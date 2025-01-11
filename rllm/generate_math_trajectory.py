@@ -64,9 +64,11 @@ if __name__ == "__main__":
 
     engine = DistributedVLLM(num_workers=2, tensor_parallel_size=2, model=payload["model"])
 
-    responses = engine.chat(payload["messages"], SamplingParams(temperature=1.0))
+    responses = engine.chat([payload["messages"]], SamplingParams(temperature=1.0))
 
     print(responses)
+
+    engine.shutdown(persist=True)
 
     # response = poll_vllm_chat_completions(api_url, payload)
     # print(response)
