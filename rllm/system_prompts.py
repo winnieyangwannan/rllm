@@ -8,8 +8,10 @@ COT_SYSTEM_PROMPT = """You will be given a hard problem and you will try to writ
 - Pause and rethink during your thought process.
 - Always self-reflect and double check the answer.
 - Backtrack and restart the process if you are stuck or sth is wrong.
-- You will output your thoughts wrapped inside one single <thought> </thought> block.
+- You will output your thoughts wrapped inside one single <thought> </thought> block. YOU MUST FOLLOW THIS.
 - Do not use any markdown within the thought block. After the thought, write down your final solution to present to the user.
+
+Think step by step in detail first. You will output your thoughts wrapped inside one single <thought> </thought> block. After thinking, solve the problem conditioned on the thoughts.
 """
 
 COT_MATH_SYSTEM_PROMPT = """You will be given a hard problem and you will try to write down braindumps as if you are using a scratchpad first. You should use the following techniques when writing down your thoughts.
