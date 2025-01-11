@@ -1,14 +1,14 @@
 from rllm.system_prompts import COT_SYSTEM_PROMPT, COT_MATH_SYSTEM_PROMPT
 from rllm.data.load_dataset import Datasets, load_dataset
-# If grade_answer is not used in this snippet, you can remove the import.
 from rllm.grading.grader import grade_answer
 from rllm.rollout.distributed import DistributedVLLM
 
 from vllm import SamplingParams
 
 import requests
-import time
 import json
+import pprint
+import os
 
 def poll_vllm_chat_completions(api_url, payload):
     """
@@ -17,11 +17,9 @@ def poll_vllm_chat_completions(api_url, payload):
     Parameters:
     - api_url (str): The API endpoint for chat completions.
     - payload (dict): The payload to send to the API, including the prompt or input message.
-    - interval (int): Polling interval in seconds (default: 1 second).
-    - timeout (int): Maximum time to wait for a response (default: 30 seconds).
 
     Returns:
-    - dict: The response from the API, or None if timeout is reached.
+    - str or None: The assistant's response (assistant content).
     """
     try:
         # Send the initial request to start processing
@@ -46,32 +44,66 @@ def poll_vllm_chat_completions(api_url, payload):
         print(f"An error occurred: {e}")
         return None
 
+
 if __name__ == "__main__":
-    #aime_problems = load_dataset(Datasets.AIME)
-    
-
-    # Load from aime in data/aime_v1.json
+    # Very inefficient, will just run for tonight to test things out.
+    # Load from AIME in data/aime_v1.json
     api_url = "http://0.0.0.0:8000"  # Replace with your vllm server URL
-    content_dict = [
-        {"role": "system", "content": COT_MATH_SYSTEM_PROMPT},
-            {
-                "role": "user",
-                "content": "Find all real $ a$, such that there exist a function $ f: \\mathbb{R}\\rightarrow\\mathbb{R}$ satisfying the following inequality:\n\\[ x\\plus{}af(y)\\leq y\\plus{}f(f(x))\n\\]\nfor all $ x,y\\in\\mathbb{R}$"
-            },
-    ]
-    payload = {
-        "messages": content_dict,
-        "model": "Qwen/QwQ-32B-Preview",  # Replace with your model name if different
-    }
+    aime_problems = load_dataset(Datasets.AIME)
 
-    # engine = DistributedVLLM(num_workers=2, tensor_parallel_size=2, model="Qwen/QwQ-32B-Preview")
-    # responses = engine.chat([payload["messages"]], SamplingParams(temperature=1.0))
-    # print(responses)
-    # engine.shutdown(persist=True)
+    # Path to the JSON file where we'll store cumulative data
+    output_file = "aime_responses.json"
 
-    response = poll_vllm_chat_completions(api_url, payload)
+    # 1. Load existing JSON data if file already exists
+    output_data = []
 
-    content_dict.append({"role": "assistant", "content": response})
-    import pprint
-    pprint.pprint(content_dict)
-    print(grade_answer(response, "f(x) = 2x"))
+    # 2. Process each problem and incrementally save to JSON
+    for aime in aime_problems:
+        problem = aime['problem']
+
+        content_dict = [
+            {"role": "system", "content": COT_MATH_SYSTEM_PROMPT},
+            {"role": "user", "content": problem},
+        ]
+
+        payload = {
+            "messages": content_dict,
+            "model": "Qwen/QwQ-32B-Preview",  # Replace with your model name if different
+        }
+
+        # Example: If using DistributedVLLM, you'd do something like:
+        # engine = DistributedVLLM(num_workers=2, tensor_parallel_size=2, model="Qwen/QwQ-32B-Preview")
+        # responses = engine.chat([payload["messages"]], SamplingParams(temperature=1.0))
+        # engine.shutdown(persist=True)
+
+        # Poll the server
+        response = poll_vllm_chat_completions(api_url, payload)
+
+        # Add assistant response to the conversation
+        if response is not None:
+            content_dict.append({"role": "assistant", "content": response})
+
+        # Print conversation for debugging
+        pprint.pprint(content_dict)
+
+        # Grade the answer
+        grader_result = grade_answer(response if response else "", str(aime['answer']))
+        print("Grader Result:", grader_result)
+
+        # Convert grader result to 1 or 0
+        # Adjust logic based on how your grader returns results
+        grade_value = 1 if grader_result else 0
+
+        # Make a copy of the original AIME record
+        record = dict(aime)  # so we preserve the original fields
+        record["trajectory"] = content_dict
+        record["grade"] = grade_value
+
+        # Add to our cumulative data
+        output_data.append(record)
+
+        # 3. Save the updated data back to the file **after each iteration**
+        with open(output_file, mode="w", encoding="utf-8") as f:
+            json.dump(output_data, f, indent=2, ensure_ascii=False)
+
+    print("All problems processed and appended to JSON.")
