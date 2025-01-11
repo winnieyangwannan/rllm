@@ -5,20 +5,6 @@ import ray
 import torch
 from vllm import LLM, SamplingParams
 
-# @ray.remote(num_gpus=None)
-# class RayVLLMWorker:
-#     def __init__(self, tensor_parallel_size: int = 1, **model_kwargs):
-#         model_kwargs['tensor_parallel_size'] = tensor_parallel_size
-#         self.model = LLM(**model_kwargs)
-
-#     def chat(self, messages, sampling_params):
-#         return self.model.chat(messages, sampling_params)
-
-#     def shutdown(self):
-#         del self.model
-#         gc.collect()
-#         torch.cuda.empty_cache()
-
 @ray.remote(num_gpus=None)
 class RayVLLMWorker:
     def __init__(self, tensor_parallel_size: int = 1, **model_kwargs):
