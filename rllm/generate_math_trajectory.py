@@ -2,6 +2,10 @@ from rllm.system_prompts import COT_SYSTEM_PROMPT, COT_MATH_SYSTEM_PROMPT
 # If grade_answer is not used in this snippet, you can remove the import.
 from rllm.grading.grader import grade_answer
 
+from rllm.rollout.distributed import DistributedVLLM
+
+from vllm import SamplingParams
+
 import requests
 import time
 import json
@@ -42,10 +46,10 @@ def poll_vllm_chat_completions(api_url, payload):
         print(f"An error occurred: {e}")
         return None
 
-# Example usage
 if __name__ == "__main__":
     # Load from aime in data/aime_v1.json
     api_url = "http://0.0.0.0:8000"  # Replace with your vllm server URL
+    
     payload = {
         "messages": [
             {"role": "system", "content": COT_MATH_SYSTEM_PROMPT},
@@ -57,6 +61,13 @@ if __name__ == "__main__":
         "model": "Qwen/QwQ-32B-Preview",  # Replace with your model name if different
     }
 
-    response = poll_vllm_chat_completions(api_url, payload)
-    print(response)
-    grade_answer(response, "f(x) = 2x")
+
+    engine = DistributedVLLM(num_workers=2, tensor_parallel_size=2, model=payload["model"])
+
+    responses = engine.chat(payload["messages"], SamplingParams(temperature=1.0))
+
+    print(responses)
+
+    # response = poll_vllm_chat_completions(api_url, payload)
+    # print(response)
+    # grade_answer(response, "f(x) = 2x")
