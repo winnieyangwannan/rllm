@@ -56,7 +56,7 @@ class DistributedLLMClient:
         finally:
             endpoint.current_load -= 1
 
-    async def chat_batch(self, messages: List[List[Dict]], sampling_params: Dict) -> List[Dict]:
+    async def chat(self, messages: List[List[Dict]], sampling_params: Dict) -> List[Dict]:
         """
         Process a batch of message lists in parallel across available endpoints.
         """

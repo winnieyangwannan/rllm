@@ -38,7 +38,7 @@ def load_omni() -> Union[List[Any], Dict[str, Any]]:
     :param path: Path to the OMNI JSON file.
     :return: The loaded OMNI data (usually a list or dict, depending on the file).
     """
-    full_path = os.path.dirname(os.path.abspath(__file__)) + f'/raw/train/omni_math.jsonl'
+    full_path = os.path.dirname(os.path.abspath(__file__)) + f'/raw/train/omni_math.json'
     with open(full_path, "r", encoding="utf-8") as f:
         data = json.load(f)
     return data

@@ -1,16 +1,17 @@
 
 from vllm import SamplingParams
+from rllm.system_prompts import COT_MATH_SYSTEM_PROMPT
 
 
-class vLLMModel:
-    def __init__(self, vllm_instance):
-        self.vllm = vllm_instance
+class BaseRollout:
+    def __init__(self, engine):
+        self.engine = engine
     
-    def __call__(self, **generation_kwargs):
+    def rollout(self, **generation_kwargs):
         pass
 
-    def rollout(self, messages, **generation_kwargs):
-        responses = self.vllm.chat(messages, SamplingParams(**generation_kwargs))
+    def generate(self, messages, **generation_kwargs):
+        responses = self.engine.chat(messages, SamplingParams(**generation_kwargs))
         
         preds = []
         for resp in responses:
@@ -23,14 +24,15 @@ class vLLMModel:
         return preds
 
         
-class ProverRollout(vLLMModel):
+class COTRollout(BaseRollout):
     
-    def __call__(self, questions, **generation_kwargs):
+    def rollout(self, queries, **generation_kwargs):
         messages = [
             [
-                {"role": "system", "content": "You are an expert problem solver. You will be given a problem to solve. Please reason step by step, and put your final answer within \\boxed{}."},
-                {"role": "user", "content": f"{question}"},
-            ] for question in questions
+                {"role": "system", "content": COT_MATH_SYSTEM_PROMPT},
+                {"role": "user", "content": queries},
+            ]
+            for query in queries
         ]
 
-        return self.rollout(messages, **generation_kwargs)
+        return self.generate(messages, **generation_kwargs)

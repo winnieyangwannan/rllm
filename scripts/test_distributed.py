@@ -27,7 +27,7 @@ async def main():
     
     try:
         client = await DistributedLLMClient.create_client(endpoints)
-        results = await client.chat_batch(messages_batch, sampling_params)
+        results = await client.chat(messages_batch, sampling_params)
         
         # Print results
         for i, result in enumerate(results):
