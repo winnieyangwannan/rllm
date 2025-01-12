@@ -15,8 +15,8 @@ if __name__ == "__main__":
 
     # Initialize DistributedVLLM
     engine = DistributedVLLM(
-        num_workers=2,
-        tensor_parallel_size=2,
+        num_workers=1,
+        tensor_parallel_size=4,
         model="Qwen/QwQ-32B-Preview"
     )
 
