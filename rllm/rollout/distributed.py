@@ -36,7 +36,6 @@ class DistributedVLLM:
         try:
             ray.init(address="auto")
         except:
-            print("ray is not initialized")
             total_gpus = num_workers * tensor_parallel_size
             ray.init(num_gpus=total_gpus, namespace=self.NAMESPACE)
 
@@ -56,12 +55,9 @@ class DistributedVLLM:
                 #     ray.get(worker.shutdown.remote())
                 #     worker = self._create_worker(worker_name, tensor_parallel_size, model_kwargs)
             except ValueError as e:
-
-                print(e)
                 # Worker doesn't exist, create new one
                 worker = self._create_worker(worker_name, tensor_parallel_size, model_kwargs)
-
-                print("# Worker doesn't exist, create new one")
+                print("Worker doesn't exist, create new one")
             
             self.workers.append(worker)
 
