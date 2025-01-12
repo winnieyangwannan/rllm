@@ -5,7 +5,7 @@ import ray
 import torch
 from vllm import LLM, SamplingParams
 
-@ray.remote(num_gpus=None)
+@ray.remote(num_gpus=None, num_cpus=None)
 class RayVLLMWorker:
     def __init__(self, tensor_parallel_size: int = 1, **model_kwargs):
         model_kwargs['tensor_parallel_size'] = tensor_parallel_size
@@ -37,7 +37,7 @@ class DistributedVLLM:
             ray.init(address="auto")
         except:
             total_gpus = num_workers * tensor_parallel_size
-            ray.init(num_gpus=total_gpus, namespace=self.NAMESPACE)
+            ray.init(num_gpus=total_gpus, num_cpus=total_gpus*8, namespace=self.NAMESPACE)
 
 
         self.workers = []
@@ -65,7 +65,8 @@ class DistributedVLLM:
         return RayVLLMWorker.options(
             name=name,
             lifetime="detached",  # This makes the actor persist
-            num_gpus=tensor_parallel_size
+            num_gpus=tensor_parallel_size,
+            num_cpus=tensor_parallel_size*8
         ).remote(
             tensor_parallel_size=tensor_parallel_size,
             **model_kwargs
