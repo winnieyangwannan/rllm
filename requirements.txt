@@ -1,2 +1,5 @@
+datasets
+latex2sympy2
 pylatexenc
+sentence_transformers
 vllm
