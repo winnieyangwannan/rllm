@@ -16,7 +16,7 @@ if __name__ == "__main__":
         for entry in dataset
     ]
 
-    engine = DistributedVLLM(num_workers=2, tensor_parallel_size=2, model=model)
+    engine = DistributedVLLM(num_workers=1, tensor_parallel_size=4, model=model)
 
     responses = engine.chat(messages, SamplingParams(temperature=1.0, max_tokens=32768))
 
