@@ -333,3 +333,7 @@ def grade_answer(given_answer: str, ground_truth: str) -> bool:
                 break
 
     return is_correct
+
+
+def grade_answer_verl(solution_str, ground_truth):
+    return grade_answer(solution_str, ground_truth)
