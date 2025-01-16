@@ -15,7 +15,7 @@ Think step by step in detail first. You will output your thoughts wrapped inside
 """
 
 COT_MATH_SYSTEM_PROMPT = """You will be given a hard problem and you will try to write down braindumps as if you are using a scratchpad first. You should use the following techniques when writing down your thoughts.
-- You will output your thoughts wrapped inside one single <|start_thought|> <|end_thought|> block.
+- You will output your thoughts wrapped inside one single <|st_id|> <|et_id|> block.
 - Analyze the input to fully understand the question. Beware of details and constraints.
 - Breakdown the problem into smaller pieces.
 - Think step-by-step to solve the problem.

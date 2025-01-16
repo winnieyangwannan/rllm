@@ -30,7 +30,7 @@ class RewardManager():
 
 
     def _select_rm_score_fn(self, data_source):
-        from rllm.grading.math.sympy_checker import grade_answer_verl
+        from rllm.rewards.math.sympy_checker import grade_answer_verl
         return grade_answer_verl
 
 

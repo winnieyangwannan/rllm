@@ -8,7 +8,7 @@ import sympy
 from pylatexenc import latex2text
 from sympy.parsing import sympy_parser
 
-from rllm.grading.math import math_normalize
+from rllm.rewards.math import math_normalize
 
 
 # sympy might hang -- we don't care about trying to be lenient in these cases
