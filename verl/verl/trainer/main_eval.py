@@ -25,10 +25,8 @@ import numpy as np
 
 
 def select_reward_fn(data_source):
-    if data_source == 'lighteval/MATH':
-        return math.compute_score
-    else:
-        raise NotImplementedError
+    from rllm.grading.grader import grade_answer_verl
+    return grade_answer_verl
 
 
 @hydra.main(config_path='config', config_name='evaluation', version_base=None)

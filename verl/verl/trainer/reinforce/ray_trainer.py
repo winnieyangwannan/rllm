@@ -326,12 +326,14 @@ class RayReinforceTrainer(object):
 
             # evaluate using reward_function
             # for certain reward function (e.g. sandbox), the generation can overlap with reward
-            reward_tensor = self.val_reward_fn(test_batch)
+            sequence_rewards = self.val_reward_fn(test_batch)
 
-            reward_tensor_lst.append(reward_tensor)
-            data_source_lst.append(test_batch.non_tensor_batch.get('data_source', ['unknown'] * reward_tensor.shape[0]))
+            reward_tensor_lst.append(sequence_rewards.unsqueeze(-1))
+            data_source_lst.append(test_batch.non_tensor_batch.get('data_source', ['unknown'] * sequence_rewards.shape[0]))
 
         reward_tensor = torch.cat(reward_tensor_lst, dim=0).sum(-1).cpu()  # (batch_size,)
+        print(reward_tensor)
+        print(reward_tensor.shape)
         data_sources = np.concatenate(data_source_lst, axis=0)
         # evaluate test_score based on data source
         data_source_reward = {}
@@ -479,8 +481,9 @@ class RayReinforceTrainer(object):
                         batch = batch.union(reward_tensor)
 
                     # we combine with rule-based rm
-                    reward_tensor, rewards = self.reward_fn(batch)
-                    batch.batch['token_level_scores'] = reward_tensor
+                    rewards = self.reward_fn(batch)
+                    per_token_rewards = self.reward_fn.get_per_token_rewards(batch, rewards)
+                    batch.batch['token_level_scores'] = per_token_rewards
                     batch.batch['rewards'] = rewards
 
                     # compute rewards. apply_kl_penalty if available
@@ -577,23 +580,3 @@ class RayReinforceTrainer(object):
             raise NotImplementedError
 
         return data
-
-    #     if adv_estimator == "grpo":
-    #         n_rollouts = self.config.actor_rollout_ref.rollout.n
-    #         rewards = data.batch['scores']
-
-    #         assert rewards.size(0) % n_rollouts == 0
-    #         batch_size = rewards.size(0) // n_rollouts
-    #         reshaped_rewards = rewards.view(batch_size, n_rollouts, -1)
-
-    #         group_mean = reshaped_rewards.mean(dim=1, keepdim=True)
-    #         group_std = reshaped_rewards.std(dim=1, keepdim=True) + 1e-8 
-
-    #         normalized_rewards = (reshaped_rewards - group_mean) / group_std
-    #         normalized_rewards = normalized_rewards.view_as(rewards)
-
-    #         data.batch['advantages'] = normalized_rewards
-    #     else:
-    #         raise NotImplementedError
-
-    #     return data

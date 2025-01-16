@@ -274,8 +274,8 @@ class RayWorkerGroup(WorkerGroup):
                     assert register_center_actor is not None, f"failed to get register_center_actor: {self.name_prefix}_register_center in {list_named_actors(all_namespaces=True)}"
                     rank_zero_info = ray.get(register_center_actor.get_rank_zero_info.remote())
                     self._master_addr, self._master_port = rank_zero_info['MASTER_ADDR'], rank_zero_info['MASTER_PORT']
-                    # print(f"rank_zero_info: {rank_zero_info}")
-                    # print(f"master_addr: {self._master_addr}, master_port: {self._master_port}")
+                    print(f"rank_zero_info: {rank_zero_info}")
+                    print(f"master_addr: {self._master_addr}, master_port: {self._master_port}")
 
     @property
     def worker_names(self):
