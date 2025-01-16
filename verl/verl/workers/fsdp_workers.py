@@ -79,16 +79,18 @@ class ActorRolloutRefWorker(Worker):
 
         # normalize config
         if self._is_actor:
-            self.config.actor.ppo_mini_batch_size //= self.device_mesh.shape[0]
-            self.config.actor.ppo_micro_batch_size //= self.device_mesh.shape[0]
             self.config.actor.ppo_mini_batch_size *= self.config.rollout.n
             self.config.actor.ppo_micro_batch_size *= self.config.rollout.n
+            self.config.actor.ppo_mini_batch_size //= self.device_mesh.shape[0]
+            self.config.actor.ppo_micro_batch_size //= self.device_mesh.shape[0]
+
+            print("mini/micro batch size:", self.config.actor.ppo_mini_batch_size, self.config.actor.ppo_micro_batch_size)
         if self._is_rollout:
-            self.config.rollout.log_prob_micro_batch_size //= self.device_mesh.shape[0]
             self.config.rollout.log_prob_micro_batch_size *= self.config.rollout.n
+            self.config.rollout.log_prob_micro_batch_size //= self.device_mesh.shape[0]
         if self._is_ref:
-            self.config.ref.log_prob_micro_batch_size //= self.device_mesh.shape[0]
             self.config.ref.log_prob_micro_batch_size *= self.config.rollout.n
+            self.config.ref.log_prob_micro_batch_size //= self.device_mesh.shape[0]
 
     def _build_model_optimizer(self,
                                model_path,

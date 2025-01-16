@@ -17,8 +17,8 @@ rollout:
   temperature: 1.0
   top_k: 50 # 0 for hf rollout, -1 for vllm rollout
   top_p: 0.7
-  prompt_length: 1536
-  response_length: 512
+  prompt_length: 512
+  response_length: 1024
   # for vllm rollout
   dtype: bfloat16 # should align with FSDP
   gpu_memory_utilization: 0.5
@@ -33,3 +33,4 @@ rollout:
   log_prob_micro_batch_size: 8
   # for hf rollout
   do_sample: True
+  n: 5
