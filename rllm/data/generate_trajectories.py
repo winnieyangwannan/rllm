@@ -1,6 +1,6 @@
 from rllm.system_prompts import COT_SYSTEM_PROMPT, COT_MATH_SYSTEM_PROMPT
 from rllm.data.load_dataset import Datasets, load_dataset
-from rllm.grading.grader import grade_answer
+from rllm.grading.math.sympy_checker import grade_answer
 from rllm.rollout.distributed import DistributedVLLM
 
 from vllm import SamplingParams
