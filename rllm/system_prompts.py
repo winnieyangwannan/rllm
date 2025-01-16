@@ -237,4 +237,4 @@ $(\\rm ii)$ the closed broken line $C_1C_2...C_{96}C_1$ has a centre of symmetry
   
   ------------------------------------------------
   A user will provide the problem and solution below. Only output your estimation of the difficulty of the problem, which is a number between 1-10, inclusive.
-  Important: You should only output the difficulty from 1-10, not the solution of the problem."""
+  Important: You should only output the difficulty from 1-10, not the solution of the problem. OUTPUT ONLY ONE NUMBER, not multiple numbers."""

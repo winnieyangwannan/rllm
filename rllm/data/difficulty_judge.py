@@ -1,6 +1,7 @@
 import json
 import concurrent.futures
 from concurrent.futures import as_completed
+from tqdm import tqdm
 
 # rllm imports
 from rllm.utils import call_gemini_llm
@@ -13,6 +14,9 @@ def get_difficulty(idx, entry):
     3) Convert to float safely, filter out parse errors.
     4) Take the average and store as 'difficulty'.
     """
+    if entry.get('difficulty') is not None:
+        # Skip if already computed
+        return idx, entry
     problem_text = entry.get('problem', '')
     solution_text = entry.get('solution', '')
     # Call the Gemini LLM with n=4
@@ -45,25 +49,24 @@ def get_difficulty(idx, entry):
         difficulty = sum(values) / len(values)
     else:
         difficulty = None
+        print(output_list)
         print("I FAILED WHY?")
 
     # Add the difficulty field to the entry
     entry['difficulty'] = difficulty
-    print(difficulty)
 
     return idx, entry
 
 if __name__ == "__main__":
     # Load data
-    with open("./raw/train/olympiad.json", 'r', encoding='utf-8') as f:
+    with open("olympiad.json", 'r', encoding='utf-8') as f:
         data = json.load(f)
-
     # We'll store results in the same order:
     # make an array of the same length as data
     results = [None] * len(data)
 
     # Use ThreadPoolExecutor to process concurrently
-    with concurrent.futures.ThreadPoolExecutor(max_workers=48) as executor:
+    with concurrent.futures.ThreadPoolExecutor(max_workers=24) as executor:
         # Submit jobs to the executor, passing (index, entry)
         futures = [
             executor.submit(get_difficulty, i, entry)
@@ -72,13 +75,13 @@ if __name__ == "__main__":
 
         # We'll track how many have completed
         done_count = 0
-        for future in as_completed(futures):
+        for future in tqdm(as_completed(futures), total=len(futures)):
             idx, result = future.result()
             results[idx] = result
             done_count += 1
 
             # Periodically print progress and save partial results
-            if done_count % 1000 == 0:
+            if done_count % 5000 == 0:
                 print(f"Processed {done_count} entries.")
                 with open("olympiad.json", "w", encoding='utf-8') as f:
                     json.dump(results, f, indent=2, ensure_ascii=False)
