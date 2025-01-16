@@ -9,7 +9,7 @@ from rllm.rollout.distributed_client import DistributedLLMClient
 from rllm.rollout.model import COTRollout
 from rllm.system_prompts import COT_MATH_SYSTEM_PROMPT
 
-from rllm.grading.grader import grade_answer
+from rllm.grading.math.sympy_checker import grade_answer
 from rllm.trainer.reinforce import ReinforceTrainer, ReinforceConfig
 
 import asyncio
