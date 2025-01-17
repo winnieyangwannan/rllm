@@ -53,8 +53,7 @@ def get_difficulty(idx, entry):
         difficulty = sum(values) / len(values)
     else:
         difficulty = None
-        print(output_list)
-        print("Sad life :( LLM bad")
+        print('Failed parsing all difficulties: ', output_list)
 
     # Add the difficulty field to the entry
     entry['difficulty'] = difficulty
@@ -62,8 +61,9 @@ def get_difficulty(idx, entry):
     return idx, entry
 
 if __name__ == "__main__":
-    # Load data
-    with open("train/olympiad.json", 'r', encoding='utf-8') as f:
+    base_file = "train/olympiad.json"
+    
+    with open(base_file, 'r', encoding='utf-8') as f:
         data = json.load(f)
 
     results = deepcopy(data)
@@ -85,9 +85,9 @@ if __name__ == "__main__":
             # Periodically print progress and save partial results
             if done_count % 5000 == 0:
                 print(f"Processed {done_count} entries.")
-                with open("olympiad.json", "w", encoding='utf-8') as f:
+                with open(base_file, "w", encoding='utf-8') as f:
                     json.dump(results, f, indent=2, ensure_ascii=False)
 
     # Save final results
-    with open("olympiad.json", "w", encoding='utf-8') as f:
+    with open(base_file, "w", encoding='utf-8') as f:
         json.dump(results, f, indent=2, ensure_ascii=False)
