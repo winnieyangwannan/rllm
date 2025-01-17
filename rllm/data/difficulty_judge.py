@@ -1,16 +1,19 @@
+"""
+Labels approximate difficulty between 1-10 for each problem in the train/ or test/ dataset.
+"""
 import json
 import concurrent.futures
 from concurrent.futures import as_completed
+from copy import deepcopy
 from tqdm import tqdm
 
-# rllm imports
-from rllm.utils import call_gemini_llm
 from rllm.system_prompts import MATH_DIFFICULTY_PROMPT
+from rllm.utils import call_gemini_llm
 
 def get_difficulty(idx, entry):
     """
     1) Extract problem and solution text.
-    2) Call LLM for difficulty estimates (4 numeric strings).
+    2) Call LLM for difficulty estimates (8 numeric strings).
     3) Convert to float safely, filter out parse errors.
     4) Take the average and store as 'difficulty'.
     """
@@ -19,7 +22,8 @@ def get_difficulty(idx, entry):
         return idx, entry
     problem_text = entry.get('problem', '')
     solution_text = entry.get('solution', '')
-    # Call the Gemini LLM with n=4
+
+    # Pass@8 Difficulty.
     output_list = call_gemini_llm(
         f"Problem: {problem_text}\n----\nSolution: {solution_text}",
         system_prompt=MATH_DIFFICULTY_PROMPT,
@@ -50,7 +54,7 @@ def get_difficulty(idx, entry):
     else:
         difficulty = None
         print(output_list)
-        print("I FAILED WHY?")
+        print("Sad life :( LLM bad")
 
     # Add the difficulty field to the entry
     entry['difficulty'] = difficulty
@@ -59,12 +63,10 @@ def get_difficulty(idx, entry):
 
 if __name__ == "__main__":
     # Load data
-    with open("olympiad.json", 'r', encoding='utf-8') as f:
+    with open("train/olympiad.json", 'r', encoding='utf-8') as f:
         data = json.load(f)
-    # We'll store results in the same order:
-    # make an array of the same length as data
-    results = [None] * len(data)
 
+    results = deepcopy(data)
     # Use ThreadPoolExecutor to process concurrently
     with concurrent.futures.ThreadPoolExecutor(max_workers=24) as executor:
         # Submit jobs to the executor, passing (index, entry)

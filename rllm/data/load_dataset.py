@@ -3,53 +3,53 @@ import json
 import os
 from typing import Any, Dict, List, Union
 
-class Datasets(enum.Enum):
+class TrainDataset(enum.Enum):
+    # The standard American beginner competitions.
     AIME = 'AIME'
-    OMNI = 'OMNI'
-    NUMINA = 'NUMINA'
+    AMC =  'AMC'
+    # Omni math dataset
+    OMNI_MATH = 'OMNI_MATH'
+    # Unique Olympiad problems from NUMINA
+    NUMINA_OLYMPIAD = 'OLYMPIAD'
+    # Dan Hendrycks math
+    MATH = 'MATH'
 
-class DatasetType(enum.Enum):
-    TRAIN = 'TRAIN'
-    TEST = 'TEST'
+class TestDataset(enum.Enum):
+    AIME = 'AIME'
+    AMC =  'AMC'
+    MATH = 'MATH'
 
-def load_aime(dataset_type = DatasetType.TRAIN) -> Union[List[Any], Dict[str, Any]]:
+Dataset = Union[TrainDataset, TestDataset]
+
+def load_dataset(dataset: Dataset) -> List[Dict[str, Any]]:
+    """Loads a dataset from a JSON file.
+
+    Args:
+        dataset: The dataset to load.
+        train: Whether to load the training or testing dataset.
+
+    Returns:
+        A list of dictionaries representing the dataset.
+
+    Raises:
+        ValueError: If the dataset is invalid or the file cannot be found.
     """
-    Loads the AIME dataset from the given JSON file and returns its contents.
 
-    Convert AIME dataset into universal format ['problem', 'solution', 'answer', 'difficulty']
+    dataset_name = dataset.value.lower()
+    data_dir = "train" if isinstance(dataset, TrainDataset) else "test"
+     
+    file_path = os.path.join(".", data_dir, f"{dataset_name}.json")
+    if not os.path.exists(file_path):
+        raise ValueError(f"Dataset file not found: {file_path}")
 
-    :param path: Path to the AIME JSON file.
-    :return: The loaded AIME data (usually a list or dict, depending on the file).
-    """
-    subfolder_name = 'train'
-    if dataset_type == DatasetType.TEST:
-        subfolder_name = 'test'
-    # Get the current directory path of this file
-    full_path = os.path.dirname(os.path.abspath(__file__)) + f'/raw/{subfolder_name}/aime.json'
-    with open(full_path, "r", encoding="utf-8") as f:
-        data = json.load(f)
-    return data
+    try:
+        with open(file_path, "r", encoding="utf-8") as f:
+            data = json.load(f)
+        return data
+    except json.JSONDecodeError:
+        raise ValueError(f"Invalid JSON format in {file_path}")
+    except Exception as e: # Catch other potential file errors.
+        raise ValueError(f"Error loading dataset: {e}")
 
-
-def load_omni() -> Union[List[Any], Dict[str, Any]]:
-    """
-    Loads the OMNI (OMNIMath) dataset from the given JSON file and returns its contents.
-
-    :param path: Path to the OMNI JSON file.
-    :return: The loaded OMNI data (usually a list or dict, depending on the file).
-    """
-    full_path = os.path.dirname(os.path.abspath(__file__)) + f'/raw/train/omni_math.json'
-    with open(full_path, "r", encoding="utf-8") as f:
-        data = json.load(f)
-    return data
-
-
-def load_dataset(dataset: Datasets):
-    if dataset == Datasets.AIME:
-        return load_aime()
-    elif dataset == Datasets.OMNI:
-        return load_omni()
-    elif dataset == Datasets.NUMINA:
-        pass
-        #return load_numina()
-    raise ValueError('Invalid dataset')
+if __name__ == '__main__':
+    load_dataset(TrainDataset.NUMINA_OLYMPIAD)

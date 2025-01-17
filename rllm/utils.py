@@ -8,14 +8,16 @@ from google.cloud.aiplatform_v1beta1.types.content import SafetySetting
 from sentence_transformers import SentenceTransformer, util
 from vertexai.generative_models import GenerationConfig, GenerativeModel, HarmBlockThreshold, HarmCategory
 
+from rllm.globals import GCP_PROJECT_ID, GCP_LOCATION, GEMINI_MODEL
+
 def call_gemini_llm(
     prompt: str,
     system_prompt: str,
     n: int = 1,
     temperature: float = 1.0,
-    project_id: str = 'cloud-llm-test',
-    location: str = "us-central1",
-    model_id: str = "gemini-1.5-pro-002",
+    project_id: str = GCP_PROJECT_ID,
+    location: str = GCP_LOCATION,
+    model_id: str = GEMINI_MODEL,
     retry_count: int = 1e9,
 ) -> List[str]:
     """
