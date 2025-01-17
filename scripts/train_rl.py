@@ -51,15 +51,6 @@ async def async_generate_responses(model_name, queries):
 def generate_responses(model_name, queries):
     return asyncio.run(async_generate_responses(model_name, queries))
 
-
-# def generate_responses(model_name, queries):
-#     engine = DistributedVLLM(num_workers=1, tensor_parallel_size=4, model=model_name)
-#     model = COTRollout(engine=engine)
-
-#     responses = model.rollout(queries)
-#     return responses
-
-
 def compute_rewards(responses, labels):
     rewards = []
     for response, label in zip(responses, labels):

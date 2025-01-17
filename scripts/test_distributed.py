@@ -1,11 +1,11 @@
 
-from rllm.data.load_dataset import Datasets, load_dataset
+from rllm.data.load_dataset import TrainDataset, load_dataset
 from rllm.sampler.distributed_client import DistributedLLMClient
 from rllm.system_prompts import COT_MATH_SYSTEM_PROMPT
 
 
 async def main():
-    dataset = load_dataset(Datasets.AIME)[:5]
+    dataset = load_dataset(TrainDataset.AIME)[:5]
     messages_batch = [
         [
             {"role": "system", "content": COT_MATH_SYSTEM_PROMPT},
@@ -15,7 +15,7 @@ async def main():
     ]
 
     endpoints = [
-        {"url": "http://0.0.0.0:8001/v1/chat/completions", "weight": 1.0},
+        {"url": "http://0.0.0.0:8000/v1/chat/completions", "weight": 1.0},
     ]
     
     

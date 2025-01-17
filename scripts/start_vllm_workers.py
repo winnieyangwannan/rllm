@@ -1,7 +1,7 @@
 import time
 import signal
 import sys
-from rllm.sampler.distributed import DistributedVLLM
+from rllm.sampler.distributed_sampler import DistributedVLLM
 
 def signal_handler(sig, frame):
     print("\nReceived shutdown signal. Shutting down workers...")
@@ -16,7 +16,7 @@ if __name__ == "__main__":
     # Initialize DistributedVLLM
     engine = DistributedVLLM(
         num_workers=1,
-        tensor_parallel_size=4,
+        tensor_parallel_size=8,
         model="Qwen/QwQ-32B-Preview"
     )
 
