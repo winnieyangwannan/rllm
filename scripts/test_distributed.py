@@ -1,6 +1,6 @@
 
 from rllm.data.load_dataset import Datasets, load_dataset
-from rllm.rollout.distributed_client import DistributedLLMClient
+from rllm.sampler.distributed_client import DistributedLLMClient
 from rllm.system_prompts import COT_MATH_SYSTEM_PROMPT
 
 

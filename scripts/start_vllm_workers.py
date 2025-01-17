@@ -1,7 +1,7 @@
 import time
 import signal
 import sys
-from rllm.rollout.distributed import DistributedVLLM
+from rllm.sampler.distributed import DistributedVLLM
 
 def signal_handler(sig, frame):
     print("\nReceived shutdown signal. Shutting down workers...")
