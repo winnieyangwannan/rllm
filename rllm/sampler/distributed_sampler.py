@@ -11,6 +11,8 @@ import atexit
 import asyncio
 import gc
 import os
+import requests
+import time
 
 import ray
 import torch
@@ -46,18 +48,47 @@ class RayVLLMWorker:
         # Override with host and port
         openai_args.host = self.host
         openai_args.port = self.port
+        openai_args.disable_signal_handlers = True
         # Override with all model kwargs
         for key, value in self.model_kwargs.items():
             setattr(openai_args, key, value)
 
         self.server_args = openai_args
 
-        # Start server in a separate thread
-        self.loop = asyncio.new_event_loop()
-        asyncio.set_event_loop(self.loop)
-
-        # Run the server directly in this thread
-        self.loop.run_until_complete(run_server(self.server_args))
+    def start_server(self):
+        """This runs in a dedicated thread, so we can block here safely."""
+        loop = asyncio.new_event_loop()
+        asyncio.set_event_loop(loop)
+        loop.run_until_complete(run_server(self.server_args))
+        loop.close()
+    
+    def wait_for_server(self, timeout=600, interval=3):
+        """Wait for the server to be ready by checking the health endpoint.
+        
+        Args:
+            timeout (int): Maximum time to wait in seconds
+            interval (int): Time between health checks in seconds
+        
+        Raises:
+            TimeoutError: If server doesn't become ready within timeout period
+        """
+        health_url = f"http://{self.host}:{self.port}/ready"
+        start_time = time.time()
+        while time.time() - start_time < timeout:
+            try:
+                response = requests.get(health_url, timeout=interval)
+                print(response)
+                if response.status_code == 200:
+                    print(f"Server ready on {self.host}:{self.port}")
+                    return
+            except requests.exceptions.RequestException as e:
+                print(e)
+                pass
+            except Exception as e:
+                print(e)
+                pass
+            time.sleep(interval)      
+        raise TimeoutError(f"Server failed to start within {timeout} seconds")
 
     def get_config(self):
         """Get the model configuration for this worker."""
@@ -96,24 +127,24 @@ class DistributedVLLM:
             **model_kwargs: Additional arguments passed to each vLLM model
         """
         try:
-            ray.init(address="auto",)
+            ray.init(address="auto", namespace=self.NAMESPACE)
             print("Ray cluster is already initialized.")
         except:
             print("No existing Ray cluster found. Starting a new one...")
             # If ray cluster is not available, start a new clusters.
             total_gpus = num_workers * tensor_parallel_size
+            total_actual_gpus = torch.cuda.device_count()
+            if total_gpus > total_actual_gpus:
+                raise ValueError(f"Requested {total_gpus} GPUs, but only {total_actual_gpus} are available.")
             # Get total number of cpus on machine
             total_cpus = os.cpu_count()
-            ray.init(
-                num_gpus=total_gpus,
-                num_cpus=total_cpus - 1,
-                namespace=self.NAMESPACE,
-                ignore_reinit_error=True,
-            )
+            os.system(f"ray start --head --num-cpus={total_cpus-1} --num-gpus={total_gpus}")
+            ray.init(address="auto", namespace=self.NAMESPACE)
 
         self.persist = persist
         # Register shutdown handler
-        atexit.register(self.shutdown)
+        if not self.persist:
+            atexit.register(self.shutdown)
 
         self.workers = []
         for i in range(num_workers):
@@ -144,12 +175,22 @@ class DistributedVLLM:
         # Avoid conflict with DistributedVLLM using Ray.
         model_kwargs["worker_use_ray"] = False
         try:
-            return RayVLLMWorker.options(
+            ray_actor =  RayVLLMWorker.options(
                 name=name,
                 lifetime="detached",  # This makes the actor persist
+                namespace=self.NAMESPACE,
                 num_gpus=tensor_parallel_size,
                 num_cpus=tensor_parallel_size * 8,
+                max_concurrency=2,
             ).remote(**model_kwargs)
+            
+            # Start the server in a non-blocking way
+            ray_actor.start_server.remote()
+            # Wait until the server is ready via /ready endpoint.
+            print("Waiting for server to be ready...")
+            health_future = ray_actor.wait_for_server.remote()
+            ray.get(health_future)
+            return ray_actor
         except Exception as e:
             print(f"Error creating worker {name}: {str(e)}")
             raise
@@ -158,16 +199,13 @@ class DistributedVLLM:
         """
         Shutdown the distributed system
         """
-        if not self.persist:  # Only shutdown if not persisting or explicitly killing
-            print("Shutting down workers...")
-            for worker in self.workers:
-                try:
-                    ray.get(worker.shutdown.remote())
-                except:
-                    pass  # Ignore errors during shutdown
-            ray.shutdown()
-        else:
-            print("Keeping workers alive (persist=True)")
+        print("Shutting down Ray and vLLM workers...")
+        for worker in self.workers:
+            try:
+                ray.get(worker.shutdown.remote())
+            except:
+                pass  # Ignore errors during shutdown
+        ray.shutdown()
 
 
 if __name__ == "__main__":
