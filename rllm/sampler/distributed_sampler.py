@@ -33,7 +33,7 @@ OPTIMIZED_VLLM_CONFIG = {
     "enable_chunked_prefill": True,
     "num_scheduler_steps": 40,
     "enable_prefix_caching": True,
-    "cpu_offload_gb": 75,
+    "cpu_offload_gb": 100,
     "preemption_mode": "swap",
 }
 
