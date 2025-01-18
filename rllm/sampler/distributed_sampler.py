@@ -12,6 +12,7 @@ import requests
 import time
 import threading
 from typing import List, Dict, Any
+import psutil
 
 import ray
 import torch
@@ -30,7 +31,7 @@ OPTIMIZED_VLLM_CONFIG = {
     "max_num_seqs": 256,
     "max_num_batched_tokens": 2**16,
     "enable_chunked_prefill": True,
-    "num_scheduler_steps": 25,
+    "num_scheduler_steps": 40,
 }
 
 @ray.remote(num_gpus=None, num_cpus=None)
@@ -126,9 +127,33 @@ class RayVLLMWorker:
 
     def shutdown(self):
         """Shutdown the worker and clean up resources."""
-        # The server will automatically shut down when the worker is killed
+        # Ensure all VLLM worker processes are terminated
+        try:
+            # Get all child processes
+            parent = psutil.Process(os.getpid())
+            children = parent.children(recursive=True)
+            
+            # Terminate each child process
+            for child in children:
+                try:
+                    child.terminate()
+                except psutil.NoSuchProcess:
+                    pass
+            
+            # Wait for processes to terminate and kill if needed
+            _, alive = psutil.wait_procs(children, timeout=3)
+            for p in alive:
+                try:
+                    p.kill()
+                except psutil.NoSuchProcess:
+                    pass
+        except Exception as e:
+            print(f"Error shutting down worker processes: {e}")
+            
+        # Clean up GPU memory
         gc.collect()
         torch.cuda.empty_cache()
+        torch.cuda.synchronize()
 
 
 class DistributedVLLM:
@@ -153,9 +178,10 @@ class DistributedVLLM:
             num_workers (int): Number of vLLM workers to create
             **model_kwargs: Additional arguments passed to each vLLM model
         """
-        self._current_worker_idx = 0
         self._worker_lock = threading.Lock()
         self.model = model_kwargs.get("model", "facebook/opt-125m")
+        self.active_requests = {}  # Dict to track active requests per worker
+        
         try:
             ray.init(address="auto", namespace=self.NAMESPACE)
             print("Ray cluster is already initialized.")
@@ -191,6 +217,7 @@ class DistributedVLLM:
                 )
                 new_actors_refs.append(worker)
             actor_refs.append(worker)
+            self.active_requests[i] = 0  # Initialize request counter for each worker
         
         if new_actors_refs:
             # Start all servers in parallel (non-blocking calls)
@@ -203,16 +230,16 @@ class DistributedVLLM:
         print("All vLLM servers have started successfully.")
         self.workers = actor_refs
 
-    def _get_next_worker_url(self) -> str:
-        """Get the URL of the next worker in round-robin fashion."""
+    def _get_least_busy_worker(self) -> str:
+        """Get the URL of the worker with the least number of active requests."""
         with self._worker_lock:
-            current_idx = self._current_worker_idx
-            self._current_worker_idx = (self._current_worker_idx + 1) % len(self.workers)
-            port = BASE_VLLM_PORT + current_idx
-            return f"http://0.0.0.0:{port}"
+            least_busy_idx = min(self.active_requests, key=self.active_requests.get)
+            port = BASE_VLLM_PORT + least_busy_idx
+            self.active_requests[least_busy_idx] += 1
+            return f"http://0.0.0.0:{port}", least_busy_idx
 
     def chat_completion(self, messages: List[Dict[str, str]], **kwargs) -> Dict[str, Any]:
-        """Send a chat completion request to the next available worker.
+        """Send a chat completion request to the least busy worker.
         
         Args:
             messages: List of message dictionaries with 'role' and 'content'
@@ -221,8 +248,8 @@ class DistributedVLLM:
         Returns:
             Dict containing the API response
         """
-        url = self._get_next_worker_url()
-        print(url)
+        url, worker_idx = self._get_least_busy_worker()
+        print(f"Using worker {worker_idx} at {url}; {self.active_requests}")
         endpoint = f"{url}/v1/chat/completions"
         
         payload = {
@@ -231,9 +258,17 @@ class DistributedVLLM:
             **kwargs
         }
         
-        response = requests.post(endpoint, json=payload)
-        response.raise_for_status()
-        return response.json()
+        try:
+            response = requests.post(endpoint, json=payload)
+            response.raise_for_status()
+            response_json = response.json()
+            with self._worker_lock:
+                self.active_requests[worker_idx] -= 1
+            return response_json
+        except Exception as e:
+            with self._worker_lock:
+                self.active_requests[worker_idx] -= 1
+            raise e
 
     def _create_worker(self, name, model_kwargs, port=BASE_VLLM_PORT):
         """Create a new Ray vLLM worker.
@@ -278,14 +313,14 @@ class DistributedVLLM:
                 print(f"Error shutting down worker {worker}: {str(e)}")
                 pass  # Ignore errors during shutdown
         # Tear down Ray cluster.
-        os.system('ray stop --force')
+        os.system('ray stop')
         # Kill everything in process group, including zombie Ray actors and itself.
-        os.system(f"pkill -9 -g $(ps -o pgid= {os.getpid()} | tr -d ' ')")        
+        #os.system(f"pkill -9 -g $(ps -o pgid= {os.getpid()} | tr -d ' ')")        
 
 if __name__ == "__main__":
     # Testing DistributedVLLM
     distributed_vllm = DistributedVLLM(
-        num_workers=4,
+        num_workers=2,
         tensor_parallel_size=2,
         model="Qwen/QwQ-32B-Preview"
     )

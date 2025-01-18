@@ -2,7 +2,7 @@ from copy import deepcopy
 from tqdm import tqdm
 
 from rllm.system_prompts import COT_MATH_SYSTEM_PROMPT
-from rllm.data.load_dataset import TrainDataset, load_dataset
+from rllm.data.load_dataset import TrainDataset, TestDataset, load_dataset
 from rllm.rewards.math.sympy_checker import grade_answer
 
 import requests
@@ -10,6 +10,21 @@ import json
 
 from rllm.sampler.distributed_sampler import DistributedVLLM
 import concurrent.futures
+import argparse
+
+def parse_args():
+    parser = argparse.ArgumentParser(description='Generate trajectories for math problems')
+    parser.add_argument('--dataset', type=str, choices=['AIME', 'AMC', 'MATH', 'OMNI_MATH', 'OLYMPIAD'],
+                       default='AIME', help='Dataset to process')
+    parser.add_argument('--split', type=str, choices=['train', 'test'],
+                       default='train', help='Dataset split to use')
+    parser.add_argument('--temperature', type=float, default=1.0,
+                       help='Temperature for sampling')
+    parser.add_argument('--n', type=int, default=8,
+                       help='Number of samples to generate per problem')
+    parser.add_argument('--output', type=str, default=None,
+                       help='Output file path (default: {dataset}_{split}_trajectories.json)')
+    return parser.parse_args()
 
 def generate_trajectory(idx, engine, entry, n=8, temperature=1.0):
     """
@@ -54,16 +69,22 @@ def generate_trajectory(idx, engine, entry, n=8, temperature=1.0):
     return idx, entry
 
 if __name__ == "__main__":
-    # Initialize the distributed VLLM engine
+    args = parse_args()
+    
+    # Initialize the distributed VLLM engine, do not cntrl C here...
     engine = DistributedVLLM(
         num_workers=4,  # Adjust based on your GPU setup
         tensor_parallel_size=2,
         model="Qwen/QwQ-32B-Preview"
     )
-
-    # Load AIME problems
-    problems = load_dataset(TrainDataset.AIME)
-    output_file = "aime_trajectories.json"
+    print('Engine initialized. Ready to generate trajectories.')
+    
+    # Load problems based on args
+    dataset_enum = TrainDataset if args.split == 'train' else TestDataset
+    problems = load_dataset(dataset_enum[args.dataset])
+    
+    # Set output file path
+    output_file = args.output or f"{args.dataset.lower()}_{args.split}_trajectories.json"
     
     results = deepcopy(problems)
     
@@ -75,6 +96,8 @@ if __name__ == "__main__":
                 idx, 
                 engine, 
                 entry,
+                n=args.n,
+                temperature=args.temperature
             ) for idx, entry in enumerate(problems)
         ]
 
@@ -85,7 +108,7 @@ if __name__ == "__main__":
                 results[idx] = entry
                 
                 # Save incrementally
-                if counter % 100 == 0:
+                if counter % 50 == 0:
                     with open(output_file, mode="w", encoding="utf-8") as f:
                         json.dump(results, f, indent=2, ensure_ascii=False)      
             except Exception as e:
