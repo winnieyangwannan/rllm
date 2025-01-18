@@ -30,7 +30,7 @@ OPTIMIZED_VLLM_CONFIG = {
     "max_num_seqs": 256,
     "max_num_batched_tokens": 2**16,
     "enable_chunked_prefill": True,
-    "num_scheduler_steps": 50,
+    "num_scheduler_steps": 25,
 }
 
 @ray.remote(num_gpus=None, num_cpus=None)

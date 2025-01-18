@@ -1,109 +1,97 @@
-from rllm.system_prompts import COT_MATH_SYSTEM_PROMPT
-from rllm.data.load_dataset import Datasets, load_dataset
-from rllm.rewards.math.sympy_checker import grade_answer
-from rllm.rollout.distributed import DistributedVLLM
+from copy import deepcopy
+from tqdm import tqdm
 
-from vllm import SamplingParams
+from rllm.system_prompts import COT_MATH_SYSTEM_PROMPT
+from rllm.data.load_dataset import TrainDataset, load_dataset
+from rllm.rewards.math.sympy_checker import grade_answer
 
 import requests
 import json
-import pprint
-import os
 
-def poll_vllm_chat_completions(api_url, payload):
+from rllm.sampler.distributed_sampler import DistributedVLLM
+import concurrent.futures
+
+def generate_trajectory(idx, engine, entry, n=8, temperature=1.0):
     """
-    Polls the vllm chat completions API to fetch the output.
-
-    Parameters:
-    - api_url (str): The API endpoint for chat completions.
-    - payload (dict): The payload to send to the API, including the prompt or input message.
-
+    Process a single problem using the distributed VLLM engine.
+    
     Returns:
-    - str or None: The assistant's response (assistant content).
+    - dict: Problem record with trajectory and grade
     """
-    try:
-        # Send the initial request to start processing
-        response = requests.post(f"{api_url}/v1/chat/completions", json=payload)
-        if response.status_code != 200:
-            print(f"Error: {response.status_code} - {response.text}")
-            return None
+    problem = entry['problem']
+    answer = entry['answer']
+    content_dict = [
+        {"role": "system", "content": COT_MATH_SYSTEM_PROMPT},
+        {"role": "user", "content": problem},
+    ]
 
-        response_data = response.json()
-        choices = response_data.get("choices", [])
-        if not choices:
-            print("Error: No choices found in the response.")
-            return None
+    # Use the distributed engine's chat_completion method
+    for _ in range(5):
+        try:
+            response_data = engine.chat_completion(content_dict,
+                                                n=n,
+                                                temperature=temperature)
+            # Multiple responses
+            llm_responses = [r['message']['content'] for r in response_data['choices']]
+            break
+        except Exception as e:
+            print(f"Error getting completion: {e}")
+            llm_responses = None
 
-        messages = choices[0]
-        if not messages:
-            print("Error: No messages found in the response.")
-            return None
-        return messages['message']['content']
-
-    except Exception as e:
-        print(f"An error occurred: {e}")
-        return None
-
+    # Grade the answer
+    grades = [grade_answer(r if r else "", str(answer)) for r in llm_responses]
+    # Convert grades to 0 and 1s
+    grades = [1 if g else 0 for g in grades]
+    # Compute pass@1 and pass@8
+    pass_at_1 = grades[0]
+    pass_at_8 = 1 if any(grades) else 0
+    entry.update({
+        'grades': grades,
+        'pass@1': pass_at_1, 
+        'pass@8': pass_at_8,
+        'trajectories': llm_responses
+    })
+    return idx, entry
 
 if __name__ == "__main__":
-    # Very inefficient, will just run for tonight to test things out.
-    # Load from AIME in data/aime_v1.json
-    api_url = "http://0.0.0.0:8000"  # Replace with your vllm server URL
-    aime_problems = load_dataset(Datasets.AIME)
+    # Initialize the distributed VLLM engine
+    engine = DistributedVLLM(
+        num_workers=4,  # Adjust based on your GPU setup
+        tensor_parallel_size=2,
+        model="Qwen/QwQ-32B-Preview"
+    )
 
-    # Path to the JSON file where we'll store cumulative data
-    output_file = "aime_responses.json"
-
-    # 1. Load existing JSON data if file already exists
-    output_data = []
-
-    # 2. Process each problem and incrementally save to JSON
-    for aime in aime_problems:
-        problem = aime['problem']
-
-        content_dict = [
-            {"role": "system", "content": COT_MATH_SYSTEM_PROMPT},
-            {"role": "user", "content": problem},
+    # Load AIME problems
+    problems = load_dataset(TrainDataset.AIME)
+    output_file = "aime_trajectories.json"
+    
+    results = deepcopy(problems)
+    
+    # Process problems in parallel using ThreadPoolExecutor
+    with concurrent.futures.ThreadPoolExecutor(max_workers=128) as executor:
+        futures = [
+            executor.submit(
+                generate_trajectory,
+                idx, 
+                engine, 
+                entry,
+            ) for idx, entry in enumerate(problems)
         ]
 
-        payload = {
-            "messages": content_dict,
-            "model": "Qwen/QwQ-32B-Preview",  # Replace with your model name if different
-        }
-
-        # Example: If using DistributedVLLM, you'd do something like:
-        # engine = DistributedVLLM(num_workers=2, tensor_parallel_size=2, model="Qwen/QwQ-32B-Preview")
-        # responses = engine.chat([payload["messages"]], SamplingParams(temperature=1.0))
-        # engine.shutdown(persist=True)
-
-        # Poll the server
-        response = poll_vllm_chat_completions(api_url, payload)
-
-        # Add assistant response to the conversation
-        if response is not None:
-            content_dict.append({"role": "assistant", "content": response})
-
-        # Print conversation for debugging
-        pprint.pprint(content_dict)
-
-        # Grade the answer
-        grader_result = grade_answer(response if response else "", str(aime['answer']))
-        print("Grader Result:", grader_result)
-
-        # Convert grader result to 1 or 0
-        # Adjust logic based on how your grader returns results
-        grade_value = 1 if grader_result else 0
-
-        # Make a copy of the original AIME record
-        record = dict(aime)  # so we preserve the original fields
-        record["trajectory"] = content_dict
-        record["grade"] = grade_value
-
-        # Add to our cumulative data
-        output_data.append(record)
-
-        # 3. Save the updated data back to the file **after each iteration**
-        with open(output_file, mode="w", encoding="utf-8") as f:
-            json.dump(output_data, f, indent=2, ensure_ascii=False)
+        # Process results as they complete
+        for counter, future in tqdm(enumerate(concurrent.futures.as_completed(futures)), total=len(futures), desc="Processing problems"):
+            try:
+                idx, entry = future.result()
+                results[idx] = entry
+                
+                # Save incrementally
+                if counter % 100 == 0:
+                    with open(output_file, mode="w", encoding="utf-8") as f:
+                        json.dump(results, f, indent=2, ensure_ascii=False)      
+            except Exception as e:
+                print(f"Error processing problem: {e}")
+    
+    with open(output_file, mode="w", encoding="utf-8") as f:
+        json.dump(results, f, indent=2, ensure_ascii=False)
 
     print("All problems processed and appended to JSON.")
