@@ -18,6 +18,12 @@ def parse_args():
                        default='AIME', help='Dataset to process')
     parser.add_argument('--split', type=str, choices=['train', 'test'],
                        default='train', help='Dataset split to use')
+    parser.add_argument('--num_workers', type=int, default=4,
+                       help='Number of vLLM workers')
+    parser.add_argument('--tensor_parallel_size', type=int, default=2,
+                       help='Tensor parallelism per worker')
+    parser.add_argument('--model', type=str, default="Qwen/QwQ-32B-Preview",
+                       help='Model name/path to use')
     parser.add_argument('--temperature', type=float, default=1.0,
                        help='Temperature for sampling')
     parser.add_argument('--n', type=int, default=8,
@@ -35,6 +41,8 @@ def generate_trajectory(idx, engine, entry, n=8, temperature=1.0):
     """
     problem = entry['problem']
     answer = entry['answer']
+    if 'trajectories' in entry and len(entry['trajectories']) >= n:
+        return idx, entry
     content_dict = [
         {"role": "system", "content": COT_MATH_SYSTEM_PROMPT},
         {"role": "user", "content": problem},
@@ -73,9 +81,9 @@ if __name__ == "__main__":
     
     # Initialize the distributed VLLM engine, do not cntrl C here...
     engine = DistributedVLLM(
-        num_workers=4,  # Adjust based on your GPU setup
-        tensor_parallel_size=2,
-        model="Qwen/QwQ-32B-Preview"
+        num_workers=args.num_workers,
+        tensor_parallel_size=args.tensor_parallel_size,
+        model=args.model
     )
     print('Engine initialized. Ready to generate trajectories.')
     

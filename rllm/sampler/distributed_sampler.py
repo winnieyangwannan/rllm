@@ -32,6 +32,9 @@ OPTIMIZED_VLLM_CONFIG = {
     "max_num_batched_tokens": 2**16,
     "enable_chunked_prefill": True,
     "num_scheduler_steps": 40,
+    "enable_prefix_caching": True,
+    "cpu_offload_gb": 75,
+    "preemption_mode": "swap",
 }
 
 @ray.remote(num_gpus=None, num_cpus=None)
@@ -313,9 +316,7 @@ class DistributedVLLM:
                 print(f"Error shutting down worker {worker}: {str(e)}")
                 pass  # Ignore errors during shutdown
         # Tear down Ray cluster.
-        os.system('ray stop')
-        # Kill everything in process group, including zombie Ray actors and itself.
-        #os.system(f"pkill -9 -g $(ps -o pgid= {os.getpid()} | tr -d ' ')")        
+        os.system('ray stop')      
 
 if __name__ == "__main__":
     # Testing DistributedVLLM
