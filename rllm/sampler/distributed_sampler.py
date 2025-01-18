@@ -10,6 +10,8 @@ import gc
 import os
 import requests
 import time
+import threading
+from typing import List, Dict, Any
 
 import ray
 import torch
@@ -151,6 +153,9 @@ class DistributedVLLM:
             num_workers (int): Number of vLLM workers to create
             **model_kwargs: Additional arguments passed to each vLLM model
         """
+        self._current_worker_idx = 0
+        self._worker_lock = threading.Lock()
+        self.model = model_kwargs.get("model", "facebook/opt-125m")
         try:
             ray.init(address="auto", namespace=self.NAMESPACE)
             print("Ray cluster is already initialized.")
@@ -169,6 +174,7 @@ class DistributedVLLM:
 
         # Create or get existing actors (no blocking)
         actor_refs = []
+        new_actors_refs = []
         for i in range(num_workers):
             worker_name = self.WORKER_NAME_TEMPLATE.format(i)
             try:
@@ -183,19 +189,51 @@ class DistributedVLLM:
                     model_kwargs=model_kwargs,
                     port=BASE_VLLM_PORT + i
                 )
+                new_actors_refs.append(worker)
             actor_refs.append(worker)
         
-        # Start all servers in parallel (non-blocking calls)
-        [actor.start_server.remote() for actor in actor_refs]
-
-        # Wait for all servers to report they're healthy (still parallel)
-        wait_futures = [actor.wait_for_server.remote() for actor in actor_refs]
-
-        # Ray will block until all wait_for_server calls are finished
-        ray.get(wait_futures)
+        if new_actors_refs:
+            # Start all servers in parallel (non-blocking calls)
+            [actor.start_server.remote() for actor in new_actors_refs]
+            # Wait for all servers to report they're healthy (still parallel)
+            wait_futures = [actor.wait_for_server.remote() for actor in new_actors_refs]
+            # Ray will block until all wait_for_server calls are finished
+            ray.get(wait_futures)
         
         print("All vLLM servers have started successfully.")
         self.workers = actor_refs
+
+    def _get_next_worker_url(self) -> str:
+        """Get the URL of the next worker in round-robin fashion."""
+        with self._worker_lock:
+            current_idx = self._current_worker_idx
+            self._current_worker_idx = (self._current_worker_idx + 1) % len(self.workers)
+            port = BASE_VLLM_PORT + current_idx
+            return f"http://0.0.0.0:{port}"
+
+    def chat_completion(self, messages: List[Dict[str, str]], **kwargs) -> Dict[str, Any]:
+        """Send a chat completion request to the next available worker.
+        
+        Args:
+            messages: List of message dictionaries with 'role' and 'content'
+            **kwargs: Additional parameters for the chat completion API
+            
+        Returns:
+            Dict containing the API response
+        """
+        url = self._get_next_worker_url()
+        print(url)
+        endpoint = f"{url}/v1/chat/completions"
+        
+        payload = {
+            "messages": messages,
+            "model": self.model,
+            **kwargs
+        }
+        
+        response = requests.post(endpoint, json=payload)
+        response.raise_for_status()
+        return response.json()
 
     def _create_worker(self, name, model_kwargs, port=BASE_VLLM_PORT):
         """Create a new Ray vLLM worker.
@@ -234,33 +272,25 @@ class DistributedVLLM:
         print("Shutting down Ray and vLLM workers...")
         for worker in self.workers:
             try:
-                # Get worker PID
-                worker_pid = ray.get(worker.get_pid.remote())
-                os.system(f"pkill -9 -g $(ps -o pgid= {worker_pid} | tr -d ' ')")
                 ray.get(worker.shutdown.remote())
                 ray.kill(worker)
             except Exception as e:
                 print(f"Error shutting down worker {worker}: {str(e)}")
                 pass  # Ignore errors during shutdown
-
-        # In case ray stop doesn't actually stop the cluster, try again        
-        for _ in range(2):
-            os.system('ray stop --force')
-
-def __del__(self):
-    """Destructor to ensure cleanup if program gets killed."""
-    try:
-        # Force stop Ray cluster
+        # Tear down Ray cluster.
         os.system('ray stop --force')
-    except:
-        pass
-
-        
+        # Kill everything in process group, including zombie Ray actors and itself.
+        os.system(f"pkill -9 -g $(ps -o pgid= {os.getpid()} | tr -d ' ')")        
 
 if __name__ == "__main__":
+    # Testing DistributedVLLM
     distributed_vllm = DistributedVLLM(
         num_workers=4,
         tensor_parallel_size=2,
         model="Qwen/QwQ-32B-Preview"
     )
+    print(distributed_vllm.chat_completion([{"role": "user", "content": "What is the capital of France?"}]))
+    print(distributed_vllm.chat_completion([{"role": "user", "content": "What is the capital of MarioLand?"}]))
+    print(distributed_vllm.chat_completion([{"role": "user", "content": "What is the capital of MarioLand?"}]))
+    print(distributed_vllm.chat_completion([{"role": "user", "content": "What is the capital of MarioLand?"}]))
     distributed_vllm.shutdown()
