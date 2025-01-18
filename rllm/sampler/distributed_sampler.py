@@ -16,10 +16,14 @@ import time
 
 import ray
 import torch
-from vllm.entrypoints.openai.api_server import run_server
+
+from vllm.entrypoints.openai import api_server as vllm_api_server
 from vllm.entrypoints.openai.cli_args import make_arg_parser
 from vllm.engine.arg_utils import FlexibleArgumentParser
 
+# Monkey patch the vLLM server to disable signal handlers
+from rllm.sampler.monkey_patch import run_server
+vllm_api_server.run_server = run_server
 
 @ray.remote(num_gpus=None, num_cpus=None)
 class RayVLLMWorker:
@@ -45,6 +49,7 @@ class RayVLLMWorker:
         # Create parser with all AsyncEngineArgs defaults
         openai_parser = make_arg_parser(FlexibleArgumentParser())
         openai_args = openai_parser.parse_args([])
+        
         # Override with host and port
         openai_args.host = self.host
         openai_args.port = self.port
@@ -59,10 +64,10 @@ class RayVLLMWorker:
         """This runs in a dedicated thread, so we can block here safely."""
         loop = asyncio.new_event_loop()
         asyncio.set_event_loop(loop)
-        loop.run_until_complete(run_server(self.server_args))
+        loop.run_until_complete(run_server(self.server_args,))
         loop.close()
     
-    def wait_for_server(self, timeout=600, interval=3):
+    def wait_for_server(self, timeout=600, interval=5):
         """Wait for the server to be ready by checking the health endpoint.
         
         Args:
@@ -72,7 +77,7 @@ class RayVLLMWorker:
         Raises:
             TimeoutError: If server doesn't become ready within timeout period
         """
-        health_url = f"http://{self.host}:{self.port}/ready"
+        health_url = f"http://{self.host}:{self.port}/health"
         start_time = time.time()
         while time.time() - start_time < timeout:
             try:
