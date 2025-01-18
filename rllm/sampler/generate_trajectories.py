@@ -1,4 +1,5 @@
 from copy import deepcopy
+import os
 from tqdm import tqdm
 
 from rllm.system_prompts import COT_MATH_SYSTEM_PROMPT
@@ -93,7 +94,9 @@ if __name__ == "__main__":
     
     # Set output file path
     output_file = args.output or f"{args.dataset.lower()}_{args.split}_trajectories.json"
-    
+    if not os.path.isabs(output_file):
+        script_dir = os.path.dirname(os.path.abspath(__file__))
+        output_file = os.path.join(script_dir, output_file)
     results = deepcopy(problems)
     
     # Process problems in parallel using ThreadPoolExecutor

@@ -33,8 +33,8 @@ OPTIMIZED_VLLM_CONFIG = {
     "enable_chunked_prefill": True,
     "num_scheduler_steps": 40,
     "enable_prefix_caching": True,
-    "cpu_offload_gb": 100,
-    "preemption_mode": "swap",
+    # "cpu_offload_gb": 100,
+    # "preemption_mode": "swap",
 }
 
 @ray.remote(num_gpus=None, num_cpus=None)
