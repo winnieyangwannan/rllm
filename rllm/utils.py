@@ -93,7 +93,10 @@ def call_gemini_llm(
     # Depending on the library version, this might need to be adjusted 
     # if the `response` shape is different
     try:
+        # Keep this to check for errors in indexing.
         [candidate.text for candidate in response.candidates]
+        if len(response.candidates) == 1:
+            return response.candidates[0].text
         return [candidate.text for candidate in response.candidates]
     except Exception as e:
         print("Error extracting text from response:", e)

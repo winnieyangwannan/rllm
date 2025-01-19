@@ -1,19 +1,3 @@
-COT_SYSTEM_PROMPT = """You will be given a hard problem and you will try to write down braindumps as if you are using a scratchpad first. You should use the following techniques when writing down your thoughts.
-- Analyze the input to fully understand the question. Beware of details and constraints.
-- Breakdown the problem into smaller pieces.
-- Think step-by-step to solve the problem.
-- Write down intermediate thoughts during each step to be used later.
-- Make high-level plan first, then progressively more detailed ones
-- Explore multiple options to approach the problem and try not to settle on the first idea.
-- Pause and rethink during your thought process.
-- Always self-reflect and double check the answer.
-- Backtrack and restart the process if you are stuck or sth is wrong.
-- You will output your thoughts wrapped inside one single <thought> </thought> block. YOU MUST FOLLOW THIS.
-- Do not use any markdown within the thought block. After the thought, write down your final solution to present to the user.
-
-Think step by step in detail first. You will output your thoughts wrapped inside one single <thought> </thought> block. After thinking, solve the problem conditioned on the thoughts.
-"""
-
 COT_MATH_SYSTEM_PROMPT = """You will be given a hard problem and you will try to write down braindumps as if you are using a scratchpad first. You should use the following techniques when writing down your thoughts.
 - You will output your thoughts wrapped inside one single <|st_id|> <|et_id|> block.
 - Analyze the input to fully understand the question. Beware of details and constraints.
@@ -39,6 +23,60 @@ questions, summarizing relevant findings, brainstorming new ideas, verifying the
 In the Solution section, based on various attempts, explorations, and reflections from the Thought section, systematically present the final solution that you deem correct. 
 The solution should remain a logical, accurate, concise expression style and detail necessary step needed to reach the conclusion, formatted as follows: 
 <|begin_of_solution|> {final formatted, precise, and clear solution} <|end_of_solution|> Now, try to solve the following question through the above guidelines:"""
+
+ORM_PROMPT = """Your assigned task is to check if two math answers are equivalent. You are a wordclass expert for this task.
+
+Given a problem and two answers, determine if they are mathematically equivalent. Do not solve the problem.
+Instead, analyze whether the two answers represent the same mathematical value or expression, even if written differently.
+
+Guidelines for equivalence:
+- Different forms of the same number (e.g., 0.5 = 1/2 = 50%)
+- Algebraically equivalent expressions (e.g., (x+1)^2 = x^2 + 2x + 1)
+- Geometrically equivalent expressions (e.g., r²π = πr²)
+- Trigonometrically equivalent expressions (e.g., sin²θ + cos²θ = 1)
+- Semantic equivalence (e.g., "impossible" and "no possible solution")
+- Different formats of the same solution (e.g., (1,1,1,3) and a=1,b=1,c=1,p=3)
+- Solutions with different or no units (e.g., 100 versus 100 degrees)
+- For other cases, please use your best judgement to determine if two answers are truly equivalent.
+
+Your output must follow the following format:
+1) Explain your reasoning for why the answers are equivalent or not.
+2) Then provide your final verdict in the format: [[YES]] or [[NO]]
+
+Examples:
+Problem: What is the area of a circle with radius 2?
+Answer 1: 4π
+Answer 2: πr² where r=2
+Explanation: Answer 2 simplifies to 4π, making both answers identical.
+[[YES]]
+
+Problem: Solve for x: x² + 2x + 1 = 0
+Answer 1: x = -1
+Answer 2: x = -1 ± 0
+Explanation: While Answer 2 includes ± 0, this reduces to just -1, making them equivalent.
+[[YES]]
+
+Problem: Find all positive integers $a,b,c$ and prime $p$ satisfying that\n\\[ 2^a p^b=(p+2)^c+1.\\]
+Answer 1: a=1, b=1, c=1, p=3
+Answer 3:  (1, 1, 1, 3)
+Explanation: Both answers represent exactly the same solution, just written in different formats. Answer 1 writes out the values with variable names (a=1, b=1, c=1, p=3) while Answer 3 presents them as an ordered tuple (1, 1, 1, 3).
+[[YES]]
+
+Problem: The sides of a $99$ -gon are initially colored so that consecutive sides are red, blue, red, blue,..., red, blue, yellow. We make a sequence of modifications in the coloring, changing the color of one side at a time to one of the three given colors (red, blue, yellow), under the constraint that no two adjacent sides may be the same color. By making a sequence of such modifications, is it possible to arrive at the coloring in which consecutive sides \nare red, blue, red, blue, red, blue,..., red, yellow, blue?
+Answer 1: There is no such coloring.
+Answer 2: It is impossible to perform a series of such modifications that change the start sequence to the end sequence.
+Explanation: Both answers are equivalent because they both state that it is impossible to perform a series of such modifications.
+[[YES]]
+
+Problem: Find the slope of the line y = 2x + 1
+Answer 1: 2
+Answer 2: 3
+Explanation: These are different numbers and cannot be equivalent.
+[[NO]]
+
+-----
+"""
+
 
 # Judge difficulty of the math problem.
 MATH_DIFFICULTY_PROMPT = """You will be given a math problem. Your job is to grade the difficulty level from 1-10 according to the AoPS standard.

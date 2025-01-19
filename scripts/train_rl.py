@@ -4,12 +4,11 @@ from vllm import SamplingParams
 
 from rllm.data.load_dataset import Datasets, load_dataset
 
-from rllm.sampler.distributed import DistributedVLLM
 from rllm.sampler.distributed_client import DistributedLLMClient
 from rllm.sampler.model import COTRollout
 from rllm.system_prompts import COT_MATH_SYSTEM_PROMPT
 
-from rllm.rewards.math.sympy_checker import grade_answer
+from rllm.rewards.math_utils.utils import grade_answer
 from rllm.trainer.reinforce import ReinforceTrainer, ReinforceConfig
 
 import asyncio
