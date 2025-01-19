@@ -54,7 +54,7 @@ def wait_for_server(port: int, timeout: int = 1800, interval: int = 5):
     """Wait for server to be healthy"""
     start_time = time.time()
     while time.time() - start_time < timeout:
-        if _check_server_health(port):
+        if check_server_health(port):
             return True
         time.sleep(interval)
     raise TimeoutError(f"Server on port {port} failed to start within {timeout} seconds")
