@@ -2,7 +2,7 @@ import asyncio
 from typing import Any
 
 import uvicorn
-from fastapi import FastAPI, Request, Response
+from fastapi import FastAPI
 
 from vllm.entrypoints.launcher import serve_http
 from vllm.entrypoints.openai.tool_parsers import ToolParserManager

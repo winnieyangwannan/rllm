@@ -2,8 +2,11 @@ datasets
 latex2sympy2
 pylatexenc
 sentence_transformers
-vllm
 accelerate
 pandas
 wandb
-vllm==0.6.6.post1
+vertexai
+#vllm==0.6.6.post1
+sglang[all]
+sglang-router
+google-cloud-aiplatform

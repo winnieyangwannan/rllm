@@ -158,6 +158,9 @@ class RayVLLMWorker:
         torch.cuda.empty_cache()
         torch.cuda.synchronize()
 
+class RaySglangWorker:
+    pass
+
 
 class DistributedVLLM:
     """Manages a distributed system of vLLM workers using Ray.

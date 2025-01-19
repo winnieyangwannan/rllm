@@ -1,8 +1,8 @@
 """
 Global variables for the RLLM project.
 """
-# VLLM Sampler
-BASE_VLLM_PORT = 8000
+# For both vLLM and SGLang samplers
+BASE_SAMPLER_PORT = 8000
 
 # Gemini Vertex AI Config (for dataset preprocessing).
 GCP_PROJECT_ID = "cloud-llm-test"

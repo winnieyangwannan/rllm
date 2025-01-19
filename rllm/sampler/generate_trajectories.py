@@ -1,31 +1,42 @@
-from copy import deepcopy
+import argparse
+import concurrent.futures
+import json
 import os
+from copy import deepcopy
+
 from tqdm import tqdm
 
-from rllm.system_prompts import COT_MATH_SYSTEM_PROMPT
 from rllm.data.load_dataset import TrainDataset, TestDataset, load_dataset
 from rllm.rewards.math.sympy_checker import grade_answer
-
-import requests
-import json
-
-from rllm.sampler.distributed_sampler import DistributedVLLM
-import concurrent.futures
-import argparse
+from rllm.sampler.distributed_sglang_sampler import DistributedSGLang
+from rllm.system_prompts import COT_MATH_SYSTEM_PROMPT
 
 def parse_args():
+    """Parse command line arguments for trajectory generation.
+    
+    Returns:
+        argparse.Namespace: Parsed command line arguments with the following fields:
+            - dataset (str): Dataset to process (AIME, AMC, MATH, OMNI_MATH, or OLYMPIAD)
+            - split (str): Dataset split to use (train or test)
+            - num_workers (int): Number of vLLM workers to use for parallel processing
+            - tensor_parallel_size (int): Tensor parallelism size per worker for model sharding
+            - model (str): Name or path of the model to use
+            - temperature (float): Sampling temperature for generation
+            - n (int): Number of samples to generate per math problem
+            - output (str): Output file path for saving trajectories
+    """
     parser = argparse.ArgumentParser(description='Generate trajectories for math problems')
     parser.add_argument('--dataset', type=str, choices=['AIME', 'AMC', 'MATH', 'OMNI_MATH', 'OLYMPIAD'],
                        default='AIME', help='Dataset to process')
     parser.add_argument('--split', type=str, choices=['train', 'test'],
                        default='train', help='Dataset split to use')
-    parser.add_argument('--num_workers', type=int, default=4,
+    parser.add_argument('--num_workers', type=int, default=1,
                        help='Number of vLLM workers')
-    parser.add_argument('--tensor_parallel_size', type=int, default=2,
+    parser.add_argument('--tensor_parallel_size', type=int, default=8,
                        help='Tensor parallelism per worker')
     parser.add_argument('--model', type=str, default="Qwen/QwQ-32B-Preview",
                        help='Model name/path to use')
-    parser.add_argument('--temperature', type=float, default=1.0,
+    parser.add_argument('--temperature', type=float, default=0.8,
                        help='Temperature for sampling')
     parser.add_argument('--n', type=int, default=8,
                        help='Number of samples to generate per problem')
@@ -33,7 +44,7 @@ def parse_args():
                        help='Output file path (default: {dataset}_{split}_trajectories.json)')
     return parser.parse_args()
 
-def generate_trajectory(idx, engine, entry, n=8, temperature=1.0):
+def generate_trajectory(idx, engine, entry, n=8, temperature=0.8):
     """
     Process a single problem using the distributed VLLM engine.
     
@@ -43,6 +54,9 @@ def generate_trajectory(idx, engine, entry, n=8, temperature=1.0):
     problem = entry['problem']
     answer = entry['answer']
     if 'trajectories' in entry and len(entry['trajectories']) >= n:
+        # if entry[f'pass@{n}'] == 0:
+        #     pass
+        # else:
         return idx, entry
     content_dict = [
         {"role": "system", "content": COT_MATH_SYSTEM_PROMPT},
@@ -50,7 +64,8 @@ def generate_trajectory(idx, engine, entry, n=8, temperature=1.0):
     ]
 
     # Use the distributed engine's chat_completion method
-    for _ in range(5):
+    retry_limit = 5
+    for retry_idx in range(retry_limit):
         try:
             response_data = engine.chat_completion(content_dict,
                                                 n=n,
@@ -61,27 +76,29 @@ def generate_trajectory(idx, engine, entry, n=8, temperature=1.0):
         except Exception as e:
             print(f"Error getting completion: {e}")
             llm_responses = None
-
+            if retry_idx == retry_limit - 1:
+                raise e
     # Grade the answer
     grades = [grade_answer(r if r else "", str(answer)) for r in llm_responses]
     # Convert grades to 0 and 1s
     grades = [1 if g else 0 for g in grades]
     # Compute pass@1 and pass@8
     pass_at_1 = grades[0]
-    pass_at_8 = 1 if any(grades) else 0
+    pass_at_n = 1 if any(grades) else 0
     entry.update({
         'grades': grades,
         'pass@1': pass_at_1, 
-        'pass@8': pass_at_8,
+        f'pass@{n}': pass_at_n,
         'trajectories': llm_responses
     })
+    print(entry)
     return idx, entry
 
 if __name__ == "__main__":
     args = parse_args()
     
     # Initialize the distributed VLLM engine, do not cntrl C here...
-    engine = DistributedVLLM(
+    engine = DistributedSGLang(
         num_workers=args.num_workers,
         tensor_parallel_size=args.tensor_parallel_size,
         model=args.model
@@ -97,8 +114,8 @@ if __name__ == "__main__":
     if not os.path.isabs(output_file):
         script_dir = os.path.dirname(os.path.abspath(__file__))
         output_file = os.path.join(script_dir, output_file)
+
     results = deepcopy(problems)
-    
     # Process problems in parallel using ThreadPoolExecutor
     with concurrent.futures.ThreadPoolExecutor(max_workers=128) as executor:
         futures = [
@@ -117,14 +134,12 @@ if __name__ == "__main__":
             try:
                 idx, entry = future.result()
                 results[idx] = entry
-                
                 # Save incrementally
                 if counter % 50 == 0:
                     with open(output_file, mode="w", encoding="utf-8") as f:
                         json.dump(results, f, indent=2, ensure_ascii=False)      
             except Exception as e:
                 print(f"Error processing problem: {e}")
-    
     with open(output_file, mode="w", encoding="utf-8") as f:
         json.dump(results, f, indent=2, ensure_ascii=False)
 

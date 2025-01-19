@@ -1,3 +1,5 @@
+import random
+import socket
 import time
 from typing import List
 
@@ -130,5 +132,31 @@ class RAG:
             })
         return results
 
+def find_available_ports(base_port: int, count: int) -> List[int]:
+    """Find consecutive available ports starting from base_port."""
+    available_ports = []
+    current_port = base_port
+
+    while len(available_ports) < count:
+        if is_port_available(current_port):
+            available_ports.append(current_port)
+        current_port += random.randint(100, 1000)
+
+    return available_ports
+
+
+def is_port_available(port):
+    """Return whether a port is available."""
+    with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
+        try:
+            s.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+            s.bind(("", port))
+            s.listen(1)
+            return True
+        except socket.error:
+            return False
+        except OverflowError:
+            return False
+
 if __name__ == '__main__':
-    print(call_gemini_llm('hello', 'You are freindly, be freindly', n=2))
+    print(is_port_available(8000))
