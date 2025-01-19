@@ -13,7 +13,7 @@ from rllm.system_prompts import COT_MATH_SYSTEM_PROMPT
 from rllm.rewards import RewardInput, RewardType
 from rllm.rewards.math_reward import RewardMathFn
 
-def parse_args():
+def parse_args(parser: argparse.ArgumentParser):
     """Parse command line arguments for trajectory generation.
     
     Returns:
@@ -27,7 +27,6 @@ def parse_args():
             - n (int): Number of samples to generate per math problem
             - output (str): Output file path for saving trajectories
     """
-    parser = argparse.ArgumentParser(description='Generate trajectories for math problems')
     parser.add_argument('--dataset', type=str, choices=['AIME', 'AMC', 'MATH', 'OMNI_MATH', 'OLYMPIAD'],
                        default='AIME', help='Dataset to process')
     parser.add_argument('--split', type=str, choices=['train', 'test'],
@@ -99,7 +98,8 @@ def generate_trajectory(idx, engine, entry, n=8, temperature=0.8):
     return idx, entry
 
 if __name__ == "__main__":
-    args = parse_args()
+    parser = argparse.ArgumentParser(description='Generate trajectories for math problems')
+    args = parse_args(parser)
     
     # Initialize the distributed VLLM engine, do not cntrl C here...
     engine = DistributedSGLang(
