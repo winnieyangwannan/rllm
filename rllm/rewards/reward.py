@@ -51,7 +51,7 @@ class RewardOutput:
     is_correct: bool
 
 
-class Reward:
+class RewardFn:
     """Abstract base class for defining reward calculation strategies.
 
     This class should be subclassed to implement specific reward calculation logic.

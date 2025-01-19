@@ -10,6 +10,8 @@ from rllm.data.load_dataset import TrainDataset, TestDataset, load_dataset
 from rllm.rewards.math_utils.utils import grade_answer
 from rllm.sampler.distributed_sglang_sampler import DistributedSGLang
 from rllm.system_prompts import COT_MATH_SYSTEM_PROMPT
+from rllm.rewards import RewardInput, RewardType
+from rllm.rewards.math_reward import RewardMathFn
 
 def parse_args():
     """Parse command line arguments for trajectory generation.
@@ -78,10 +80,12 @@ def generate_trajectory(idx, engine, entry, n=8, temperature=0.8):
             llm_responses = None
             if retry_idx == retry_limit - 1:
                 raise e
+    
+    reward_fn = RewardMathFn()
+    reward_inputs = [RewardInput(problem=problem, problem_type=RewardType.MATH, model_response=r, metadata={"answer": answer}) for r in llm_responses]
+    reward_outputs = [reward_fn(r) for r in reward_inputs]
     # Grade the answer
-    grades = [grade_answer(r if r else "", str(answer)) for r in llm_responses]
-    # Convert grades to 0 and 1s
-    grades = [1 if g else 0 for g in grades]
+    grades = [1 if r.is_correct else 0 for r in reward_outputs]
     # Compute pass@1 and pass@8
     pass_at_1 = grades[0]
     pass_at_n = 1 if any(grades) else 0

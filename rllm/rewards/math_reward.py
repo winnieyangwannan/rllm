@@ -6,12 +6,12 @@ validate answers when necessary.
 
 from enum import Enum
 
-from rllm.rewards import Reward, RewardInput, RewardOutput, RewardType
+from rllm.rewards import RewardFn, RewardInput, RewardOutput, RewardType
 from rllm.rewards.math_utils.utils import extract_answer, grade_answer_sympy, grade_answer_mathd
 from rllm.system_prompts import ORM_PROMPT
 from rllm.utils import call_gemini_llm
 
-ORM_PROMPT_TEMPLATE = """
+ORM_USER_TEMPLATE = """
 Problem: {problem}
 Answer 1: {answer_1}
 Answer 2: {answer_2}
@@ -35,7 +35,7 @@ class AnswertoReward(Enum):
     UNK = -1
 
 
-class RewardMathFn(Reward):
+class RewardMathFn(RewardFn):
     """
     Reward function for evaluating mathematical answers.
 
@@ -46,7 +46,7 @@ class RewardMathFn(Reward):
     def __call__(self, input: RewardInput) -> RewardOutput:
         assert input.problem_type == RewardType.MATH, \
             "Invalid problem type: expected 'MATH', but got '{}'".format(input.problem_type)
-        import pdb; pdb.set_trace()
+
         problem = input.problem
         # Process the LLM response
         model_response = input.model_response
@@ -69,7 +69,7 @@ class RewardMathFn(Reward):
         # If latex heuristics fail, use LLM as ORM to evaluate correctness.
         orm_response = call_gemini_llm(
             system_prompt=ORM_PROMPT,
-            prompt=ORM_PROMPT_TEMPLATE.format(problem=problem, answer_1=model_answer, answer_2=ground_truth),
+            prompt=ORM_USER_TEMPLATE.format(problem=problem, answer_1=model_answer, answer_2=ground_truth),
             temperature=0.0,
         )
         if "[[YES]]" in orm_response:
@@ -81,6 +81,6 @@ class RewardMathFn(Reward):
 
 if __name__ == "__main__":
     reward = RewardMathFn()
-    input = RewardInput(problem="Let $P(x)=x^{4}+2 x^{3}-13 x^{2}-14 x+24$ be a polynomial with roots $r_{1}, r_{2}, r_{3}, r_{4}$. Let $Q$ be the quartic polynomial with roots $r_{1}^{2}, r_{2}^{2}, r_{3}^{2}, r_{4}^{2}$, such that the coefficient of the $x^{4}$ term of $Q$ is 1. Simplify the quotient $Q\\left(x^{2}\\right) / P(x)$, leaving your answer in terms of $x$. (You may assume that $x$ is not equal to any of $\\left.r_{1}, r_{2}, r_{3}, r_{4}\\right)$.", problem_type=RewardType.MATH, model_response="The answer is \\boxed{the function 24 + 14*x + (-13)*x^2 - 2*x^3 + x^4}.", metadata={"answer": "$x^{4}-2 x^{3}-13 x^{2}+14 x+24$"})
+    input = RewardInput(problem="Let $P(x)=x^{4}+2 x^{3}-13 x^{2}-14 x+24$ be a polynomial with roots $r_{1}, r_{2}, r_{3}, r_{4}$. Let $Q$ be the quartic polynomial with roots $r_{1}^{2}, r_{2}^{2}, r_{3}^{2}, r_{4}^{2}$, such that the coefficient of the $x^{4}$ term of $Q$ is 1. Simplify the quotient $Q\\left(x^{2}\\right) / P(x)$, leaving your answer in terms of $x$. (You may assume that $x$ is not equal to any of $\\left.r_{1}, r_{2}, r_{3}, r_{4}\\right)$.", problem_type=RewardType.MATH, model_response="The answer is \\boxed{the function is 24 + 14*x + (-13)*x^2 - 2*x^3 + x^4}.", metadata={"answer": "$x^{4}-2 x^{3}-13 x^{2}+14 x+24$"})
     output = reward(input)
     print(output)
