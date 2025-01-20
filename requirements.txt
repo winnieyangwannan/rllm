@@ -6,7 +6,6 @@ accelerate
 pandas
 wandb
 vertexai
-#vllm==0.6.6.post1
 sglang[all]
 sglang-router
 google-cloud-aiplatform

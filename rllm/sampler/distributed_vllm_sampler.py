@@ -9,23 +9,22 @@ import asyncio
 import gc
 import os
 import requests
-import time
 import threading
 from typing import List, Dict, Any
-import psutil
+import multiprocessing as mp
 
 import ray
 import torch
 
-from vllm.entrypoints.openai import api_server as vllm_api_server
+from vllm.entrypoints.openai.api_server import run_server
 from vllm.entrypoints.openai.cli_args import make_arg_parser
 from vllm.engine.arg_utils import FlexibleArgumentParser
 
-from rllm.globals import BASE_VLLM_PORT
-# Monkey patch the vLLM server to disable signal handlers
-from rllm.sampler.monkey_patch import run_server
-vllm_api_server.run_server = run_server
-
+from rllm.globals import BASE_SAMPLER_PORT
+from rllm.sampler.utils import (
+    kill_process_and_children,
+    wait_for_server,
+)
 
 OPTIMIZED_VLLM_CONFIG = {
     "max_num_seqs": 256,
@@ -33,9 +32,19 @@ OPTIMIZED_VLLM_CONFIG = {
     "enable_chunked_prefill": True,
     "num_scheduler_steps": 40,
     "enable_prefix_caching": True,
-    # "cpu_offload_gb": 100,
-    # "preemption_mode": "swap",
 }
+
+def _launch_vllm_server(args: Any) -> None:
+    """Target function for our child process.
+    
+    This is where we call the blocking run_server(args).
+    Because this runs in a separate process, it doesn't block the Ray actor's thread.
+    """
+    print(f"[Child Process] Launching vLLM server on port {args.port}")
+    loop = asyncio.new_event_loop()
+    asyncio.set_event_loop(loop)
+    loop.run_until_complete(run_server(args))
+    loop.close()
 
 @ray.remote(num_gpus=None, num_cpus=None)
 class RayVLLMWorker:
@@ -50,197 +59,157 @@ class RayVLLMWorker:
         model_kwargs: Additional arguments passed to the vLLM model
     """
 
-    def __init__(self, host="0.0.0.0", port=8000, **model_kwargs):
-        """Initialize the worker and start the vLLM server.
+    def __init__(self, port: int, **model_kwargs) -> None:
+        """Initialize the worker and prepare vLLM server configuration.
 
         Args:
-            host (str): Host address to bind the server to
-            port (int): Port to run the server on
-            **model_kwargs: Additional arguments passed to the vLLM model
+            port: Port to run the server on
+            **model_kwargs: Additional arguments for model configuration
         """
-        self.model_kwargs = model_kwargs
-        self.host = host
         self.port = port
-
+        self.model = model_kwargs.get("model", "facebook/opt-125m")
+        
         # Initialize server args
-        # Create parser with all AsyncEngineArgs defaults
         openai_parser = make_arg_parser(FlexibleArgumentParser())
-        openai_args = openai_parser.parse_args([])
+        self.server_args = openai_parser.parse_args([])
         
-        # Override with host and port
-        openai_args.host = self.host
-        openai_args.port = self.port
-        openai_args.disable_signal_handlers = True
-        # Override with optimized vLLM config
+        # Configure server args
+        self.server_args.host = "0.0.0.0"
+        self.server_args.port = self.port
+        self.server_args.disable_signal_handlers = True
+        
+        # Apply optimized config
         for key, value in OPTIMIZED_VLLM_CONFIG.items():
-            setattr(openai_args, key, value)
-        # Override with all model kwargs
-        for key, value in self.model_kwargs.items():
-            setattr(openai_args, key, value)
-
-        self.server_args = openai_args
-
-    def get_pid(self):
-        """Get the process ID of this worker.
+            setattr(self.server_args, key, value)
         
+        # Apply model kwargs
+        for key, value in model_kwargs.items():
+            setattr(self.server_args, key, value)
+
+        # We'll store a reference to the child Process
+        self.server_process = None
+
+    def start_server(self) -> str:
+        """Spawn a child process that runs the vLLM server.
+
         Returns:
-            int: Process ID of the worker
+            Status message indicating if server started or was already running
         """
-        return os.getpid()
+        if self.server_process is not None:
+            return f"vLLM server already running on port {self.port}"
 
-    def start_server(self):
-        """Start the vLLM server in a dedicated thread."""
-        loop = asyncio.new_event_loop()
-        asyncio.set_event_loop(loop)
-        loop.run_until_complete(run_server(self.server_args))
-        loop.close()
-    
-    def wait_for_server(self, timeout=600, interval=5):
-        """Wait for the server to be ready by checking the health endpoint.
+        # Create and start the child process
+        self.server_process = mp.Process(
+            target=_launch_vllm_server,
+            args=(self.server_args,),
+            daemon=False
+        )
+        self.server_process.start()
         
-        Args:
-            timeout (int): Maximum time to wait in seconds
-            interval (int): Time between health checks in seconds
-        
-        Raises:
-            TimeoutError: If server doesn't become ready within timeout period
-        """
-        health_url = f"http://{self.host}:{self.port}/health"
-        start_time = time.time()
-        while time.time() - start_time < timeout:
-            try:
-                response = requests.get(health_url, timeout=interval)
-                if response.status_code == 200:
-                    print(f"Server ready on {self.host}:{self.port}")
-                    return
-            except requests.exceptions.RequestException:
-                pass
-            except Exception:
-                pass
-            time.sleep(interval)      
-        raise TimeoutError(f"Server failed to start within {timeout} seconds")
+        # Wait for server to become healthy
+        wait_for_server(self.port)
+        return f"Started server on port {self.port}"
 
-    def get_config(self):
-        """Get the model configuration for this worker.
-        
+    def shutdown(self) -> str:
+        """Terminate the vLLM server process (if running).
+
         Returns:
-            dict: Model configuration parameters
+            Status message indicating if server was terminated
         """
-        return self.model_kwargs
+        if self.server_process is None:
+            return "No server process to terminate."
 
-    def shutdown(self):
-        """Shutdown the worker and clean up resources."""
-        # Ensure all VLLM worker processes are terminated
-        try:
-            # Get all child processes
-            parent = psutil.Process(os.getpid())
-            children = parent.children(recursive=True)
-            
-            # Terminate each child process
-            for child in children:
-                try:
-                    child.terminate()
-                except psutil.NoSuchProcess:
-                    pass
-            
-            # Wait for processes to terminate and kill if needed
-            _, alive = psutil.wait_procs(children, timeout=3)
-            for p in alive:
-                try:
-                    p.kill()
-                except psutil.NoSuchProcess:
-                    pass
-        except Exception as e:
-            print(f"Error shutting down worker processes: {e}")
-            
+        pid = self.server_process.pid
+        kill_process_and_children(pid)
+        self.server_process = None
+        
         # Clean up GPU memory
         gc.collect()
         torch.cuda.empty_cache()
         torch.cuda.synchronize()
-
-class RaySglangWorker:
-    pass
-
+        
+        return f"Server on port {self.port} has been shut down."
 
 class DistributedVLLM:
     """Manages a distributed system of vLLM workers using Ray.
 
-    This class handles creating and managing multiple vLLM workers across a Ray cluster,
-    enabling distributed inference.
-
-    Attributes:
-        WORKER_NAME_TEMPLATE (str): Template for worker names
-        NAMESPACE (str): Ray namespace for the workers
-        workers (list): List of worker references
+    This class handles:
+    - Starting/stopping Ray cluster
+    - Managing worker processes
+    - Routing inference requests
+    - Resource cleanup
     """
 
     WORKER_NAME_TEMPLATE = "persistent_vllm_worker_{}"
     NAMESPACE = "vllm_workers"
 
-    def __init__(self, num_workers: int = 1, **model_kwargs):
+    def __init__(self, num_workers: int = 1, **model_kwargs) -> None:
         """Initialize the distributed system.
 
         Args:
-            num_workers (int): Number of vLLM workers to create
-            **model_kwargs: Additional arguments passed to each vLLM model
+            num_workers: Number of worker processes to launch
+            **model_kwargs: Model configuration parameters
         """
         self._worker_lock = threading.Lock()
         self.model = model_kwargs.get("model", "facebook/opt-125m")
+        self.num_workers = num_workers
+        self.model_kwargs = model_kwargs
         self.active_requests = {}  # Dict to track active requests per worker
-        
+
         try:
             ray.init(address="auto", namespace=self.NAMESPACE)
             print("Ray cluster is already initialized.")
-        except:
-            print("No existing Ray cluster found. Starting a new one...")
-            # If ray cluster is not available, start a new cluster
+        except ConnectionError:
+            print("Starting new Ray cluster...")
             tensor_parallel_size = model_kwargs.get("tensor_parallel_size", 1)
             total_gpus = num_workers * tensor_parallel_size
-            total_actual_gpus = torch.cuda.device_count()
-            if total_gpus > total_actual_gpus:
-                raise ValueError(f"Requested {total_gpus} GPUs, but only {total_actual_gpus} are available.")
-            
             total_cpus = os.cpu_count()
             os.system(f"ray start --head --num-cpus={total_cpus-1} --num-gpus={total_gpus}")
             ray.init(address="auto", namespace=self.NAMESPACE)
 
-        # Create or get existing actors (no blocking)
-        actor_refs = []
-        new_actors_refs = []
-        for i in range(num_workers):
+        # Fetch vLLM workers
+        self._get_or_launch_workers()
+        print("All vLLM servers have started successfully.")
+
+    def _get_or_launch_workers(self) -> None:
+        """Launch vLLM workers or connect to existing ones."""
+        worker_refs = []
+        new_worker_refs = []
+        self.worker_ports = [BASE_SAMPLER_PORT + i for i in range(self.num_workers)]
+        
+        for i in range(self.num_workers):
             worker_name = self.WORKER_NAME_TEMPLATE.format(i)
             try:
-                # Try to get an existing named actor
                 worker = ray.get_actor(worker_name, namespace=self.NAMESPACE)
                 print(f"Found existing worker: {worker_name}")
             except ValueError:
-                # If it doesn't exist, create a new one
-                print(f"Worker {worker_name} doesn't exist, creating a new one.")
-                worker = self._create_worker(
+                print(f"Creating new worker: {worker_name}")
+                worker = RayVLLMWorker.options(
                     name=worker_name,
-                    model_kwargs=model_kwargs,
-                    port=BASE_VLLM_PORT + i
+                    lifetime="detached",
+                    namespace=self.NAMESPACE,
+                    num_gpus=self.model_kwargs.get("tensor_parallel_size", 1),
+                    num_cpus=8,
+                    max_concurrency=256,
+                ).remote(
+                    port=self.worker_ports[i],
+                    **self.model_kwargs
                 )
-                new_actors_refs.append(worker)
-            actor_refs.append(worker)
-            self.active_requests[i] = 0  # Initialize request counter for each worker
-        
-        if new_actors_refs:
-            # Start all servers in parallel (non-blocking calls)
-            [actor.start_server.remote() for actor in new_actors_refs]
-            # Wait for all servers to report they're healthy (still parallel)
-            wait_futures = [actor.wait_for_server.remote() for actor in new_actors_refs]
-            # Ray will block until all wait_for_server calls are finished
-            ray.get(wait_futures)
-        
-        print("All vLLM servers have started successfully.")
-        self.workers = actor_refs
+                new_worker_refs.append(worker)
+            worker_refs.append(worker)
+            self.active_requests[i] = 0
+
+        # Start new workers if any
+        if new_worker_refs:
+            ray.get([w.start_server.remote() for w in new_worker_refs])
+
+        self.workers = worker_refs
 
     def _get_least_busy_worker(self) -> str:
         """Get the URL of the worker with the least number of active requests."""
         with self._worker_lock:
             least_busy_idx = min(self.active_requests, key=self.active_requests.get)
-            port = BASE_VLLM_PORT + least_busy_idx
+            port = BASE_SAMPLER_PORT + least_busy_idx
             self.active_requests[least_busy_idx] += 1
             return f"http://0.0.0.0:{port}", least_busy_idx
 
@@ -276,50 +245,20 @@ class DistributedVLLM:
                 self.active_requests[worker_idx] -= 1
             raise e
 
-    def _create_worker(self, name, model_kwargs, port=BASE_VLLM_PORT):
-        """Create a new Ray vLLM worker.
-
-        Args:
-            name (str): Name for the Ray actor
-            model_kwargs (dict): Arguments to pass to the vLLM model
-            port (int): Port number for the worker's server
-
-        Returns:
-            RayVLLMWorker: A reference to the created worker
-
-        Raises:
-            Exception: If worker creation fails
-        """
-        # Avoid conflict with DistributedVLLM using Ray
-        model_kwargs["worker_use_ray"] = False
-        model_kwargs["engine_use_ray"] = False
-        tensor_parallel_size = model_kwargs.get("tensor_parallel_size", 1)
-        try:
-            ray_actor = RayVLLMWorker.options(
-                name=name,
-                lifetime="detached",  # This makes the actor persist
-                namespace=self.NAMESPACE,
-                num_gpus=tensor_parallel_size,
-                num_cpus=tensor_parallel_size * 8,
-                max_concurrency=2,
-            ).remote(port=port, **model_kwargs)
-            return ray_actor
-        except Exception as e:
-            print(f"Error creating worker {name}: {str(e)}")
-            raise
-
-    def shutdown(self):
+    def shutdown(self, shutdown_ray: bool = False):
         """Shutdown the distributed system and clean up resources."""
         print("Shutting down Ray and vLLM workers...")
         for worker in self.workers:
+            # Kill worker 
+            ray.get(worker.shutdown.remote())
+            ray.kill(worker)
+        # Stop Ray
+        if shutdown_ray:
             try:
-                ray.get(worker.shutdown.remote())
-                ray.kill(worker)
-            except Exception as e:
-                print(f"Error shutting down worker {worker}: {str(e)}")
-                pass  # Ignore errors during shutdown
-        # Tear down Ray cluster.
-        os.system('ray stop')      
+                ray.shutdown()
+                os.system("ray stop")
+            except Exception as exc:
+                print(f"Error stopping Ray: {exc}") 
 
 if __name__ == "__main__":
     # Testing DistributedVLLM

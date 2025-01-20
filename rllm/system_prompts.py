@@ -24,6 +24,7 @@ In the Solution section, based on various attempts, explorations, and reflection
 The solution should remain a logical, accurate, concise expression style and detail necessary step needed to reach the conclusion, formatted as follows: 
 <|begin_of_solution|> {final formatted, precise, and clear solution} <|end_of_solution|> Now, try to solve the following question through the above guidelines:"""
 
+# For Math ORM to verify correctness of LLM's solution.
 ORM_PROMPT = """Your assigned task is to check if two math answers are equivalent. You are a wordclass expert for this task.
 
 Given a problem and two answers, determine if they are mathematically equivalent. Do not solve the problem.
@@ -43,6 +44,7 @@ Your output must follow the following format:
 1) Explain your reasoning for why the answers are equivalent or not.
 2) Then provide your final verdict in the format: [[YES]] or [[NO]]
 
+-----
 Examples:
 Problem: What is the area of a circle with radius 2?
 Answer 1: 4π
@@ -73,7 +75,6 @@ Answer 1: 2
 Answer 2: 3
 Explanation: These are different numbers and cannot be equivalent.
 [[NO]]
-
 -----
 """
 
@@ -205,58 +206,39 @@ $(\\rm ii)$ the closed broken line $C_1C_2...C_{96}C_1$ has a centre of symmetry
   Important: You should only output the difficulty from 1-10, not the solution of the problem. OUTPUT ONLY ONE NUMBER, not multiple numbers."""
 
 
-#============NUMINA OLYMPIAD Data Processing Prompts================#
-
+#============General Data Processing Prompts================#
 # For checking if a math problem is a proof.
-PROOF_PROMPT = """Your task is to identify if the user provided problem into three categories:
-Case 1: Problems that require a proof.
-Case 2: Problems that have a clear and direct answer. If a problem asks for a proof and has a direct answer, it still falls under this case.
-Case 3: It's not a math problem and it just making a blanket statement. 
+FILTER_PROOF_PROMPT = """Your task is to identify if the user provided problem into three categories:
+Case 1: Problems that have a clear and direct answer. Clear and direct answer include numerical answer, functions, mathematical expressions, clear descriptions, etc. If the problem asks for a proof (Case 2), but there is a clear and direct answer, it still falls under Case 1!
+Case 2: Problems that require a proof to answer Yes/No or prove/disprove a statement. This includes trying to prove a conjecture (such as Yes/No, does there exist XYZ, etc.).
+Case 3: It's not a math problem and it just making a blanket statement.
 
-Output 1 if it falls under Case 1. Output 2 if it falls under Case 2. Output 3 if it falls under Case 3. Only output 1 or 2 or 3 (at most one token!).
-
-You are provided several examples of Case 1 and 2 below:
+Here are several examples of Case 1 and 2 below:
 
 Case 1:
-
-Prove that if \( \frac{a}{b} = \frac{b}{c} \), then \( a^{2} + c^{2} \geq 2 b^{2} \).
-
-Let \(a, b,\) and \(c\) be strictly positive real numbers such that \(abc = 1\). Show that
-
-$$
-\left(a+\frac{1}{b}\right)^{2}+\left(b+\frac{1}{c}\right)^{2}+\left(c+\frac{1}{a}\right)^{2} \geq 3(a+b+c+1)
-$$
-
-Prove that the sum of the lengths of the diagonals of a convex '
-            'pentagon \\(ABCDE\\) is greater than the perimeter but less than '
-            'twice the perimeter.
+- Find all prime numbers \( p \) such that for any prime number \( q < p \), if \( p = kq + r \) with \( 0 \leq r < q \), then there does not exist an integer \( a > 1 \) such that \( a^2 \) divides \( r \).
+- Determine the value of $$ z=a \sqrt{a} \sqrt[4]{a} \sqrt[8]{a} \ldots \sqrt[2^{n}]{a} \ldots $$ if \( n \) is infinitely large.
+- A set consists of five different odd positive integers, each greater than 2. When these five integers are multiplied together, their product is a five-digit integer of the form $AB0AB$, where $A$ and $B$ are digits with $A \neq 0$ and $A \neq B$. (The hundreds digit of the product is zero.) In total, how many different sets of five different odd positive integers have these properties?
+- Find all integers \(a\) such that the equation $$x^{2} + axy + y^{2} = 1$$ has infinitely many integer solutions \((x, y)\). Prove your conclusion.
+- Suppose a hyperbola \( C: \frac{x^{2}}{a^{2}} - \frac{y^{2}}{b^{2}} = 1 \) has a right focal point \( F \). Let \( P \) be a point outside the hyperbola. Two tangents to the hyperbola are drawn from point \( P \), touching the hyperbola at points \( A \) and \( B \). If \( A B \perp P F \), find the locus of point \( P \).
+- Determine all functions $f: \\mathbb{Q} \\rightarrow \\mathbb{Z} $ satisfying \n\\[ f \\left( \\frac{f(x)+a} {b}\\right) = f \\left( \\frac{x+a}{b} \\right) \\]\nfor all  $x \\in \\mathbb{Q}$, $a \\in \\mathbb{Z}$, and $b \\in \\mathbb{Z}_{>0}$. (Here, $\\mathbb{Z}_{>0}$ denotes the set of positive integers.)
+- Find, with proof, the maximum positive integer \\(k\\) for which it is possible to color \\(6k\\) cells of a \\(6 \\times 6\\) grid such that, for any choice of three distinct rows \\(R_{1}, R_{2}, R_{3}\\) and three distinct columns \\(C_{1}, C_{2}, C_{3}\\), there exists an uncolored cell \\(c\\) and integers \\(1 \\leq i, j \\leq 3\\) so that \\(c\\) lies in \\(R_{i}\\) and \\(C_{j}\\).
+- Determine all integers $s \\ge 4$ for which there exist positive integers $a$, $b$, $c$, $d$ such that $s = a+b+c+d$ and $s$ divides $abc+abd+acd+bcd$.
 
 Case 2:
+- Prove that if \( \frac{a}{b} = \frac{b}{c} \), then \( a^{2} + c^{2} \geq 2 b^{2} \).
+- Let \(a, b,\) and \(c\) be strictly positive real numbers such that \(abc = 1\). Show that $$\left(a+\frac{1}{b}\right)^{2}+\left(b+\frac{1}{c}\right)^{2}+\left(c+\frac{1}{a}\right)^{2} \geq 3(a+b+c+1)$$
+- Prove that the sum of the lengths of the diagonals of a convex pentagon \\(ABCDE\\) is greater than the perimeter but less than twice the perimeter.
+- Does there exists a positive irrational number ${x},$ such that there are at most finite positive integers ${n},$ satisfy that for any integer $1\\leq k\\leq n,$ $\\{kx\\}\\geq\\frac 1{n+1}?$
 
-Find all prime numbers \( p \) such that for any prime number \( q < p \), if \( p = kq + r \) with \( 0 \leq r < q \), then there does not exist an integer \( a > 1 \) such that \( a^2 \) divides \( r \).
+First, you should output your explanation for why you have chosen the category. Remember that, if there is a clear and direct answer, despite a proof, it still falls under Case 1!
+Then, you MUST output for final answer: [[1]] if it falls under Case 1. Output [[2]] if it falls under Case 2. Output [[3]] if it falls under Case 3. Ensure that you output the correct answer at the end: [[1]], [[2]], or [[3]].
 
-Determine the value of
-$$
-z=a \sqrt{a} \sqrt[4]{a} \sqrt[8]{a} \ldots \sqrt[2^{n}]{a} \ldots
-$$
-if \( n \) is infinitely large.
-
-A set consists of five different odd positive integers, each greater than 2. When these five integers are multiplied together, their product is a five-digit integer of the form $AB0AB$, where $A$ and $B$ are digits with $A \neq 0$ and $A \neq B$. (The hundreds digit of the product is zero.) In total, how many different sets of five different odd positive integers have these properties?
-
-
-Find all integers \(a\) such that the equation
-$$
-x^{2} + axy + y^{2} = 1
-$$
-has infinitely many integer solutions \((x, y)\). Prove your conclusion.
-
-Suppose a hyperbola \( C: \frac{x^{2}}{a^{2}} - \frac{y^{2}}{b^{2}} = 1 \) has a right focal point \( F \). Let \( P \) be a point outside the hyperbola. Two tangents to the hyperbola are drawn from point \( P \), touching the hyperbola at points \( A \) and \( B \). If \( A B \perp P F \), find the locus of point \( P \).
-
-The user provides both the problem and solution below. Use this information to make your best informed decision.
+The user provides both the problem and answer below. Do not solve the problem.Use this information to make your best informed decision. Happy classifying!
 """
 
 # For automatically extracting the final answer from a solution.
-SOLUTION_PROMPT = """You are an agent tasked with extracting the final solution/answer as a LATEX string. You are provided a problem and solution text in the user prompt below. Only output the final answer. Follow these rules and guidelines:
+EXTRACT_SOLUTION_PROMPT = """You are an agent tasked with extracting the final solution/answer as a LATEX string. You are provided a problem and solution text in the user prompt below. Only output the final answer. Follow these rules and guidelines:
 1. Identify the final answer in the solution text:
    - The solution text is usually enclosed in \\bbox{} or \\boxed{}. Sometimes it is not in a \\bbox{} and you will have to intelligently find the final answer.
    - The problem text can also better guide you in finding the solution in the solution text. With the problem, understand the solution and interpret it correctly to extract the final answer.
@@ -277,7 +259,7 @@ SOLUTION_PROMPT = """You are an agent tasked with extracting the final solution/
 Process each input rigorously, think and analyze deeply, closely follow the instructions above, and generate the required LaTeX output.
 """
 
-#============AMC Data Processing Prompts================#
+#============Data Processing Multiple ChoicePrompts================#
 
 REFINE_AMC_PROMPT = """You are tasked with fixing the latex in the user provided problem. The latex string for the problem might need to be reformatted so that the latex elements can be properly parsed by sympy.
 
