@@ -8,10 +8,12 @@ from tqdm import tqdm
 
 from rllm.data.load_dataset import TrainDataset, TestDataset, load_dataset
 from rllm.rewards.math_utils.utils import grade_answer
+from rllm.sampler import SampleBatch
 from rllm.sampler.distributed_sglang_sampler import DistributedSGLang
 from rllm.system_prompts import COT_MATH_SYSTEM_PROMPT
 from rllm.rewards import RewardInput, RewardType
 from rllm.rewards.math_reward import RewardMathFn
+
 
 def parse_args(parser: argparse.ArgumentParser):
     """Parse command line arguments for trajectory generation.
@@ -55,9 +57,6 @@ def generate_trajectory(idx, engine, entry, n=8, temperature=0.8):
     problem = entry['problem']
     answer = entry['answer']
     if 'trajectories' in entry and len(entry['trajectories']) >= n:
-        # if entry[f'pass@{n}'] == 0:
-        #     pass
-        # else:
         return idx, entry
     content_dict = [
         {"role": "system", "content": COT_MATH_SYSTEM_PROMPT},
@@ -68,11 +67,11 @@ def generate_trajectory(idx, engine, entry, n=8, temperature=0.8):
     retry_limit = 5
     for retry_idx in range(retry_limit):
         try:
-            response_data = engine.chat_completion(content_dict,
-                                                n=n,
-                                                temperature=temperature)
-            # Multiple responses
-            llm_responses = [r['message']['content'] for r in response_data['choices']]
+            sample_batch = engine.chat_completion(content_dict,
+                                              n=n,
+                                              temperature=temperature)
+            # Extract responses from Sample objects in the batch
+            llm_responses = [sample.response for sample in sample_batch.samples]
             break
         except Exception as e:
             print(f"Error getting completion: {e}")
@@ -112,12 +111,15 @@ if __name__ == "__main__":
     # Load problems based on args
     dataset_enum = TrainDataset if args.split == 'train' else TestDataset
     problems = load_dataset(dataset_enum[args.dataset])
-    
     # Set output file path
     output_file = args.output or f"{args.dataset.lower()}_{args.split}_trajectories.json"
     if not os.path.isabs(output_file):
         script_dir = os.path.dirname(os.path.abspath(__file__))
         output_file = os.path.join(script_dir, output_file)
+
+    # To remove...
+    with open(output_file, "r", encoding="utf-8") as f:
+        problems= json.load(f)
 
     results = deepcopy(problems)
     # Process problems in parallel using ThreadPoolExecutor
