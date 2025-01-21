@@ -8,20 +8,23 @@ in parallel.
 import asyncio
 import gc
 import os
-import requests
 import threading
 from typing import List, Dict, Any
 import multiprocessing as mp
 
+from openai import OpenAI
 import ray
 import torch
+from transformers import AutoTokenizer
 
 from vllm.entrypoints.openai.api_server import run_server
 from vllm.entrypoints.openai.cli_args import make_arg_parser
 from vllm.engine.arg_utils import FlexibleArgumentParser
 
 from rllm.globals import BASE_SAMPLER_PORT
+from rllm.sampler import Sample, SampleBatch
 from rllm.sampler.utils import (
+    convert_openai_response_to_samples,
     kill_process_and_children,
     wait_for_server,
 )
@@ -88,6 +91,9 @@ class RayVLLMWorker:
 
         # We'll store a reference to the child Process
         self.server_process = None
+        self.oai_client = OpenAI(api_key='EMPTY', base_url=f"http://0.0.0.0:{self.port}/v1")
+        self.tokenizer = AutoTokenizer.from_pretrained(self.model)
+        
 
     def start_server(self) -> str:
         """Spawn a child process that runs the vLLM server.
@@ -109,6 +115,37 @@ class RayVLLMWorker:
         # Wait for server to become healthy
         wait_for_server(self.port)
         return f"Started server on port {self.port}"
+    
+    def chat_completion(self, messages: List[Dict[str, str]], **kwargs) -> SampleBatch:
+        try:
+            chat_response = self.oai_client.chat.completions.create(
+                model=self.model,
+                messages=messages,
+                logprobs=True,
+                top_logprobs=1,
+                **kwargs
+            )
+        except Exception as e:
+            return {'Error': str(e)}
+        
+        samples = convert_openai_response_to_samples(chat_response)
+        sample_lengths = []
+        for sample in samples:
+            sample.tokens = self.tokenizer.encode(sample.response)
+            sample_lengths.append(len(sample.tokens))
+        
+        prompt= self.tokenizer.apply_chat_template(messages, tokenize=False)
+        prompt_tokens = self.tokenizer.encode(prompt)
+        num_prompt_tokens = len(prompt_tokens)
+        return SampleBatch(
+            prompt=prompt,
+            prompt_tokens=prompt_tokens,
+            samples=samples,
+            metrics={
+                "prompt_tokens": num_prompt_tokens,
+                "completion_tokens": sum(sample_lengths),
+                "sample_tokens": sample_lengths,
+            })
 
     def shutdown(self) -> str:
         """Terminate the vLLM server process (if running).
@@ -162,16 +199,17 @@ class DistributedVLLM:
         except ConnectionError:
             print("Starting new Ray cluster...")
             tensor_parallel_size = model_kwargs.get("tensor_parallel_size", 1)
-            total_gpus = num_workers * tensor_parallel_size
+            # Get total GPUs on cluster, programatically
+            total_gpus = torch.cuda.device_count()
             total_cpus = os.cpu_count()
-            os.system(f"ray start --head --num-cpus={total_cpus-1} --num-gpus={total_gpus}")
+            os.system(f"ray start --head --num-cpus={total_cpus} --num-gpus={total_gpus}")
             ray.init(address="auto", namespace=self.NAMESPACE)
 
         # Fetch vLLM workers
-        self._get_or_launch_workers()
+        self.get_or_launch_workers()
         print("All vLLM servers have started successfully.")
 
-    def _get_or_launch_workers(self) -> None:
+    def get_or_launch_workers(self) -> None:
         """Launch vLLM workers or connect to existing ones."""
         worker_refs = []
         new_worker_refs = []
@@ -190,7 +228,7 @@ class DistributedVLLM:
                     namespace=self.NAMESPACE,
                     num_gpus=self.model_kwargs.get("tensor_parallel_size", 1),
                     num_cpus=8,
-                    max_concurrency=256,
+                    max_concurrency=64,
                 ).remote(
                     port=self.worker_ports[i],
                     **self.model_kwargs
@@ -225,50 +263,37 @@ class DistributedVLLM:
         """
         url, worker_idx = self._get_least_busy_worker()
         print(f"Using worker {worker_idx} at {url}; {self.active_requests}")
-        endpoint = f"{url}/v1/chat/completions"
-        
-        payload = {
-            "messages": messages,
-            "model": self.model,
-            **kwargs
-        }
         
         try:
-            response = requests.post(endpoint, json=payload)
-            response.raise_for_status()
-            response_json = response.json()
+            sample_batch = ray.get(self.workers[worker_idx].chat_completion.remote(messages=messages, **kwargs))
             with self._worker_lock:
                 self.active_requests[worker_idx] -= 1
-            return response_json
+            return sample_batch
         except Exception as e:
             with self._worker_lock:
                 self.active_requests[worker_idx] -= 1
             raise e
+    
+    def restart(self):
+        self.shutdown()
+        self.get_or_launch_workers()
 
-    def shutdown(self, shutdown_ray: bool = False):
+    def shutdown(self):
         """Shutdown the distributed system and clean up resources."""
-        print("Shutting down Ray and vLLM workers...")
+        print("Shutting down vLLM workers...")
         for worker in self.workers:
             # Kill worker 
             ray.get(worker.shutdown.remote())
             ray.kill(worker)
-        # Stop Ray
-        if shutdown_ray:
-            try:
-                ray.shutdown()
-                os.system("ray stop")
-            except Exception as exc:
-                print(f"Error stopping Ray: {exc}") 
 
 if __name__ == "__main__":
     # Testing DistributedVLLM
     distributed_vllm = DistributedVLLM(
-        num_workers=2,
+        num_workers=1,
         tensor_parallel_size=2,
-        model="Qwen/QwQ-32B-Preview"
+        model="deepseek-ai/DeepSeek-R1-Distill-Qwen-32B"
     )
     print(distributed_vllm.chat_completion([{"role": "user", "content": "What is the capital of France?"}]))
     print(distributed_vllm.chat_completion([{"role": "user", "content": "What is the capital of MarioLand?"}]))
     print(distributed_vllm.chat_completion([{"role": "user", "content": "What is the capital of MarioLand?"}]))
     print(distributed_vllm.chat_completion([{"role": "user", "content": "What is the capital of MarioLand?"}]))
-    distributed_vllm.shutdown()

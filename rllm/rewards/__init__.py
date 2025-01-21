@@ -1,5 +1,5 @@
 """Import reward-related classes and types from the reward module."""
 
-from .reward import RewardFn, RewardInput, RewardOutput, RewardType
+from .reward_types import RewardFn, RewardInput, RewardOutput, RewardType
 
 __all__ = ['RewardFn', 'RewardInput', 'RewardOutput', 'RewardType']

@@ -2,8 +2,36 @@ import gc
 import requests
 import time
 import psutil
+from typing import List
 
+from openai import ChatCompletion
 import torch
+
+from rllm.sampler.sampler_types import Sample
+
+    # tokenizer = AutoTokenizer.from_pretrained("deepseek-ai/DeepSeek-R1-Distill-Qwen-32B")
+def convert_openai_response_to_samples(response: ChatCompletion) -> List[Sample]:
+    choices = response.choices
+    samples = []
+    for choice in choices:
+        response = choice.message.content
+        choice_log_probs = choice.logprobs.content
+        log_probs = []
+        for token_log_prob in choice_log_probs:
+            log_probs.append(token_log_prob.logprob)
+        mask = [True for _ in log_probs]
+        # response_tokens = tokenizer.encode(response)
+        sample =  Sample(
+            response=response,
+            tokens=None,
+            mask=mask,
+            log_probs=log_probs,
+            reward=None,
+            is_correct=None,
+        )
+        samples.append(sample)
+    return samples
+
 
 def kill_process_and_children(pid: int) -> bool:
     """Kill a process and all its children processes.

@@ -23,6 +23,10 @@ import requests
 from sglang.srt.server import launch_server
 from sglang.srt.server_args import ServerArgs
 from sglang_router.launch_router import RouterArgs
+from transformers import AutoTokenizer
+from rllm.sampler import Sample, SampleBatch
+from rllm.sampler.utils import convert_openai_response_to_samples
+from openai import OpenAI
 
 from rllm.globals import BASE_SAMPLER_PORT
 from rllm.sampler.utils import (
@@ -121,6 +125,9 @@ class RaySGLangWorker:
 
         # We'll store a reference to the child Process so we can shut it down later.
         self.server_process = None
+        self.tokenizer = AutoTokenizer.from_pretrained(self.model)
+        # Initialize OpenAI client
+        self.client = OpenAI(base_url=f"http://0.0.0.0:{self.port}/v1", api_key="not-needed")
 
     def start_server(self) -> str:
         """Spawn a child process that runs launch_server(self.server_args).
@@ -156,6 +163,47 @@ class RaySGLangWorker:
         kill_process_and_children(pid)
         self.server_process = None
         return f"Server on port {self.port} has been shut down."
+
+    def chat_completion(self, messages: List[Dict[str, str]], **kwargs) -> SampleBatch:
+        """Send a chat completion request to this worker.
+        
+        Args:
+            messages: List of message dictionaries with 'role' and 'content'
+            **kwargs: Additional parameters for the chat completion API
+            
+        Returns:
+            SampleBatch containing the response and metrics
+        """
+        try:
+            chat_response = self.client.chat.completions.create(
+                messages=messages,
+                model=self.model,
+                logprobs=True,
+                top_logprobs=1,
+                **kwargs
+            )
+        except Exception as e:
+            return {'Error': str(e)}
+
+        samples = convert_openai_response_to_samples(chat_response)
+        sample_lengths = []
+        for sample in samples:
+            sample.tokens = self.tokenizer.encode(sample.response)
+            sample_lengths.append(len(sample.tokens))
+        
+        prompt = self.tokenizer.apply_chat_template(messages, tokenize=False)
+        prompt_tokens = self.tokenizer.encode(prompt)
+        num_prompt_tokens = len(prompt_tokens)
+        
+        return SampleBatch(
+            prompt=prompt,
+            prompt_tokens=prompt_tokens,
+            samples=samples,
+            metrics={
+                "prompt_tokens": num_prompt_tokens,
+                "completion_tokens": sum(sample_lengths),
+                "sample_tokens": sample_lengths,
+            })
 
 
 # Deprecated.
@@ -310,41 +358,29 @@ class DistributedSGLang:
             return f"http://0.0.0.0:{port}", least_busy_idx
 
     def chat_completion(self, messages: List[Dict[str, str]], **kwargs) -> Dict[str, Any]:
-        """Send a chat completion request through the router.
-
+        """Send a chat completion request to the least busy worker.
+        
         Args:
             messages: List of message dictionaries with 'role' and 'content'
             **kwargs: Additional parameters for the chat completion API
-
+            
         Returns:
-            Dict containing the API response
-
-        Raises:
-            Exception: If the request fails
+            SampleBatch containing the response and metrics
         """
         url, worker_idx = self._get_least_busy_worker()
         print(f"Using worker {worker_idx} at {url}; {self.active_requests}")
-        endpoint = f"{url}/v1/chat/completions"
-
-        payload = {
-            "messages": messages,
-            "model": self.model,
-            **kwargs
-        }
-
+        
         try:
-            response = requests.post(endpoint, json=payload)
-            response.raise_for_status()
-            response_json = response.json()
+            sample_batch = ray.get(self.workers[worker_idx].chat_completion.remote(messages=messages, **kwargs))
             with self._worker_lock:
                 self.active_requests[worker_idx] -= 1
-            return response_json
-        except Exception as exc:
+            return sample_batch
+        except Exception as e:
             with self._worker_lock:
                 self.active_requests[worker_idx] -= 1
-            raise exc
+            raise e
 
-    def shutdown(self, shutdown_ray: bool = False) -> None:
+    def shutdown(self) -> None:
         """Shutdown the distributed system and clean up resources.
 
         Args:
@@ -358,13 +394,11 @@ class DistributedSGLang:
             # Kill worker 
             ray.get(worker.shutdown.remote())
             ray.kill(worker)
-        # Stop Ray
-        if shutdown_ray:
-            try:
-                ray.shutdown()
-                os.system("ray stop")
-            except Exception as exc:
-                print(f"Error stopping Ray: {exc}")
+
+    def restart(self):
+        """Restart all workers."""
+        self.shutdown()
+        self._get_or_launch_workers()
 
 
 if __name__ == "__main__":
@@ -374,6 +408,7 @@ if __name__ == "__main__":
         tensor_parallel_size=2,
         model="deepseek-ai/DeepSeek-R1-Distill-Qwen-32B"
     )
+    import pdb; pdb.set_trace()
     print(distributed_sampler.chat_completion([{"role": "user", "content": "What is the capital of France?"}]))
     print(distributed_sampler.chat_completion([{"role": "user", "content": "What is the capital of MarioLand?"}]))
     print(distributed_sampler.chat_completion([{"role": "user", "content": "What is the capital of MarioLand?"}]))
