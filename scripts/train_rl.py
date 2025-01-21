@@ -2,7 +2,7 @@ import random
 
 from vllm import SamplingParams
 
-from rllm.data.load_dataset import Datasets, load_dataset
+from rllm.data.load_dataset import Dataset , load_dataset
 
 from rllm.sampler.distributed_client import DistributedLLMClient
 from rllm.system_prompts import COT_MATH_SYSTEM_PROMPT
@@ -67,7 +67,7 @@ def train():
     tokenizer = AutoTokenizer.from_pretrained(model_name)
     
     trainer = ReinforceTrainer(model, tokenizer, ReinforceConfig())
-    dataset = load_dataset(Datasets.OMNI)
+    dataset = load_dataset(Dataset.OMNI)
 
     for i in range(2):
         batch = dataset[i * batch_size : (i + 1) * batch_size]
@@ -87,4 +87,5 @@ def train():
 
 
 if __name__ == "__main__":
+
     train()
