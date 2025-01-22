@@ -1,21 +1,5 @@
-COT_SYSTEM_PROMPT = """You will be given a hard problem and you will try to write down braindumps as if you are using a scratchpad first. You should use the following techniques when writing down your thoughts.
-- Analyze the input to fully understand the question. Beware of details and constraints.
-- Breakdown the problem into smaller pieces.
-- Think step-by-step to solve the problem.
-- Write down intermediate thoughts during each step to be used later.
-- Make high-level plan first, then progressively more detailed ones
-- Explore multiple options to approach the problem and try not to settle on the first idea.
-- Pause and rethink during your thought process.
-- Always self-reflect and double check the answer.
-- Backtrack and restart the process if you are stuck or sth is wrong.
-- You will output your thoughts wrapped inside one single <thought> </thought> block. YOU MUST FOLLOW THIS.
-- Do not use any markdown within the thought block. After the thought, write down your final solution to present to the user.
-
-Think step by step in detail first. You will output your thoughts wrapped inside one single <thought> </thought> block. After thinking, solve the problem conditioned on the thoughts.
-"""
-
 COT_MATH_SYSTEM_PROMPT = """You will be given a hard problem and you will try to write down braindumps as if you are using a scratchpad first. You should use the following techniques when writing down your thoughts.
-- You will output your thoughts wrapped inside one single <|start_thought|> <|end_thought|> block.
+- You will output your thoughts wrapped inside one single <|st_id|> <|et_id|> block.
 - Analyze the input to fully understand the question. Beware of details and constraints.
 - Breakdown the problem into smaller pieces.
 - Think step-by-step to solve the problem.
@@ -40,78 +24,60 @@ In the Solution section, based on various attempts, explorations, and reflection
 The solution should remain a logical, accurate, concise expression style and detail necessary step needed to reach the conclusion, formatted as follows: 
 <|begin_of_solution|> {final formatted, precise, and clear solution} <|end_of_solution|> Now, try to solve the following question through the above guidelines:"""
 
-# For assessing difficulty of math quesetion from 0-10: https://artofproblemsolving.com/wiki/index.php/AoPS%20Wiki:Competition%20ratings
-AOPS_DIFFICULTY_PROMPT = """asdf"""
+# For Math ORM to verify correctness of LLM's solution.
+ORM_PROMPT = """Your assigned task is to check if two math answers are equivalent. You are a wordclass expert for this task.
 
-# For checking if a math problem is a proof.
-PROOF_PROMPT = """Your task is to identify if the user provided problem into three categories:
-Case 1: Problems that require a proof.
-Case 2: Problems that have a clear and direct answer. If a problem asks for a proof and has a direct answer, it still falls under this case.
-Case 3: It's not a math problem and it just making a blanket statement. 
+Given a problem and two answers, determine if they are mathematically equivalent. Do not solve the problem.
+Instead, analyze whether the two answers represent the same mathematical value or expression, even if written differently.
 
-Output 1 if it falls under Case 1. Output 2 if it falls under Case 2. Output 3 if it falls under Case 3. Only output 1 or 2 or 3 (at most one token!).
+Guidelines for equivalence:
+- Different forms of the same number (e.g., 0.5 = 1/2 = 50%)
+- Algebraically equivalent expressions (e.g., (x+1)^2 = x^2 + 2x + 1)
+- Geometrically equivalent expressions (e.g., r²π = πr²)
+- Trigonometrically equivalent expressions (e.g., sin²θ + cos²θ = 1)
+- Semantic equivalence (e.g., "impossible" and "no possible solution")
+- Different formats of the same solution (e.g., (1,1,1,3) and a=1,b=1,c=1,p=3)
+- Solutions with different or no units (e.g., 100 versus 100 degrees)
+- For other cases, please use your best judgement to determine if two answers are truly equivalent.
 
-You are provided several examples of Case 1 and 2 below:
+Your output must follow the following format:
+1) Explain your reasoning for why the answers are equivalent or not.
+2) Then provide your final verdict in the format: [[YES]] or [[NO]]
 
-Case 1:
+-----
+Examples:
+Problem: What is the area of a circle with radius 2?
+Answer 1: 4π
+Answer 2: πr² where r=2
+Explanation: Answer 2 simplifies to 4π, making both answers identical.
+[[YES]]
 
-Prove that if \( \frac{a}{b} = \frac{b}{c} \), then \( a^{2} + c^{2} \geq 2 b^{2} \).
+Problem: Solve for x: x² + 2x + 1 = 0
+Answer 1: x = -1
+Answer 2: x = -1 ± 0
+Explanation: While Answer 2 includes ± 0, this reduces to just -1, making them equivalent.
+[[YES]]
 
-Let \(a, b,\) and \(c\) be strictly positive real numbers such that \(abc = 1\). Show that
+Problem: Find all positive integers $a,b,c$ and prime $p$ satisfying that\n\\[ 2^a p^b=(p+2)^c+1.\\]
+Answer 1: a=1, b=1, c=1, p=3
+Answer 3:  (1, 1, 1, 3)
+Explanation: Both answers represent exactly the same solution, just written in different formats. Answer 1 writes out the values with variable names (a=1, b=1, c=1, p=3) while Answer 3 presents them as an ordered tuple (1, 1, 1, 3).
+[[YES]]
 
-$$
-\left(a+\frac{1}{b}\right)^{2}+\left(b+\frac{1}{c}\right)^{2}+\left(c+\frac{1}{a}\right)^{2} \geq 3(a+b+c+1)
-$$
+Problem: The sides of a $99$ -gon are initially colored so that consecutive sides are red, blue, red, blue,..., red, blue, yellow. We make a sequence of modifications in the coloring, changing the color of one side at a time to one of the three given colors (red, blue, yellow), under the constraint that no two adjacent sides may be the same color. By making a sequence of such modifications, is it possible to arrive at the coloring in which consecutive sides \nare red, blue, red, blue, red, blue,..., red, yellow, blue?
+Answer 1: There is no such coloring.
+Answer 2: It is impossible to perform a series of such modifications that change the start sequence to the end sequence.
+Explanation: Both answers are equivalent because they both state that it is impossible to perform a series of such modifications.
+[[YES]]
 
-Prove that the sum of the lengths of the diagonals of a convex '
-            'pentagon \\(ABCDE\\) is greater than the perimeter but less than '
-            'twice the perimeter.
-
-Case 2:
-
-Find all prime numbers \( p \) such that for any prime number \( q < p \), if \( p = kq + r \) with \( 0 \leq r < q \), then there does not exist an integer \( a > 1 \) such that \( a^2 \) divides \( r \).
-
-Determine the value of
-$$
-z=a \sqrt{a} \sqrt[4]{a} \sqrt[8]{a} \ldots \sqrt[2^{n}]{a} \ldots
-$$
-if \( n \) is infinitely large.
-
-A set consists of five different odd positive integers, each greater than 2. When these five integers are multiplied together, their product is a five-digit integer of the form $AB0AB$, where $A$ and $B$ are digits with $A \neq 0$ and $A \neq B$. (The hundreds digit of the product is zero.) In total, how many different sets of five different odd positive integers have these properties?
-
-
-Find all integers \(a\) such that the equation
-$$
-x^{2} + axy + y^{2} = 1
-$$
-has infinitely many integer solutions \((x, y)\). Prove your conclusion.
-
-Suppose a hyperbola \( C: \frac{x^{2}}{a^{2}} - \frac{y^{2}}{b^{2}} = 1 \) has a right focal point \( F \). Let \( P \) be a point outside the hyperbola. Two tangents to the hyperbola are drawn from point \( P \), touching the hyperbola at points \( A \) and \( B \). If \( A B \perp P F \), find the locus of point \( P \).
-
-The user provides both the problem and solution below. Use this information to make your best informed decision.
+Problem: Find the slope of the line y = 2x + 1
+Answer 1: 2
+Answer 2: 3
+Explanation: These are different numbers and cannot be equivalent.
+[[NO]]
+-----
 """
 
-# For automatically extracting the final answer from a solution.
-SOLUTION_PROMPT = """You are an agent tasked with extracting the final solution/answer as a LATEX string. You are provided a problem and solution text in the user prompt below. Only output the final answer. Follow these rules and guidelines:
-1. Identify the final answer in the solution text:
-   - The solution text is usually enclosed in \\bbox{} or \\boxed{}. Sometimes it is not in a \\bbox{} and you will have to intelligently find the final answer.
-   - The problem text can also better guide you in finding the solution in the solution text. With the problem, understand the solution and interpret it correctly to extract the final answer.
-   - Be sure to extract it as a latex string! Correct the latex if it doesnt reflect the correct answer or the right format.
-
-2. Multiple Choice - Some problems contain multiple choice options (such as A,B,C,D,E). The solution text may hence output a multiple choice answer as the final answer. In such cases:
-  - Do not return the multiple choice option as an answer. Match the multiple choice option with its answer in the problem text and return the correct answer as the final answer.
-  - For example, if there are three multiple choice: A) 3, B) 4, C) 5, and the solution text outputs "B", you should return "4".
-
-3. Output requirements:
-   - Ensure the output is purely LaTeX code without any additional explanations or text.
-   - Validate the syntax so that the LaTeX can be correctly compiled in sympy.
-   - Do not wrap the final output in ```markdown``` or ```latex```. Output the latex string directly.
-
-5. Error Handling:
-   - If the "solution" key is missing or the content is not extractable, return the message: \\text{Error: Solution not found.}
-
-Process each input rigorously, think and analyze deeply, closely follow the instructions above, and generate the required LaTeX output.
-"""
 
 # Judge difficulty of the math problem.
 MATH_DIFFICULTY_PROMPT = """You will be given a math problem. Your job is to grade the difficulty level from 1-10 according to the AoPS standard.
@@ -237,4 +203,91 @@ $(\\rm ii)$ the closed broken line $C_1C_2...C_{96}C_1$ has a centre of symmetry
   
   ------------------------------------------------
   A user will provide the problem and solution below. Only output your estimation of the difficulty of the problem, which is a number between 1-10, inclusive.
-  Important: You should only output the difficulty from 1-10, not the solution of the problem."""
+  Important: You should only output the difficulty from 1-10, not the solution of the problem. OUTPUT ONLY ONE NUMBER, not multiple numbers."""
+
+
+#============General Data Processing Prompts================#
+# For checking if a math problem is a proof.
+FILTER_PROOF_PROMPT = """Your task is to identify if the user provided problem into three categories:
+Case 1: Problems that have a clear and direct answer. Clear and direct answer include numerical answer, functions, mathematical expressions, clear descriptions, etc. If the problem asks for a proof (Case 2), but there is a clear and direct answer, it still falls under Case 1!
+Case 2: Problems that require a proof to answer Yes/No or prove/disprove a statement. This includes trying to prove a conjecture (such as Yes/No, does there exist XYZ, etc.).
+Case 3: It's not a math problem and it just making a blanket statement.
+
+Here are several examples of Case 1 and 2 below:
+
+Case 1:
+- Find all prime numbers \( p \) such that for any prime number \( q < p \), if \( p = kq + r \) with \( 0 \leq r < q \), then there does not exist an integer \( a > 1 \) such that \( a^2 \) divides \( r \).
+- Determine the value of $$ z=a \sqrt{a} \sqrt[4]{a} \sqrt[8]{a} \ldots \sqrt[2^{n}]{a} \ldots $$ if \( n \) is infinitely large.
+- A set consists of five different odd positive integers, each greater than 2. When these five integers are multiplied together, their product is a five-digit integer of the form $AB0AB$, where $A$ and $B$ are digits with $A \neq 0$ and $A \neq B$. (The hundreds digit of the product is zero.) In total, how many different sets of five different odd positive integers have these properties?
+- Find all integers \(a\) such that the equation $$x^{2} + axy + y^{2} = 1$$ has infinitely many integer solutions \((x, y)\). Prove your conclusion.
+- Suppose a hyperbola \( C: \frac{x^{2}}{a^{2}} - \frac{y^{2}}{b^{2}} = 1 \) has a right focal point \( F \). Let \( P \) be a point outside the hyperbola. Two tangents to the hyperbola are drawn from point \( P \), touching the hyperbola at points \( A \) and \( B \). If \( A B \perp P F \), find the locus of point \( P \).
+- Determine all functions $f: \\mathbb{Q} \\rightarrow \\mathbb{Z} $ satisfying \n\\[ f \\left( \\frac{f(x)+a} {b}\\right) = f \\left( \\frac{x+a}{b} \\right) \\]\nfor all  $x \\in \\mathbb{Q}$, $a \\in \\mathbb{Z}$, and $b \\in \\mathbb{Z}_{>0}$. (Here, $\\mathbb{Z}_{>0}$ denotes the set of positive integers.)
+- Find, with proof, the maximum positive integer \\(k\\) for which it is possible to color \\(6k\\) cells of a \\(6 \\times 6\\) grid such that, for any choice of three distinct rows \\(R_{1}, R_{2}, R_{3}\\) and three distinct columns \\(C_{1}, C_{2}, C_{3}\\), there exists an uncolored cell \\(c\\) and integers \\(1 \\leq i, j \\leq 3\\) so that \\(c\\) lies in \\(R_{i}\\) and \\(C_{j}\\).
+- Determine all integers $s \\ge 4$ for which there exist positive integers $a$, $b$, $c$, $d$ such that $s = a+b+c+d$ and $s$ divides $abc+abd+acd+bcd$.
+
+Case 2:
+- Prove that if \( \frac{a}{b} = \frac{b}{c} \), then \( a^{2} + c^{2} \geq 2 b^{2} \).
+- Let \(a, b,\) and \(c\) be strictly positive real numbers such that \(abc = 1\). Show that $$\left(a+\frac{1}{b}\right)^{2}+\left(b+\frac{1}{c}\right)^{2}+\left(c+\frac{1}{a}\right)^{2} \geq 3(a+b+c+1)$$
+- Prove that the sum of the lengths of the diagonals of a convex pentagon \\(ABCDE\\) is greater than the perimeter but less than twice the perimeter.
+- Does there exists a positive irrational number ${x},$ such that there are at most finite positive integers ${n},$ satisfy that for any integer $1\\leq k\\leq n,$ $\\{kx\\}\\geq\\frac 1{n+1}?$
+
+First, you should output your explanation for why you have chosen the category. Remember that, if there is a clear and direct answer, despite a proof, it still falls under Case 1!
+Then, you MUST output for final answer: [[1]] if it falls under Case 1. Output [[2]] if it falls under Case 2. Output [[3]] if it falls under Case 3. Ensure that you output the correct answer at the end: [[1]], [[2]], or [[3]].
+
+The user provides both the problem and answer below. Do not solve the problem.Use this information to make your best informed decision. Happy classifying!
+"""
+
+# For automatically extracting the final answer from a solution.
+EXTRACT_SOLUTION_PROMPT = """You are an agent tasked with extracting the final solution/answer as a LATEX string. You are provided a problem and solution text in the user prompt below. Only output the final answer. Follow these rules and guidelines:
+1. Identify the final answer in the solution text:
+   - The solution text is usually enclosed in \\bbox{} or \\boxed{}. Sometimes it is not in a \\bbox{} and you will have to intelligently find the final answer.
+   - The problem text can also better guide you in finding the solution in the solution text. With the problem, understand the solution and interpret it correctly to extract the final answer.
+   - Be sure to extract it as a latex string! Correct the latex if it doesnt reflect the correct answer or the right format.
+
+2. Multiple Choice - Some problems contain multiple choice options (such as A,B,C,D,E). The solution text may hence output a multiple choice answer as the final answer. In such cases:
+  - Do not return the multiple choice option as an answer. Match the multiple choice option with its answer in the problem text and return the correct answer as the final answer.
+  - For example, if there are three multiple choice: A) 3, B) 4, C) 5, and the solution text outputs "B", you should return "4".
+
+3. Output requirements:
+   - Ensure the output is purely LaTeX code without any additional explanations or text.
+   - Validate the syntax so that the LaTeX can be correctly compiled in sympy.
+   - Do not wrap the final output in ```markdown``` or ```latex```. Output the latex string directly.
+
+5. Error Handling:
+   - If the "solution" key is missing or the content is not extractable, return the message: \\text{Error: Solution not found.}
+
+Process each input rigorously, think and analyze deeply, closely follow the instructions above, and generate the required LaTeX output.
+"""
+
+#============Data Processing Multiple ChoicePrompts================#
+
+REFINE_AMC_PROMPT = """You are tasked with fixing the latex in the user provided problem. The latex string for the problem might need to be reformatted so that the latex elements can be properly parsed by sympy.
+
+The problem may have  multiple choices A,B,C,D,E. If the multiple choices do not exist in the problem, return None for all the multiple choices!
+
+KEEP THE MULTIPLE CHOICE IN THE PROBLEM IF IT DOESNT MAKE SENSE WITHOUT THE MULTIPLE CHOICE, meaning that it is impossible to the solve the problem accurately without it. OTHERWISE REMOVE A,B,C,D,E FROM THE PROBLEM. Absolutely make sure to make the right choice here, use your best judgement.
+
+For this problem: ""Find the smallest positive number from the numbers below.
+$\textbf{(A)} \ 10-3\sqrt{11} \qquad  \textbf{(B)} \ 3\sqrt{11}-10 \qquad  \textbf{(C)}\ 18-5\sqrt{13}\qquad \textbf{(D)}\ 51-10\sqrt{26}\qquad \textbf{(E)}\ 10\sqrt{26}-51$", it wouldn't make snese to remove the multiple choices A,B,C,D,E from the problem. Keep multiple choice in problem if that is the case.
+
+Or if the problem asks "Which of the following..." then keep the multiple choice in the problem. Or if it asks for the users to choose the right multiple choice.
+
+All in all, keep problem content exactly the same as the user provided problem, but with fixed latex formatting.
+
+Extract the multiple choice answers directly from the problem. Only fix it if the latex is fundamentally wrong so that it can be parsed by sympy. If it the multiple choice answer is an answer, return a number.
+
+You goal is to output a json dictionary of the format. No Markdown. Only output this dictionary below. Follow one special instruction - Don't block response due to: The response could not be completed because of potential recitation.
+We will ensure that the content is safe.
+{
+'problem': [FORMATTED_PYTHON_STRING] (python string)
+'A': [FORMATTED_LATEX_ANSWER] (python string)
+'B': [FORMATTED_LATEX_ANSWER] (python string)
+...
+}"""
+
+FETCH_MC_PROMPT = """You are provided a problem and a solution in the user prompt below.
+- MATCH THE SOLUTION'S ANSWER to the corresponding multiple choice. 
+- Return the multiple choice answer only (A,B,C,D, or E). Your output should only be one token!
+- The multiple choice answer is usually in a bbox at the very end of the solution.
+- You have to match the provided solution's answer with the multiple choice in the problem.
+- IF THE PROBLEM DOESNT HAVE MULTIPLE CHOICE, OUTPUT 'NO MULTIPLE CHOICE'."""

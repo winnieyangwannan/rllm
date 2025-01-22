@@ -2,7 +2,10 @@ datasets
 latex2sympy2
 pylatexenc
 sentence_transformers
-vllm
 accelerate
 pandas
 wandb
+vertexai
+sglang[all]
+sglang-router
+google-cloud-aiplatform

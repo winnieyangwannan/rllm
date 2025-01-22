@@ -25,7 +25,7 @@ import numpy as np
 
 
 def select_reward_fn(data_source):
-    from rllm.grading.grader import grade_answer_verl
+    from rllm.rewards.grader import grade_answer_verl
     return grade_answer_verl
 
 

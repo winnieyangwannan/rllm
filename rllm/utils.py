@@ -1,3 +1,5 @@
+import random
+import socket
 import time
 from typing import List
 
@@ -8,14 +10,16 @@ from google.cloud.aiplatform_v1beta1.types.content import SafetySetting
 from sentence_transformers import SentenceTransformer, util
 from vertexai.generative_models import GenerationConfig, GenerativeModel, HarmBlockThreshold, HarmCategory
 
+from rllm.globals import GCP_PROJECT_ID, GCP_LOCATION, GEMINI_MODEL
+
 def call_gemini_llm(
     prompt: str,
     system_prompt: str,
     n: int = 1,
     temperature: float = 1.0,
-    project_id: str = 'cloud-llm-test',
-    location: str = "us-central1",
-    model_id: str = "gemini-1.5-pro-002",
+    project_id: str = GCP_PROJECT_ID,
+    location: str = GCP_LOCATION,
+    model_id: str = GEMINI_MODEL,
     retry_count: int = 1e9,
 ) -> List[str]:
     """
@@ -89,7 +93,10 @@ def call_gemini_llm(
     # Depending on the library version, this might need to be adjusted 
     # if the `response` shape is different
     try:
+        # Keep this to check for errors in indexing.
         [candidate.text for candidate in response.candidates]
+        if len(response.candidates) == 1:
+            return response.candidates[0].text
         return [candidate.text for candidate in response.candidates]
     except Exception as e:
         print("Error extracting text from response:", e)
@@ -128,5 +135,31 @@ class RAG:
             })
         return results
 
+def find_available_ports(base_port: int, count: int) -> List[int]:
+    """Find consecutive available ports starting from base_port."""
+    available_ports = []
+    current_port = base_port
+
+    while len(available_ports) < count:
+        if is_port_available(current_port):
+            available_ports.append(current_port)
+        current_port += random.randint(100, 1000)
+
+    return available_ports
+
+
+def is_port_available(port):
+    """Return whether a port is available."""
+    with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
+        try:
+            s.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+            s.bind(("", port))
+            s.listen(1)
+            return True
+        except socket.error:
+            return False
+        except OverflowError:
+            return False
+
 if __name__ == '__main__':
-    print(call_gemini_llm('hello', 'You are freindly, be freindly', n=2))
+    print(is_port_available(8000))
