@@ -56,6 +56,11 @@ class RewardManager():
             compute_score_fn = self._select_rm_score_fn(data_source)
 
             score = compute_score_fn(solution_str=responses_str, ground_truth=ground_truth)
+
+            if i == 0:
+                print(responses_str)
+                print("ground truth:", ground_truth)
+
             rewards.append(score)
 
         return torch.tensor(rewards, dtype=torch.float)
@@ -132,7 +137,7 @@ def main_task(config):
     role_worker_mapping = {
         Role.ActorRollout: ray.remote(ActorRolloutRefWorker),
         # Role.Critic: ray.remote(CriticWorker),
-        Role.RefPolicy: ray.remote(ActorRolloutRefWorker)
+        # Role.RefPolicy: ray.remote(ActorRolloutRefWorker)
     }
 
     global_pool_id = 'global_pool'
@@ -142,7 +147,7 @@ def main_task(config):
     mapping = {
         Role.ActorRollout: global_pool_id,
         # Role.Critic: global_pool_id,
-        Role.RefPolicy: global_pool_id,
+        # Role.RefPolicy: global_pool_id,
     }
 
     # we should adopt a multi-source reward function here

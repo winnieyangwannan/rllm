@@ -1,73 +1,4 @@
-# PYTHONUNBUFFERED=1 python3 -m verl.trainer.main_reinforce \
-#  data.train_files=$HOME/data/gsm8k/train.parquet \
-#  data.val_files=$HOME/data/gsm8k/test.parquet \
-#  data.train_batch_size=256 \
-#  data.val_batch_size=1312 \
-#  data.max_prompt_length=512 \
-#  data.max_response_length=256\
-#  actor_rollout_ref.model.path=Qwen/Qwen2.5-0.5B-Instruct \
-#  actor_rollout_ref.actor.optim.lr=1e-6 \
-#  actor_rollout_ref.actor.ppo_mini_batch_size=8 \
-#  actor_rollout_ref.actor.ppo_micro_batch_size=4 \
-#  actor_rollout_ref.rollout.log_prob_micro_batch_size=64 \
-#  actor_rollout_ref.rollout.tensor_model_parallel_size=1 \
-#  actor_rollout_ref.rollout.gpu_memory_utilization=0.4 \
-#  actor_rollout_ref.rollout.n=4 \
-#  actor_rollout_ref.ref.log_prob_micro_batch_size=4 \
-#  actor_rollout_ref.actor.fsdp_config.param_offload=False \
-#  actor_rollout_ref.actor.fsdp_config.grad_offload=False \
-#  actor_rollout_ref.actor.fsdp_config.optimizer_offload=False \
-#  actor_rollout_ref.ref.fsdp_config.param_offload=True \
-#  algorithm.adv_estimator=grpo \
-#  algorithm.kl_ctrl.kl_coef=0.001 \
-#  trainer.logger=['console'] \
-#  +trainer.val_before_train=False \
-#  trainer.default_hdfs_dir=null \
-#  trainer.n_gpus_per_node=1 \
-#  trainer.nnodes=1 \
-#  trainer.save_freq=10 \
-#  trainer.test_freq=10 \
-#  trainer.logger=['console','wandb'] \
-#  trainer.project_name='rllm-o3' \
-#  trainer.experiment_name='test' \
-#  trainer.total_epochs=1 2>&1 | tee verl_demo.log
-
-
-# python3 -m verl.trainer.main_reinforce \
-#     data.train_files=$HOME/data/gsm8k/train.parquet \
-#     data.val_files=$HOME/data/gsm8k/test.parquet \
-#     data.train_batch_size=256 \
-#     data.val_batch_size=1312 \
-#     data.max_prompt_length=512 \
-#     data.max_response_length=512 \
-#     actor_rollout_ref.model.path=Qwen/Qwen2.5-0.5B-Instruct \
-#     actor_rollout_ref.actor.optim.lr=1e-6 \
-#     actor_rollout_ref.actor.ppo_mini_batch_size=64 \
-#     actor_rollout_ref.actor.ppo_micro_batch_size=16 \
-#     actor_rollout_ref.actor.fsdp_config.param_offload=False \
-#     actor_rollout_ref.actor.fsdp_config.grad_offload=False \
-#     actor_rollout_ref.actor.fsdp_config.optimizer_offload=False \
-#     actor_rollout_ref.rollout.log_prob_micro_batch_size=128 \
-#     actor_rollout_ref.rollout.tensor_model_parallel_size=1 \
-#     actor_rollout_ref.rollout.name=vllm \
-#     actor_rollout_ref.rollout.gpu_memory_utilization=0.4 \
-#     actor_rollout_ref.rollout.n=4 \
-#     actor_rollout_ref.ref.log_prob_micro_batch_size=128\
-#     actor_rollout_ref.ref.fsdp_config.param_offload=True \
-#     algorithm.adv_estimator=grpo \
-#     algorithm.kl_ctrl.kl_coef=0.001 \
-#     trainer.critic_warmup=0 \
-#     trainer.logger=['console','wandb'] \
-#     trainer.project_name='rllm-o3' \
-#     trainer.experiment_name='qwen-0.5b-gsm8k' \
-#     trainer.n_gpus_per_node=8 \
-#     trainer.nnodes=1 \
-#     trainer.save_freq=10 \
-#     trainer.test_freq=10 \
-#     trainer.total_epochs=15 \
-#     +trainer.val_before_train=False \
-
-
+# setting that works
 # python3 -m verl.trainer.main_reinforce \
 #     data.train_files=$HOME/data/math/train.parquet \
 #     data.val_files=$HOME/data/math/test.parquet \
@@ -104,37 +35,75 @@
 #     +trainer.val_before_train=False \
 
 
+
+# python3 -m verl.trainer.main_reinforce \
+#     data.train_files=$HOME/data/math/train.parquet \
+#     data.val_files=$HOME/data/math/test.parquet \
+#     data.train_batch_size=16 \
+#     data.val_batch_size=500 \
+#     data.max_prompt_length=512 \
+#     data.max_response_length=4096 \
+#     actor_rollout_ref.model.path=meta-llama/Llama-3.1-8B-Instruct \
+#     actor_rollout_ref.actor.optim.lr=1e-6 \
+#     actor_rollout_ref.actor.ppo_mini_batch_size=16 \
+#     actor_rollout_ref.actor.ppo_micro_batch_size=4 \
+#     actor_rollout_ref.actor.fsdp_config.param_offload=False \
+#     actor_rollout_ref.actor.fsdp_config.grad_offload=False \
+#     actor_rollout_ref.actor.fsdp_config.optimizer_offload=False \
+#     actor_rollout_ref.rollout.log_prob_micro_batch_size=32 \
+#     actor_rollout_ref.rollout.tensor_model_parallel_size=2 \
+#     actor_rollout_ref.rollout.name=vllm \
+#     actor_rollout_ref.rollout.gpu_memory_utilization=0.4 \
+#     actor_rollout_ref.rollout.n=4 \
+#     actor_rollout_ref.ref.log_prob_micro_batch_size=32\
+#     actor_rollout_ref.ref.fsdp_config.param_offload=True \
+#     algorithm.adv_estimator=grpo \
+#     actor_rollout_ref.actor.entropy_coeff=0 \
+#     algorithm.kl_ctrl.kl_coef=0 \
+#     trainer.critic_warmup=0 \
+#     trainer.logger=['console','wandb'] \
+#     trainer.project_name='rllm-o3' \
+#     trainer.experiment_name='llama-3.1-8b-math-grpo' \
+#     trainer.n_gpus_per_node=8 \
+#     trainer.nnodes=2 \
+#     trainer.save_freq=64 \
+#     trainer.test_freq=16 \
+#     trainer.total_epochs=15 \
+#     +trainer.val_before_train=False \
+
+
 python3 -m verl.trainer.main_reinforce \
-    data.train_files=$HOME/data/eurus-rl/train.parquet \
+    data.train_files=$HOME/data/math/train.parquet \
     data.val_files=$HOME/data/math/test.parquet \
     data.train_batch_size=64 \
-    data.val_batch_size=500 \
+    data.val_batch_size=496 \
     data.max_prompt_length=512 \
-    data.max_response_length=2048 \
-    actor_rollout_ref.model.path=NovaSky-AI/Sky-T1-32B-Preview \
-    actor_rollout_ref.model.enable_gradient_checkpointing=true \
+    data.max_response_length=4096 \
+    actor_rollout_ref.model.path=deepseek-ai/DeepSeek-R1-Distill-Qwen-1.5B \
+    actor_rollout_ref.model.enable_gradient_checkpointing=False \
     actor_rollout_ref.actor.optim.lr=1e-6 \
-    actor_rollout_ref.actor.ppo_mini_batch_size=16 \
-    actor_rollout_ref.actor.ppo_micro_batch_size=4 \
-    actor_rollout_ref.actor.fsdp_config.param_offload=True \
-    actor_rollout_ref.actor.fsdp_config.grad_offload=True \
-    actor_rollout_ref.actor.fsdp_config.optimizer_offload=True \
-    actor_rollout_ref.rollout.log_prob_micro_batch_size=32 \
-    actor_rollout_ref.rollout.tensor_model_parallel_size=4 \
+    actor_rollout_ref.actor.ppo_mini_batch_size=64 \
+    actor_rollout_ref.actor.ppo_micro_batch_size=8 \
+    actor_rollout_ref.actor.fsdp_config.param_offload=False \
+    actor_rollout_ref.actor.fsdp_config.grad_offload=False \
+    actor_rollout_ref.actor.fsdp_config.optimizer_offload=False \
+    actor_rollout_ref.rollout.log_prob_micro_batch_size=64 \
+    actor_rollout_ref.rollout.tensor_model_parallel_size=1 \
     actor_rollout_ref.rollout.name=vllm \
-    actor_rollout_ref.rollout.gpu_memory_utilization=0.3 \
+    actor_rollout_ref.rollout.gpu_memory_utilization=0.4 \
     actor_rollout_ref.rollout.n=4 \
-    actor_rollout_ref.ref.log_prob_micro_batch_size=32\
+    actor_rollout_ref.ref.log_prob_micro_batch_size=64\
     actor_rollout_ref.ref.fsdp_config.param_offload=True \
     algorithm.adv_estimator=grpo \
     actor_rollout_ref.actor.entropy_coeff=0 \
+    +actor_rollout_ref.actor.kl_coeff=0.001 \
     algorithm.kl_ctrl.kl_coef=0 \
     trainer.critic_warmup=0 \
     trainer.logger=['console','wandb'] \
     trainer.project_name='rllm-o3' \
-    trainer.experiment_name='sky-t1-grpo' \
+    trainer.experiment_name='qwen1.5b-r1-grpo' \
     trainer.n_gpus_per_node=8 \
-    trainer.nnodes=1 \
+    trainer.nnodes=2 \
     trainer.save_freq=20 \
     trainer.test_freq=20 \
     trainer.total_epochs=15 \

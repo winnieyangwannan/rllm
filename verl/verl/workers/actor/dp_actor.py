@@ -21,7 +21,7 @@ from torch import nn
 from torch.distributed.fsdp import FullyShardedDataParallel as FSDP
 
 from verl import DataProto
-from verl.trainer.ppo import core_algos
+from verl.trainer import core_algos
 from verl.workers.actor import BasePPOActor
 from verl.utils.py_functional import append_to_dict
 from verl.utils.torch_functional import logprobs_from_logits, log_probs_from_logits_all_rmpad
@@ -91,6 +91,12 @@ class DataParallelPPOActor(BasePPOActor):
         See PPO paper for details. https://arxiv.org/abs/1707.06347
         """
         select_keys = ['responses', 'input_ids', 'attention_mask', 'position_ids', 'old_log_probs', 'advantages']
+
+        if 'ref_log_probs' in data:
+            select_keys.append('ref_log_probs')
+
+        print(f"Size of the data: {len(data)}")
+
         data = data.select(batch_keys=select_keys)
         return data.make_iterator(mini_batch_size=self.config.ppo_mini_batch_size,
                                   epochs=self.config.ppo_epochs,
@@ -153,6 +159,7 @@ class DataParallelPPOActor(BasePPOActor):
 
         metrics = {}
         for batch_idx, data in enumerate(dataloader):
+            print("batch idx", batch_idx)
             # split batch into micro_batches
             micro_batches = data.batch.split(self.config.ppo_micro_batch_size)
 
@@ -187,14 +194,22 @@ class DataParallelPPOActor(BasePPOActor):
                     entropy_loss = core_algos.compute_entropy_loss(logits, full_response_mask_rmpad)  # (total_nnz,)
                 else:
                     entropy_loss = core_algos.compute_entropy_loss(logits, response_mask)
+                
+                # kl_coeff = 0.001 # ToDO: fix this
+                # kl_coeff = self.config.kl_coeff
+                # kl_loss = core_algos.compute_kl_loss(logprob=log_prob, ref_logprob=data['ref_log_prob'], eos_mask=response_mask)
+                
                 # compute policy loss
                 policy_loss = pg_loss - entropy_loss * entropy_coeff
+                # policy_loss = policy_loss - kl_loss * kl_coeff
+
 
                 loss = policy_loss / self.gradient_accumulation
                 loss.backward()
 
                 data = {
                     'actor/entropy_loss': entropy_loss.detach().item(),
+                    # 'actor/kl_loss': kl_loss.detach().item(),
                     'actor/pg_loss': pg_loss.detach().item(),
                     'actor/pg_clipfrac': pg_clipfrac.detach().item(),
                     'actor/ppo_kl': ppo_kl.detach().item(),
