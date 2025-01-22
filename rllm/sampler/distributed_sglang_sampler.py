@@ -12,24 +12,23 @@ The main components are:
 """
 import argparse
 import dataclasses
-import gc
 import multiprocessing as mp
 import os
 import threading
 from typing import Any, Dict, List, Tuple
 
+from openai import OpenAI
 import ray
-import requests
+import torch
 from sglang.srt.server import launch_server
 from sglang.srt.server_args import ServerArgs
 from sglang_router.launch_router import RouterArgs
 from transformers import AutoTokenizer
-from rllm.sampler import Sample, SampleBatch
-from rllm.sampler.utils import convert_openai_response_to_samples
-from openai import OpenAI
 
 from rllm.globals import BASE_SAMPLER_PORT
+from rllm.sampler import SampleBatch
 from rllm.sampler.utils import (
+    convert_openai_response_to_samples,
     kill_process_and_children,
     wait_for_server,
 )
@@ -298,7 +297,7 @@ class DistributedSGLang:
         except ConnectionError:
             print("Starting new Ray cluster...")
             tensor_parallel_size = model_kwargs.get("tensor_parallel_size", 1)
-            total_gpus = num_workers * tensor_parallel_size
+            total_gpus = torch.cuda.device_count()
             total_cpus = os.cpu_count()
             os.system(f"ray start --head --num-cpus={total_cpus-1} --num-gpus={total_gpus}")
             ray.init(address="auto", namespace=self.NAMESPACE)

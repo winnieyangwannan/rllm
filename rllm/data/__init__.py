@@ -1,7 +1,9 @@
-from rllm.data.load_dataset import load_dataset, TrainDataset, TestDataset, Dataset
+from rllm.data.dataset_types import TrainDataset, TestDataset, Dataset
+from rllm.data.dataloader import make_dataloader
 
 __all__ = [
-    'load_dataset',
     'TrainDataset',
     'TestDataset',
+    'Dataset',
+    'make_dataloader',
 ]

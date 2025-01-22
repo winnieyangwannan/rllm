@@ -11,12 +11,11 @@ from rllm.system_prompts import MATH_DIFFICULTY_PROMPT
 from rllm.utils import call_gemini_llm
 
 # Import the dataset loading logic
-from load_dataset import (
-    load_dataset,
+from rllm.data.dataset_types import (
     TrainDataset,
     TestDataset,
 )
-
+from rllm.data.utils import load_dataset
 def difficulty_fn(idx, entry):
     """
     1) Extract problem and solution text.

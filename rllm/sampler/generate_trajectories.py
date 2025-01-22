@@ -6,9 +6,8 @@ from copy import deepcopy
 
 from tqdm import tqdm
 
-from rllm.data.load_dataset import TrainDataset, TestDataset, load_dataset
-from rllm.rewards.math_utils.utils import grade_answer
-from rllm.sampler import SampleBatch
+from rllm.data.dataset_types import TrainDataset, TestDataset
+from rllm.data.utils import load_dataset
 from rllm.sampler.distributed_sglang_sampler import DistributedSGLang
 from rllm.system_prompts import COT_MATH_SYSTEM_PROMPT
 from rllm.rewards import RewardInput, RewardType
