@@ -6,7 +6,7 @@ import torch
 import wandb
 from accelerate import Accelerator
 
-from .core import get_action_logprobs
+from .utils import get_action_logprobs
 
 @dataclass
 class ReinforceConfig:

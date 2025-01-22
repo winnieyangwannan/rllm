@@ -8,7 +8,7 @@ from rllm.sampler.distributed_client import DistributedLLMClient
 from rllm.system_prompts import COT_MATH_SYSTEM_PROMPT
 
 from rllm.rewards.math_utils.utils import grade_answer
-from rllm.trainer.reinforce import ReinforceTrainer, ReinforceConfig
+from rllm.algorithms.reinforce import ReinforceTrainer, ReinforceConfig
 
 import asyncio
 

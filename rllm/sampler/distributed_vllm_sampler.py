@@ -22,7 +22,7 @@ from vllm.entrypoints.openai.cli_args import make_arg_parser
 from vllm.engine.arg_utils import FlexibleArgumentParser
 
 from rllm.globals import BASE_SAMPLER_PORT
-from rllm.sampler import Sample, SampleBatch
+from rllm.sampler import SampleBatch
 from rllm.sampler.utils import (
     convert_openai_response_to_samples,
     kill_process_and_children,

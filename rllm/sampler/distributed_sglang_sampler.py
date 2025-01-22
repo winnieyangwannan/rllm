@@ -413,4 +413,4 @@ if __name__ == "__main__":
     print(distributed_sampler.chat_completion([{"role": "user", "content": "What is the capital of MarioLand?"}]))
     print(distributed_sampler.chat_completion([{"role": "user", "content": "What is the capital of MarioLand?"}]))
     print(distributed_sampler.chat_completion([{"role": "user", "content": "What is the capital of MarioLand?"}]))
-    distributed_sampler.shutdown(shutdown_ray=False)
+    distributed_sampler.shutdown()
