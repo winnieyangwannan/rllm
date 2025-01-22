@@ -27,6 +27,7 @@ import argparse
 import dataclasses
 import multiprocessing as mp
 import os
+import signal
 from typing import Any, Dict, List, Tuple
 
 from openai import OpenAI
@@ -127,6 +128,8 @@ class RaySGLangWorker:
                 - model_path/model: Model name or path
                 - tensor_parallel_size/tp_size: Number of GPUs for tensor parallelism
         """
+        if os.environ.get("IGNORE_SIGINT", "") == "1":
+            signal.signal(signal.SIGINT, signal.SIG_IGN)
         self.port = port
         self.model = model_kwargs.get("model_path") or model_kwargs.get("model", "facebook/opt-125m")
         self.tensor_parallel_size = model_kwargs.get("tensor_parallel_size") or model_kwargs.get("tp_size", 1)
@@ -146,7 +149,11 @@ class RaySGLangWorker:
         self.tokenizer = AutoTokenizer.from_pretrained(self.model)
         # Initialize OpenAI client
         self.client = OpenAI(base_url=f"http://0.0.0.0:{self.port}/v1", api_key="not-needed")
-
+    
+    def wait_for_server(self) -> None:
+        """Wait for the server to become healthy."""
+        wait_for_server(self.port)
+    
     def start_server(self) -> str:
         """Start the SGLang server in a subprocess.
 
@@ -164,9 +171,11 @@ class RaySGLangWorker:
         )
         # Start the process
         self.server_process.start()
-        # Wait for server to become healthy
+
+    def wait_for_server(self) -> None:
+        """Wait for the server to become healthy."""
         wait_for_server(self.port)
-        return f"Started server on port {self.port}"
+        print(f"Started server on port {self.port}")
 
     def shutdown(self) -> str:
         """Terminate the SGLang server process.
