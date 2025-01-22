@@ -408,9 +408,8 @@ if __name__ == "__main__":
         tensor_parallel_size=2,
         model="deepseek-ai/DeepSeek-R1-Distill-Qwen-32B"
     )
-    import pdb; pdb.set_trace()
     print(distributed_sampler.chat_completion([{"role": "user", "content": "What is the capital of France?"}]))
     print(distributed_sampler.chat_completion([{"role": "user", "content": "What is the capital of MarioLand?"}]))
     print(distributed_sampler.chat_completion([{"role": "user", "content": "What is the capital of MarioLand?"}]))
     print(distributed_sampler.chat_completion([{"role": "user", "content": "What is the capital of MarioLand?"}]))
-    distributed_sampler.shutdown(shutdown_ray=False)
+    distributed_sampler.shutdown()
