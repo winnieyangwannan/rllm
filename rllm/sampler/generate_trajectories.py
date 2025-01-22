@@ -8,7 +8,7 @@ from tqdm import tqdm
 
 from rllm.data.dataset_types import TrainDataset, TestDataset
 from rllm.data.utils import load_dataset
-from rllm.sampler.distributed_sglang_sampler import DistributedSGLang
+from rllm.sampler import DistributedSampler
 from rllm.system_prompts import COT_MATH_SYSTEM_PROMPT
 from rllm.rewards import RewardInput, RewardType
 from rllm.rewards.math_reward import RewardMathFn
@@ -100,7 +100,8 @@ if __name__ == "__main__":
     args = parse_args(parser)
     
     # Initialize the distributed VLLM engine, do not cntrl C here...
-    engine = DistributedSGLang(
+    engine = DistributedSampler(
+        backend="sglang",
         num_workers=args.num_workers,
         tensor_parallel_size=args.tensor_parallel_size,
         model=args.model

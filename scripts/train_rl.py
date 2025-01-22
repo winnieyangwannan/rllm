@@ -2,7 +2,8 @@ import random
 
 from vllm import SamplingParams
 
-from rllm.data.load_dataset import Dataset , load_dataset
+from rllm.data.dataset_types import Dataset 
+from rllm.data.utils import load_dataset
 
 from rllm.sampler.distributed_client import DistributedLLMClient
 from rllm.system_prompts import COT_MATH_SYSTEM_PROMPT

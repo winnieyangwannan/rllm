@@ -1,6 +1,5 @@
+from dataclasses import dataclass
 import enum
-import json
-import os
 from typing import Any, Dict, List, Union
 
 class TrainDataset(enum.Enum):
@@ -20,3 +19,11 @@ class TestDataset(enum.Enum):
     MATH = 'MATH'
 
 Dataset = Union[TrainDataset, TestDataset]
+
+@dataclass
+class Problem:
+    problem: str
+    solution: str 
+    answer: str
+    difficulty: float
+    dataset: Dataset

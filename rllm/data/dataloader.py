@@ -1,19 +1,24 @@
+from dataclasses import dataclass
 from typing import List, Union, Dict
 
 from torch.utils.data import Dataset as TorchDataset, DataLoader, WeightedRandomSampler, Sampler
 
-from rllm.data.dataset_types import Dataset
+from rllm.data.dataset_types import Dataset, Problem
 from rllm.data.utils import load_dataset
-
-DATASET_KEYS = ['problem', 'solution', 'answer']
 
 def collate_fn(batch):
     """Collate function for the dataloader."""
-    # Combine all items in the batch into a single dict
-    return {
-        key: [item[key] for item in batch]
-        for key in DATASET_KEYS
-    }
+    # Convert batch items into Problem objects
+    return [
+        Problem(
+            problem=item['problem'],
+            solution=item['solution'], 
+            answer=item['answer'],
+            difficulty=item['difficulty'],
+            dataset=item['dataset']
+        )
+        for item in batch
+    ]
 
 class WeightedDatasetSampler(Sampler):
     """Samples elements based on provided weights for each dataset."""
@@ -64,6 +69,7 @@ class DatasetMix(TorchDataset):
         # Load and concatenate datasets
         self.datasets = [load_dataset(d) for d in dataset_enums]
         self.dataset_sizes = [len(d) for d in self.datasets]
+        self.dataset_enums = dataset_enums
         
         # Calculate dataset offsets for indexing
         self.offsets = [0]
@@ -84,6 +90,7 @@ class DatasetMix(TorchDataset):
         # Get local index within dataset
         local_idx = idx - self.offsets[dataset_idx]
         sample = self.datasets[dataset_idx][local_idx]
+        sample['dataset'] = self.dataset_enums[dataset_idx]
         return sample
 
 
@@ -101,7 +108,7 @@ def make_dataloader(
             Batch size for the dataloader
             
     Returns:
-        DataLoader: DataLoader for the dataset(s)
+        DataLoader: DataLoader that yields lists of Problem objects
     """
     dataset = DatasetMix(datasets)
     sampler = WeightedDatasetSampler(
