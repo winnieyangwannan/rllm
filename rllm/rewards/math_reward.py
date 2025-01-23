@@ -3,9 +3,6 @@ This module contains the RewardMathFn class, which evaluates mathematical answer
 and assigns rewards based on their correctness. It utilizes a language model to 
 validate answers when necessary.
 """
-
-from enum import Enum
-
 from rllm.globals import THOUGHT_DELIMITER_START, THOUGHT_DELIMITER_END
 from rllm.rewards import RewardConfig, RewardFn, RewardInput, RewardOutput, RewardType
 from rllm.rewards.math_utils.utils import extract_answer, grade_answer_sympy, grade_answer_mathd

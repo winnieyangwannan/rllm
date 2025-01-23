@@ -41,7 +41,7 @@ def main_rl_train_loop(config: RLTrainerConfig):
     import pdb; pdb.set_trace()
     # Cleanup
     sampler.shutdown()
-    # TODO: Launch and implement trainer.
+    # TODO: Launch and finish megatron trainer.
     
 if __name__ == "__main__":
     config = RLTrainerConfig()
