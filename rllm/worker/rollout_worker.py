@@ -4,7 +4,7 @@ from concurrent.futures import ThreadPoolExecutor
 from rllm.data import Problem
 from rllm.sampler import SampleBatch, DistributedSampler
 from rllm.system_prompts import COT_MATH_SYSTEM_PROMPT 
-from rllm.rewards import RewardFn, RewardType, RewardInput, RewardOutput
+from rllm.rewards import RewardFn
 from rllm.worker.utils import convert_batch_to_reward_input, convert_reward_output_to_batch
 
 class RolloutWorker:

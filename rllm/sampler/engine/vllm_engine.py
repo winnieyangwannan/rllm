@@ -19,6 +19,7 @@ import asyncio
 import gc
 import multiprocessing as mp
 import os
+import signal
 from typing import Any, Dict, List
 
 from openai import OpenAI
@@ -89,6 +90,8 @@ class RayVLLMWorker:
                 - tensor_parallel_size: Number of GPUs for tensor parallelism
                 - Other vLLM engine parameters
         """
+        if os.environ.get("IGNORE_SIGINT", "") == "1":
+            signal.signal(signal.SIGINT, signal.SIG_IGN)
         self.port = port
         self.model = model_kwargs.get("model", "facebook/opt-125m")
         
@@ -130,10 +133,11 @@ class RayVLLMWorker:
             daemon=False
         )
         self.server_process.start()
-        
-        # Wait for server to become healthy
+    
+    def wait_for_server(self) -> None:
+        """Wait for the server to become healthy."""
         wait_for_server(self.port)
-        return f"Started server on port {self.port}"
+        print(f"Started server on port {self.port}")
     
     def chat_completion(self, messages: List[Dict[str, str]], **kwargs) -> SampleBatch:
         """Send a chat completion request to this worker.

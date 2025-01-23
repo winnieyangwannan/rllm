@@ -16,6 +16,7 @@ Features:
 """
 from enum import Enum
 import os
+import signal
 import threading
 from typing import Dict, List, Any
 
@@ -32,6 +33,15 @@ class EngineBackend(Enum):
     SGLANG = "SGLANG"
     VLLM = "VLLM"
 
+
+def _signal_handler(signum, frame):
+    """Handle interrupt signals gracefully."""
+    print("\nReceived interrupt signal. Workers will continue running in background.")
+    print("To shutdown workers, call shutdown().")
+    # Unregister the signal handler to prevent further interrupts
+    signal.signal(signal.SIGINT, signal.SIG_IGN)
+    # Exit without calling sys.exit() to keep Ray actors running
+    os._exit(0)
 
 class DistributedSampler:
     """Manages distributed inference across multiple workers using Ray.
@@ -65,6 +75,10 @@ class DistributedSampler:
                 - tensor_parallel_size: Number of GPUs per worker
                 - Other engine-specific parameters
         """
+        # Move signal handler setup before Ray initialization
+        signal.signal(signal.SIGINT, _signal_handler)
+        signal.signal(signal.SIGTERM, _signal_handler)
+        
         self.model = model_kwargs.get("model_path") or model_kwargs.get("model", "facebook/opt-125m")
         self.backend = EngineBackend(backend.upper())
         self.num_workers = num_workers
@@ -114,6 +128,7 @@ class DistributedSampler:
                 print(f"Found existing worker: {worker_name}")
             except ValueError:
                 print(f"Creating new worker: {worker_name}")
+                # Create worker with fault tolerance settings and signal handling
                 worker = WorkerClass.options(
                     name=worker_name,
                     lifetime="detached",
@@ -121,6 +136,12 @@ class DistributedSampler:
                     num_gpus=self.model_kwargs.get("tensor_parallel_size", 1),
                     num_cpus=8,
                     max_concurrency=256,
+                    runtime_env={
+                        "env_vars": {
+                            "PYTHONUNBUFFERED": "1",
+                            "IGNORE_SIGINT": "1"  # Environment variable to ignore SIGINT in worker
+                        }
+                    }
                 ).remote(
                     port=self.worker_ports[i],
                     **self.model_kwargs
@@ -131,8 +152,8 @@ class DistributedSampler:
 
         # Start new workers if any
         if new_worker_refs:
-            ray.get([w.start_server.remote() for w in new_worker_refs])
-
+            [w.start_server.remote() for w in new_worker_refs]
+        ray.get([w.wait_for_server.remote() for w in new_worker_refs])
         return worker_refs
 
     def _get_least_busy_worker(self) -> int:
@@ -193,12 +214,11 @@ if __name__ == "__main__":
     sampler = DistributedSampler(
         num_workers=1,
         tensor_parallel_size=2,
-        backend="vllm",
+        backend="sglang",
         model="deepseek-ai/DeepSeek-R1-Distill-Qwen-32B"
     )
+    print(sampler.chat_completion([{
+        "role": "user",
+        "content": "Find the minimum value of $\\frac{9x^2\\sin^2 x + 4}{x\\sin x}$ for $0 < x < \\pi$."
+    }]))
     sampler.shutdown()
-    # print(sampler.chat_completion([{
-    #     "role": "user",
-    #     "content": "What is the capital of France?"
-    # }]))
-    # sampler.shutdown()
