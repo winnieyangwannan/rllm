@@ -27,7 +27,7 @@ class SampleConfig:
     tensor_parallel_size: int = 2
     sampler_backend: str = "SGLang"
     model: str = "deepseek-ai/DeepSeek-R1-Distill-Qwen-32B"
-    temperature: float = 0.8
+    temperature: float = 0.6
     max_tokens: int = 8096
 
 @dataclass(slots=True, kw_only=True)
