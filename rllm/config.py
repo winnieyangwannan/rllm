@@ -37,6 +37,7 @@ class RLTrainerConfig:
     """
     # Training Configuration
     algorithm: str = "reinforce" # TODO: Add more algorithms, rn either reinforce or grpo.
+    total_train_steps: int = 500
     train_batch_size: int = 32 # Number of problems sampled is train_batch_size // samples_per_problem
     
     # Dataset Configuration

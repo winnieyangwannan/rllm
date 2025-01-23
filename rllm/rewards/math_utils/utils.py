@@ -480,22 +480,11 @@ def extract_answer(passage: str) -> str:
         return extract_boxed_answer(passage)
     return None
 
-
-def grade_answer(given_answer: str, ground_truth: str) -> bool:
-    """
-    The answer will be considered correct if:
-    (a) it normalizes to the same string as the ground truth answer
-    OR
-    (b) sympy can simplify the difference between the expressions to 0
-    """
+def grade_answer_verl(solution_str, ground_truth):
     if '\\boxed' in ground_truth:
         ground_truth = extract_answer(ground_truth)
-    given_answer = extract_answer(given_answer)
+    given_answer = extract_answer(solution_str)
     if given_answer is None:
         return False
     return grade_answer_mathd(given_answer, ground_truth) \
         or grade_answer_sympy(given_answer, ground_truth)
-
-
-def grade_answer_verl(solution_str, ground_truth):
-    return grade_answer(solution_str, ground_truth)

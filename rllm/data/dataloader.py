@@ -11,10 +11,10 @@ def collate_fn(batch):
     # Convert batch items into Problem objects
     return [
         Problem(
-            problem=item['problem'],
-            solution=item['solution'], 
-            answer=item['answer'],
-            difficulty=item['difficulty'],
+            problem=item.get('problem', ''),
+            solution=item.get('solution', ''), 
+            answer=item.get('answer', ''),
+            difficulty=item.get('difficulty', -1.0),
             dataset=item['dataset']
         )
         for item in batch

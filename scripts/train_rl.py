@@ -8,7 +8,7 @@ from rllm.data.utils import load_dataset
 from rllm.sampler.distributed_client import DistributedLLMClient
 from rllm.system_prompts import COT_MATH_SYSTEM_PROMPT
 
-from rllm.rewards.math_utils.utils import grade_answer
+from rllm.rewards.math_utils.utils import grade_answer_verl
 from rllm.algorithms.reinforce import ReinforceTrainer, ReinforceConfig
 
 import asyncio
@@ -53,7 +53,7 @@ def generate_responses(model_name, queries):
 def compute_rewards(responses, labels):
     rewards = []
     for response, label in zip(responses, labels):
-        is_correct = grade_answer(response, label)
+        is_correct = grade_answer_verl(response, label)
         reward = 1.0 if is_correct else -1.0
         rewards.append(reward)
     return rewards

@@ -16,6 +16,7 @@ from rllm.data.dataset_types import (
     TestDataset,
 )
 from rllm.data.utils import load_dataset
+
 def difficulty_fn(idx, entry):
     """
     1) Extract problem and solution text.
@@ -23,9 +24,9 @@ def difficulty_fn(idx, entry):
     3) Convert to float safely, filter out parse errors.
     4) Take the average and store as 'difficulty'.
     """
-    if entry.get('difficulty') is not None:
-        # Skip if already computed
-        return idx, entry
+    # if entry.get('difficulty') is not None:
+    #     # Skip if already computed
+    #     return idx, entry
 
     problem_text = entry.get('problem', '')
     solution_text = entry.get('solution', '')
@@ -35,7 +36,7 @@ def difficulty_fn(idx, entry):
         f"Problem: {problem_text}\n----\nSolution: {solution_text}",
         system_prompt=MATH_DIFFICULTY_PROMPT,
         n=8,
-        temperature=1.0,
+        temperature=0.7,
     )
     # (Use .lower() to catch both uppercase/lowercase errors)
     output_list = [
@@ -79,7 +80,7 @@ def batch_difficulty(dataset: str, split: str):
     # Prepare to save back to the same file location
     data_dir = "train" if isinstance(dataset_enum, TrainDataset) else "test"
     dataset_name = dataset_enum.value.lower()
-    file_path = os.path.join(".", data_dir, f"{dataset_name}.json")
+    file_path = os.path.join("..", data_dir, f"{dataset_name}.json")
 
     # Use ThreadPoolExecutor to process concurrently
     with concurrent.futures.ThreadPoolExecutor(max_workers=24) as executor:
