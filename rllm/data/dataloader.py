@@ -3,7 +3,7 @@ from typing import List, Union, Dict
 
 from torch.utils.data import Dataset as TorchDataset, DataLoader, WeightedRandomSampler, Sampler
 
-from rllm.data.dataset_types import Dataset, Problem
+from rllm.data.dataset_types import Dataset, DatasetConfig, Problem
 from rllm.data.utils import load_dataset
 
 def collate_fn(batch):
@@ -11,10 +11,10 @@ def collate_fn(batch):
     # Convert batch items into Problem objects
     return [
         Problem(
-            problem=item['problem'],
-            solution=item['solution'], 
-            answer=item['answer'],
-            difficulty=item['difficulty'],
+            problem=item.get('problem', ''),
+            solution=item.get('solution', ''), 
+            answer=item.get('answer', ''),
+            difficulty=item.get('difficulty', -1.0),
             dataset=item['dataset']
         )
         for item in batch
@@ -93,42 +93,42 @@ class DatasetMix(TorchDataset):
         sample['dataset'] = self.dataset_enums[dataset_idx]
         return sample
 
-
-def make_dataloader(
-    datasets: Union[Dataset, List[Dataset], Dict[Dataset, float]],
-    batch_size: int = 8,
-):
-    """Create a DataLoader from a dataset or mixture of datasets.
+class DataLoaderFn:
+    """A function that creates a DataLoader."""
     
-    Args:
-        datasets: Union[Dataset, List[Dataset], Dict[Dataset, float]]
-            Either a single Dataset, a list of Datasets, or a dictionary mapping
-            Datasets to their sampling weights
-        batch_size: int
-            Batch size for the dataloader
-            
-    Returns:
-        DataLoader: DataLoader that yields lists of Problem objects
-    """
-    dataset = DatasetMix(datasets)
-    sampler = WeightedDatasetSampler(
-        dataset_sizes=dataset.dataset_sizes,
-        weights=dataset.weights
-    )
-    return DataLoader(
-        dataset,
-        batch_size=batch_size,
-        sampler=sampler,
-        collate_fn=collate_fn
-    )
+    def __init__(self, config: DatasetConfig):
+        # Create dictionary mapping datasets to their weights
+        self.config = config
+        self.datasets = config.datasets
+        self.dataset_weights = config.dataset_weights
+        if not self.dataset_weights:
+            self.dataset_weights = [1.0] * len(self.datasets)
+        assert len(self.datasets) == len(self.dataset_weights), "Datasets and weights must have the same length"
+        self.batch_size = self.config.dataloader_batch_size
+        self._create_dataloader()
+        
+    def _create_dataloader(self):
+        """Create a DataLoader from a dataset or mixture of datasets."""
+        dataset_dict = dict(zip(self.datasets, self.dataset_weights))
+        self.dataset_mix = DatasetMix(dataset_dict)
+        sampler = WeightedDatasetSampler(
+            dataset_sizes=self.dataset_mix.dataset_sizes,
+            weights=self.dataset_mix.weights
+        )
+        self.dataloader =  DataLoader(
+            self.dataset_mix,
+            batch_size=self.batch_size,
+            sampler=sampler,
+            collate_fn=collate_fn
+        )
+    
+    def __iter__(self):
+        return iter(self.dataloader)
+
 
 if __name__ == "__main__":
-    from rllm.data.dataset_types import TrainDataset
-    datasets = {
-        TrainDataset.AIME: 0.5,
-        TrainDataset.AMC: 0.5,
-    }
-    dataloader = make_dataloader(datasets, batch_size=8)
+    data_config = DatasetConfig(datasets=["AMC", "AIME"], dataset_weights=[0.3, 0.7])
+    dataloader = DataLoaderFn(data_config)
     for batch in dataloader:
         print(batch)
         import pdb; pdb.set_trace()

@@ -46,7 +46,7 @@ def parse_args(parser: argparse.ArgumentParser):
                        help='Output file path (default: {dataset}_{split}_trajectories.json)')
     return parser.parse_args()
 
-def generate_trajectory(idx, engine, entry, n=8, temperature=0.8):
+def generate_trajectory(idx, engine, entry, n=8, temperature=0.6):
     """
     Process a single problem using the distributed VLLM engine.
     
