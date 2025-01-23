@@ -23,11 +23,11 @@ def main_rl_train_loop(config: RLTrainerConfig):
         model=sample_config.model,
     )
 
-    problems_per_batch  = config.train_batch_size // config.samples_per_problem
-    # Create workers based on batch size
+    problems_batch_size  = config.train_batch_size // config.samples_per_problem
+    # Create workers based on batch size. Workers sample and compute reward.
     sampler_workers = [
         RolloutWorker(sample_config, sampler, reward_fn) 
-        for _ in range(problems_per_batch)
+        for _ in range(problems_batch_size)
     ]
 
     # Get next batch from dataloader

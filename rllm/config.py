@@ -38,7 +38,8 @@ class RLTrainerConfig:
     # Training Configuration
     algorithm: str = "reinforce" # TODO: Add more algorithms, rn either reinforce or grpo.
     total_train_steps: int = 500
-    train_batch_size: int = 32 # Number of problems sampled is train_batch_size // samples_per_problem
+    mini_batch_size: int = 16 # 
+    gradient_accumulation_steps: int = 2 # Batch size through model is mini_batch_size/gradient_accumulation_steps
     
     # Dataset Configuration
     datasets: Union[List[Dataset], List[str], str] = field(default_factory=lambda: ["AMC", "AIME"])
@@ -51,7 +52,7 @@ class RLTrainerConfig:
     sampler_backend: str = "SGLang"
     model: str = "deepseek-ai/DeepSeek-R1-Distill-Qwen-32B"
     temperature: float = 0.6
-    max_tokens: int = 8096
+    max_tokens: int = 1024
     
     # Reward Configuration (see RewardConfig for more details)
     math_reward_weight: float = 1.0

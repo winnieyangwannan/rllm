@@ -23,7 +23,7 @@ class RolloutWorker:
         sample_batch: SampleBatch = self.sampler.chat_completion(messages=messages,
                                                           temperature=self.config.temperature,
                                                           n=self.config.samples_per_problem,
-                                                          max_completion_tokens=self.config.max_tokens)
+                                                          max_tokens=self.config.max_tokens)
         
         reward_inputs = convert_batch_to_reward_input(problem, sample_batch)
         with ThreadPoolExecutor(max_workers=len(reward_inputs)) as executor:
