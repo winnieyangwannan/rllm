@@ -6,6 +6,29 @@ of samples during inference.
 from dataclasses import dataclass
 from typing import Dict, List, Union
 
+@dataclass(slots=True, frozen=True)
+class SampleConfig:
+    """Configuration for language model sampling.
+
+    Controls parameters for distributed sampling from language models, including batch sizes,
+    parallelization settings, and sampling temperature.
+
+    Attributes:
+        samples_per_problem: Number of samples to generate for each input problem/prompt.
+        num_workers: Number of parallel sampling workers to distribute inference across.
+        tensor_parallel_size: Degree of tensor parallelism for each worker.
+        sampler_backend: Backend framework for sampling ("SGLang" or "VLLM").
+        model: Path or name of the language model to use for sampling.
+        temperature: Sampling temperature - higher values increase randomness (0.0-2.0).
+        max_tokens: Maximum number of tokens to generate for each sample.
+    """
+    samples_per_problem: int = 4
+    num_workers: int = 1
+    tensor_parallel_size: int = 2
+    sampler_backend: str = "SGLang"
+    model: str = "deepseek-ai/DeepSeek-R1-Distill-Qwen-32B"
+    temperature: float = 0.8
+    max_tokens: int = 8096
 
 @dataclass(slots=True, kw_only=True)
 class Sample:

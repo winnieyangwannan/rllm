@@ -6,6 +6,21 @@ to evaluate model responses for various problem types, including math and coding
 from dataclasses import dataclass
 from enum import Enum
 
+@dataclass
+class RewardConfig:
+    # Config for math-bsed rewards
+    math_reward_weight: float = 1.0
+    use_math_orm: bool = True
+    
+    # Config for cot-based rewards
+    cot_reward_weight: float = 0.0
+    
+    # General reward constants
+    correct_reward: float = 1.0
+    incorrect_reward: float = -1.0
+    format_error_reward: float = -1.0
+    unk_error_reward: float = -1.0
+
 
 class RewardType(Enum):
     """
@@ -58,5 +73,8 @@ class RewardFn:
     The __call__ method must be overridden to provide the functionality for evaluating
     the input and returning the corresponding reward output.
     """
+    def __init__(self, config: RewardConfig):
+        self.config = config
+
     def __call__(self, input: RewardInput) -> RewardOutput:
         raise NotImplementedError("Subclasses must implement this method.")

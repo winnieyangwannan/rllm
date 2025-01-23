@@ -1,58 +1,48 @@
-from rllm.data import TrainDataset, make_dataloader
-from rllm.sampler import DistributedSampler
-from rllm.rewards.math_reward import RewardMathFn
-from rllm.worker.rollout_worker import RolloutWorker
-from dataclasses import dataclass
 from concurrent.futures import ThreadPoolExecutor
 
-@dataclass
-class RLTrainerConfig:
-    # RL Config
-    algorithm: str = "reinforce"
-    # Batch size for RL training.
-    train_batch_size: int = 8
-    # Sampler Config.
-    # Number of samples per problem.
-    samples_per_problem: int = 4
-    # Number of workers for distributed sampling.
-    num_workers: int = 1
-    # Tensor parallel size for each sampler worker.
-    tensor_parallel_size: int = 2
-    # Sampler backend. Either SGLang or VLLM.
-    sampler_backend: str = "SGLang"
-    # Model for distributed sampling.
-    model: str = "deepseek-ai/DeepSeek-R1-Distill-Qwen-32B"
-    
-    # Reward Config.
-    # blah blah
+from rllm.config import RLTrainerConfig
+from rllm.data import DataLoaderFn
+from rllm.rewards.rl_reward import RLRewardFn
+from rllm.sampler import DistributedSampler
+from rllm.worker.rollout_worker import RolloutWorker
 
-if __name__ == "__main__":
-    batch_size = 1
-    datasets = {
-        TrainDataset.AIME: 0.5,
-        TrainDataset.AMC: 0.5, 
-    }
-    dataloader = make_dataloader(datasets, batch_size=batch_size)
+def main_rl_train_loop(config: RLTrainerConfig):
+    # Create dataloader using config
+    dataset_config = config.get_dataset_config()
+    dataloader = DataLoaderFn(dataset_config)
     
-    reward_fn = RewardMathFn()
-    
+    # Initialize reward function using config
+    reward_config = config.get_reward_config()
+    reward_fn = RLRewardFn(reward_config)
+    # Create sampler using config parameters
+    sample_config = config.get_sample_config()
     sampler = DistributedSampler(
-        backend="vllm",
-        num_workers=1,
-        tensor_parallel_size=2,
-        model="deepseek-ai/DeepSeek-R1-Distill-Qwen-32B"
+        backend=sample_config.sampler_backend,
+        num_workers=sample_config.num_workers,
+        tensor_parallel_size=sample_config.tensor_parallel_size,
+        model=sample_config.model,
     )
-    sampler_workers = [RolloutWorker(sampler, reward_fn) for _ in range(batch_size)]
-    import pdb; pdb.set_trace()
-    # Get next batch from dataloader.
+
+    problems_per_batch  = config.train_batch_size // config.samples_per_problem
+    # Create workers based on batch size
+    sampler_workers = [
+        RolloutWorker(sample_config, sampler, reward_fn) 
+        for _ in range(problems_per_batch)
+    ]
+
+    # Get next batch from dataloader
     for batch in dataloader:
         with ThreadPoolExecutor(max_workers=len(batch)) as executor:
             futures = []
             for i, problem in enumerate(batch):
                 futures.append(executor.submit(sampler_workers[i].rollout, problem))
-            sample_batch_outputs = [future.result() for i, future in enumerate(futures)]
+            sample_batch_outputs = [future.result() for future in futures]
         break
     import pdb; pdb.set_trace()
-    # Shutdown sampler to launch trainer lol.
+    # Cleanup
     sampler.shutdown()
     # TODO: Launch and implement trainer.
+    
+if __name__ == "__main__":
+    config = RLTrainerConfig()
+    main_rl_train_loop(config)
