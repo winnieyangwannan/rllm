@@ -16,7 +16,7 @@ class TrainDataset(enum.Enum):
 class TestDataset(enum.Enum):
     AIME = 'AIME'
     AMC =  'AMC'
-    MATH = 'MATH'
+    MATH = 'MATH500'
 
 Dataset = Union[TrainDataset, TestDataset]
 
