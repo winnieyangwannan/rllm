@@ -1,6 +1,7 @@
 accelerate
 datasets
 deepspeed
+dm-tree
 google-cloud-aiplatform
 latex2sympy2
 pandas
