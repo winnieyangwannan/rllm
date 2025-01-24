@@ -26,7 +26,7 @@ class RewardMathFn(RewardFn):
     def __call__(self, input: RewardInput) -> RewardOutput:
         assert input.problem_type == RewardType.MATH, \
             "Invalid problem type: expected 'MATH', but got '{}'".format(input.problem_type)
-
+        
         problem = input.problem
         model_response = input.model_response
         
@@ -34,7 +34,7 @@ class RewardMathFn(RewardFn):
         if THOUGHT_DELIMITER_START in model_response and THOUGHT_DELIMITER_END in model_response:
             model_solution = model_response.split(THOUGHT_DELIMITER_END)[1]
         else:
-            return RewardOutput(reward=self.config.format_error_reward, is_correct=False)
+            model_solution = model_response
         
         model_answer = extract_answer(model_solution)
         if model_answer is None:
@@ -44,6 +44,7 @@ class RewardMathFn(RewardFn):
         ground_truth = input.metadata.get("answer", None)
         if "\\boxed" in ground_truth:
             ground_truth = extract_answer(ground_truth)
+        
         if ground_truth is None:
             return RewardOutput(reward=self.config.unk_error_reward, is_correct=False)
 
@@ -54,21 +55,28 @@ class RewardMathFn(RewardFn):
 
         # If latex heuristics fail and ORM is enabled, use LLM as ORM to evaluate correctness.
         if self.config.use_math_orm:
-            orm_response = call_gemini_llm(
-                system_prompt=ORM_PROMPT,
-                prompt=ORM_USER_TEMPLATE.format(problem=problem, answer_1=model_answer, answer_2=ground_truth),
-                temperature=0.0,
-            )
-            if "[[YES]]" in orm_response:
-                return RewardOutput(reward=self.config.correct_reward, is_correct=True)
-            elif "[[NO]]" in orm_response:
-                return RewardOutput(reward=self.config.incorrect_reward, is_correct=False)
+            try: 
+                orm_response = call_gemini_llm(
+                    system_prompt=ORM_PROMPT,
+                    prompt=ORM_USER_TEMPLATE.format(problem=problem, answer_1=model_answer, answer_2=ground_truth),
+                    temperature=0.0,
+                )
+            
+                if "[[YES]]" in orm_response:
+                    return RewardOutput(reward=self.config.correct_reward, is_correct=True)
+                elif "[[NO]]" in orm_response:
+                    return RewardOutput(reward=self.config.incorrect_reward, is_correct=False)
+            except Exception as e: 
+                print("TODO: Implement alternative eval LLM")
+                print(e)
+                pass
+                
         
         return RewardOutput(reward=self.config.unk_error_reward, is_correct=False)
 
 
 if __name__ == "__main__":
-    reward = RewardMathFn()
+    reward = RewardMathFn(RewardConfig)
     input = RewardInput(problem="Let $P(x)=x^{4}+2 x^{3}-13 x^{2}-14 x+24$ be a polynomial with roots $r_{1}, r_{2}, r_{3}, r_{4}$. Let $Q$ be the quartic polynomial with roots $r_{1}^{2}, r_{2}^{2}, r_{3}^{2}, r_{4}^{2}$, such that the coefficient of the $x^{4}$ term of $Q$ is 1. Simplify the quotient $Q\\left(x^{2}\\right) / P(x)$, leaving your answer in terms of $x$. (You may assume that $x$ is not equal to any of $\\left.r_{1}, r_{2}, r_{3}, r_{4}\\right)$.", problem_type=RewardType.MATH, model_response="The answer is \\boxed{the function is 24 + 14*x + (-13)*x^2 - 2*x^3 + x^4}.", metadata={"answer": "$x^{4}-2 x^{3}-13 x^{2}+14 x+24$"})
     output = reward(input)
     print(output)
