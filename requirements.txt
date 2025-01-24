@@ -2,6 +2,7 @@ accelerate
 datasets
 deepspeed
 google-cloud-aiplatform
+gdown
 latex2sympy2
 pandas
 pylatexenc
