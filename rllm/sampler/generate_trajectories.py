@@ -1,4 +1,5 @@
 import argparse
+from pathlib import Path
 import concurrent.futures
 import json
 import os
@@ -10,7 +11,7 @@ from rllm.data.dataset_types import TrainDataset, TestDataset
 from rllm.data.utils import load_dataset
 from rllm.sampler import DistributedSampler
 from rllm.system_prompts import COT_MATH_SYSTEM_PROMPT
-from rllm.rewards import RewardInput, RewardType
+from rllm.rewards import RewardInput, RewardType, RewardConfig
 from rllm.rewards.math_reward import RewardMathFn
 
 
@@ -71,6 +72,7 @@ def generate_trajectory(idx, engine, entry, n=8, temperature=0.6):
                                               temperature=temperature)
             # Extract responses from Sample objects in the batch
             llm_responses = [sample.response for sample in sample_batch.samples]
+            print (len(llm_responses))
             break
         except Exception as e:
             print(f"Error getting completion: {e}")
@@ -78,7 +80,7 @@ def generate_trajectory(idx, engine, entry, n=8, temperature=0.6):
             if retry_idx == retry_limit - 1:
                 raise e
     
-    reward_fn = RewardMathFn()
+    reward_fn = RewardMathFn(RewardConfig)
     reward_inputs = [RewardInput(problem=problem, problem_type=RewardType.MATH, model_response=r, metadata={"answer": answer}) for r in llm_responses]
     reward_outputs = [reward_fn(r) for r in reward_inputs]
     # Grade the answer
@@ -117,11 +119,31 @@ if __name__ == "__main__":
         script_dir = os.path.dirname(os.path.abspath(__file__))
         output_file = os.path.join(script_dir, output_file)
 
-    # To remove...
-    with open(output_file, "r", encoding="utf-8") as f:
-        problems= json.load(f)
+    # Easy debug run just one: 
+    quick_sequential_debug = False
+    if quick_sequential_debug:
+        for i in range (5):
+            idx, entry = i, problems[i]
+            generate_trajectory (idx, engine, entry, n=args.n, temperature=args.temperature)
+        exit()
+        
+    problems = problems [:2]
+        
+    # check if output_file exists
+    if not Path(output_file).exists():
+        Path(output_file).touch()
+        
+    if os.stat(output_file).st_size==0:
+        results = {}
+    else:
+        # output file has content
+        results = json.load(open(output_file, "r"))
+        if 'problem_number' not in problems[0].keys(): 
+            raise NotImplementedError
+        problems = [p for p in problems if p['problem_number'] not in results.keys()]
+        
+        
 
-    results = deepcopy(problems)
     # Process problems in parallel using ThreadPoolExecutor
     with concurrent.futures.ThreadPoolExecutor(max_workers=128) as executor:
         futures = [
@@ -141,6 +163,7 @@ if __name__ == "__main__":
                 idx, entry = future.result()
                 results[idx] = entry
                 # Save incrementally
+                # TODO: This really should be done with a file lock and done by appending lines
                 if counter % 50 == 0:
                     with open(output_file, mode="w", encoding="utf-8") as f:
                         json.dump(results, f, indent=2, ensure_ascii=False)      

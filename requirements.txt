@@ -3,6 +3,7 @@ datasets
 deepspeed
 dm-tree
 google-cloud-aiplatform
+gdown
 latex2sympy2
 pandas
 pylatexenc
