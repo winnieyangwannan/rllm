@@ -117,12 +117,12 @@ class ActorRolloutRefWorker(Worker):
             self._is_offload_param = self.config.ref.fsdp_config.get('param_offload', False)
 
         # normalize config
+        self.config.actor.ppo_mini_batch_size *= self.config.rollout.n
+        self.config.actor.ppo_micro_batch_size *= self.config.rollout.n
         if self._is_actor:
             self.config.actor.ppo_mini_batch_size //= (self.device_mesh.shape[0] // self.ulysses_sequence_parallel_size)
             self.config.actor.ppo_micro_batch_size //= (self.device_mesh.shape[0] //
                                                         self.ulysses_sequence_parallel_size)
-            self.config.actor.ppo_mini_batch_size *= self.config.rollout.n
-            self.config.actor.ppo_micro_batch_size *= self.config.rollout.n
         if self._is_rollout:
             self.config.rollout.log_prob_micro_batch_size //= (self.device_mesh.shape[0] //
                                                                self.ulysses_sequence_parallel_size)
@@ -495,7 +495,7 @@ class ActorRolloutRefWorker(Worker):
         data.meta_info['max_token_len'] = self.config.ref.log_prob_max_token_len_per_gpu
         data.meta_info['use_dynamic_bsz'] = self.config.ref.log_prob_use_dynamic_bsz
         with self.ulysses_sharding_manager:
-            data = self.ulysses_sharding_manager.preprocess_data(data)
+            data = self.ulysses_sharding_manager.preprocfess_data(data)
             output = self.ref_policy.compute_log_prob(data=data)
             output = DataProto.from_dict(tensors={'ref_log_prob': output})
             output = self.ulysses_sharding_manager.postprocess_data(output)

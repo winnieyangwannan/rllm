@@ -231,6 +231,7 @@ def tokenize_and_postprocess_data(prompt: str,
     """
     input_data is the output from tokenizer.
     """
+    truncation = 'right'
     assert truncation in ['left', 'right', 'error']
 
     input_data = tokenizer(prompt, return_tensors='pt', add_special_tokens=False)

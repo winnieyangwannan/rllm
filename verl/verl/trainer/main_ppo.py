@@ -20,6 +20,7 @@ import torch
 from verl.utils.reward_score import gsm8k, math
 from verl.trainer.ppo.ray_trainer import RayPPOTrainer
 
+from rllm.rewards.math_utils.utils import grade_answer_verl
 
 def _select_rm_score_fn(data_source):
     if data_source == 'openai/gsm8k':
@@ -27,7 +28,7 @@ def _select_rm_score_fn(data_source):
     elif data_source == 'lighteval/MATH':
         return math.compute_score
     else:
-        raise NotImplementedError
+        return grade_answer_verl
 
 
 class RewardManager():
