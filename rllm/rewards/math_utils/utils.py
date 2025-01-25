@@ -481,6 +481,8 @@ def extract_answer(passage: str) -> str:
     return None
 
 def grade_answer_verl(solution_str, ground_truth):
+    if not ground_truth:
+        return False
     if '\\boxed' in ground_truth:
         ground_truth = extract_answer(ground_truth)
     given_answer = extract_answer(solution_str)
