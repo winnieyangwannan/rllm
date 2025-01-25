@@ -74,6 +74,42 @@ class RewardMathFn(RewardFn):
         
         return RewardOutput(reward=self.config.unk_error_reward, is_correct=False)
 
+def grade_answer_rllm_for_verl(solution_str, ground_truth):
+    # Extract answer from solution string
+    model_answer = extract_answer(solution_str)
+    if model_answer is None:
+        return False
+
+    # Process the ground truth
+    if "\\boxed" in ground_truth:
+        ground_truth = extract_answer(ground_truth)
+    
+    if ground_truth is None:
+        return False
+
+    # Grade the answer using sympy and mathd heuristics
+    is_correct = grade_answer_mathd(model_answer, ground_truth) or grade_answer_sympy(model_answer, ground_truth)
+    if is_correct:
+        return True
+
+    try:
+        orm_response = call_gemini_llm(
+            system_prompt=ORM_PROMPT,
+            prompt=ORM_USER_TEMPLATE.format(problem=solution_str, answer_1=model_answer, answer_2=ground_truth),
+            temperature=0.0,
+        )
+    
+        if "[[YES]]" in orm_response:
+            return True
+        elif "[[NO]]" in orm_response:
+            return False
+    except Exception as e:
+        print("TODO: Implement alternative eval LLM")
+        print(e)
+        pass
+            
+    return False
+
 
 if __name__ == "__main__":
     reward = RewardMathFn(RewardConfig)

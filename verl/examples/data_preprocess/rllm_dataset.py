@@ -16,12 +16,12 @@ if __name__ == '__main__':
     local_dir = args.local_dir
     hdfs_dir = args.hdfs_dir
     train_datasets = [
-        # TrainDataset.AIME,
-        # TrainDataset.AMC,
+        TrainDataset.AIME,
+        TrainDataset.AMC,
         TrainDataset.MATH,
     ]
     train_dataset = DatasetMix(train_datasets)
-    test_datasets = [ TestDataset.MATH ]
+    test_datasets = [ TestDataset.AIME ]
     test_dataset = DatasetMix(test_datasets) 
     instruction_following = "Let's think step by step and output the final answer within \\boxed{}."
     # add a row to each data item that represents a unique id
