@@ -193,7 +193,8 @@ class vLLMRollout(BaseRollout):
                         'temperature': 0,
                         'n': 1
                     }
-
+                if prompts.meta_info.get('val_temperature', None):
+                    kwargs['temperature'] = prompts.meta_info['val_temperature']
                 # Generate sequences
                 with self.update_sampling_params(**kwargs):
                     output = self.inference_engine.generate(

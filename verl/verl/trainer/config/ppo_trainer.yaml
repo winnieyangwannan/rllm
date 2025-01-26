@@ -60,6 +60,7 @@ actor_rollout_ref:
   rollout:
     name: vllm
     temperature: 1.0
+    val_temperature: 0.6
     top_k: -1 # 0 for hf rollout, -1 for vllm rollout
     top_p: 1
     prompt_length: ${data.max_prompt_length}  # not use for opensource
