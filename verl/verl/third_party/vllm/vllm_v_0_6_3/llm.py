@@ -111,6 +111,14 @@ class LLM(LLM):
         removed_vision_keys = ("image_token_id", "image_feature_size", "image_input_shape", "image_input_type")
         if any(k in kwargs for k in removed_vision_keys):
             raise TypeError("There is no need to pass vision-related arguments anymore.")
+        
+        OPTIMIZED_VLLM_CONFIG = {
+            "max_num_seqs": 256,
+            "max_num_batched_tokens": 2**16,
+            "enable_chunked_prefill": True,
+            "num_scheduler_steps": 40,
+            "enable_prefix_caching": True,
+        }
         engine_args = EngineArgs(
             model_hf_config=model_hf_config,
             # tokenizer=tokenizer,
@@ -131,6 +139,11 @@ class LLM(LLM):
             max_seq_len_to_capture=max_seq_len_to_capture,
             disable_custom_all_reduce=disable_custom_all_reduce,
             load_format=load_format,
+            enable_chunked_prefill=True,
+            num_scheduler_steps=40,
+            max_num_seqs=256,
+            max_num_batched_tokens=2**16,
+            #enable_prefix_caching=True,
             **kwargs,
         )
         tokenizer_cls = (PreTrainedTokenizer, PreTrainedTokenizerFast, HybridEngineBaseTokenizer)

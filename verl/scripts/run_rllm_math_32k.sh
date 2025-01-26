@@ -7,7 +7,7 @@ python3 -m verl.trainer.main_ppo \
     data.train_files=$HOME/data/rllm-math/train.parquet \
     data.val_files=$HOME/data/rllm-math/test.parquet \
     data.train_batch_size=256 \
-    data.val_batch_size=500 \
+    data.val_batch_size=512 \
     data.max_prompt_length=1024 \
     data.max_response_length=32768 \
     actor_rollout_ref.model.path=deepseek-ai/DeepSeek-R1-Distill-Qwen-1.5B \
