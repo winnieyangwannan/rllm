@@ -74,7 +74,7 @@ class RewardMathFn(RewardFn):
         
         return RewardOutput(reward=self.config.unk_error_reward, is_correct=False)
 
-def grade_answer_rllm_for_verl(solution_str, ground_truth):
+def grade_answer_rllm_for_verl(solution_str, ground_truth, enable_llm = False):
     # Extract answer from solution string
     model_answer = extract_answer(solution_str)
     if model_answer is None:
@@ -91,7 +91,9 @@ def grade_answer_rllm_for_verl(solution_str, ground_truth):
     is_correct = grade_answer_mathd(model_answer, ground_truth) or grade_answer_sympy(model_answer, ground_truth)
     if is_correct:
         return True
-
+    if not enable_llm:
+        return is_correct
+    print('Using LLM as ORM!')
     try:
         orm_response = call_gemini_llm(
             system_prompt=ORM_PROMPT,
