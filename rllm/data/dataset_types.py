@@ -12,11 +12,13 @@ class TrainDataset(enum.Enum):
     NUMINA_OLYMPIAD = 'OLYMPIAD'
     # Dan Hendrycks math
     MATH = 'MATH'
+    GSM8k = 'GSM8k'
 
 class TestDataset(enum.Enum):
     AIME = 'AIME'
     AMC =  'AMC'
     MATH = 'MATH'
+    GSM8k = 'GSM8k'
 
 Dataset = Union[TrainDataset, TestDataset]
 
