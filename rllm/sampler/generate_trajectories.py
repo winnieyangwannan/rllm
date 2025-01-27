@@ -39,7 +39,7 @@ def parse_args(parser: argparse.ArgumentParser):
                        help='Tensor parallelism per worker')
     parser.add_argument('--model', type=str, default="Qwen/QwQ-32B-Preview",
                        help='Model name/path to use')
-    parser.add_argument('--temperature', type=float, default=0.8,
+    parser.add_argument('--temperature', type=float, default=0.6,
                        help='Temperature for sampling')
     parser.add_argument('--n', type=int, default=8,
                        help='Number of samples to generate per problem')
@@ -126,8 +126,6 @@ if __name__ == "__main__":
             idx, entry = i, problems[i]
             generate_trajectory (idx, engine, entry, n=args.n, temperature=args.temperature)
         exit()
-        
-    problems = problems [:2]
         
     # check if output_file exists
     if not Path(output_file).exists():
