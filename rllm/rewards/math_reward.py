@@ -3,6 +3,8 @@ This module contains the RewardMathFn class, which evaluates mathematical answer
 and assigns rewards based on their correctness. It utilizes a language model to 
 validate answers when necessary.
 """
+from typing import List, Union
+
 from rllm.globals import THOUGHT_DELIMITER_START, THOUGHT_DELIMITER_END
 from rllm.rewards import RewardConfig, RewardFn, RewardInput, RewardOutput, RewardType
 from rllm.rewards.math_utils.utils import extract_answer, grade_answer_sympy, grade_answer_mathd
@@ -40,81 +42,62 @@ class RewardMathFn(RewardFn):
         if model_answer is None:
             return RewardOutput(reward=self.config.format_error_reward, is_correct=False)
 
-        # Process the ground truth
-        ground_truth = input.metadata.get("answer", None)
-        if "\\boxed" in ground_truth:
-            ground_truth = extract_answer(ground_truth)
+        # Process the ground truth(s)
+        ground_truths = input.metadata.get("answer", None)
+        if ground_truths is None:
+            return RewardOutput(reward=self.config.unk_error_reward, is_correct=False)
         
-        if ground_truth is None:
+        # Convert single answer to list for uniform processing
+        if isinstance(ground_truths, str):
+            ground_truths = [ground_truths]
+            
+        # Process each ground truth
+        processed_ground_truths = []
+        for truth in ground_truths:
+            if "\\boxed" in truth:
+                processed_truth = extract_answer(truth)
+                if processed_truth is not None:
+                    processed_ground_truths.append(processed_truth)
+            else:
+                processed_ground_truths.append(truth)
+        
+        if not processed_ground_truths:
             return RewardOutput(reward=self.config.unk_error_reward, is_correct=False)
 
-        # Grade the answer using sympy and mathd heuristics.
-        is_correct = grade_answer_mathd(model_answer, ground_truth) or grade_answer_sympy(model_answer, ground_truth)
-        if is_correct:
-            return RewardOutput(reward=self.config.correct_reward, is_correct=True)
+        # Check against all possible correct answers
+        for ground_truth in processed_ground_truths:
+            is_correct = grade_answer_mathd(model_answer, ground_truth) or grade_answer_sympy(model_answer, ground_truth)
+            if is_correct:
+                return RewardOutput(reward=self.config.correct_reward, is_correct=True)
 
-        # If latex heuristics fail and ORM is enabled, use LLM as ORM to evaluate correctness.
+        # If latex heuristics fail and ORM is enabled, use LLM as ORM to evaluate correctness
         if self.config.use_math_orm:
-            try: 
-                orm_response = call_gemini_llm(
-                    system_prompt=ORM_PROMPT,
-                    prompt=ORM_USER_TEMPLATE.format(problem=problem, answer_1=model_answer, answer_2=ground_truth),
-                    temperature=0.0,
-                )
-            
-                if "[[YES]]" in orm_response:
-                    return RewardOutput(reward=self.config.correct_reward, is_correct=True)
-                elif "[[NO]]" in orm_response:
-                    return RewardOutput(reward=self.config.incorrect_reward, is_correct=False)
-            except Exception as e: 
-                print("TODO: Implement alternative eval LLM")
-                print(e)
-                pass
+            for ground_truth in processed_ground_truths:
+                try:
+                    orm_response = call_gemini_llm(
+                        system_prompt=ORM_PROMPT,
+                        prompt=ORM_USER_TEMPLATE.format(problem=problem, answer_1=model_answer, answer_2=ground_truth),
+                        temperature=0.0,
+                    )
+                    if "[[YES]]" in orm_response:
+                        return RewardOutput(reward=self.config.correct_reward, is_correct=True)
+                except Exception as e:
+                    print("TODO: Implement a lternative eval LLM")
+                    print(e)
+                    continue
                 
-        
-        return RewardOutput(reward=self.config.unk_error_reward, is_correct=False)
+        return RewardOutput(reward=self.config.incorrect_reward, is_correct=False)
 
-def grade_answer_rllm_for_verl(solution_str, ground_truth, enable_llm = False):
-    # Extract answer from solution string
-    model_answer = extract_answer(solution_str)
-    if model_answer is None:
-        return False
-
-    # Process the ground truth
-    if "\\boxed" in ground_truth:
-        ground_truth = extract_answer(ground_truth)
-    
-    if ground_truth is None:
-        return False
-
-    # Grade the answer using sympy and mathd heuristics
-    is_correct = grade_answer_mathd(model_answer, ground_truth) or grade_answer_sympy(model_answer, ground_truth)
-    if is_correct:
-        return True
-    if not enable_llm:
-        return is_correct
-    print('Using LLM as ORM!')
-    try:
-        orm_response = call_gemini_llm(
-            system_prompt=ORM_PROMPT,
-            prompt=ORM_USER_TEMPLATE.format(problem=solution_str, answer_1=model_answer, answer_2=ground_truth),
-            temperature=0.0,
-        )
-    
-        if "[[YES]]" in orm_response:
-            return True
-        elif "[[NO]]" in orm_response:
-            return False
-    except Exception as e:
-        print("TODO: Implement alternative eval LLM")
-        print(e)
-        pass
-            
-    return False
-
+def grade_answer_rllm_for_verl(solution_str: str, ground_truth: Union[str, List[str]], enable_llm = False):
+    reward_config = RewardConfig()
+    reward_config.use_math_orm = enable_llm
+    reward_fn = RewardMathFn(reward_config)
+    reward_response = reward_fn(RewardInput(problem=solution_str, problem_type=RewardType.MATH, model_response=solution_str, metadata={"answer": ground_truth}))
+    return reward_response.is_correct
 
 if __name__ == "__main__":
     reward = RewardMathFn(RewardConfig)
-    input = RewardInput(problem="Let $P(x)=x^{4}+2 x^{3}-13 x^{2}-14 x+24$ be a polynomial with roots $r_{1}, r_{2}, r_{3}, r_{4}$. Let $Q$ be the quartic polynomial with roots $r_{1}^{2}, r_{2}^{2}, r_{3}^{2}, r_{4}^{2}$, such that the coefficient of the $x^{4}$ term of $Q$ is 1. Simplify the quotient $Q\\left(x^{2}\\right) / P(x)$, leaving your answer in terms of $x$. (You may assume that $x$ is not equal to any of $\\left.r_{1}, r_{2}, r_{3}, r_{4}\\right)$.", problem_type=RewardType.MATH, model_response="The answer is \\boxed{the function is 24 + 14*x + (-13)*x^2 - 2*x^3 + x^4}.", metadata={"answer": "$x^{4}-2 x^{3}-13 x^{2}+14 x+24$"})
+    input = RewardInput(problem="Let $P(x)=x^{4}+2 x^{3}-13 x^{2}-14 x+24$ be a polynomial with roots $r_{1}, r_{2}, r_{3}, r_{4}$. Let $Q$ be the quartic polynomial with roots $r_{1}^{2}, r_{2}^{2}, r_{3}^{2}, r_{4}^{2}$, such that the coefficient of the $x^{4}$ term of $Q$ is 1. Simplify the quotient $Q\\left(x^{2}\\right) / P(x)$, leaving your answer in terms of $x$. (You may assume that $x$ is not equal to any of $\\left.r_{1}, r_{2}, r_{3}, r_{4}\\right)$.", problem_type=RewardType.MATH, model_response="The answer is \\boxed{the function is 24 + 14*x + (-13)*x^2 - 2*x^3 + x^4}.",
+                        metadata={"answer": ["10", "$x^{4}-2 x^{3}-13 x^{2}+14 x+24$"]})
     output = reward(input)
     print(output)

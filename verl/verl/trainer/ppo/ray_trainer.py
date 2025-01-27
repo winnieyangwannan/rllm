@@ -639,7 +639,8 @@ class RayPPOTrainer(object):
                             batch = batch[valid_mask]
                             batch = dataprotoitem_to_dataproto(batch)
                             # Round down to the nearest multiple of world size
-                            max_batch_size = (batch.batch['input_ids'].shape[0] // self.actor_rollout_wg.world_size) * self.actor_rollout_wg.world_size
+                            num_trainer_replicas = self.actor_rollout_wg.world_size // self.config.actor_rollout_ref.actor.ulysses_sequence_parallel_size
+                            max_batch_size = (batch.batch['input_ids'].shape[0] // num_trainer_replicas) * num_trainer_replicas
                             if not max_batch_size:
                                 # give up, you got everything either all wrong or right.
                                 continue

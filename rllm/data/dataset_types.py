@@ -19,6 +19,7 @@ class TestDataset(enum.Enum):
     AMC =  'AMC'
     MATH = 'MATH'
     GSM8k = 'GSM8k'
+    MINERVA = 'MINERVA'
 
 Dataset = Union[TrainDataset, TestDataset]
 

@@ -178,3 +178,9 @@ verl/outputs/*
 verl/wandb/*
 
 verl/scripts/outputs/*
+
+verl/scripts/wandb/*
+
+outputs/*
+
+wandb/*
