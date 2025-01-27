@@ -4,12 +4,12 @@ export VLLM_ATTENTION_BACKEND=XFORMERS
 
 python3 -m verl.trainer.main_ppo \
     algorithm.adv_estimator=grpo \
-    data.train_files=$HOME/data/rllm-math/train.parquet \
+    data.train_files=$HOME/data/math/train.parquet \
     data.val_files=$HOME/data/math/test.parquet \
     data.train_batch_size=256 \
     data.val_batch_size=500 \
     data.max_prompt_length=512 \
-    data.max_response_length=8192 \
+    data.max_response_length=2048 \
     actor_rollout_ref.model.path=deepseek-ai/DeepSeek-R1-Distill-Qwen-1.5B \
     actor_rollout_ref.actor.optim.lr=1e-6 \
     actor_rollout_ref.model.use_remove_padding=True \
@@ -25,6 +25,8 @@ python3 -m verl.trainer.main_ppo \
     actor_rollout_ref.actor.fsdp_config.optimizer_offload=False \
     actor_rollout_ref.rollout.tensor_model_parallel_size=1 \
     actor_rollout_ref.rollout.name=vllm \
+    actor_rollout_ref.rollout.temperature=0.6 \
+    actor_rollout_ref.rollout.val_temperature=0.6 \
     actor_rollout_ref.rollout.gpu_memory_utilization=0.9 \
     actor_rollout_ref.rollout.n=4 \
     actor_rollout_ref.ref.fsdp_config.param_offload=True \
@@ -32,11 +34,11 @@ python3 -m verl.trainer.main_ppo \
     trainer.critic_warmup=0 \
     trainer.logger=['console','wandb'] \
     trainer.project_name='rllm-o3' \
-    trainer.experiment_name='r1-1.5b-8k-grpo-math' \
+    trainer.experiment_name='r1-1.5b-2k-grpo-math' \
     +trainer.val_before_train=False \
     trainer.n_gpus_per_node=8 \
-    trainer.nnodes=2 \
-    trainer.save_freq=10 \
-    trainer.test_freq=10 \
+    trainer.nnodes=1 \
+    trainer.save_freq=25 \
+    trainer.test_freq=25 \
     trainer.default_hdfs_dir=null \
     trainer.total_epochs=15 $@
