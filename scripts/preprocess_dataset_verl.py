@@ -27,6 +27,7 @@ if __name__ == '__main__':
         TrainDataset.AIME,
         TrainDataset.AMC,
         TrainDataset.MATH,
+        TrainDataset.OMNI_MATH,
     ]
     train_dataset = DatasetMix(train_datasets)
 
@@ -41,13 +42,6 @@ if __name__ == '__main__':
 
         def process_fn(example, idx):
             question = example.pop('problem')
-
-            data_source = example.pop('dataset')
-            if data_source == TrainDataset.MATH:
-                difficulty = example.pop('difficulty')
-                if difficulty < 4.0:
-                    return None
-
 
             question = question + ' ' + instruction_following
 
@@ -93,8 +87,10 @@ if __name__ == '__main__':
     # Convert to DataFrame and save as parquet
     train_df = pd.DataFrame(train_data)
     train_df.to_parquet(os.path.join(local_dir, 'train.parquet'))
+    print("train data saved to", os.path.join(local_dir, 'train.parquet'))
     test_df = pd.DataFrame(test_data)
     test_df.to_parquet(os.path.join(local_dir, 'test.parquet'))
+    print("test data saved to", os.path.join(local_dir, 'test.parquet'))
 
     if hdfs_dir is not None:
         makedirs(hdfs_dir)

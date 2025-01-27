@@ -660,13 +660,20 @@ class RayPPOTrainer(object):
                                 batch = batch.union(ref_log_prob)
 
                         # compute rewards with KL penalty if needed
-                        if not self.config.actor_rollout_ref.actor.use_kl_loss:
-                            batch, kl_metrics = apply_kl_penalty(batch,
-                                                               kl_ctrl=self.kl_ctrl,
-                                                               kl_penalty=self.config.algorithm.kl_penalty)
-                            metrics.update(kl_metrics)
-                        else:
-                            batch.batch['token_level_rewards'] = batch.batch['token_level_scores']
+
+                        # Note: This kl penalty applied directly over the rewards is disabled for GRPO. The kl penalty is applied at dp_actor.py
+                        # where it is subtracted directly from the policy loss
+
+                        # if not self.config.actor_rollout_ref.actor.use_kl_loss:
+                        #     batch, kl_metrics = apply_kl_penalty(batch,
+                        #                                        kl_ctrl=self.kl_ctrl,
+                        #                                        kl_penalty=self.config.algorithm.kl_penalty)
+                        #     metrics.update(kl_metrics)
+                        # else:
+                        #     batch.batch['token_level_rewards'] = batch.batch['token_level_scores']
+
+
+                        batch.batch['token_level_rewards'] = batch.batch['token_level_scores']
 
                         # compute advantages, executed on the driver process
                         batch = compute_advantage(batch,
