@@ -10,7 +10,7 @@ from tqdm import tqdm
 from rllm.data.dataset_types import TrainDataset, TestDataset
 from rllm.data.utils import load_dataset
 from rllm.sampler import DistributedSampler
-from rllm.system_prompts import COT_MATH_SYSTEM_PROMPT
+from rllm.system_prompts import DEEPSEEK_MATH_SYSTEM_PROMPT
 from rllm.rewards import RewardInput, RewardType, RewardConfig
 from rllm.rewards.math_reward import RewardMathFn
 
@@ -59,8 +59,7 @@ def generate_trajectory(idx, engine, entry, n=8, temperature=0.6):
     if 'trajectories' in entry and len(entry['trajectories']) >= n:
         return idx, entry
     content_dict = [
-        {"role": "system", "content": COT_MATH_SYSTEM_PROMPT},
-        {"role": "user", "content": problem},
+        {"role": "user", "content": DEEPSEEK_MATH_SYSTEM_PROMPT + problem},
     ]
 
     # Use the distributed engine's chat_completion method

@@ -1,24 +1,27 @@
+# Simple script to quickly debug long context training and distributed bugs.
 set -x
 
 export VLLM_ATTENTION_BACKEND=XFORMERS
 
 python3 -m verl.trainer.main_ppo \
     algorithm.adv_estimator=grpo \
-    data.train_files=$HOME/data/gsm8k/train.parquet \
-    data.val_files=$HOME/data/gsm8k/test.parquet \
-    data.train_batch_size=128 \
-    data.val_batch_size=1312 \
-    data.max_prompt_length=128 \
+    data.train_files=$HOME/data/rllm-math/train.parquet \
+    data.val_files=$HOME/data/rllm-math/test.parquet \
+    data.train_batch_size=2 \
+    data.val_batch_size=512 \
+    data.max_prompt_length=1024 \
     data.max_response_length=128 \
     actor_rollout_ref.model.path=deepseek-ai/DeepSeek-R1-Distill-Qwen-1.5B \
     actor_rollout_ref.actor.optim.lr=1e-6 \
     actor_rollout_ref.model.use_remove_padding=True \
-    actor_rollout_ref.actor.ppo_mini_batch_size=64 \
+    actor_rollout_ref.actor.ppo_mini_batch_size=1 \
+    actor_rollout_ref.actor.ppo_micro_batch_size=1 \
     actor_rollout_ref.actor.use_dynamic_bsz=True \
     actor_rollout_ref.actor.ppo_max_token_len_per_gpu=24000 \
     actor_rollout_ref.actor.use_kl_loss=True \
     actor_rollout_ref.actor.kl_loss_coef=0.001 \
     actor_rollout_ref.actor.kl_loss_type=low_var_kl \
+    actor_rollout_ref.actor.ulysses_sequence_parallel_size=1 \
     actor_rollout_ref.model.enable_gradient_checkpointing=True \
     actor_rollout_ref.actor.fsdp_config.param_offload=False \
     actor_rollout_ref.actor.fsdp_config.grad_offload=False \
@@ -31,12 +34,12 @@ python3 -m verl.trainer.main_ppo \
     algorithm.kl_ctrl.kl_coef=0.001 \
     trainer.critic_warmup=0 \
     trainer.logger=['console','wandb'] \
-    trainer.project_name='verl_grpo_example_gsm8k' \
-    trainer.experiment_name='qwen2_7b_function_rm_kl1e-3' \
+    trainer.project_name='rllm-o3' \
+    trainer.experiment_name='math-amc-aime-16k' \
     +trainer.val_before_train=False \
-    trainer.n_gpus_per_node=8 \
+    trainer.n_gpus_per_node=2 \
     trainer.nnodes=1 \
     trainer.save_freq=1 \
-    trainer.test_freq=5 \
+    trainer.test_freq=1 \
     trainer.default_hdfs_dir=null \
     trainer.total_epochs=15 $@
