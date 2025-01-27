@@ -19,6 +19,7 @@ sentence_transformers
 sglang[all]
 sglang-router
 tensordict
+swebench
 torchmetrics
 transformers
 vertexai

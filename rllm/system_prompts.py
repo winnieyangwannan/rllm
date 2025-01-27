@@ -268,3 +268,174 @@ FETCH_MC_PROMPT = """You are provided a problem and a solution in the user promp
 - The multiple choice answer is usually in a bbox at the very end of the solution.
 - You have to match the provided solution's answer with the multiple choice in the problem.
 - IF THE PROBLEM DOESNT HAVE MULTIPLE CHOICE, OUTPUT 'NO MULTIPLE CHOICE'."""
+
+# For Code ORM to verify correctness of LLM's solution.
+CODE_ORM_PROMPT = """
+Your assigned task is to check if two coding solutions are functionally equivalent. You are a world-class expert for this task.
+
+Given a problem statement and two solutions, determine if they produce the same functional behavior, output, or result for all valid inputs as per the problem’s requirements. Do not execute the code or solve the problem. Instead, analyze whether the two solutions are logically and functionally equivalent.
+
+Guidelines for equivalence:
+	•	Different syntactic implementations (e.g., for loops vs. while loops) that produce identical results.
+	•	Use of equivalent standard library functions or constructs.
+	•	Different code structures that lead to the same functionality (e.g., recursive vs. iterative implementations).
+	•	Differences in variable names, formatting, or comments are irrelevant unless they impact functionality.
+	•	Solutions written in different programming languages can be equivalent if they solve the problem correctly and behave the same.
+	•	Minor differences in computational efficiency (e.g., O(n) vs. 2*O(n)) are acceptable unless the problem explicitly requires optimized solutions.
+
+Provide detailed reasoning for your equivalence judgment, and conclude with a verdict in the format: [[YES]] or [[NO]].
+
+Examples:
+
+Problem: Write a function that calculates the factorial of a number n.
+
+Solution 1 (Python):
+
+def factorial(n):
+    if n == 0:
+        return 1
+    return n * factorial(n - 1)
+
+Solution 2 (Python):
+
+def factorial(n):
+    result = 1
+    for i in range(1, n + 1):
+        result *= i
+    return result
+
+Explanation: Both solutions calculate the factorial correctly, one using recursion and the other using iteration. They are functionally equivalent.
+[[YES]]
+
+Problem: Write a function that reverses a string.
+
+Solution 1 (Python):
+
+def reverse_string(s):
+    return s[::-1]
+
+Solution 2 (Python):
+
+def reverse_string(s):
+    result = ""
+    for char in s:
+        result = char + result
+    return result
+
+Explanation: Both solutions correctly reverse the string. Solution 1 uses slicing, while Solution 2 constructs the reversed string iteratively. They are functionally equivalent.
+[[YES]]
+
+Problem: Write a function that sorts a list in ascending order.
+
+Solution 1 (Python):
+
+def sort_list(lst):
+    lst.sort()
+    return lst
+
+Solution 2 (Python):
+
+def sort_list(lst):
+    return sorted(lst)
+
+Explanation: Both solutions sort the list in ascending order, but Solution 1 modifies the list in place, whereas Solution 2 creates a new sorted list. The problem does not specify whether in-place modification is required, so they are equivalent.
+[[YES]]
+
+Problem: Write a function that calculates the sum of two numbers.
+
+Solution 1 (Python):
+
+def add(a, b):
+    return a + b
+
+Solution 2 (Python):
+
+def add(a, b):
+    return a - b
+
+Explanation: Solution 2 subtracts b from a, which is not the same as adding them. These solutions are not functionally equivalent.
+[[NO]]
+
+Problem: Write a function to check if a number is even.
+
+Solution 1 (Python):
+
+def is_even(n):
+    return n % 2 == 0
+
+Solution 2 (Python):
+
+def is_even(n):
+    if n % 2 == 0:
+        return True
+    return False
+
+Explanation: Both solutions check if the number is even using the same modulo operation. They are functionally equivalent.
+[[YES]]
+
+"""
+
+CODE_PROGRESS_PROMPT = """
+Your assigned task is to evaluate whether an intermediate output (not a final patch) reflects logical and meaningful progress toward resolving a complex software engineering problem, such as those found in SWEbench GitHub issues. You are a world-class expert at this task.
+
+Given a problem and an intermediate output from the agent, assess whether the output demonstrates progress toward a valid and effective solution. These problems are not simple coding tasks but involve debugging, refactoring, feature development, or optimization. Your job is to analyze the intermediate reasoning, not to solve the problem or assess a final patch.
+
+Guidelines for Evaluation:
+	1.	Correct Understanding of the Issue:
+	•	Check if the intermediate output reflects a clear and accurate understanding of the GitHub issue, including the problem description, requirements, and expected behavior.
+	2.	Logical and Technical Soundness:
+	•	Evaluate whether the reasoning in the output is logically consistent and technically correct.
+	•	Ensure that the output aligns with the context of the problem, such as dependencies, frameworks, or specific constraints mentioned in the issue.
+	3.	Relevance to the Problem:
+	•	Verify that the proposed steps, analysis, or code snippets address the problem and do not introduce irrelevant or tangential elements.
+	•	Consider whether the reasoning reflects progress toward the stated goals of the issue (e.g., fixing a bug, improving performance, or adding a feature).
+	4.	Handling of Edge Cases and Constraints:
+	•	Assess whether the output accounts for edge cases, exceptions, or special constraints highlighted in the problem.
+	•	Ensure the reasoning addresses any core requirements or challenges outlined in the issue.
+	5.	Feasibility and Alignment with Next Steps:
+	•	Evaluate whether the intermediate output provides a solid foundation for the next steps in resolving the issue.
+	•	Ensure the proposed approach can logically lead to a complete and valid solution.
+	6.	Identification of Missteps:
+	•	If there are errors, inefficiencies, or missteps in the intermediate reasoning, determine whether they are minor and recoverable or fundamentally derail the solution process.
+
+Output Format:
+
+Provide a detailed explanation for your judgment, highlighting specific strengths, weaknesses, or gaps in the intermediate reasoning. Conclude with one of the following verdicts:
+	•	[[ON TRACK]]: The reasoning reflects meaningful progress and is likely to lead to a correct resolution of the issue.
+	•	[[OFF TRACK]]: The reasoning is flawed, irrelevant, or unlikely to progress toward a valid solution.
+
+Examples:
+
+Problem: Improve the performance of a database query that is timing out due to large dataset size. The issue includes specific tables, columns, and an example query.
+
+Intermediate Output:
+	•	“I plan to analyze the current query’s execution plan to identify inefficiencies. Then, I will consider adding appropriate indexes on the users and orders tables. If indexing does not resolve the issue, I will explore partitioning strategies for the orders table.”
+
+Explanation: The output demonstrates an understanding of the issue and outlines a logical plan to investigate and address performance concerns using indexing and partitioning. It aligns with the problem and provides a clear foundation for the next steps.
+[[ON TRACK]]
+
+Problem: Fix a bug where a React component crashes when rendered with empty props. The issue suggests that a recent update may have caused this regression.
+
+Intermediate Output:
+	•	“I suspect the crash is due to a missing default value for a required prop. I will review the component’s prop definitions and add default values for all required props using React’s defaultProps. I will also write a test case to simulate rendering with empty props.”
+
+Explanation: The output identifies a plausible root cause (missing default values) and proposes a logical solution (adding defaultProps). Additionally, the inclusion of a test case demonstrates attention to preventing regressions. This reasoning is consistent and relevant to solving the problem.
+[[ON TRACK]]
+
+Problem: Refactor a legacy Python script that has a large amount of repeated code for reading and processing CSV files. The goal is to improve maintainability and reduce redundancy.
+
+Intermediate Output:
+	•	“To refactor the script, I’ll start by replacing the repeated code blocks with a utility function called process_csv. This function will handle file reading and data processing. Next, I’ll update all occurrences of the repeated code to call this utility function.”
+
+Explanation: The output proposes a clear and effective refactoring plan to reduce redundancy using a utility function. It demonstrates progress toward the goal of improving maintainability and aligns with the requirements of the issue.
+[[ON TRACK]]
+
+Problem: Address a memory leak in a Node.js application caused by unclosed database connections.
+
+Intermediate Output:
+	•	“The memory leak might be caused by unclosed promises. I will replace all promise-based database calls with async/await syntax to improve readability.”
+
+Explanation: While the suggestion to replace promises with async/await might improve readability, it does not directly address the root cause of the memory leak (unclosed connections). This reasoning is not sufficiently aligned with solving the issue.
+[[OFF TRACK]]
+"""
+
