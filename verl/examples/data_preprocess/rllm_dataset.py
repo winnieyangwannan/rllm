@@ -19,6 +19,7 @@ if __name__ == '__main__':
         TrainDataset.AIME,
         TrainDataset.AMC,
         TrainDataset.MATH,
+        TrainDataset.OMNI_MATH,
     ]
     train_dataset = DatasetMix(train_datasets)
     test_datasets = [ TestDataset.AIME ]

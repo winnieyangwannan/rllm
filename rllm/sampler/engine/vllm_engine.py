@@ -40,7 +40,7 @@ from rllm.sampler.utils import (
 
 # Optimized configuration for vLLM server
 OPTIMIZED_VLLM_CONFIG = {
-    "max_num_seqs": 256,
+    "max_num_seqs": 1024,
     "max_num_batched_tokens": 2**16,
     "enable_chunked_prefill": True,
     "num_scheduler_steps": 40,
