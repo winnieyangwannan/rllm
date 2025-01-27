@@ -20,6 +20,7 @@ import gc
 import multiprocessing as mp
 import os
 import signal
+import traceback
 from typing import Any, Dict, List
 
 from openai import OpenAI
@@ -158,6 +159,7 @@ class RayVLLMWorker:
                 **kwargs
             )
         except Exception as e:
+            traceback.print_exc()
             return {'Error': str(e)}
         
         samples = convert_openai_response_to_samples(chat_response)

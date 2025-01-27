@@ -18,9 +18,9 @@ ray
 sentence_transformers
 sglang[all]
 sglang-router
-tensordict<0.6
+tensordict
 torchmetrics
-transformers<4.48
+transformers
 vertexai
-vllm==0.6.3
+vllm
 wandb

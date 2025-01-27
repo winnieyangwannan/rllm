@@ -190,6 +190,8 @@ class DistributedSampler:
                 self.active_requests[worker_idx] -= 1
             return sample_batch
         except Exception as e:
+            import traceback
+            traceback.print_exc()
             with self._worker_lock:
                 self.active_requests[worker_idx] -= 1
             raise e
