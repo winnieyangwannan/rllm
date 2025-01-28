@@ -36,8 +36,26 @@ def classify_difficulty(difficulty):
 # Convert the entire dataset to JSON
 json_data = [convert_to_json(example) for example in dataset["test"]]
 
-# Save the JSON data to a file
-with open("zebra_logic.json", "w") as json_file:
-    json.dump(json_data, json_file, indent=4)
+# Calculate split sizes
+total_samples = len(json_data)
+train_size = int(0.8 * total_samples)
 
-print("Dataset converted and saved as zebra_logic_dataset.json")
+# Shuffle the data
+np.random.seed(42)  # for reproducibility
+np.random.shuffle(json_data)
+
+# Split the data
+train_data = json_data[:train_size]
+test_data = json_data[train_size:]
+
+# Save the train JSON data
+with open("zebra_logic_train.json", "w") as json_file:
+    json.dump(train_data, json_file, indent=4)
+
+# Save the test JSON data
+with open("zebra_logic_test.json", "w") as json_file:
+    json.dump(test_data, json_file, indent=4)
+
+print(f"Dataset split and saved:")
+print(f"Train set: {len(train_data)} samples saved as zebra_logic_train.json")
+print(f"Test set: {len(test_data)} samples saved as zebra_logic_test.json")
