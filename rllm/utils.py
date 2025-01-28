@@ -5,12 +5,31 @@ from typing import List
 
 import torch
 import vertexai
+import openai
 
 from google.cloud.aiplatform_v1beta1.types.content import SafetySetting
 from sentence_transformers import SentenceTransformer, util
 from vertexai.generative_models import GenerationConfig, GenerativeModel, HarmBlockThreshold, HarmCategory
 
-from rllm.globals import GCP_PROJECT_ID, GCP_LOCATION, GEMINI_MODEL
+from rllm.globals import GCP_PROJECT_ID, GCP_LOCATION, GEMINI_MODEL, OAI_RM_MODEL
+
+def call_oai_rm_llm(
+    prompt: str,
+    system_prompt: str,
+    n: int = 1,
+    temperature: float = 1.0,
+    model_id: str = OAI_RM_MODEL,
+) -> List[str]:
+    client = openai.OpenAI()
+    response = client.chat.completions.create(
+        model=model_id,
+        messages=[{"role": "system", "content": system_prompt}, {"role": "user", "content": prompt}],
+        temperature=temperature,
+        n=n,
+    )
+    if n == 1:
+        return response.choices[0].message.content
+    return [choice.message.content for choice in response.choices]
 
 def call_gemini_llm(
     prompt: str,
@@ -85,6 +104,9 @@ def call_gemini_llm(
                 time.sleep(backoff)
                 backoff = min(backoff * 2, 64)  # Exponential backoff up to 64s
                 continue
+            elif "403" in str(e):
+                print("NO ACCESS TO ENDPOINT", e)
+                raise NotImplementedError
             else:
                 print("Exception: ", e)
                 return []  # or raise an exception if desired
@@ -92,6 +114,7 @@ def call_gemini_llm(
     # Collect the texts from all returned candidates
     # Depending on the library version, this might need to be adjusted 
     # if the `response` shape is different
+
     try:
         # Keep this to check for errors in indexing.
         [candidate.text for candidate in response.candidates]
