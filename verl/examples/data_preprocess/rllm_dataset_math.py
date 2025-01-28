@@ -10,7 +10,7 @@ def extract_solution(solution_str):
     return remove_boxed(last_boxed_only_string(solution_str))
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
-    parser.add_argument('--local_dir', default='~/data/rllm-math')
+    parser.add_argument('--local_dir', default='~/data/math')
     parser.add_argument('--hdfs_dir', default=None)
     args = parser.parse_args()
     local_dir = args.local_dir
@@ -23,7 +23,7 @@ if __name__ == '__main__':
         TrainDataset.STILL,
     ]
     train_dataset = DatasetMix(train_datasets)
-    test_datasets = [ TestDataset.AIME ]
+    test_datasets = [ TestDataset.MATH ]
     test_dataset = DatasetMix(test_datasets) 
     instruction_following = "Let's think step by step and output the final answer within \\boxed{}."
     # add a row to each data item that represents a unique id
@@ -38,7 +38,7 @@ if __name__ == '__main__':
             question = question + ' ' + instruction_following
             answer = example.pop('answer')
             data = {
-                "data_source": "rllm",
+                "data_source": "math",
                 "prompt": [{
                     "role": "user",
                     "content": question
