@@ -58,6 +58,9 @@ from swebench.harness.utils import (
     str2bool,
 )
 
+from rllm.globals import DATASET_NAME, MAX_WORKERS, FORCE_REBUILD, CACHE_LEVEL, CLEAN, OPEN_FILE_LIMIT, TIMEOUT, NAMESPACE, REWRITE_REPORTS, SPLIT, INSTANCE_IMAGE_TAG, REPORT_DIR
+import uuid
+
 GIT_APPLY_CMDS = [
     "git apply --verbose",
     "git apply --verbose --reject",
@@ -487,40 +490,29 @@ def run_evaluation(
     # read from the report - generate the reward - return the reward
     return make_run_report(actions, full_dataset, run_id, client)
 
-def get_reward_from_step(
-        dataset_name: str,
+def check_correctness(
         instance_ids: list,
         actions: dict[str: str],
-        max_workers: int,
-        force_rebuild: bool,
-        cache_level: str,
-        clean: bool,
-        open_file_limit: int,
-        run_id: str,
-        timeout: int,
-        namespace: str | None,
-        rewrite_reports: bool,
-        split: str = 'test',
-        instance_image_tag: str = 'latest',
-        report_dir: str = '.'
     ) -> float:
 
+    run_id = str(uuid.uuid4())
+
     eval_report_path = run_evaluation(
-        dataset_name,
+        DATASET_NAME,
         instance_ids, 
         actions, 
-        max_workers, 
-        force_rebuild, 
-        cache_level, 
-        clean, 
-        open_file_limit, 
+        MAX_WORKERS, 
+        FORCE_REBUILD, 
+        CACHE_LEVEL, 
+        CLEAN, 
+        OPEN_FILE_LIMIT, 
         run_id, 
-        timeout, 
-        namespace, 
-        rewrite_reports, 
-        split, 
-        instance_image_tag, 
-        report_dir)
+        TIMEOUT, 
+        NAMESPACE, 
+        REWRITE_REPORTS, 
+        SPLIT, 
+        INSTANCE_IMAGE_TAG, 
+        REPORT_DIR)
     
     # read from eval report and get the correct/incorrect stats for reward calculation
     with open(eval_report_path, 'r') as f:

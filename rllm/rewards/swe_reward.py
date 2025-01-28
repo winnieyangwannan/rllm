@@ -6,8 +6,8 @@ validate answers when necessary.
 from rllm.rewards import RewardConfig, RewardFn, RewardInput, RewardOutput, RewardType
 from rllm.system_prompts import CODE_ORM_PROMPT, CODE_PROGRESS_PROMPT
 from rllm.utils import call_gemini_llm
-from rllm.envs.swebench.run_eval import get_reward_from_step
-
+from rllm.envs.swebench.run_eval import check_correctness
+from rllm.globals import MODEL_NAME_OR_PATH
 
 ORM_USER_TEMPLATE = """
 Problem Statement: {problem}
@@ -36,7 +36,7 @@ class RewardSWEFn(RewardFn):
         model_response = input.model_response
         instance_id = input.metadata.get("instance_id", None)
         ground_truth = input.metadata.get("patch", None)
-       
+        
         # Attempt to parse a patch from the model response
         patch_start = model_response.find("diff --git")
 
@@ -73,34 +73,20 @@ class RewardSWEFn(RewardFn):
                 return RewardOutput(reward=self.config.correct_reward, is_correct=True)
             elif "[[NO]]" in orm_response:
                 return RewardOutput(reward=self.config.incorrect_reward, is_correct=False)
-            print("LMFAO")
             return RewardOutput(reward=self.config.unk_error_reward, is_correct=False)
  
         actions = {
             "instance_id": instance_id,
             "model_patch": patch,
-            "model_name_or_path": "rllm",
+            "model_name_or_path": MODEL_NAME_OR_PATH,
         }
 
         predictions = {instance_id: actions}
                 
         metadata = input.metadata
-        resolved_percentage = get_reward_from_step(
-            dataset_name=metadata.get("dataset_name", "princeton-nlp/SWE-bench_Lite"),
+        resolved_percentage = check_correctness(
             instance_ids=metadata.get("instance_ids", ""),
             actions=predictions,
-            max_workers=metadata.get("max_workers", 4),
-            force_rebuild=metadata.get("force_rebuild", False),
-            cache_level=metadata.get("cache_level", "None"),
-            clean=metadata.get("clean", False),
-            open_file_limit=metadata.get("open_file_limit", 4096),
-            run_id=metadata.get("run_id", "run1"),
-            timeout=metadata.get("timeout", 1_800),
-            namespace=metadata.get("namespace", None),
-            rewrite_reports=metadata.get("rewrite_reports", False),
-            split=metadata.get("split", "test"),
-            instance_image_tag=metadata.get("instance_image_tag", "latest"),
-            report_dir=metadata.get("report_dir", ".")
         )
         
         if resolved_percentage == 1:
