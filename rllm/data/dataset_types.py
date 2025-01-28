@@ -12,7 +12,8 @@ class TrainDataset(enum.Enum):
     NUMINA_OLYMPIAD = 'OLYMPIAD'
     # Dan Hendrycks math
     MATH = 'MATH'
-    GSM8k = 'GSM8k'
+    GSM8k = 'GSM8K'
+    STILL = "STILL"
 
 class TestDataset(enum.Enum):
     AIME = 'AIME'
