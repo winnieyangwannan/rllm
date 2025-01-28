@@ -93,7 +93,7 @@ class RewardMathFn(RewardFn):
                         model_id=OAI_RM_MODEL,
                     )
                     
-                    if all("[[YES]]" in r for r in orm_response):
+                    if "[[YES]]" in orm_response:
                         return RewardOutput(reward=self.config.correct_reward, is_correct=True)
                     print(e)
                     continue

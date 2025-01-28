@@ -27,6 +27,8 @@ def call_oai_rm_llm(
         temperature=temperature,
         n=n,
     )
+    if n == 1:
+        return response.choices[0].message.content
     return [choice.message.content for choice in response.choices]
 
 def call_gemini_llm(
