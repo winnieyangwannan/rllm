@@ -89,11 +89,7 @@ class RewardSWEFn(RewardFn):
             actions=predictions,
         )
         
-        if reward > 0:
-            return RewardOutput(reward=RewardConfig(correct_reward=reward), is_correct=True)
-        else:
-            return RewardOutput(reward=RewardConfig(incorrect_reward=reward), is_correct=False)
-    
+        return RewardOutput(reward=reward, is_correct=reward == 1)
 
 if __name__ == "__main__":
     reward = RewardSWEFn(RewardConfig)
