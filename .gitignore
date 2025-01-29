@@ -184,3 +184,6 @@ verl/scripts/wandb/*
 outputs/*
 
 wandb/*
+
+checkpoints/*
+verl/checkpoints/*
