@@ -14,7 +14,7 @@ class RewardConfig:
 
     # Config for code-based rewards
     code_reward_weight: float = 1.0
-    use_code_orm: bool = True
+    use_code_orm: bool = False
     
     # Config for cot-based rewards
     cot_reward_weight: float = 0.0

@@ -495,7 +495,8 @@ def check_correctness(
         actions: dict[str: str],
     ) -> float:
 
-    run_id = str(uuid.uuid4())
+    # generate unique run id
+    run_id = uuid.uuid4().hex
 
     eval_report_path = run_evaluation(
         DATASET_NAME,
@@ -520,10 +521,10 @@ def check_correctness(
         
         # Calculate reward based on correct/incorrect stats
         resolved_instances = eval_report["resolved_instances"]
-        completed_instances = eval_report["completed_instances"]
+        submitted_instances = eval_report["submitted_instances"]
         print(f"Resolved instances: {resolved_instances}")
-        print(f"Completed instances: {completed_instances}")
+        print(f"Submitted instances: {submitted_instances}")
 
-        resolve_rate = resolved_instances / completed_instances
+        resolve_rate = resolved_instances / submitted_instances
         
         return resolve_rate
