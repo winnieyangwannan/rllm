@@ -84,16 +84,12 @@ class RewardSWEFn(RewardFn):
         predictions = {instance_id: actions}
                 
         metadata = input.metadata
-        resolved_percentage = check_correctness(
+        reward = check_correctness(
             instance_ids=metadata.get("instance_ids", ""),
             actions=predictions,
         )
         
-        if resolved_percentage == 1:
-            return RewardOutput(reward=self.config.correct_reward, is_correct=True)
-        else:
-            return RewardOutput(reward=self.config.incorrect_reward, is_correct=False)
-    
+        return RewardOutput(reward=reward, is_correct=reward == 1)
 
 if __name__ == "__main__":
     reward = RewardSWEFn(RewardConfig)
