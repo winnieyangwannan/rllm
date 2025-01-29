@@ -647,7 +647,8 @@ def check_correctness(
         actions: dict[str: str],
     ) -> float:
 
-    run_id = str(uuid.uuid4())
+    # generate unique run id
+    run_id = uuid.uuid4().hex
 
     eval_report_path = run_evaluation(
         DATASET_NAME,
