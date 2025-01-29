@@ -95,7 +95,6 @@ class RewardMathFn(RewardFn):
                     
                     if "[[YES]]" in orm_response:
                         return RewardOutput(reward=self.config.correct_reward, is_correct=True)
-                    print(e)
                     continue
                 
         return RewardOutput(reward=self.config.incorrect_reward, is_correct=False)
