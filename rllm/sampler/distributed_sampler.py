@@ -135,7 +135,7 @@ class DistributedSampler:
                     namespace=self.NAMESPACE,
                     num_gpus=self.model_kwargs.get("tensor_parallel_size", 1),
                     num_cpus=8,
-                    max_concurrency=1024,
+                    max_concurrency=4096,
                     runtime_env={
                         "env_vars": {
                             "PYTHONUNBUFFERED": "1",

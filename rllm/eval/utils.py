@@ -23,7 +23,7 @@ def evaluate_dataset_entry(idx, engine, entry, n=8, temperature=0.6):
     answer = entry['answer']
 
     content_dict = [
-        {"role": "user", "content": DEEPSEEK_MATH_SYSTEM_PROMPT + problem},
+        {"role": "user", "content":  problem + ' ' + DEEPSEEK_MATH_SYSTEM_PROMPT},
     ]
 
     # Use the distributed engine's chat_completion method
@@ -32,7 +32,8 @@ def evaluate_dataset_entry(idx, engine, entry, n=8, temperature=0.6):
         try:
             sample_batch = engine.chat_completion(content_dict,
                                               n=n,
-                                              temperature=temperature)
+                                              temperature=temperature,
+                                              max_tokens=24000)
             # Extract responses from Sample objects in the batch
             llm_responses = [sample.response for sample in sample_batch.samples]
             break
@@ -105,7 +106,7 @@ def evaluate_dataset(dataset: Dataset, output_dir: str, engine: DistributedSampl
     # Calculate statistics
     total_problems = len(results)
     pass_at_1 = sum(entry['pass@1'] for entry in results.values()) / float(total_problems)
-    pass_at_1_average = sum(entry['grades'] for entry in results.values()) / float(total_problems * n)
+    pass_at_1_average = sum([sum(entry['grades']) for entry in results.values()]) / float(total_problems * n)
     pass_at_n = sum(entry[f'pass@{n}'] for entry in results.values()) / float(total_problems)
     
     return dataset, {
