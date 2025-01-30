@@ -148,7 +148,7 @@ class RaySGLangWorker:
         os.environ["TOKENIZERS_PARALLELISM"] = "true"
         self.tokenizer = AutoTokenizer.from_pretrained(self.model)
         # Initialize OpenAI client
-        self.client = OpenAI(base_url=f"http://0.0.0.0:{self.port}/v1", api_key="not-needed")
+        self.client = OpenAI(base_url=f"http://0.0.0.0:{self.port}/v1", api_key="not-needed", timeout=int(1e9))
     
     def wait_for_server(self) -> None:
         """Wait for the server to become healthy."""
@@ -201,16 +201,22 @@ class RaySGLangWorker:
         Returns:
             SampleBatch containing the response and metrics
         """
-        try:
-            chat_response = self.client.chat.completions.create(
-                messages=messages,
-                model=self.model,
-                logprobs=True,
-                top_logprobs=1,
-                **kwargs
-            )
-        except Exception as exc:
-            return {'Error': str(exc)}
+        num_retries = 10
+        for retry in range(num_retries):
+            try:
+                chat_response = self.client.chat.completions.create(
+                    messages=messages,
+                    model=self.model,
+                    logprobs=True,
+                    top_logprobs=1,
+                    **kwargs
+                )
+                break
+            except Exception as exc:
+                import traceback
+                traceback.print_exc()
+                if retry == num_retries - 1:
+                    return {'Error': str(exc)}
 
         samples = convert_openai_response_to_samples(chat_response)
         sample_lengths = []

@@ -11,7 +11,7 @@ from rllm.eval.utils import evaluate_dataset
 def parse_args(parser: argparse.ArgumentParser):
     """Parse command line arguments for trajectory generation."""
     parser.add_argument('--datasets', type=str, nargs='+', 
-                       choices=['AIME', 'AMC', 'MATH', 'OMNI_MATH', 'OLYMPIAD', 'MINERVA'],
+                       choices=['AIME', 'AMC', 'MATH', 'OMNI_MATH', 'OLYMPIAD', 'MINERVA', 'OLYMPIAD_BENCH'],
                        default=['AIME'], help='Datasets to process')
     parser.add_argument('--split', type=str, choices=['train', 'test'],
                        default='train', help='Dataset split to use')
@@ -45,7 +45,7 @@ if __name__ == "__main__":
     
     # Initialize the distributed VLLM engine
     engine = DistributedSampler(
-        backend="vllm",
+        backend="sglang",
         num_workers=args.num_workers,
         tensor_parallel_size=args.tensor_parallel_size,
         model=args.model

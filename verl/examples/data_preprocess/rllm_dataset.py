@@ -38,7 +38,7 @@ if __name__ == '__main__':
             question = question + ' ' + instruction_following
             answer = example.pop('answer')
             data = {
-                "data_source": "",
+                "data_source": "rllm",
                 "prompt": [{
                     "role": "user",
                     "content": question
