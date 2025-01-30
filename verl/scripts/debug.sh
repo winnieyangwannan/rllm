@@ -5,8 +5,8 @@ export VLLM_ATTENTION_BACKEND=XFORMERS
 
 python3 -m verl.trainer.main_ppo \
     algorithm.adv_estimator=grpo \
-    data.train_files=$HOME/data/rllm-math/train.parquet \
-    data.val_files=$HOME/data/rllm-math/test.parquet \
+    data.train_files=$HOME/data/deepscaler/train.parquet \
+    data.val_files=$HOME/data/deepscaler/test.parquet \
     data.train_batch_size=2 \
     data.val_batch_size=512 \
     data.max_prompt_length=1024 \
@@ -30,13 +30,14 @@ python3 -m verl.trainer.main_ppo \
     actor_rollout_ref.rollout.name=vllm \
     actor_rollout_ref.rollout.gpu_memory_utilization=0.9 \
     actor_rollout_ref.rollout.n=4 \
+    actor_rollout_ref.rollout.n_val=8 \
     actor_rollout_ref.ref.fsdp_config.param_offload=True \
     algorithm.kl_ctrl.kl_coef=0.001 \
     trainer.critic_warmup=0 \
     trainer.logger=['console','wandb'] \
     trainer.project_name='rllm-o3' \
-    trainer.experiment_name='math-amc-aime-16k' \
-    +trainer.val_before_train=False \
+    trainer.experiment_name='debug-run' \
+    +trainer.val_before_train=True \
     trainer.n_gpus_per_node=2 \
     trainer.nnodes=1 \
     trainer.save_freq=1 \
