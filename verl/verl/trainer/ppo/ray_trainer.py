@@ -359,8 +359,12 @@ class RayPPOTrainer(object):
                                          filter_prompts=True,
                                          return_raw_chat=self.config.data.get('return_raw_chat', False),
                                          truncation='error')
+        train_batch_size = self.config.data.train_batch_size
+        if self.config.trainer.rejection_sample:
+            train_batch_size *= self.config.trainer.rejection_sample_multiplier
+            train_batch_size = int(train_batch_size)
         self.train_dataloader = DataLoader(dataset=self.train_dataset,
-                                           batch_size=self.config.data.train_batch_size if not self.config.trainer.rejection_sample else self.config.data.train_batch_size + self.config.trainer.rejection_sample_additional_batch_size,
+                                           batch_size=train_batch_size,
                                            shuffle=True,
                                            drop_last=True,
                                            collate_fn=collate_fn)
@@ -648,10 +652,21 @@ class RayPPOTrainer(object):
                             # If no valid samples remain, skip this batch and get a new one
                             if not valid_mask.any():
                                 continue
+
                             # Filter batch to keep only valid samples
                             batch = batch[valid_mask]
                             batch = dataprotoitem_to_dataproto(batch)
-                            batch = pad_dataproto_to_divisor(batch, self.actor_rollout_wg.world_size)
+                            # Round down to the nearest multiple of world size
+                            num_trainer_replicas = self.actor_rollout_wg.world_size 
+                            max_batch_size = (batch.batch['input_ids'].shape[0] // num_trainer_replicas) * num_trainer_replicas
+                            if not max_batch_size:
+                                # give up, you got everything either all wrong or right.
+                                continue
+
+                            size_mask = torch.zeros(batch.batch['input_ids'].shape[0], dtype=torch.bool)
+                            size_mask[:max_batch_size] = True
+                            batch = batch[size_mask]
+                            batch = dataprotoitem_to_dataproto(batch)
 
                         # recompute old_log_probs
                         with _timer('old_log_prob', timing_raw):
