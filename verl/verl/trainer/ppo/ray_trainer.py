@@ -409,6 +409,8 @@ class RayPPOTrainer(object):
             if self.config.reward_model.enable and test_batch[0].non_tensor_batch['reward_model']['style'] == 'model':
                 return {}
 
+            n_val_samples = self.config.actor_rollout_ref.rollout.n_val
+            test_batch = test_batch.repeat(repeat_times=n_val_samples, interleave=True)
             test_gen_batch = test_batch.pop(['input_ids', 'attention_mask', 'position_ids'])
             test_gen_batch.meta_info = {
                 'eos_token_id': self.tokenizer.eos_token_id,
@@ -419,8 +421,6 @@ class RayPPOTrainer(object):
             }
 
             # pad to be divisible by dp_size
-            n_val_samples = self.config.actor_rollout_ref.rollout.n_val
-            test_gen_batch = test_gen_batch.repeat(repeat_times=n_val_samples, interleave=True)
             test_gen_batch_padded, pad_size = pad_dataproto_to_divisor(test_gen_batch, self.actor_rollout_wg.world_size)
             test_gen_batch_padded.meta_info['val_temperature'] = self.config.actor_rollout_ref.rollout.val_temperature
             test_output_gen_batch_padded = self.actor_rollout_wg.generate_sequences(test_gen_batch_padded)
@@ -619,21 +619,32 @@ class RayPPOTrainer(object):
 
                         reward_tensor = self.reward_fn(batch)
                         batch.batch['token_level_scores'] = reward_tensor
-                        
-                        if self.config.trainer.rejection_sample:
-                            # Rejection sampling based on rewards
-                            # Group rewards by uid
-                            uids = batch.non_tensor_batch['uid']
-                            unique_uids = np.unique(uids)
-                            valid_mask = torch.ones(len(uids), dtype=torch.bool)
 
-                            for uid in unique_uids:
-                                uid_mask = uids == uid
-                                uid_rewards = reward_tensor[uid_mask].sum(-1)  # Sum rewards for each sequence
-                                
-                                # Check if all rewards are 0 or all are 1 for this uid
-                                if (uid_rewards == 0).all() or (uid_rewards == 1).all():
-                                    valid_mask[uid_mask] = False
+                        # Rejection sampling based on rewards
+                        # Group rewards by uid
+                        uids = batch.non_tensor_batch['uid']
+                        unique_uids = np.unique(uids)
+                        valid_mask = torch.ones(len(uids), dtype=torch.bool)
+                        solve_none = 0
+                        solve_all = 0
+                        for uid in unique_uids:
+                            uid_mask = uids == uid
+                            uid_rewards = reward_tensor[uid_mask].sum(-1)  # Sum rewards for each sequence
+                            
+                            # Check if all rewards are 0 or all are 1 for this uid
+                            if (uid_rewards == 0).all():
+                                valid_mask[uid_mask] = False
+                                solve_none += 1
+                            elif (uid_rewards == 1).all():
+                                valid_mask[uid_mask] = False
+                                solve_all += 1
+                        
+                        # Log to metrics
+                        metrics['batch/solve_none'] = solve_none
+                        metrics['batch/solve_all'] = solve_all
+
+
+                        if self.config.trainer.rejection_sample:
                             # If no valid samples remain, skip this batch and get a new one
                             if not valid_mask.any():
                                 continue
