@@ -148,7 +148,7 @@ class RaySGLangWorker:
         os.environ["TOKENIZERS_PARALLELISM"] = "true"
         self.tokenizer = AutoTokenizer.from_pretrained(self.model)
         # Initialize OpenAI client
-        self.client = OpenAI(base_url=f"http://0.0.0.0:{self.port}/v1", api_key="not-needed")
+        self.client = OpenAI(base_url=f"http://0.0.0.0:{self.port}/v1", api_key="not-needed", timeout=int(1e9))
     
     def wait_for_server(self) -> None:
         """Wait for the server to become healthy."""
@@ -211,6 +211,7 @@ class RaySGLangWorker:
                     top_logprobs=1,
                     **kwargs
                 )
+                break
             except Exception as exc:
                 import traceback
                 traceback.print_exc()
