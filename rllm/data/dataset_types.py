@@ -14,6 +14,7 @@ class TrainDataset(enum.Enum):
     MATH = 'MATH'
     GSM8k = 'GSM8K'
     STILL = "STILL"
+    DEEPSCALER = "DEEPSCALER"
 
 class TestDataset(enum.Enum):
     AIME = 'AIME'
