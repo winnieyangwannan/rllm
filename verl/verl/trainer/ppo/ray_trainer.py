@@ -419,6 +419,8 @@ class RayPPOTrainer(object):
             }
 
             # pad to be divisible by dp_size
+            n_val_samples = self.config.actor_rollout_ref.rollout.n_val
+            test_gen_batch = test_gen_batch.repeat(repeat_times=n_val_samples, interleave=True)
             test_gen_batch_padded, pad_size = pad_dataproto_to_divisor(test_gen_batch, self.actor_rollout_wg.world_size)
             test_gen_batch_padded.meta_info['val_temperature'] = self.config.actor_rollout_ref.rollout.val_temperature
             test_output_gen_batch_padded = self.actor_rollout_wg.generate_sequences(test_gen_batch_padded)
@@ -638,16 +640,7 @@ class RayPPOTrainer(object):
                             # Filter batch to keep only valid samples
                             batch = batch[valid_mask]
                             batch = dataprotoitem_to_dataproto(batch)
-                            # Round down to the nearest multiple of world size
-                            num_trainer_replicas = self.actor_rollout_wg.world_size // self.config.actor_rollout_ref.actor.ulysses_sequence_parallel_size
-                            max_batch_size = (batch.batch['input_ids'].shape[0] // num_trainer_replicas) * num_trainer_replicas
-                            if not max_batch_size:
-                                # give up, you got everything either all wrong or right.
-                                continue
-                            size_mask = torch.zeros(batch.batch['input_ids'].shape[0], dtype=torch.bool)
-                            size_mask[:max_batch_size] = True
-                            batch = batch[size_mask]
-                            batch = dataprotoitem_to_dataproto(batch)
+                            batch = pad_dataproto_to_divisor(batch, self.actor_rollout_wg.world_size)
 
                         # recompute old_log_probs
                         with _timer('old_log_prob', timing_raw):
