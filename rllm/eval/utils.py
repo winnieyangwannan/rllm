@@ -45,7 +45,7 @@ def evaluate_dataset_entry(idx, engine, entry, n=8, temperature=0.6):
             if retry_idx == retry_limit - 1:
                 raise e
     
-    reward_fn = RewardMathFn(RewardConfig(use_math_orm=True))
+    reward_fn = RewardMathFn(RewardConfig(use_math_orm=False))
     reward_inputs = [RewardInput(problem=problem, problem_type=RewardType.MATH, model_response=r, metadata={"answer": answer}) for r in llm_responses]
     reward_outputs = [reward_fn(r) for r in reward_inputs]
     # Grade the answer
