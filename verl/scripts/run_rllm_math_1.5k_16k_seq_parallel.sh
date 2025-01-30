@@ -9,7 +9,7 @@ python3 -m verl.trainer.main_ppo \
     data.train_batch_size=128 \
     data.val_batch_size=512 \
     data.max_prompt_length=1024 \
-    data.max_response_length=8192 \
+    data.max_response_length=16384 \
     actor_rollout_ref.model.path=deepseek-ai/DeepSeek-R1-Distill-Qwen-1.5B \
     actor_rollout_ref.actor.optim.lr=1e-6 \
     actor_rollout_ref.model.use_remove_padding=True \
@@ -39,7 +39,7 @@ python3 -m verl.trainer.main_ppo \
     trainer.experiment_name='8k-seq-parallel-still' \
     +trainer.val_before_train=True \
     trainer.n_gpus_per_node=8 \
-    trainer.nnodes=1 \
+    trainer.nnodes=2 \
     trainer.save_freq=10 \
     trainer.test_freq=10 \
     trainer.default_hdfs_dir=null \
