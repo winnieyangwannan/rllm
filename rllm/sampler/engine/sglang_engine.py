@@ -201,16 +201,21 @@ class RaySGLangWorker:
         Returns:
             SampleBatch containing the response and metrics
         """
-        try:
-            chat_response = self.client.chat.completions.create(
-                messages=messages,
-                model=self.model,
-                logprobs=True,
-                top_logprobs=1,
-                **kwargs
-            )
-        except Exception as exc:
-            return {'Error': str(exc)}
+        num_retries = 10
+        for retry in range(num_retries):
+            try:
+                chat_response = self.client.chat.completions.create(
+                    messages=messages,
+                    model=self.model,
+                    logprobs=True,
+                    top_logprobs=1,
+                    **kwargs
+                )
+            except Exception as exc:
+                import traceback
+                traceback.print_exc()
+                if retry == num_retries - 1:
+                    return {'Error': str(exc)}
 
         samples = convert_openai_response_to_samples(chat_response)
         sample_lengths = []

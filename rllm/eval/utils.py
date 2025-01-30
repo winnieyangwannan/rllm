@@ -21,7 +21,8 @@ def evaluate_dataset_entry(idx, engine, entry, n=8, temperature=0.6):
     """
     problem = entry['problem']
     answer = entry['answer']
-
+    if isinstance(answer, float) or isinstance(answer, int):
+        answer = str(answer)
     content_dict = [
         {"role": "user", "content":  problem + ' ' + DEEPSEEK_MATH_SYSTEM_PROMPT},
     ]
