@@ -34,7 +34,7 @@ def evaluate_dataset_entry(idx, engine, entry, n=8, temperature=0.6):
             sample_batch = engine.chat_completion(content_dict,
                                               n=n,
                                               temperature=temperature,
-                                              max_tokens=24000,
+                                              max_tokens=32000,
                                               top_p=0.95)
             # Extract responses from Sample objects in the batch
             llm_responses = [sample.response for sample in sample_batch.samples]
