@@ -114,7 +114,7 @@ class RayVLLMWorker:
             setattr(self.server_args, key, value)
 
         self.server_process = None
-        self.oai_client = OpenAI(api_key='EMPTY', base_url=f"http://0.0.0.0:{self.port}/v1")
+        self.oai_client = OpenAI(api_key='EMPTY', base_url=f"http://0.0.0.0:{self.port}/v1", timeout=int(1e9))
         os.environ["TOKENIZERS_PARALLELISM"] = "true"
         self.tokenizer = AutoTokenizer.from_pretrained(self.model)
 

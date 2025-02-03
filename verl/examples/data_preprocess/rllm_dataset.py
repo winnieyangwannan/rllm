@@ -20,6 +20,7 @@ if __name__ == '__main__':
         TrainDataset.AMC,
         TrainDataset.MATH,
         TrainDataset.OMNI_MATH,
+        TrainDataset.STILL,
     ]
     train_dataset = DatasetMix(train_datasets)
     test_datasets = [ TestDataset.AIME ]
@@ -37,7 +38,7 @@ if __name__ == '__main__':
             question = question + ' ' + instruction_following
             answer = example.pop('answer')
             data = {
-                "data_source": "",
+                "data_source": "rllm",
                 "prompt": [{
                     "role": "user",
                     "content": question

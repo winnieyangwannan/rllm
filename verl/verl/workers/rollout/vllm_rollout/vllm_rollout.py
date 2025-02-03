@@ -79,6 +79,9 @@ class vLLMRollout(BaseRollout):
         assert tensor_parallel_size <= torch.distributed.get_world_size(), \
             "tensor parallel size should be less than or equal to the world size"
         self.tensor_parallel_size = tensor_parallel_size
+        
+        max_num_batched_tokens = self.config.get('max_num_batched_tokens', 8192)
+        
         if kwargs.get('train_tp', None) is not None:
             # deployed with megatron
             import os
@@ -101,6 +104,8 @@ class vLLMRollout(BaseRollout):
                                     gpu_memory_utilization=config.gpu_memory_utilization,
                                     skip_tokenizer_init=False,
                                     max_model_len=config.prompt_length + config.response_length,
+                                    max_num_batched_tokens=max_num_batched_tokens,
+                                    enable_chunked_prefill=config.enable_chunked_prefill,
                                     load_format=config.load_format)
         # Offload vllm model to reduce peak memory usage
         self.inference_engine.offload_model_weights()

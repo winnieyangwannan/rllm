@@ -6,11 +6,11 @@ python3 -m verl.trainer.main_ppo \
     algorithm.adv_estimator=grpo \
     data.train_files=$HOME/data/rllm-math/train.parquet \
     data.val_files=$HOME/data/rllm-math/test.parquet \
-    data.train_batch_size=256 \
-    data.val_batch_size=512 \
+    data.train_batch_size=128 \
+    data.val_batch_size=30 \
     data.max_prompt_length=1024 \
     data.max_response_length=16384 \
-    actor_rollout_ref.model.path=/home/huangyp_google_com/model/global_step_180 \
+    actor_rollout_ref.model.path=deepseek-ai/DeepSeek-R1-Distill-Qwen-1.5B \
     actor_rollout_ref.actor.optim.lr=1e-6 \
     actor_rollout_ref.model.use_remove_padding=True \
     actor_rollout_ref.actor.ppo_mini_batch_size=64 \
@@ -24,6 +24,7 @@ python3 -m verl.trainer.main_ppo \
     actor_rollout_ref.actor.fsdp_config.param_offload=False \
     actor_rollout_ref.actor.fsdp_config.grad_offload=False \
     actor_rollout_ref.actor.fsdp_config.optimizer_offload=False \
+    actor_rollout_ref.rollout.temperature=0.6 \
     actor_rollout_ref.rollout.val_temperature=0.6 \
     actor_rollout_ref.rollout.tensor_model_parallel_size=2 \
     actor_rollout_ref.rollout.name=vllm \
@@ -34,11 +35,11 @@ python3 -m verl.trainer.main_ppo \
     trainer.critic_warmup=0 \
     trainer.logger=['console','wandb'] \
     trainer.project_name='rllm-o3' \
-    trainer.experiment_name='math-amc-aime-16k-run' \
+    trainer.experiment_name='still-data-16k-run' \
     +trainer.val_before_train=False \
     trainer.n_gpus_per_node=8 \
     trainer.nnodes=2 \
-    trainer.save_freq=4 \
+    trainer.save_freq=10 \
     trainer.test_freq=5 \
     trainer.default_hdfs_dir=null \
     trainer.total_epochs=15 $@

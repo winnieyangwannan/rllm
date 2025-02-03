@@ -12,7 +12,7 @@ from rllm.rewards import RewardInput, RewardType, RewardConfig
 from rllm.rewards.math_reward import RewardMathFn
 
 
-def evaluate_dataset_entry(idx, engine, entry, n=8, temperature=0.6):
+def evaluate_dataset_entry(idx, engine, entry, n=8, temperature=0.6, max_tokens=32000):
     """
     Process a single problem using the distributed VLLM engine.
     
@@ -21,9 +21,10 @@ def evaluate_dataset_entry(idx, engine, entry, n=8, temperature=0.6):
     """
     problem = entry['problem']
     answer = entry['answer']
-
+    if isinstance(answer, float) or isinstance(answer, int):
+        answer = str(answer)
     content_dict = [
-        {"role": "user", "content": DEEPSEEK_MATH_SYSTEM_PROMPT + problem},
+        {"role": "user", "content":  problem + ' ' + DEEPSEEK_MATH_SYSTEM_PROMPT},
     ]
 
     # Use the distributed engine's chat_completion method
@@ -32,7 +33,9 @@ def evaluate_dataset_entry(idx, engine, entry, n=8, temperature=0.6):
         try:
             sample_batch = engine.chat_completion(content_dict,
                                               n=n,
-                                              temperature=temperature)
+                                              temperature=temperature,
+                                              max_tokens=max_tokens,
+                                              top_p=0.95)
             # Extract responses from Sample objects in the batch
             llm_responses = [sample.response for sample in sample_batch.samples]
             break
@@ -42,7 +45,7 @@ def evaluate_dataset_entry(idx, engine, entry, n=8, temperature=0.6):
             if retry_idx == retry_limit - 1:
                 raise e
     
-    reward_fn = RewardMathFn(RewardConfig(use_math_orm=True))
+    reward_fn = RewardMathFn(RewardConfig(use_math_orm=False))
     reward_inputs = [RewardInput(problem=problem, problem_type=RewardType.MATH, model_response=r, metadata={"answer": answer}) for r in llm_responses]
     reward_outputs = [reward_fn(r) for r in reward_inputs]
     # Grade the answer
@@ -59,7 +62,7 @@ def evaluate_dataset_entry(idx, engine, entry, n=8, temperature=0.6):
     return idx, entry
 
 
-def evaluate_dataset(dataset: Dataset, output_dir: str, engine: DistributedSampler, n=8, temperature=0.6):
+def evaluate_dataset(dataset: Dataset, output_dir: str, engine: DistributedSampler, n=8, temperature=0.6, max_tokens=32000):
     print(f"\nProcessing dataset: {dataset}")
     problems = load_dataset(dataset)
     
@@ -84,7 +87,8 @@ def evaluate_dataset(dataset: Dataset, output_dir: str, engine: DistributedSampl
                 engine,
                 entry,
                 n=n,
-                temperature=temperature
+                temperature=temperature,
+                max_tokens=max_tokens
             ) for idx, entry in enumerate(problems)
         ]
 
@@ -105,7 +109,7 @@ def evaluate_dataset(dataset: Dataset, output_dir: str, engine: DistributedSampl
     # Calculate statistics
     total_problems = len(results)
     pass_at_1 = sum(entry['pass@1'] for entry in results.values()) / float(total_problems)
-    pass_at_1_average = sum(entry['grades'] for entry in results.values()) / float(total_problems * n)
+    pass_at_1_average = sum([sum(entry['grades']) for entry in results.values()]) / float(total_problems * n)
     pass_at_n = sum(entry[f'pass@{n}'] for entry in results.values()) / float(total_problems)
     
     return dataset, {

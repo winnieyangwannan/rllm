@@ -359,8 +359,12 @@ class RayPPOTrainer(object):
                                          filter_prompts=True,
                                          return_raw_chat=self.config.data.get('return_raw_chat', False),
                                          truncation='error')
+        train_batch_size = self.config.data.train_batch_size
+        if self.config.trainer.rejection_sample:
+            train_batch_size *= self.config.trainer.rejection_sample_multiplier
+            train_batch_size = int(train_batch_size)
         self.train_dataloader = DataLoader(dataset=self.train_dataset,
-                                           batch_size=self.config.data.train_batch_size if not self.config.trainer.rejection_sample else self.config.data.train_batch_size + self.config.trainer.rejection_sample_additional_batch_size,
+                                           batch_size=train_batch_size,
                                            shuffle=True,
                                            drop_last=True,
                                            collate_fn=collate_fn)
@@ -409,6 +413,8 @@ class RayPPOTrainer(object):
             if self.config.reward_model.enable and test_batch[0].non_tensor_batch['reward_model']['style'] == 'model':
                 return {}
 
+            n_val_samples = self.config.actor_rollout_ref.rollout.n_val
+            test_batch = test_batch.repeat(repeat_times=n_val_samples, interleave=True)
             test_gen_batch = test_batch.pop(['input_ids', 'attention_mask', 'position_ids'])
             test_gen_batch.meta_info = {
                 'eos_token_id': self.tokenizer.eos_token_id,
@@ -617,33 +623,46 @@ class RayPPOTrainer(object):
 
                         reward_tensor = self.reward_fn(batch)
                         batch.batch['token_level_scores'] = reward_tensor
-                        
-                        if self.config.trainer.rejection_sample:
-                            # Rejection sampling based on rewards
-                            # Group rewards by uid
-                            uids = batch.non_tensor_batch['uid']
-                            unique_uids = np.unique(uids)
-                            valid_mask = torch.ones(len(uids), dtype=torch.bool)
 
-                            for uid in unique_uids:
-                                uid_mask = uids == uid
-                                uid_rewards = reward_tensor[uid_mask].sum(-1)  # Sum rewards for each sequence
-                                
-                                # Check if all rewards are 0 or all are 1 for this uid
-                                if (uid_rewards == 0).all() or (uid_rewards == 1).all():
-                                    valid_mask[uid_mask] = False
+                        # Rejection sampling based on rewards
+                        # Group rewards by uid
+                        uids = batch.non_tensor_batch['uid']
+                        unique_uids = np.unique(uids)
+                        valid_mask = torch.ones(len(uids), dtype=torch.bool)
+                        solve_none = 0
+                        solve_all = 0
+                        for uid in unique_uids:
+                            uid_mask = uids == uid
+                            uid_rewards = reward_tensor[uid_mask].sum(-1)  # Sum rewards for each sequence
+                            
+                            # Check if all rewards are 0 or all are 1 for this uid
+                            if (uid_rewards == 0).all():
+                                valid_mask[uid_mask] = False
+                                solve_none += 1
+                            elif (uid_rewards == 1).all():
+                                valid_mask[uid_mask] = False
+                                solve_all += 1
+                        
+                        # Log to metrics
+                        metrics['batch/solve_none'] = solve_none
+                        metrics['batch/solve_all'] = solve_all
+
+
+                        if self.config.trainer.rejection_sample:
                             # If no valid samples remain, skip this batch and get a new one
                             if not valid_mask.any():
                                 continue
+
                             # Filter batch to keep only valid samples
                             batch = batch[valid_mask]
                             batch = dataprotoitem_to_dataproto(batch)
                             # Round down to the nearest multiple of world size
-                            num_trainer_replicas = self.actor_rollout_wg.world_size // self.config.actor_rollout_ref.actor.ulysses_sequence_parallel_size
+                            num_trainer_replicas = self.actor_rollout_wg.world_size 
                             max_batch_size = (batch.batch['input_ids'].shape[0] // num_trainer_replicas) * num_trainer_replicas
                             if not max_batch_size:
                                 # give up, you got everything either all wrong or right.
                                 continue
+
                             size_mask = torch.zeros(batch.batch['input_ids'].shape[0], dtype=torch.bool)
                             size_mask[:max_batch_size] = True
                             batch = batch[size_mask]

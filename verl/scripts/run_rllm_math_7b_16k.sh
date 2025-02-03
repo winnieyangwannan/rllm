@@ -6,8 +6,8 @@ python3 -m verl.trainer.main_ppo \
     algorithm.adv_estimator=grpo \
     data.train_files=$HOME/data/rllm-math/train.parquet \
     data.val_files=$HOME/data/rllm-math/test.parquet \
-    data.train_batch_size=264 \
-    data.val_batch_size=500 \
+    data.train_batch_size=128 \
+    data.val_batch_size=30 \
     data.max_prompt_length=1024 \
     data.max_response_length=16192 \
     actor_rollout_ref.model.path=deepseek-ai/DeepSeek-R1-Distill-Qwen-7B \
@@ -28,8 +28,9 @@ python3 -m verl.trainer.main_ppo \
     actor_rollout_ref.rollout.name=vllm \
     actor_rollout_ref.rollout.temperature=0.6 \
     actor_rollout_ref.rollout.val_temperature=0.6 \
-    actor_rollout_ref.rollout.gpu_memory_utilization=0.9 \
+    actor_rollout_ref.rollout.gpu_memory_utilization=0.75 \
     actor_rollout_ref.rollout.n=4 \
+    actor_rollout_ref.rollout.n_val=8 \
     actor_rollout_ref.ref.fsdp_config.param_offload=True \
     algorithm.kl_ctrl.kl_coef=0.001 \
     trainer.critic_warmup=0 \
@@ -38,8 +39,8 @@ python3 -m verl.trainer.main_ppo \
     trainer.experiment_name='qwen_7b_16k' \
     +trainer.val_before_train=False \
     trainer.n_gpus_per_node=8 \
-    trainer.nnodes=3 \
-    trainer.save_freq=5 \
+    trainer.nnodes=4 \
+    trainer.save_freq=10 \
     trainer.test_freq=5 \
     trainer.default_hdfs_dir=null \
-    trainer.total_epochs=15 $@
+    trainer.total_epochs=10 $@

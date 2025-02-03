@@ -16,7 +16,7 @@ actor_rollout_ref:
     path: ~/models/deepseek-llm-7b-chat
     external_lib: null
     override_config: { }
-    enable_gradient_checkpointing: False
+    enable_gradient_checkpointing: True
     use_remove_padding: False
   actor:
     strategy: fsdp  # This is for backward-compatibility
@@ -78,10 +78,12 @@ actor_rollout_ref:
     log_prob_micro_batch_size: 128
     log_prob_use_dynamic_bsz: ${actor_rollout_ref.actor.use_dynamic_bsz}
     log_prob_max_token_len_per_gpu: ${actor_rollout_ref.actor.ppo_max_token_len_per_gpu}
+    enable_chunked_prefill: True
     # for hf rollout
     do_sample: True
     # number of responses (i.e. num sample times)
     n: 1 # > 1 for grpo
+    n_val: 8
 
 critic:
   strategy: fsdp
@@ -96,7 +98,7 @@ critic:
     tokenizer_path: ${actor_rollout_ref.model.path}
     override_config: { }
     external_lib: ${actor_rollout_ref.model.external_lib}
-    enable_gradient_checkpointing: False
+    enable_gradient_checkpointing: True
     use_remove_padding: False
     fsdp_config:
       param_offload: False
@@ -147,7 +149,7 @@ algorithm:
 
 trainer:
   rejection_sample: False # Reject sample prompts that all succeed or all fail (0 signal for GRPO due to normalization).
-  rejection_sample_additional_batch_size: 128 # Number of additional samples to collect for rejection sampling.
+  rejection_sample_multiplier: 2 # Multiple the training batch size by this factor to account for rejection sampling reduction.
   total_epochs: 30
   total_training_steps: null
   project_name: verl_examples

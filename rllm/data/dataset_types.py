@@ -12,7 +12,9 @@ class TrainDataset(enum.Enum):
     NUMINA_OLYMPIAD = 'OLYMPIAD'
     # Dan Hendrycks math
     MATH = 'MATH'
-    GSM8k = 'GSM8k'
+    GSM8k = 'GSM8K'
+    STILL = "STILL"
+    DEEPSCALER = "DEEPSCALER"
 
 class TestDataset(enum.Enum):
     AIME = 'AIME'
@@ -20,6 +22,7 @@ class TestDataset(enum.Enum):
     MATH = 'MATH'
     GSM8k = 'GSM8k'
     MINERVA = 'MINERVA'
+    OLYMPIAD_BENCH = 'OLYMPIAD_BENCH'
 
 Dataset = Union[TrainDataset, TestDataset]
 

@@ -5,7 +5,7 @@ export VLLM_ATTENTION_BACKEND=XFORMERS
 python3 -m verl.trainer.main_ppo \
     algorithm.adv_estimator=grpo \
     data.train_files=$HOME/data/math/train.parquet \
-    data.val_files=$HOME/data/math/test.parquet \
+    data.val_files="$HOME/data/math/test_aime.parquet,$HOME/data/math/test_math.parquet" \
     data.train_batch_size=256 \
     data.val_batch_size=500 \
     data.max_prompt_length=512 \
