@@ -25,6 +25,8 @@ def parse_args(parser: argparse.ArgumentParser):
                        help='Temperature for sampling')
     parser.add_argument('--n', type=int, default=8,
                        help='Number of samples to generate per problem')
+    parser.add_argument('--max_tokens', type=int, default=32000,
+                        help='Maximum number of output tokens')
     parser.add_argument('--output_dir', type=str, default=None,
                        help='Output directory for results (default: current directory)')
     return parser.parse_args()
@@ -36,7 +38,8 @@ def evaluate_dataset_wrapper(args: Dict[str, Any]) -> tuple[str, Dict[str, Any]]
         output_dir=args['output_dir'],
         engine=args['engine'],
         n=args['n'],
-        temperature=args['temperature']
+        temperature=args['temperature'],
+        max_tokens=args['max_tokens'],
     )
 
 if __name__ == "__main__":
@@ -74,7 +77,8 @@ if __name__ == "__main__":
             'output_dir': output_dir,
             'engine': engine,
             'n': args.n,
-            'temperature': args.temperature
+            'temperature': args.temperature,
+            'max_tokens': args.max_tokens,
         }
         for dataset_name in args.datasets
     ]
