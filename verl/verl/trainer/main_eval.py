@@ -23,12 +23,14 @@ from verl.utils.reward_score import math, gsm8k
 import pandas as pd
 import numpy as np
 
+from rllm.rewards.math_reward import grade_answer_rllm_for_verl
+
 
 def select_reward_fn(data_source):
     if data_source == 'lighteval/MATH':
         return math.compute_score
     else:
-        raise NotImplementedError
+        return grade_answer_rllm_for_verl
 
 
 @hydra.main(config_path='config', config_name='evaluation', version_base=None)
@@ -43,7 +45,7 @@ def main(config):
     passes = 0
 
     total = len(dataset)
-
+    total_scores = []
     for i in range(total):
         response_lst = responses[i]
         data_source = data_sources[i]
@@ -56,13 +58,12 @@ def main(config):
         for r in response_lst:
             score = reward_fn(r, ground_truth)
             score_lst.append(score)
-
         max_score = np.max(score_lst)
-
+        total_scores.append(score_lst)
         if max_score == 1:
             passes += 1
-
-    print(f'pass@5: {passes / total}')
+    print(f'average score: {np.mean(total_scores)}')
+    print(f'pass@16: {passes / total}')
 
 
 if __name__ == '__main__':

@@ -117,9 +117,9 @@ class ActorRolloutRefWorker(Worker):
             self._is_offload_param = self.config.ref.fsdp_config.get('param_offload', False)
 
         # normalize config
-        self.config.actor.ppo_mini_batch_size *= self.config.rollout.n
-        self.config.actor.ppo_micro_batch_size *= self.config.rollout.n
         if self._is_actor:
+            self.config.actor.ppo_mini_batch_size *= self.config.rollout.n
+            self.config.actor.ppo_micro_batch_size *= self.config.rollout.n
             self.config.actor.ppo_mini_batch_size //= (self.device_mesh.shape[0] // self.ulysses_sequence_parallel_size)
             self.config.actor.ppo_micro_batch_size //= (self.device_mesh.shape[0] //
                                                         self.ulysses_sequence_parallel_size)
@@ -323,7 +323,7 @@ class ActorRolloutRefWorker(Worker):
                 optim_config = self.config.actor.optim
                 fsdp_config = self.config.actor.fsdp_config
             else:
-                optim_config = None
+                optim_config = self.config.actor.optim
                 fsdp_config = OmegaConf.create()
             self.actor_module_fsdp, self.actor_optimizer, self.actor_lr_scheduler, self.actor_model_config = self._build_model_optimizer(
                 model_path=self.config.model.path,
