@@ -48,7 +48,7 @@ if __name__ == "__main__":
     
     # Initialize the distributed VLLM engine
     engine = DistributedSampler(
-        backend="sglang",
+        backend="vllm",
         num_workers=args.num_workers,
         tensor_parallel_size=args.tensor_parallel_size,
         model=args.model
