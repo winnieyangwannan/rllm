@@ -4,7 +4,7 @@ Get to O3 performance
 ## Install
 ```bash
 pip install -e .
-pip install -r requirements
+pip install -r requirements.txt
 pip install flashinfer -i https://flashinfer.ai/whl/cu124/torch2.4/
 ```
 
