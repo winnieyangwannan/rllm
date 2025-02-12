@@ -22,3 +22,9 @@ gdown "https://drive.google.com/uc?id=1tAG36FB32ZLeUUckB6AHyEROkQ8lFhJ6" -O "rll
 gdown "https://drive.google.com/uc?id=1K2kP8r8_jjGDbdwvTsRo2TEFEpJjMJxp" -O "rllm/data/train/coding/taco.json"
 gdown "https://drive.google.com/uc?id=1ek936L0N57jVaF1YA0vCPv4GRWae4R5C" -O "rllm/data/train/coding/codeforces.json"
 ```
+
+### WandB
+```bash
+wandb login
+wandb init
+```
