@@ -21,7 +21,7 @@ from verl.utils.reward_score import gsm8k, math
 from verl.trainer.ppo.ray_trainer import RayPPOTrainer
 
 
-from rllm.rewards.math_reward import grade_answer_rllm_for_verl
+from rllm.rewards.math_reward import rllm_reward_fn
 
 def _select_rm_score_fn(data_source):
     if data_source == 'openai/gsm8k':
@@ -29,7 +29,7 @@ def _select_rm_score_fn(data_source):
     elif data_source == 'lighteval/MATH':
         return math.compute_score
     else:
-        return grade_answer_rllm_for_verl
+        return rllm_reward_fn
 
 
 class RewardManager():

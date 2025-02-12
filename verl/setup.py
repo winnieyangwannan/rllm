@@ -21,10 +21,12 @@ version_folder = os.path.dirname(os.path.join(os.path.abspath(__file__)))
 with open(os.path.join(version_folder, 'verl/version/version')) as f:
     __version__ = f.read().strip()
 
-
-with open('requirements.txt') as f:
-    required = f.read().splitlines()
-    install_requires = [item.strip() for item in required if item.strip()[0] != '#']
+try:
+    with open('requirements.txt') as f:
+        required = f.read().splitlines()
+        install_requires = [item.strip() for item in required if item.strip()[0] != '#']
+except FileNotFoundError:
+    install_requires = []
 
 extras_require = {
     'test': ['pytest', 'yapf']

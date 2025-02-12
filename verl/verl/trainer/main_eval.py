@@ -19,18 +19,18 @@ The input is a parquet file that contains N generated sequences and (optional) t
 
 import hydra
 from verl.utils.fs import copy_local_path_from_hdfs
-from verl.utils.reward_score import math, gsm8k
+from verl.utils.reward_score import math
 import pandas as pd
 import numpy as np
 
-from rllm.rewards.math_reward import grade_answer_rllm_for_verl
+from rllm.rewards.math_reward import rllm_reward_fn
 
 
 def select_reward_fn(data_source):
     if data_source == 'lighteval/MATH':
         return math.compute_score
     else:
-        return grade_answer_rllm_for_verl
+        return rllm_reward_fn
 
 
 @hydra.main(config_path='config', config_name='evaluation', version_base=None)
@@ -60,10 +60,11 @@ def main(config):
             score_lst.append(score)
         max_score = np.max(score_lst)
         total_scores.append(score_lst)
+        n_samples = len(response_lst)
         if max_score == 1:
             passes += 1
-    print(f'average score: {np.mean(total_scores)}')
-    print(f'pass@16: {passes / total}')
+    print(f'Pass@1, Avg: {np.mean(total_scores)}')
+    print(f'Pass@{n_samples}: {passes / total}')
 
 
 if __name__ == '__main__':
