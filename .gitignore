@@ -173,17 +173,13 @@ cython_debug/
 # DS_Store
 .DS_Store
 
+# Ignore verl script outputs.
 verl/outputs/*
-
 verl/wandb/*
-
-verl/scripts/outputs/*
-
-verl/scripts/wandb/*
-
-outputs/*
-
-wandb/*
-
-checkpoints/*
 verl/checkpoints/*
+verl/scripts/outputs/*
+verl/scripts/wandb/*
+verl/scripts/checkpoints/*
+outputs/*
+wandb/*
+checkpoints/*

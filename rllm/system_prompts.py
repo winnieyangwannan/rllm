@@ -1,5 +1,5 @@
 
-DEEPSEEK_MATH_SYSTEM_PROMPT = """Please reason step by step, and put your final answer within \\boxed{}. """
+DEEPSEEK_MATH_SYSTEM_PROMPT = """Let's think step by step and output the final answer within \\boxed{}. """
 
 # For Math ORM to verify correctness of LLM's solution.
 ORM_PROMPT = """Your assigned task is to check if two math answers are equivalent. You are a wordclass expert for this task.

@@ -43,8 +43,9 @@ OPTIMIZED_VLLM_CONFIG = {
     "max_num_seqs": 1024,
     "max_num_batched_tokens": 2**16,
     "enable_chunked_prefill": True,
-    "num_scheduler_steps": 40,
+#    "num_scheduler_steps": 40,
     "enable_prefix_caching": True,
+    "dtype": "bfloat16",  # Add this line to set default dtype
 }
 
 
@@ -156,6 +157,10 @@ class RayVLLMWorker:
                 messages=messages,
                 logprobs=True,
                 top_logprobs=1,
+                extra_body={
+                    "top_k": -1,
+                    "min_p": 0.0,
+                },
                 **kwargs
             )
         except Exception as e:

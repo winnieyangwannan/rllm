@@ -4,8 +4,15 @@ Get to O3 performance
 ## Install
 ```bash
 pip install -e .
-pip install -r requirements
+pip install -r requirements.txt
 pip install flashinfer -i https://flashinfer.ai/whl/cu124/torch2.4/
+```
+New: 
+```bash
+cd rllm/verl
+pip install -e .
+pip install -r requirements.txt
+pip install google-cloud-aiplatform latex2sympy2 pylatexenc sentence_transformers
 ```
 
 ### Download training/testing data from Google Drive

@@ -69,19 +69,26 @@ def main(config):
     config_batch_size = config.data.batch_size
     dp_size = wg.world_size // config.rollout.tensor_model_parallel_size
     num_batch = (total_samples // config_batch_size) + 1
-    output_lst = [[] for _ in range(config.data.n_samples)]
+    output_lst = []  # We'll reshape at the end
 
     for batch_idx in range(num_batch):
         print(f'[{batch_idx+1}/{num_batch}] Start to process.')
         batch_chat_lst = chat_lst[batch_idx * config_batch_size:(batch_idx + 1) * config_batch_size]
-        inputs = tokenizer.apply_chat_template(batch_chat_lst,
-                                               add_generation_prompt=True,
-                                               padding=True,
-                                               truncation=True,
-                                               max_length=config.rollout.prompt_length,
-                                               return_tensors='pt',
-                                               return_dict=True,
-                                               tokenize=True)
+        
+        # Repeat the batch n_samples times
+        repeated_chat_lst = []
+        for chat in batch_chat_lst:
+            repeated_chat_lst.extend([chat] * config.data.n_samples)
+        
+        inputs = tokenizer.apply_chat_template(repeated_chat_lst,
+                                             add_generation_prompt=True,
+                                             padding=True,
+                                             truncation=True,
+                                             max_length=config.rollout.prompt_length,
+                                             return_tensors='pt',
+                                             return_dict=True,
+                                             tokenize=True)
+        
         input_ids = inputs['input_ids']
         attention_mask = inputs['attention_mask']
         position_ids = compute_position_id_with_mask(attention_mask)
@@ -90,6 +97,7 @@ def main(config):
 
         data = DataProto.from_dict(batch_dict)
         real_batch_size = data.batch['input_ids'].shape[0]
+        
         if real_batch_size % dp_size != 0:
             dummy_data_size = dp_size - real_batch_size % dp_size
             dummy_data = data[:dummy_data_size]
@@ -102,30 +110,32 @@ def main(config):
         assert batch_size % dp_size == 0, f'batch_size {batch_size} is not divisible by dp_size {dp_size}'
 
         print(f'[{batch_idx+1}/{num_batch}] Start to generate.')
-        # START TO GENERATE FOR n_samples TIMES
-        for i in range(config.data.n_samples):
-            output = wg.generate_sequences(data)
-            # remove dummy data
-            output = output[:real_batch_size]
-            output_text = tokenizer.batch_decode(output.batch['input_ids'][:, -config.rollout.response_length:],
-                                                 skip_special_tokens=False)
+        
+        # Generate all samples at once
+        print(len(data.batch['input_ids']))
+        output = wg.generate_sequences(data)
+        # Remove dummy data
+        output = output[:real_batch_size]
+        output_text = tokenizer.batch_decode(output.batch['input_ids'][:, -config.rollout.response_length:],
+                                           skip_special_tokens=False)
 
-            # remove the padding
-            pad_token = tokenizer.pad_token
-            output_text_unpad = []
-            for text in output_text:
-                output_text_unpad.append(text.replace(pad_token, ''))
+        # Remove padding
+        pad_token = tokenizer.pad_token
+        output_text_unpad = []
+        for text in output_text:
+            output_text_unpad.append(text.replace(pad_token, ''))
 
-            output_lst[i].extend(output_text_unpad)
+        output_lst.extend(output_text_unpad)
 
-    # convert output_lst from (n_samples, n_data) to (n_data, n_sampels)
-    output_lst = np.array(output_lst, dtype=object)
-    output_lst = np.transpose(output_lst, axes=(1, 0)).tolist()
+    # Reshape output_lst from (total_samples,) to (n_data, n_samples)
+    total_samples = len(output_lst)
+    n_data = total_samples // config.data.n_samples
+    output_lst = np.array(output_lst).reshape(n_data, config.data.n_samples).tolist()
 
-    # add to the data frame
-    dataset[f'responses'] = output_lst
+    # Add to the data frame
+    dataset['responses'] = output_lst
 
-    # write to a new parquet
+    # Write to a new parquet
     output_dir = os.path.dirname(config.data.output_path)
     makedirs(output_dir, exist_ok=True)
     dataset.to_parquet(config.data.output_path)

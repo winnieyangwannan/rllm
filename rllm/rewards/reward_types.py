@@ -41,7 +41,6 @@ class RewardType(Enum):
     CODE = 'CODE'
     UNK = 'UNK'
 
-
 @dataclass(slots=True, kw_only=True)
 class RewardInput:
     """Data structure for input required to calculate rewards.
@@ -58,6 +57,37 @@ class RewardInput:
     problem_type: RewardType = RewardType.UNK
     model_response: str
     metadata: dict
+    """
+    for code dataset
+
+    
+    #codeforces
+    metadata['test_cases'] = [[ { "input": "3 6 9", "output": "6" }, { "input": "4 4 4", "output": "4" }, { "input": "0 0 0", "output": "0" }]
+
+    #codetest
+    metadata[['public_tests'] = { 
+    { "input": [ "3\n((()))\n(())()\n()(()" ],
+	 "output": [ "YES\nYES\nNO" ] } }
+
+    # apps/ TACO
+    metadata[["input_output"] =  {
+    { "inputs": [ "8\n5 2\nWLWLL\n6 5\nLLLWWL\n7 1\nLWLWLWL\n15 5\nWWWLLLWWWLLLWWW\n40 7\nLLWLWLWWWLWLLWLWWWLWLLWLLWLLLLWLLWWWLWWL\n1 0\nL\n1 1\nL\n6 1\nWLLWLW\n" ],
+    "outputs": [ "7\n11\n6\n26\n46\n0\n1\n6\n" ] }
+    }
+    """
+
+@dataclass(slots=True, kw_only=True)
+class LiveCodebenchInput:
+    """Data structure for input required to calculate rewards.
+    
+    """
+    problem_type: RewardType = RewardType.CODE
+    question: str
+    generation_code: str
+    problem: dict
+    difficult:str='easy'
+
+
 
 
 @dataclass(slots=True, kw_only=True)
@@ -84,3 +114,4 @@ class RewardFn:
 
     def __call__(self, input: RewardInput) -> RewardOutput:
         raise NotImplementedError("Subclasses must implement this method.")
+

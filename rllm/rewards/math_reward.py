@@ -36,7 +36,7 @@ class RewardMathFn(RewardFn):
         if THOUGHT_DELIMITER_START in model_response and THOUGHT_DELIMITER_END in model_response:
             model_solution = model_response.split(THOUGHT_DELIMITER_END)[1]
         else:
-            model_solution = model_response
+            return RewardOutput(reward=self.config.format_error_reward, is_correct=False)
         
         model_answer = extract_answer(model_solution)
         if model_answer is None:
@@ -48,12 +48,13 @@ class RewardMathFn(RewardFn):
             return RewardOutput(reward=self.config.unk_error_reward, is_correct=False)
         
         # Convert single answer to list for uniform processing
-        if isinstance(ground_truths, str):
+        if isinstance(ground_truths, (str, float, int)):
             ground_truths = [ground_truths]
             
         # Process each ground truth
         processed_ground_truths = []
         for truth in ground_truths:
+            truth = str(truth)
             if "\\boxed" in truth:
                 processed_truth = extract_answer(truth)
                 if processed_truth is not None:

@@ -26,7 +26,6 @@ def evaluate_dataset_entry(idx, engine, entry, n=8, temperature=0.6, max_tokens=
     content_dict = [
         {"role": "user", "content":  problem + ' ' + DEEPSEEK_MATH_SYSTEM_PROMPT},
     ]
-
     # Use the distributed engine's chat_completion method
     retry_limit = 5
     for retry_idx in range(retry_limit):
@@ -35,7 +34,7 @@ def evaluate_dataset_entry(idx, engine, entry, n=8, temperature=0.6, max_tokens=
                                               n=n,
                                               temperature=temperature,
                                               max_tokens=max_tokens,
-                                              top_p=0.95)
+                                              top_p=0.95,)
             # Extract responses from Sample objects in the batch
             llm_responses = [sample.response for sample in sample_batch.samples]
             break
@@ -65,6 +64,7 @@ def evaluate_dataset_entry(idx, engine, entry, n=8, temperature=0.6, max_tokens=
 def evaluate_dataset(dataset: Dataset, output_dir: str, engine: DistributedSampler, n=8, temperature=0.6, max_tokens=32000):
     print(f"\nProcessing dataset: {dataset}")
     problems = load_dataset(dataset)
+    print(f"Number of problems: {len(problems)}")
     
     # Set output file path
     # Create output directory if it doesn't exist
