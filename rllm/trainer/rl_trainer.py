@@ -38,7 +38,7 @@ def main_rl_train_loop(config: RLTrainerConfig):
                 futures.append(executor.submit(sampler_workers[i].rollout, problem))
             sample_batch_outputs = [future.result() for future in futures]
         break
-    import pdb; pdb.set_trace()
+
     # Cleanup
     sampler.shutdown()
     # TODO: Launch and finish megatron trainer.
