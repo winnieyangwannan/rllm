@@ -183,3 +183,7 @@ verl/scripts/checkpoints/*
 outputs/*
 wandb/*
 checkpoints/*
+
+# Ignore debug logs and run result logs
+logs/
+rllm.*.json

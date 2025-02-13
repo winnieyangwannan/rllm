@@ -14,7 +14,6 @@ class RewardConfig:
 
     # Config for code-based rewards
     code_reward_weight: float = 1.0
-    use_code_orm: bool = False
     
     # Config for cot-based rewards
     cot_reward_weight: float = 0.0
@@ -24,8 +23,6 @@ class RewardConfig:
     incorrect_reward: float = -1.0
     format_error_reward: float = -1.0
     unk_error_reward: float = -1.0
-    on_track_reward: float = 0.5
-    off_track_reward: float = -0.25
 
 
 class RewardType(Enum):
