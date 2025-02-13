@@ -173,16 +173,13 @@ cython_debug/
 # DS_Store
 .DS_Store
 
+# Ignore parquet files.
+data/
+
 # Ignore verl script outputs.
-verl/outputs/*
-verl/wandb/*
-verl/checkpoints/*
-verl/scripts/outputs/*
-verl/scripts/wandb/*
-verl/scripts/checkpoints/*
-outputs/*
-wandb/*
-checkpoints/*
+**/outputs/
+**/wandb/
+**/checkpoints/
 
 # Ignore debug logs and run result logs
 logs/

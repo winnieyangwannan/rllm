@@ -4,8 +4,6 @@ datasets
 deepspeed
 dill
 dm-tree
-flash-attn
-flash_attn
 gdown
 google-cloud-aiplatform
 hydra-core
@@ -25,3 +23,4 @@ transformers
 vertexai
 vllm
 wandb
+flash-attn
