@@ -642,7 +642,7 @@ def run_evaluation(
     # read from the report - generate the reward - return the reward
     return make_run_report(actions, full_dataset, run_id, client)
 
-def check_correctness(
+def swebench_check_correctness(
         instance_ids: list,
         actions: dict[str: str],
     ) -> float:
@@ -689,6 +689,4 @@ def check_correctness(
 
         resolve_rate = tests_passed / total_tests if total_tests > 0 else 0
 
-        # normalize reward between [-1, 1]
-        reward = 2 * resolve_rate - 1
-        return reward
+        return resolve_rate

@@ -5,8 +5,9 @@ validate answers when necessary.
 """
 from rllm.rewards import RewardConfig, RewardFn, RewardInput, RewardOutput, RewardType
 from rllm.system_prompts import CODE_ORM_PROMPT, CODE_PROGRESS_PROMPT
-from rllm.utils import call_gemini_llm
-from rllm.envs.swebench.run_eval import check_correctness
+# from rllm.utils import call_gemini_llm
+from .code_reward import RewardCodeFn
+from rllm.rewards.swebench.testing_util import swebench_check_correctness
 from rllm.globals import MODEL_NAME_OR_PATH
 
 ORM_USER_TEMPLATE = """
@@ -49,31 +50,31 @@ class RewardSWEFn(RewardFn):
                 patch_end = len(model_response)
             patch = model_response[patch_start:patch_end].strip()
         
-        if not patch:
-            # Handle cases where there is no valid patch
-            response = call_gemini_llm(
-                system_prompt=CODE_PROGRESS_PROMPT,
-                prompt=PROGRESS_USER_TEMPLATE.format(problem=problem, action=model_response),
-                temperature=0.0,
-            )
-            if "[[ON TRACK]]" in response:
-                return RewardOutput(reward=self.config.on_track_reward_reward, is_correct=False)
-            elif "[[OFF TRACK]]" in response:
-                return RewardOutput(reward=self.config.off_track_reward_reward, is_correct=False)
-            return RewardOutput(reward=self.config.unk_error_reward, is_correct=False)
+        # if not patch:
+        #     # Handle cases where there is no valid patch
+        #     response = call_gemini_llm(
+        #         system_prompt=CODE_PROGRESS_PROMPT,
+        #         prompt=PROGRESS_USER_TEMPLATE.format(problem=problem, action=model_response),
+        #         temperature=0.0,
+        #     )
+        #     if "[[ON TRACK]]" in response:
+        #         return RewardOutput(reward=self.config.on_track_reward_reward, is_correct=False)
+        #     elif "[[OFF TRACK]]" in response:
+        #         return RewardOutput(reward=self.config.off_track_reward_reward, is_correct=False)
+        #     return RewardOutput(reward=self.config.unk_error_reward, is_correct=False)
 
         # Handle cases where a valid patch exists
-        if self.config.use_code_orm:
-            orm_response = call_gemini_llm(
-                system_prompt=CODE_ORM_PROMPT,
-                prompt=ORM_USER_TEMPLATE.format(problem=problem, patch_1=patch, patch_2=ground_truth),
-                temperature=0.0,
-            )
-            if "[[YES]]" in orm_response:
-                return RewardOutput(reward=self.config.correct_reward, is_correct=True)
-            elif "[[NO]]" in orm_response:
-                return RewardOutput(reward=self.config.incorrect_reward, is_correct=False)
-            return RewardOutput(reward=self.config.unk_error_reward, is_correct=False)
+        # if self.config.use_code_orm:
+        #     orm_response = call_gemini_llm(
+        #         system_prompt=CODE_ORM_PROMPT,
+        #         prompt=ORM_USER_TEMPLATE.format(problem=problem, patch_1=patch, patch_2=ground_truth),
+        #         temperature=0.0,
+        #     )
+        #     if "[[YES]]" in orm_response:
+        #         return RewardOutput(reward=self.config.correct_reward, is_correct=True)
+        #     elif "[[NO]]" in orm_response:
+        #         return RewardOutput(reward=self.config.incorrect_reward, is_correct=False)
+        #     return RewardOutput(reward=self.config.unk_error_reward, is_correct=False)
  
         actions = {
             "instance_id": instance_id,
@@ -83,17 +84,18 @@ class RewardSWEFn(RewardFn):
 
         predictions = {instance_id: actions}
                 
-        metadata = input.metadata
-        reward = check_correctness(
-            instance_ids=metadata.get("instance_ids", ""),
+        reward = swebench_check_correctness(
+            instance_ids=metadata.get("instance_ids", None),
             actions=predictions,
         )
         
         return RewardOutput(reward=reward, is_correct=reward == 1)
 
 if __name__ == "__main__":
-    reward = RewardSWEFn(RewardConfig)
+    # reward = RewardCodeFn(RewardConfig)
+    reward = RewardCodeFn(RewardConfig)
     metadata = {
+        "dataset_flag": "swebench",
         "instance_id": "astropy__astropy-12907",
         "dataset_name": "princeton-nlp/SWE-bench_Verified",
         "patch": """\
