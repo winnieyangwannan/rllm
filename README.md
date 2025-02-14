@@ -4,23 +4,14 @@ Get to O3 performance
 
 ## Install
 
-<<<<<<< HEAD
 Install Verl Submodule:
-=======
-
-> > > > > > > 1af5909 (pytests added and addresses comments)
 
 ```bash
 git submodule init
 git submodule update
 ```
 
-<<<<<<< HEAD
 Install Python Dependencies:
-=======
-New:
-
-> > > > > > > 1af5909 (pytests added and addresses comments)
 
 ```bash
 pip install -e ./verl
