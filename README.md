@@ -10,9 +10,11 @@ git submodule update
 
 Install Python Dependencies: 
 ```bash
+pip install -r ./verl/requirements.txt
 pip install -e ./verl
-pip install -e .
 pip install google-cloud-aiplatform latex2sympy2 pylatexenc sentence_transformers
+pip install -e .
+# Don't forget to install this, or training run will crash!
 ```
 
 ### Download training/testing data from Google Drive
