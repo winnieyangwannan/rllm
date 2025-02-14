@@ -47,21 +47,18 @@ class RewardCodeFn(RewardFn):
         model_response= input.model_response
         metadata= input.metadata
         dataset_name = metadata.get("dataset_flag", None)
+        
         if dataset_name == "TACO":#apps/TACO:
-            if metadata.get("input_output") is None:
-                raise ValueError("No input_output found in metadata")
-            print(f"This dataset is TACO")
+            if metadata.get("tests", None) is None:
+                raise ValueError("No tests found in metadata")
             is_correct = check_correctness(metadata, model_response, taco_run_test)
-
         elif dataset_name == "code_contests":#codetests
-            if metadata.get("public_tests") is None:
-                raise ValueError("No public_tests found in metadata")
-            print(f"This dataset is Codetests")
+            if metadata.get("tests", None) is None:
+                raise ValueError("No tests found in metadata")
             is_correct = check_correctness(metadata, model_response, code_contests_run_test)
         elif dataset_name == "codeforces":#codeforces 
-            if metadata.get("test_cases") is None:
-                raise ValueError("No test_cases found in metadata")
-            print(f"this dataset is Codeforces")
+            if metadata.get("tests", None) is None:
+                raise ValueError("No tests found in metadata")
             is_correct = check_correctness(metadata, model_response, codeforces_run_test)
         elif dataset_name == "swebench":#swebench
             if metadata.get("instance_id") is None or metadata.get("patch") is None:

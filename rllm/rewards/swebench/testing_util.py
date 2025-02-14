@@ -58,7 +58,7 @@ from swebench.harness.utils import (
     str2bool,
 )
 
-from rllm.globals import DATASET_NAME, MAX_WORKERS, FORCE_REBUILD, CACHE_LEVEL, CLEAN, OPEN_FILE_LIMIT, TIMEOUT, NAMESPACE, REWRITE_REPORTS, SPLIT, INSTANCE_IMAGE_TAG, REPORT_DIR
+from rllm.globals import SWEBENCH_DATASET_NAME, MAX_WORKERS, FORCE_REBUILD, CACHE_LEVEL, CLEAN, OPEN_FILE_LIMIT, TIMEOUT, NAMESPACE, REWRITE_REPORTS, SPLIT, INSTANCE_IMAGE_TAG, REPORT_DIR
 import uuid
 
 GIT_APPLY_CMDS = [
@@ -651,7 +651,7 @@ def swebench_check_correctness(
     run_id = uuid.uuid4().hex
 
     eval_report_path = run_evaluation(
-        DATASET_NAME,
+        SWEBENCH_DATASET_NAME,
         instance_ids, 
         actions, 
         MAX_WORKERS, 

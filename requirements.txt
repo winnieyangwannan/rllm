@@ -12,6 +12,7 @@ numpy
 pandas
 pybind11
 pylatexenc
+pytest
 ray
 sentence_transformers
 sglang[all]

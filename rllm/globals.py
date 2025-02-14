@@ -15,7 +15,7 @@ THOUGHT_DELIMITER_START = "<think>"
 THOUGHT_DELIMITER_END = "</think>"
 
 # SWEBench Harness Config
-DATASET_NAME = "princeton-nlp/SWE-bench_Verified"
+SWEBENCH_DATASET_NAME = "princeton-nlp/SWE-bench_Verified"
 MAX_WORKERS = 4
 FORCE_REBUILD = False
 CACHE_LEVEL = "None"
