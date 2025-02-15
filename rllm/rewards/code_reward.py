@@ -18,6 +18,7 @@ from multiprocessing import Manager
 from rllm.rewards.taco.testing_util import run_test as taco_run_test
 from rllm.rewards.code_contests.testing_util import run_test as code_contests_run_test
 from rllm.rewards.codeforces.testing_util import run_test as codeforces_run_test
+from rllm.rewards.livecodebench.testing_util import run_test as livecodebench_run_test
 import json
 
 def check_correctness(problem, generation, test_fn):
@@ -63,6 +64,9 @@ class RewardCodeFn(RewardFn):
         elif metadata.get("test_cases") is not None:#codeforces #TODO(xiaoxiang):fix the codeforces_run_test
             print(f"this dataset is from codeforces")
             is_correct = check_correctness(metadata, model_response, codeforces_run_test)
+        elif metadata.get("public_test_cases") is not None:#livecodebench
+            print(f"this dataset is from livecodebench")
+            is_correct = check_correctness(metadata, model_response, livecodebench_run_test)
         else:
             raise ValueError("Invalid metadata format")
         if is_correct:
@@ -187,3 +191,6 @@ if __name__ == "__main__":
     input = RewardInput(problem="", problem_type=RewardType.CODE, model_response=model_response, metadata=metadata)
     output = reward(input)
     print(f"code_forces output:{output}")
+
+    #livecodebench
+    
