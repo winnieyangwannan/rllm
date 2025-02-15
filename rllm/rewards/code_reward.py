@@ -72,116 +72,81 @@ class RewardCodeFn(RewardFn):
 
 
 if __name__ == "__main__":
-    #test the codetest
-    model_response = """
-    import sys
-    from itertools import permutations
-    def main():
-        # Read input
-        N, M, R = map(int, sys.stdin.readline().split())
-        r = list(map(int, sys.stdin.readline().split()))
-        A, B, C = [], [], []
-        for _ in range(M):
-            a, b, c = map(int, sys.stdin.readline().split())
-            A.append(a)
-            B.append(b)
-            C.append(c)
+    # #test the codetest
+    # model_response = """
+    # import sys
+    # from itertools import permutations
+    # def main():
+    #     # Read input
+    #     N, M, R = map(int, sys.stdin.readline().split())
+    #     r = list(map(int, sys.stdin.readline().split()))
+    #     A, B, C = [], [], []
+    #     for _ in range(M):
+    #         a, b, c = map(int, sys.stdin.readline().split())
+    #         A.append(a)
+    #         B.append(b)
+    #         C.append(c)
 
-        # Initialize distance matrix
-        INF = float('inf')
-        dist = [[INF for _ in range(N+1)] for _ in range(N+1)]
-        for i in range(1, N+1):
-            dist[i][i] = 0
+    #     # Initialize distance matrix
+    #     INF = float('inf')
+    #     dist = [[INF for _ in range(N+1)] for _ in range(N+1)]
+    #     for i in range(1, N+1):
+    #         dist[i][i] = 0
 
-        # Set initial distances
-        for i in range(M):
-            a, b, c = A[i], B[i], C[i]
-            dist[a][b] = c
-            dist[b][a] = c
+    #     # Set initial distances
+    #     for i in range(M):
+    #         a, b, c = A[i], B[i], C[i]
+    #         dist[a][b] = c
+    #         dist[b][a] = c
 
-        # Floyd-Warshall algorithm
-        for k in range(1, N+1):
-            for i in range(1, N+1):
-                for j in range(1, N+1):
-                    if dist[i][k] != INF and dist[k][j] != INF:
-                        dist[i][j] = min(dist[i][j], dist[i][k] + dist[k][j])
+    #     # Floyd-Warshall algorithm
+    #     for k in range(1, N+1):
+    #         for i in range(1, N+1):
+    #             for j in range(1, N+1):
+    #                 if dist[i][k] != INF and dist[k][j] != INF:
+    #                     dist[i][j] = min(dist[i][j], dist[i][k] + dist[k][j])
 
-        # Generate all permutations of R towns
-        min_dist = INF
-        for perm in permutations(r):
-            total = 0
-            for i in range(R-1):
-                total += dist[perm[i]][perm[i+1]]
-            if total < min_dist:
-                min_dist = total
+    #     # Generate all permutations of R towns
+    #     min_dist = INF
+    #     for perm in permutations(r):
+    #         total = 0
+    #         for i in range(R-1):
+    #             total += dist[perm[i]][perm[i+1]]
+    #         if total < min_dist:
+    #             min_dist = total
 
-        # Output the minimum distance
-        print(min_dist)
+    #     # Output the minimum distance
+    #     print(min_dist)
 
-    if __name__ == "__main__":
-        main()
-    """
+    # if __name__ == "__main__":
+    #     main()
+    # """
 
-    public_tests= {"input": ["3\n4 5\n6 3\n10 2\n"], "output": ["5\n3 4\n4 4 1 2\n"]}
-    metadata = {
-        "public_tests": public_tests,
-    }
-    reward = RewardCodeFn(RewardConfig)
-    input = RewardInput(problem="", problem_type=RewardType.CODE, model_response=model_response, metadata=metadata)
-    output = reward(input)
-    print(f"codetest output:{output}")
+
+
+    # public_tests= {"input": ["3\n4 5\n6 3\n10 2\n"], "output": ["5\n3 4\n4 4 1 2\n"]}
+    # metadata = {
+    #     "public_tests": public_tests,
+    # }
+    # reward = RewardCodeFn(RewardConfig)
+    # input = RewardInput(problem="", problem_type=RewardType.CODE, model_response=model_response, metadata=metadata)
+    # output = reward(input)
+    # print(f"codetest output:{output}")
 
     #test app/taco
     model_response = """
-    import sys
-    from itertools import permutations
-    def main():
-        # Read input
-        N, M, R = map(int, sys.stdin.readline().split())
-        r = list(map(int, sys.stdin.readline().split()))
-        A, B, C = [], [], []
-        for _ in range(M):
-            a, b, c = map(int, sys.stdin.readline().split())
-            A.append(a)
-            B.append(b)
-            C.append(c)
+import sys
+from itertools import permutations
+def main():
+    # Read input
+    x= map(int, sys.stdin.readline().split())
+    print(5)
 
-        # Initialize distance matrix
-        INF = float('inf')
-        dist = [[INF for _ in range(N+1)] for _ in range(N+1)]
-        for i in range(1, N+1):
-            dist[i][i] = 0
-
-        # Set initial distances
-        for i in range(M):
-            a, b, c = A[i], B[i], C[i]
-            dist[a][b] = c
-            dist[b][a] = c
-
-        # Floyd-Warshall algorithm
-        for k in range(1, N+1):
-            for i in range(1, N+1):
-                for j in range(1, N+1):
-                    if dist[i][k] != INF and dist[k][j] != INF:
-                        dist[i][j] = min(dist[i][j], dist[i][k] + dist[k][j])
-
-        # Generate all permutations of R towns
-        min_dist = INF
-        for perm in permutations(r):
-            total = 0
-            for i in range(R-1):
-                total += dist[perm[i]][perm[i+1]]
-            if total < min_dist:
-                min_dist = total
-
-        # Output the minimum distance
-        print(min_dist)
-
-    if __name__ == "__main__":
-        main()
+if __name__ == "__main__":
+    main()
     """
 
-    input_output = {"inputs": ["3\n4 5\n6 3\n10 2\n"], "outputs": ["5\n3 4\n4 4 1 2\n"]}
+    input_output = {"inputs": ["3\n4\n6\n"], "outputs": ["5\n5\n5\n"]}
     metadata = {
         "input_output": input_output,
     }
@@ -198,14 +163,15 @@ if __name__ == "__main__":
     #     n,m=map(int, input().split()) 
     #     a=sum(list(map(int, input().split()))) 
     #     if a+(n-1)*10<=m: 
-    #         print((m-a)//5) 
+    #         print(5) 
     #     else: 
-    #         print(-1)
+    #         print(5)
     # if __name__ == "__main__":
     #     main()
     # """
-    # test_cases = [ { "input": "3 30\n2 2 1", "output": "5" }, { "input": "3 20\n2 1 1", "output": "-1" }, { "input": "50 10000\n5 4 10 9 9 6 7 7 7 3 3 7 7 4 7 4 10 10 1 7 10 3 1 4 5 7 2 10 10 10 2 3 4 7 6 1 8 4 7 3 8 8 4 10 1 1 9 2 6 1", "output": "1943" }, { "input": "50 10000\n4 7 15 9 11 12 20 9 14 14 10 13 6 13 14 17 6 8 20 12 10 15 13 17 5 12 13 11 7 5 5 2 3 15 13 7 14 14 19 2 13 14 5 15 3 19 15 16 4 1", "output": "1891" }]
-
+    # print(f"test the code_forces")
+    # #test_cases = [ { "input": "3 30\n2 2 1", "output": "5" }, { "input": "3 20\n2 1 1", "output": "-1" }, { "input": "50 10000\n5 4 10 9 9 6 7 7 7 3 3 7 7 4 7 4 10 10 1 7 10 3 1 4 5 7 2 10 10 10 2 3 4 7 6 1 8 4 7 3 8 8 4 10 1 1 9 2 6 1", "output": "1943" }, { "input": "50 10000\n4 7 15 9 11 12 20 9 14 14 10 13 6 13 14 17 6 8 20 12 10 15 13 17 5 12 13 11 7 5 5 2 3 15 13 7 14 14 19 2 13 14 5 15 3 19 15 16 4 1", "output": "1891" }]
+    # test_cases = [ { "input": "3 30\n2 2 1", "output": "5" }, { "input": "3 10\n3 2 1", "output": "5" } ] 
     # metadata = {
     #     "test_cases": test_cases,
     # }

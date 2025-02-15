@@ -55,10 +55,10 @@ def run_test(sample, test=None, debug=False):
     in_outs = sample["test_cases"]
     #test_cases:[ { "input": "3 6 9", "output": "6" }, { "input": "4 4 4", "output": "4" }, { "input": "0 0 0", "output": "0" } ]
     #test_cases: [ { "input": "20 40 60 80 100\n0 1 2 3 4\n1 0", "output": "4900" }, { "input": "119 119 119 119 119\n0 0 0 0 0\n10 0", "output": "4930" }]
-
+    print(f"1 rllm/rewards/codeforces/testing_util.py, the type(in_outs) is {type(in_outs)}")
     if in_outs:
-        if in_outs.get("fn_name") is None:
-            fn_name = in_outs.get("fn_name")
+        if in_outs[0].get("fn_name") is None:
+            fn_name = in_outs[0].get("fn_name")
             which_type = CODE_TYPE.standard_input  # Standard input
             method_name = None
         else:
@@ -68,8 +68,11 @@ def run_test(sample, test=None, debug=False):
     outputs_list = []
     #TODO(Xiaoxiang):this have to modify to match the codeforces input and output
     for index, in_out in enumerate(in_outs):
+        #print(f"1.5 rllm/rewards/codeforces/testing_util.py, the type(in_out) is {type(in_out)}")
         inputs = in_out["input"] #"20 40 60 80 100\n0 1 2 3 4\n1 0"
         outputs = in_out["output"] #"4900"
+        print(f"2 rllm/rewards/codeforces/testing_util.py, the type(inputs) is {type(inputs)}")
+        print(f"3 rllm/rewards/codeforces/testing_util.py, the type(outputs) is {type(outputs)}")
         inputs, outputs = process_input_output(inputs, outputs)
         inputs_list.append(inputs)
         outputs_list.append(outputs)

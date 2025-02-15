@@ -15,6 +15,10 @@ class TrainDataset(enum.Enum):
     GSM8k = 'GSM8K'
     STILL = "STILL"
     DEEPSCALER = "DEEPSCALER"
+    TACO = "TACO"
+    APPS = "APPS"
+    CODEFORCES = "CODEFORCES"
+    CODETESTS = "CODETEST"
 
 class TestDataset(enum.Enum):
     AIME = 'AIME'
@@ -23,6 +27,12 @@ class TestDataset(enum.Enum):
     GSM8k = 'GSM8k'
     MINERVA = 'MINERVA'
     OLYMPIAD_BENCH = 'OLYMPIAD_BENCH'
+    TACO = "TACO"
+    APPS = "APPS"
+    CODEFORCES = "CODEFORCES"
+    CODETESTS = "CODETEST"
+    LIVECODEBENCH = "LIVECODEBENCH"
+
 
 Dataset = Union[TrainDataset, TestDataset]
 

@@ -24,6 +24,7 @@ def load_dataset(dataset: Dataset) -> List[Dict[str, Any]]:
     # Get the current path of this file
     current_dir = os.path.dirname(os.path.realpath(__file__))
     file_path = os.path.join(data_dir, f"{dataset_name}.json")
+    print(f"Loading dataset from: {file_path}")
     # Combine current_dir and file_path
     file_path = os.path.join(current_dir, file_path)
     if not os.path.exists(file_path):

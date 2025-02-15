@@ -66,7 +66,7 @@ def make_map_fn(split: str):
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='Process datasets for DeepScaler training')
-    parser.add_argument('--local_dir', default=os.path.expanduser('~/rllm/data'),
+    parser.add_argument('--local_dir', default=os.path.expanduser('/data/xiaoxiang/rllm/data'),
                        help='Local directory to save processed datasets')
     parser.add_argument('--hdfs_dir', default=None,
                        help='Optional HDFS directory to copy datasets to')
@@ -76,11 +76,13 @@ if __name__ == '__main__':
     hdfs_dir = args.hdfs_dir
     
     # Make local directory if it doesn't exist
-    makedirs(local_dir)
+    if not os.path.exists(local_dir):
+        makedirs(local_dir)
 
     # Initialize datasets
     train_datasets = [TrainDataset.DEEPSCALER]
     train_dataset = load_dataset(train_datasets[0])
+    print(f"1 scripts/data/deepscaler_dataset.py ,the train_datasets[0] is {train_datasets[0]}")
     test_datasets = [TestDataset.AIME, TestDataset.AMC, TestDataset.MATH, TestDataset.MINERVA, TestDataset.OLYMPIAD_BENCH]
     
     test_datasets_data = [load_dataset(d) for d in test_datasets]
@@ -110,6 +112,7 @@ if __name__ == '__main__':
     # Save training dataset
     print("train data size:", len(train_data))
     train_df = pd.DataFrame(train_data)
+    print(f"os.path.join(local_dir, 'train.parquet'):{os.path.join(local_dir, 'train.parquet')}")
     train_df.to_parquet(os.path.join(local_dir, 'train.parquet'))
 
     # Optionally copy to HDFS
