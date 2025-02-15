@@ -39,7 +39,7 @@ def test_reward_code_contests():
     if __name__ == "__main__":
         main()
     """
-    metadata = {"tests": {"input": ["3\n4 5\n6 3\n10 2\n"], "output": ["5\n3 4\n4 4 1 2\n"]}, "dataset_flag": "code_contests"}
+    metadata = {"tests": {"input": ["3\n4 5\n6 3\n10 2\n"], "output": ["5\n3 4\n4 4 1 2\n"]}, "dataset_flag": "codecontests"}
     reward = RewardCodeFn(RewardConfig)
     input = RewardInput(problem="", problem_type=RewardType.CODE, model_response=model_response, metadata=metadata)
     output = reward(input)
