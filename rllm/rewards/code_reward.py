@@ -18,7 +18,7 @@ from multiprocessing import Manager
 from rllm.rewards.taco.testing_util import run_test as taco_run_test
 from rllm.rewards.code_contests.testing_util import run_test as code_contests_run_test
 from rllm.rewards.codeforces.testing_util import run_test as codeforces_run_test
-from rllm.rewards.livecodebench.testing_util import run_test as livecodebench_run_test
+from rllm.rewards.livecodebench.testing_util import unsafe_lcb_runTests
 import json
 
 def check_correctness(problem, generation, test_fn):
@@ -37,6 +37,17 @@ def check_correctness(problem, generation, test_fn):
     if p.is_alive():
         p.kill()
     return bool(result and np.all(result[0]))
+
+def lcb_check_correctness(problem, generation, timeout =6,runtime_debug=False, is_extracted=False):
+    result_list = unsafe_lcb_runTests(problem, generation, timeout, runtime_debug, is_extracted)
+    details = [r[0] for r in result_list]
+
+    all_passed = all(details)
+    result = ""
+    if result_list and all_passed:
+        result = "passed"
+    return result == "passed"
+    
 
 
 class RewardCodeFn(RewardFn):
@@ -66,7 +77,9 @@ class RewardCodeFn(RewardFn):
             is_correct = check_correctness(metadata, model_response, codeforces_run_test)
         elif metadata.get("public_test_cases") is not None:#livecodebench
             print(f"this dataset is from livecodebench")
-            is_correct = check_correctness(metadata, model_response, livecodebench_run_test)
+            is_extrcted = not metadata["public_test_cases"][0].get("testtype") == "stdin"
+            is_correct = lcb_check_correctness(metadata, model_response, is_extracted=is_extrcted)
+            #is_correct = lsb_check_correctness(prolem,model_response)
         else:
             raise ValueError("Invalid metadata format")
         if is_correct:
@@ -193,4 +206,39 @@ if __name__ == "__main__":
     print(f"code_forces output:{output}")
 
     #livecodebench
+    model_response = """
+import json
+
+def main(phone_numbers):
+    # 假设输入是一个电话号码的列表，返回重复的电话号码个数
+    seen = set()
+    duplicates = set()
+    for number in phone_numbers:
+        if number in seen:
+            duplicates.add(number)
+        else:
+            seen.add(number)
+    
+    return len(duplicates)+1
+
+if __name__ == "__main__":
+    main(input.strip().split())
+
+""" 
+    #public_test_case = [{"input": "6\nabc\nacb\nbac\nbca\ncab\ncba\n", "output": "YES\nYES\nYES\nNO\nNO\nYES\n", "testtype": "stdin"}]
+    public_test_case = [{"input": "6\nabc\nacb\nbac\nbca\ncab\ncba\n", "output": "YES\nYES\nYES\nYES\nYES\n", "testtype": "stdin"}]
+    public_test_case = [
+    {
+        'input': '["12345", "530391", "12345"]',
+        'output': '2',
+        'testtype': 'functional'
+    }
+    ]
+    metadata = {
+        "public_test_cases": public_test_case,
+    }
+    reward = RewardCodeFn(RewardConfig)
+    input = RewardInput(problem="", problem_type=RewardType.CODE, model_response=model_response, metadata=metadata)
+    output = reward(input)
+    print(f"livecodebench output:{output}")
     

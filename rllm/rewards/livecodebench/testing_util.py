@@ -278,7 +278,7 @@ def run_test_std(completion, test_input, test_output):
     return output_value == test_output, output_value
 
 def unsafe_lcb_runTests(problem, completion, timeout, runtime_debug, is_extracted):
-    test_cases = problem["test"]
+    test_cases = problem["public_test_cases"]
     manager = multiprocessing.Manager()
     result = manager.list()
     p = multiprocessing.Process(target=run_tests_for_one_example, args=(test_cases, completion, result, runtime_debug, is_extracted))
@@ -302,6 +302,7 @@ def run_tests_for_one_example(test_cases, completion, result_list, runtime_debug
         try:
             time_start = time.time()
             if test_type == "functional":
+                print(f"1 run_tests_for_one_example, test_type: {test_type} and test_case: {test_case}")
                 test_input, test_output = prepare_test_input_output_functional(test_case, is_extracted)
                 passed, output_value = run_test_func(
                     completion, is_extracted, copy.deepcopy(test_input), copy.deepcopy(test_output)
