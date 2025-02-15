@@ -79,7 +79,6 @@ class RewardCodeFn(RewardFn):
             print(f"this dataset is from livecodebench")
             is_extrcted = not metadata["public_test_cases"][0].get("testtype") == "stdin"
             is_correct = lcb_check_correctness(metadata, model_response, is_extracted=is_extrcted)
-            #is_correct = lsb_check_correctness(prolem,model_response)
         else:
             raise ValueError("Invalid metadata format")
         if is_correct:
