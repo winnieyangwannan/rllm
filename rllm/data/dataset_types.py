@@ -18,7 +18,7 @@ class TrainDataset(enum.Enum):
     TACO = "TACO"
     APPS = "APPS"
     CODEFORCES = "CODEFORCES"
-    CODETESTS = "CODETEST"
+    CODE_CONTESTS = "CODE_CONTEST"
 
 class TestDataset(enum.Enum):
     AIME = 'AIME'
@@ -30,7 +30,7 @@ class TestDataset(enum.Enum):
     TACO = "TACO"
     APPS = "APPS"
     CODEFORCES = "CODEFORCES"
-    CODETESTS = "CODETEST"
+    CODE_CONTESTS = "CODE_CONTEST"
     LIVECODEBENCH = "LIVECODEBENCH"
 
 
