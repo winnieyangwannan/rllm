@@ -67,23 +67,12 @@ def test_reward_codeforces():
 
 def test_reward_swebench():
     reward = RewardCodeFn(RewardConfig)
+    tests = {
+        "instance_id": "astropy__astropy-12907",
+    }
     metadata = {
         "dataset_flag": "swebench",
-        "instance_id": "astropy__astropy-12907",
-        "dataset_name": "princeton-nlp/SWE-bench_Verified",
-        "patch": """\
-diff --git a/astropy/modeling/separable.py b/astropy/modeling/separable.py
---- a/astropy/modeling/separable.py
-+++ b/astropy/modeling/separable.py
-@@ -242,7 +242,7 @@ def _cstack(left, right):
-        cright = _coord_matrix(right, 'right', noutp)
-    else:
-        cright = np.zeros((noutp, right.shape[1]))
--        cright[-right.shape[0]:, -right.shape[1]:] = 1
-+        cright[-right.shape[0]:, -right.shape[1]:] = right
-
-    return np.hstack([cleft, cright])
-    """,
+        "tests": tests,
     }
     model_response = """\
 diff --git a/astropy/modeling/separable.py b/astropy/modeling/separable.py
@@ -190,3 +179,6 @@ def test_reward_taco():
     input = RewardInput(problem="", problem_type=RewardType.CODE, model_response=model_response, metadata=metadata)
     output = reward(input)
     assert output is not None
+
+if __name__ == "__main__":
+    test_reward_swebench()

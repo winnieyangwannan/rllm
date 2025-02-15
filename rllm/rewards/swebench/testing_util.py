@@ -9,6 +9,7 @@ if platform.system() == 'Linux':
     import resource
 
 from argparse import ArgumentParser, ArgumentDefaultsHelpFormatter
+from rllm.globals import MODEL_NAME_OR_PATH
 from pathlib import Path, PurePosixPath
 
 from swebench.harness.constants import (
@@ -643,12 +644,33 @@ def run_evaluation(
     return make_run_report(actions, full_dataset, run_id, client)
 
 def swebench_check_correctness(
-        instance_ids: list,
-        actions: dict[str: str],
+        model_response: str,
+        metadata: dict,
     ) -> float:
+
+    tests = metadata.get("tests", None)
+    instance_id = tests.get("instance_id", None)
+    # Attempt to parse a patch from the model response
+    patch_start = model_response.find("diff --git")
+
+    patch = ""
+
+    if patch_start != -1:
+        patch_end = model_response.find("```", patch_start)
+        if patch_end == -1:
+            patch_end = len(model_response)
+        patch = model_response[patch_start:patch_end].strip()
+
+    params = {
+        "instance_id": instance_id,
+        "model_patch": patch,
+        "model_name_or_path": MODEL_NAME_OR_PATH,
+    }
+    actions = {instance_id: params}
 
     # generate unique run id
     run_id = uuid.uuid4().hex
+    instance_ids = [instance_id]
 
     eval_report_path = run_evaluation(
         SWEBENCH_DATASET_NAME,

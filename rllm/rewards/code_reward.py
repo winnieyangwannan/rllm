@@ -2,6 +2,7 @@
 This module contains the RewardCode class, which evaluates code datasets answers
 and assigns rewards based on their correctness on unit tests.
 """
+from typing import List, Union
 from rllm.globals import MODEL_NAME_OR_PATH
 from rllm.rewards.reward_types import RewardConfig, RewardFn, RewardInput, RewardOutput, RewardType
 import multiprocessing
@@ -47,35 +48,20 @@ class RewardCodeFn(RewardFn):
         model_response= input.model_response
         metadata= input.metadata
         dataset_name = metadata.get("dataset_flag", None)
+        tests = metadata.get("tests", None)
+        if tests is None:
+            raise ValueError("No tests found in metadata")
         
         if dataset_name == "TACO":#apps/TACO:
-            if metadata.get("tests", None) is None:
-                raise ValueError("No tests found in metadata")
             is_correct = check_correctness(metadata, model_response, taco_run_test)
         elif dataset_name == "code_contests":#codetests
-            if metadata.get("tests", None) is None:
-                raise ValueError("No tests found in metadata")
             is_correct = check_correctness(metadata, model_response, code_contests_run_test)
         elif dataset_name == "codeforces":#codeforces 
-            if metadata.get("tests", None) is None:
-                raise ValueError("No tests found in metadata")
             is_correct = check_correctness(metadata, model_response, codeforces_run_test)
         elif dataset_name == "swebench":#swebench
-            if metadata.get("instance_id") is None or metadata.get("patch") is None:
-                raise ValueError("No instance ids or patch found in metadata")
-
-            print(f"This dataset is SWE-bench")
-            instance_id = metadata.get("instance_id", None)
-            actions = {
-                "instance_id": instance_id,
-                "model_patch": metadata.get("patch", None),
-                "model_name_or_path": MODEL_NAME_OR_PATH,
-            }
-
-            predictions = {instance_id: actions}
             resolve_rate = swebench_check_correctness(
-                instance_ids=metadata.get("instance_ids", None),
-                actions=predictions
+                model_response=model_response,
+                metadata=metadata
             )
 
             reward = 2 * resolve_rate - 1
@@ -88,3 +74,18 @@ class RewardCodeFn(RewardFn):
             return RewardOutput(reward=self.config.correct_reward, is_correct=True)
         else:
             return RewardOutput(reward=self.config.incorrect_reward, is_correct=False)
+
+def rllm_code_reward_fn(data_source: str, solution_str: str, ground_truth):
+    reward_config = RewardConfig()
+    reward_fn = RewardCodeFn(reward_config)
+    reward_response = reward_fn(
+        RewardInput(
+            problem=solution_str,
+            problem_type=RewardType.CODE,
+            model_response=solution_str,
+            metadata={
+                "dataset_flag": data_source,
+                "tests": ground_truth
+            }
+        ))
+    return reward_response.is_correct
