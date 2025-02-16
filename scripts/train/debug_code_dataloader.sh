@@ -26,8 +26,8 @@ fi
 # Train over a single node, 8 A100-80GB GPUs.
 python3 -m verl.trainer.main_ppo \
     algorithm.adv_estimator=grpo \
-    data.train_files=/data/xiaoxiang/rllm/data/train_taco.parquet \
-    data.val_files=/data/xiaoxiang/rllm/data/test_taco.parquet \
+    data.train_files=/data/xiaoxiang/rllm/data/train.parquet \
+    data.val_files=/data/xiaoxiang/rllm/data/aime.parquet \
     data.train_batch_size=2 \
     data.val_batch_size=2 \
     data.max_prompt_length=256 \

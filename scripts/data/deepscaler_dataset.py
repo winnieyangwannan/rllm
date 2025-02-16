@@ -66,7 +66,7 @@ def make_map_fn(split: str):
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='Process datasets for DeepScaler training')
-    parser.add_argument('--local_dir', default=os.path.expanduser('/data/xiaoxiang/rllm/data'),
+    parser.add_argument('--local_dir', default=os.path.expanduser('~/rllm/data'),
                        help='Local directory to save processed datasets')
     parser.add_argument('--hdfs_dir', default=None,
                        help='Optional HDFS directory to copy datasets to')
@@ -76,8 +76,7 @@ if __name__ == '__main__':
     hdfs_dir = args.hdfs_dir
     
     # Make local directory if it doesn't exist
-    if not os.path.exists(local_dir):
-        makedirs(local_dir)
+    makedirs(local_dir)
 
     # Initialize datasets
     train_datasets = [TrainDataset.DEEPSCALER]

@@ -4,7 +4,7 @@ from typing import Any, Dict, List
 
 from rllm.data import Dataset, TrainDataset
 
-def load_dataset(dataset: Dataset) -> List[Dict[str, Any]]:
+def load_dataset(dataset: Dataset, local_dir=None) -> List[Dict[str, Any]]:
     """Loads a dataset from a JSON file.
 
     Args:
@@ -20,14 +20,15 @@ def load_dataset(dataset: Dataset) -> List[Dict[str, Any]]:
 
     dataset_name = dataset.value.lower()
     data_dir = "train" if isinstance(dataset, TrainDataset) else "test"
-    name = "train" if isinstance(dataset, TrainDataset) else "test"
+    
     # Get the current path of this file
     current_dir = os.path.dirname(os.path.realpath(__file__))
-    current_dir = "/data/xiaoxiang/rllm/rllm/data/preprocess" #Xiaoxiang: hardcode, need to change later
-    file_path = os.path.join( current_dir, f"{name}_{dataset_name}.json")
-    print(f"Loading dataset from: {file_path}")
+    file_path = os.path.join(data_dir, f"{dataset_name}.json")
     # Combine current_dir and file_path
     file_path = os.path.join(current_dir, file_path)
+    if local_dir is not None:
+        file_path = os.path.join(local_dir, f"{data_dir}/{dataset_name}.json")
+
     if not os.path.exists(file_path):
         raise ValueError(f"Dataset file not found: {file_path}")
 
