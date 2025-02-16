@@ -52,7 +52,7 @@ def run_test(sample, test=None, debug=False):
     otherwise it'll just return an input and output pair.
     """
 
-    in_outs = sample["input_output"]
+    in_outs = sample["tests"]
 
     if in_outs:
         if in_outs.get("fn_name") is None:
