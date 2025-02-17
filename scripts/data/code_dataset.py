@@ -89,10 +89,10 @@ if __name__ == '__main__':
         makedirs(local_dir)
 
     # Initialize datasets
-    train_datasets = [TrainDataset.TACO, TrainDataset.APPS,TrainDataset.CODE_CONTESTS]
-    train_dataset_names = ["taco", "apps", "code_contests"]
-    test_datasets = [TestDataset.TACO, TestDataset.APPS, TestDataset.CODE_CONTESTS]
-    test_datasets_names = ["taco", "apps","code_contests"]
+    train_datasets = [TrainDataset.TACO, TrainDataset.APPS,TrainDataset.CODE_CONTESTS, TrainDataset.CODEFORCES]
+    train_dataset_names = ["taco", "apps", "code_contests", "codeforces"]
+    test_datasets = [TestDataset.TACO, TestDataset.APPS, TestDataset.CODE_CONTESTS, TestDataset.CODEFORCES]
+    test_datasets_names = ["taco", "apps","code_contests", "codeforces"]
 
     # #test_datasets = [TestDataset.AIME, TestDataset.AMC, TestDataset.MATH, TestDataset.MINERVA, TestDataset.OLYMPIAD_BENCH]
     # test_datasets = [TestDataset.LIVECODEBENCH]
@@ -117,7 +117,7 @@ if __name__ == '__main__':
     
     #save all code dataset
     all_train_df = pd.DataFrame(all_train_data)
-    all_train_df.to_parquet(os.path.join(local_dir, 'train_code.parquet')) #train parquet for all code dataset
+    #all_train_df.to_parquet(os.path.join(local_dir, 'train_code.parquet')) #train parquet for all code dataset
 
     #Process and save each test dataset separately
     all_test_data = []
@@ -130,11 +130,12 @@ if __name__ == '__main__':
                 test_data.append(processed_example)
                 all_test_data.append(processed_example)
         dataset_name = test_dataset.value.lower()
+        test_data = test_data[:5000] #TODO(xiao):if we use parquet, the dataset size can not be too large, otherwise, it can not read
         test_df = pd.DataFrame(test_data)
         test_df.to_parquet(os.path.join(local_dir, f'test_{test_datasets_name}.parquet')) #test parquet for each code dataset
     #save all code dataset
     all_test_df = pd.DataFrame(all_test_data)
-    all_test_df.to_parquet(os.path.join(local_dir, 'test_code.parquet')) #test parquet for all code dataset
+    #all_test_df.to_parquet(os.path.join(local_dir, 'test_code.parquet')) #test parquet for all code dataset
     # Optionally copy to HDFS
     if hdfs_dir is not None:
         makedirs(hdfs_dir)
