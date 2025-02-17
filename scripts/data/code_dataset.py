@@ -117,7 +117,7 @@ if __name__ == '__main__':
     
     #save all code dataset
     all_train_df = pd.DataFrame(all_train_data)
-    #all_train_df.to_parquet(os.path.join(local_dir, 'train_code.parquet')) #train parquet for all code dataset
+    all_train_df.to_parquet(os.path.join(local_dir, 'train_code.parquet')) #train parquet for all code dataset
 
     #Process and save each test dataset separately
     all_test_data = []
@@ -135,7 +135,7 @@ if __name__ == '__main__':
         test_df.to_parquet(os.path.join(local_dir, f'test_{test_datasets_name}.parquet')) #test parquet for each code dataset
     #save all code dataset
     all_test_df = pd.DataFrame(all_test_data)
-    #all_test_df.to_parquet(os.path.join(local_dir, 'test_code.parquet')) #test parquet for all code dataset
+    all_test_df.to_parquet(os.path.join(local_dir, 'test_code.parquet')) #test parquet for all code dataset
     # Optionally copy to HDFS
     if hdfs_dir is not None:
         makedirs(hdfs_dir)
