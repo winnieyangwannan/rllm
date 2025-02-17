@@ -1,7 +1,6 @@
 set -x
 
 export VLLM_ATTENTION_BACKEND=XFORMERS
-export CUDA_VISIBLE_DEVICES=1
 
 # Default values
 MODEL_PATH="$HOME/DeepScaleR-1.5B-Preview"
