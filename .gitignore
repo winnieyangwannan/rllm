@@ -183,3 +183,5 @@ data/*.parquet
 
 rllm/data/preprocess/*.json
 tmp/
+scripts/train/debug_code_dataloader.sh
+debug.sh
