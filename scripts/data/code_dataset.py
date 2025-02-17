@@ -71,8 +71,7 @@ def make_map_fn(split: str):
         return data
     return process_fn
 
-
-#python3 code_dataset.py --local_dir /data/xiaoxiang/data/
+# python3 code_dataset.py --local_dir ~/data/data
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='Process datasets for DeepScaler training')
@@ -110,7 +109,6 @@ if __name__ == '__main__':
         train_data: List[Dict[str, Any]] = []
         for idx, example in enumerate(train_dataset):
             processed_example = process_fn(example, idx, train_dataset_name)
-
             if processed_example is not None:
                 train_data.append(processed_example)
                 all_train_data.append(processed_example)
@@ -129,7 +127,6 @@ if __name__ == '__main__':
         process_fn = make_map_fn('test')
         for idx, example in enumerate(test_data_list):
             processed_example = process_fn(example, idx, test_datasets_name)
-            groud_truth = processed_example['reward_model']['ground_truth']
             if processed_example is not None:
                 test_data.append(processed_example)
                 all_test_data.append(processed_example)

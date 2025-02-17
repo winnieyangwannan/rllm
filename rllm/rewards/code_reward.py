@@ -67,16 +67,12 @@ class RewardCodeFn(RewardFn):
         metadata= input.metadata
         if metadata.get("input_output") is not None:#apps/TACO:
         # Check correctness of the generated code
-            print(f"this dataset is from apps/taco")
             is_correct = check_correctness(metadata, model_response, taco_run_test)
         elif metadata.get("public_tests") is not None:#codetests
-            print(f"this dataset is from code_tests")
             is_correct = check_correctness(metadata, model_response, code_contests_run_test)
         elif metadata.get("test_cases") is not None:#codeforces #TODO(xiaoxiang):fix the codeforces_run_test
-            print(f"this dataset is from codeforces")
             is_correct = check_correctness(metadata, model_response, codeforces_run_test)
         elif metadata.get("public_test_cases") is not None:#livecodebench
-            print(f"this dataset is from livecodebench")
             is_extrcted = not metadata["public_test_cases"][0].get("testtype") == "stdin"
             is_correct = lcb_check_correctness(metadata, model_response, is_extracted=is_extrcted)
         else:

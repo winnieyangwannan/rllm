@@ -27,7 +27,7 @@ def load_dataset(dataset: Dataset, local_dir=None) -> List[Dict[str, Any]]:
     # Combine current_dir and file_path
     file_path = os.path.join(current_dir, file_path)
     if local_dir is not None:
-        file_path = os.path.join(local_dir, f"{data_dir}/{dataset_name}.json")
+        file_path = os.path.join(local_dir, f"{data_dir}/{data_dir}_{dataset_name}.json")
 
     if not os.path.exists(file_path):
         raise ValueError(f"Dataset file not found: {file_path}")
