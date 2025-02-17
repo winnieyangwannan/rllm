@@ -91,7 +91,6 @@ if __name__ == '__main__':
     # Initialize datasets
     train_datasets = [TrainDataset.TACO, TrainDataset.APPS,TrainDataset.CODE_CONTESTS]
     train_dataset_names = ["taco", "apps", "code_contests"]
-    print(f"1 scripts/data/deepscaler_dataset.py ,the train_datasets[0] is {train_datasets[0]}")
     test_datasets = [TestDataset.TACO, TestDataset.APPS, TestDataset.CODE_CONTESTS]
     test_datasets_names = ["taco", "apps","code_contests"]
 

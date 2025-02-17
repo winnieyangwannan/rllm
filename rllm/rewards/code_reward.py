@@ -65,9 +65,8 @@ class RewardCodeFn(RewardFn):
         problem = input.problem
         model_response= input.model_response
         metadata= input.metadata
-        if metadata.get("input_output") is not None:#apps/TACO:
         # Check correctness of the generated code
-            print(f"RewardCodeFn, the apps/taso")
+        if metadata.get("input_output") is not None:#apps/TACO:
             is_correct = check_correctness(metadata, model_response, taco_run_test)
         elif metadata.get("public_tests") is not None:#codetests
             is_correct = check_correctness(metadata, model_response, code_contests_run_test)
