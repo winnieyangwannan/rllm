@@ -104,6 +104,7 @@ class RewardMathFn(RewardFn):
 
 def rllm_reward_fn(data_source, solution_str: str, ground_truth: Union[str, List[str]], enable_llm = False):
     if data_source in ["apps", "taco", "code_contests", "codeforces", "livecodebench"]:
+        print(f"rllm_reward_fn, data_sources:{data_source} and type(ground_truth):{ground_truth}")
         try:
             ground_truth = json.loads(ground_truth)
         except json.JSONDecodeError:

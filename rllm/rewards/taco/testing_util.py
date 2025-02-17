@@ -51,7 +51,7 @@ def run_test(sample, test=None, debug=False):
     if test(generated_code) is not None it'll try to run the code.
     otherwise it'll just return an input and output pair.
     """
-
+    print(f"1 rllm/rewards/taco/testing_util.py, taco/apps, type(sample):{sample}")
     in_outs = sample["input_output"]
 
     if in_outs:
