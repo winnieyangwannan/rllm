@@ -174,7 +174,7 @@ cython_debug/
 .DS_Store
 
 # Ignore parquet files.
-data/
+data/*.parquet 
 
 # Ignore verl script outputs.
 **/outputs/
