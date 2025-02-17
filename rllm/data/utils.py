@@ -31,7 +31,6 @@ def load_dataset(dataset: Dataset, local_dir=None) -> List[Dict[str, Any]]:
 
     if not os.path.exists(file_path):
         raise ValueError(f"Dataset file not found: {file_path}")
-
     try:
         with open(file_path, "r", encoding="utf-8") as f:
             data = json.load(f)
