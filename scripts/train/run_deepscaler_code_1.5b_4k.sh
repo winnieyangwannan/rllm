@@ -5,6 +5,8 @@ set -x
 # vLLM without XFORMERS will results in CUDA errors.
 export VLLM_ATTENTION_BACKEND=XFORMERS
 
+export CUDA_VISIBLE_DEVICES=4,5,6,7
+
 # Parse command line arguments
 while [[ $# -gt 0 ]]; do
     case $1 in
@@ -60,7 +62,7 @@ python3 -m verl.trainer.main_ppo \
     trainer.project_name='deepscaler' \
     trainer.experiment_name='deepscaler-1.5b-8k' \
     +trainer.val_before_train=True \
-    trainer.n_gpus_per_node=8 \
+    trainer.n_gpus_per_node=4 \
     trainer.nnodes=1 \
     trainer.save_freq=20 \
     trainer.test_freq=20 \
