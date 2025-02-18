@@ -50,7 +50,6 @@ def make_map_fn(split: str):
             answer = json.dumps(answer)
         elif dataset_name == "livecodebench":
             answer = dict()
-            question = example.pop('problem')
             answer["public_test_cases"] = example.pop('public_test_cases')
             problem = LCB_SYSTEM_MESSAGE_GENERIC + "\n" + question
             starter_code = example.pop("starter_code")
