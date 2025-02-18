@@ -18,7 +18,7 @@ from verl.utils.reward_score.math import last_boxed_only_string, remove_boxed
 from rllm.data.utils import load_dataset
 from rllm.data.dataset_types import TrainDataset, TestDataset
 from rllm.data.dataloader import DatasetMix 
-from rllm.system_prompts import LCB_SYSTEM_MESSAGE_GENERIC, LCB_FORMATTING_MESSAGE_WITH_STARTER_CODE, LCB_FORMATTING_WITHOUT_STARTER_CODE
+from rllm.system_prompts import LCB_SYSTEM_MESSAGE_GENERIC, LCB_FORMATTING_MESSAGE_WITH_STARTER_CODE, LCB_FORMATTING_WITHOUT_STARTER_CODE, CODEFORCES_SYSTEM_MESSAGE
 
 def make_map_fn(split: str):
     """Create a mapping function to process dataset examples.
@@ -43,6 +43,7 @@ def make_map_fn(split: str):
         elif dataset_name == "codeforces":
             answer = dict()
             answer["test_cases"] = example.pop('test_cases')
+            problem = CODEFORCES_SYSTEM_MESSAGE + "\n" + question
             answer = json.dumps(answer)
         elif dataset_name == "code_contests":
             answer = dict()
