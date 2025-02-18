@@ -23,7 +23,7 @@ import signal
 import traceback
 from typing import Any, Dict, List
 
-from openai import OpenAI
+from openai import AsyncOpenAI
 import ray
 import torch
 from transformers import AutoTokenizer
@@ -99,7 +99,7 @@ class RayVLLMWorker:
         
         # Initialize server args
         openai_parser = make_arg_parser(FlexibleArgumentParser())
-        self.server_args = openai_parser.parse_args([])
+        self.server_args = openai_parser.parse_args(["--enable-auto-tool-choice", "--tool-call-parser", "hermes"])
         
         # Configure server args
         self.server_args.host = "0.0.0.0"
@@ -115,7 +115,8 @@ class RayVLLMWorker:
             setattr(self.server_args, key, value)
 
         self.server_process = None
-        self.oai_client = OpenAI(api_key='EMPTY', base_url=f"http://0.0.0.0:{self.port}/v1", timeout=int(1e9))
+        # self.oai_client = OpenAI(api_key='EMPTY', base_url=f"http://0.0.0.0:{self.port}/v1", timeout=int(1e9))
+        self.oai_client = AsyncOpenAI(api_key='EMPTY', base_url=f"http://0.0.0.0:{self.port}/v1", timeout=int(1e9))
         os.environ["TOKENIZERS_PARALLELISM"] = "true"
         self.tokenizer = AutoTokenizer.from_pretrained(self.model)
 
@@ -141,8 +142,8 @@ class RayVLLMWorker:
         wait_for_server(self.port)
         print(f"Started server on port {self.port}")
     
-    def chat_completion(self, messages: List[Dict[str, str]], **kwargs) -> SampleBatch:
-        """Send a chat completion request to this worker.
+    async def chat_completion(self, messages: List[Dict[str, str]], **kwargs) -> SampleBatch:
+        """Send an async chat completion request to this worker.
         
         Args:
             messages: List of message dictionaries with 'role' and 'content'
@@ -152,7 +153,7 @@ class RayVLLMWorker:
             SampleBatch containing the response and metrics
         """
         try:
-            chat_response = self.oai_client.chat.completions.create(
+            chat_response = await self.oai_client.chat.completions.create(
                 model=self.model,
                 messages=messages,
                 logprobs=True,
