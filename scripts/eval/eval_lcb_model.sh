@@ -53,11 +53,11 @@ for DATA_TYPE in "${DATATYPES[@]}"; do
         trainer.n_gpus_per_node=4 \
         data.path=/home/xiaoxiang/data/data/test_livecodebench.parquet \
         data.output_path=/home/xiaoxiang/data/data/lcb/${DATA_TYPE}.parquet \
-        data.n_samples=2 \
-        data.batch_size=64 \
+        data.n_samples=16 \
+        data.batch_size=128 \
         model.path=${MODEL_PATH} \
         rollout.temperature=0.6 \
-        rollout.response_length=16 \
+        rollout.response_length=32768 \
         rollout.top_k=-1 \
         rollout.top_p=0.95 \
         rollout.gpu_memory_utilization=0.9 \

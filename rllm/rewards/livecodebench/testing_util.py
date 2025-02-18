@@ -315,7 +315,6 @@ def run_tests_for_one_example(test_cases, completion, result_list, runtime_debug
             time_elapsed = time.time() - time_start
 
         except Exception as e:
-            print(f"is_extracted: {is_extracted}")
             print(f"Caught a generic exception: {e}")
             passed = False
             output_error = f"For test input: {test_input}. Expected output is: {test_output}, but got error: {e}."
