@@ -107,31 +107,35 @@ if __name__ == '__main__':
     train_dataset_names = ["taco", "apps", "code_contests", "codeforces"]
     test_datasets = [TestDataset.TACO, TestDataset.APPS, TestDataset.CODE_CONTESTS, TestDataset.CODEFORCES]
     test_datasets_names = ["taco", "apps","code_contests", "codeforces"]
-    test_datasets_names = ["livecodebench"]
+    # test_datasets_names = ["livecodebench"]
     # #test_datasets = [TestDataset.AIME, TestDataset.AMC, TestDataset.MATH, TestDataset.MINERVA, TestDataset.OLYMPIAD_BENCH]
-    test_datasets = [TestDataset.LIVECODEBENCH]
+    # test_datasets = [TestDataset.LIVECODEBENCH]
+    test_datasets = [TestDataset.CODEFORCES]
+    test_datasets_names = ["codeforces"]
+    train_datasets = [TrainDataset.CODEFORCES]
+    train_datasets_names = ["codeforces"]
     
     test_datasets_data = [load_dataset(d, local_dir) for d in test_datasets]
-    #train_dataset_data = [load_dataset(d, local_dir) for d in train_datasets]
+    train_dataset_data = [load_dataset(d, local_dir) for d in train_datasets]
     
     # Process training data
     all_train_data = [] 
     process_fn = make_map_fn('train')
 
-    # for train_dataset, train_dataset_name in zip(train_dataset_data, train_dataset_names):
-    #     train_data: List[Dict[str, Any]] = []
-    #     for idx, example in enumerate(train_dataset):
-    #         processed_example = process_fn(example, idx, train_dataset_name)
-    #         if processed_example is not None:
-    #             train_data.append(processed_example)
-    #             all_train_data.append(processed_example)
-    #     train_data = train_data[:5000]#TODO(xiao):if we use parquet, the dataset size can not be too large, otherwise, it can not read
-    #     train_df = pd.DataFrame(train_data)
-    #     train_df.to_parquet(os.path.join(local_dir, f'train_{train_dataset_name}.parquet'))#train parquet for each code dataset
+    for train_dataset, train_dataset_name in zip(train_dataset_data, train_dataset_names):
+        train_data: List[Dict[str, Any]] = []
+        for idx, example in enumerate(train_dataset):
+            processed_example = process_fn(example, idx, train_dataset_name)
+            if processed_example is not None:
+                train_data.append(processed_example)
+                all_train_data.append(processed_example)
+        train_data = train_data[:5000]#TODO(xiao):if we use parquet, the dataset size can not be too large, otherwise, it can not read
+        train_df = pd.DataFrame(train_data)
+        train_df.to_parquet(os.path.join(local_dir, f'train_{train_dataset_name}.parquet'))#train parquet for each code dataset
     
-    #save all code dataset
-    # all_train_df = pd.DataFrame(all_train_data)
-    # all_train_df.to_parquet(os.path.join(local_dir, 'train_code.parquet')) #train parquet for all code dataset
+    # save all code dataset
+    all_train_df = pd.DataFrame(all_train_data)
+    all_train_df.to_parquet(os.path.join(local_dir, 'train_code.parquet')) #train parquet for all code dataset
 
     #Process and save each test dataset separately
     all_test_data = []
@@ -144,7 +148,7 @@ if __name__ == '__main__':
                 test_data.append(processed_example)
                 all_test_data.append(processed_example)
         dataset_name = test_dataset.value.lower()
-        test_data = test_data[:5000] #TODO(xiao):if we use parquet, the dataset size can not be too large, otherwise, it can not read
+        # test_data = test_data[:5000] #TODO(xiao):if we use parquet, the dataset size can not be too large, otherwise, it can not read
         test_df = pd.DataFrame(test_data)
         test_df.to_parquet(os.path.join(local_dir, f'test_{test_datasets_name}.parquet')) #test parquet for each code dataset
     #save all code dataset
