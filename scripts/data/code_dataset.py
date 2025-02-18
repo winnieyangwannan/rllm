@@ -129,7 +129,7 @@ if __name__ == '__main__':
             if processed_example is not None:
                 train_data.append(processed_example)
                 all_train_data.append(processed_example)
-        # train_data = train_data[:5000]#TODO(xiao):if we use parquet, the dataset size can not be too large, otherwise, it can not read
+        train_data = train_data[:5000]#TODO(xiao):if we use parquet, the dataset size can not be too large, otherwise, it can not read
         train_df = pd.DataFrame(train_data)
         train_df.to_parquet(os.path.join(local_dir, f'train_{train_dataset_name}.parquet'))#train parquet for each code dataset
     
