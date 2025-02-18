@@ -127,7 +127,10 @@ class RewardCodeFn(RewardFn):
                     return RewardOutput(reward=self.config.incorrect_reward, is_correct=False)
             for test_cases in public_test_cases:
                 assert isinstance(test_cases, dict)
-            metadata["public_test_cases"] = public_test_cases
+            metadata['public_test_cases'] = public_test_cases
+            print(f"len(metadata['public_test_cases']):{len(metadata['public_test_cases'])}")
+            if len(metadata["public_test_cases"]) == 0:
+                return RewardOutput(reward=self.config.incorrect_reward, is_correct=False)
             is_extrcted = not metadata["public_test_cases"][0].get("testtype") == "stdin"
             is_correct = lcb_check_correctness(metadata, model_response, is_extracted=is_extrcted)
         else:

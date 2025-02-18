@@ -52,17 +52,17 @@ def make_map_fn(split: str):
         elif dataset_name == "livecodebench":
             answer = dict()
             answer["public_test_cases"] = example.pop('public_test_cases')
-            problem = LCB_SYSTEM_MESSAGE_GENERIC + "\n" + question
+            question = LCB_SYSTEM_MESSAGE_GENERIC + "\n" + question
             starter_code = example.pop("starter_code")
             if starter_code:
-                problem += (
+                question+= (
                      f"### Format: {LCB_FORMATTING_MESSAGE_WITH_STARTER_CODE}\n"
                 )
-                problem += f"```python\n{starter_code}\n```\n\n"
+                question += f"```python\n{starter_code}\n```\n\n"
             else:
-                problem += f"### Format: {LCB_FORMATTING_WITHOUT_STARTER_CODE}\n"
-                problem += "```python\n# YOUR CODE HERE\n```\n\n"
-            problem += f"### Answer: (use the provided format with backticks)\n\n"
+                question += f"### Format: {LCB_FORMATTING_WITHOUT_STARTER_CODE}\n"
+            question += "```python\n# YOUR CODE HERE\n```\n\n"
+            question += f"### Answer: (use the provided format with backticks)\n\n"
             answer = json.dumps(answer)
         else:
             raise ValueError(f"Unknown dataset name: {dataset_name}")
