@@ -128,7 +128,7 @@ class RewardCodeFn(RewardFn):
             for test_cases in public_test_cases:
                 assert isinstance(test_cases, dict)
             metadata['public_test_cases'] = public_test_cases
-            print(f"len(metadata['public_test_cases']):{len(metadata['public_test_cases'])}")
+            print(f"len(metadata['public_test_cases']):{len(metadata['public_test_cases'])}")#TODO(Xiao):for the len(metadata['public_test_cases'],maybe we can ignore it when data preprocess. scripts/data/code_dataset.py
             if len(metadata["public_test_cases"]) == 0:
                 return RewardOutput(reward=self.config.incorrect_reward, is_correct=False)
             is_extrcted = not metadata["public_test_cases"][0].get("testtype") == "stdin"
