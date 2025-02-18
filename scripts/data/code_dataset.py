@@ -18,6 +18,7 @@ from verl.utils.reward_score.math import last_boxed_only_string, remove_boxed
 from rllm.data.utils import load_dataset
 from rllm.data.dataset_types import TrainDataset, TestDataset
 from rllm.data.dataloader import DatasetMix 
+from rllm.system_prompts import LCB_SYSTEM_MESSAGE_GENERIC, LCB_FORMATTING_MESSAGE_WITH_STARTER_CODE, LCB_FORMATTING_WITHOUT_STARTER_CODE
 
 def make_map_fn(split: str):
     """Create a mapping function to process dataset examples.
@@ -31,7 +32,8 @@ def make_map_fn(split: str):
     def process_fn(example: Dict[str, Any], idx: int, dataset_name=None) -> Optional[Dict[str, Any]]:
         question = example.pop('problem')
         instruction = "Let's think step by step and output the final answer within \\boxed{}."
-        question = f"{question} {instruction}"
+        if dataset_name != "livecodebench":
+            question = f"{question} {instruction}"
         if dataset_name == "MATH":
             answer = example.pop('answer')#str
         elif dataset_name== "taco" or dataset_name == "apps": #taco/apps code datasets
@@ -48,7 +50,19 @@ def make_map_fn(split: str):
             answer = json.dumps(answer)
         elif dataset_name == "livecodebench":
             answer = dict()
+            question = example.pop('problem')
             answer["public_test_cases"] = example.pop('public_test_cases')
+            problem = LCB_SYSTEM_MESSAGE_GENERIC + "\n" + question
+            starter_code = example.pop("starter_code")
+            if starter_code:
+                problem += (
+                     f"### Format: {LCB_FORMATTING_MESSAGE_WITH_STARTER_CODE}\n"
+                )
+                problem += f"```python\n{starter_code}\n```\n\n"
+            else:
+                problem += f"### Format: {LCB_FORMATTING_WITHOUT_STARTER_CODE}\n"
+                problem += "```python\n# YOUR CODE HERE\n```\n\n"
+            problem += f"### Answer: (use the provided format with backticks)\n\n"
             answer = json.dumps(answer)
         else:
             raise ValueError(f"Unknown dataset name: {dataset_name}")
@@ -98,26 +112,26 @@ if __name__ == '__main__':
     test_datasets = [TestDataset.LIVECODEBENCH]
     
     test_datasets_data = [load_dataset(d, local_dir) for d in test_datasets]
-    train_dataset_data = [load_dataset(d, local_dir) for d in train_datasets]
+    #train_dataset_data = [load_dataset(d, local_dir) for d in train_datasets]
     
     # Process training data
     all_train_data = [] 
     process_fn = make_map_fn('train')
 
-    for train_dataset, train_dataset_name in zip(train_dataset_data, train_dataset_names):
-        train_data: List[Dict[str, Any]] = []
-        for idx, example in enumerate(train_dataset):
-            processed_example = process_fn(example, idx, train_dataset_name)
-            if processed_example is not None:
-                train_data.append(processed_example)
-                all_train_data.append(processed_example)
-        train_data = train_data[:5000]#TODO(xiao):if we use parquet, the dataset size can not be too large, otherwise, it can not read
-        train_df = pd.DataFrame(train_data)
-        train_df.to_parquet(os.path.join(local_dir, f'train_{train_dataset_name}.parquet'))#train parquet for each code dataset
+    # for train_dataset, train_dataset_name in zip(train_dataset_data, train_dataset_names):
+    #     train_data: List[Dict[str, Any]] = []
+    #     for idx, example in enumerate(train_dataset):
+    #         processed_example = process_fn(example, idx, train_dataset_name)
+    #         if processed_example is not None:
+    #             train_data.append(processed_example)
+    #             all_train_data.append(processed_example)
+    #     train_data = train_data[:5000]#TODO(xiao):if we use parquet, the dataset size can not be too large, otherwise, it can not read
+    #     train_df = pd.DataFrame(train_data)
+    #     train_df.to_parquet(os.path.join(local_dir, f'train_{train_dataset_name}.parquet'))#train parquet for each code dataset
     
     #save all code dataset
-    all_train_df = pd.DataFrame(all_train_data)
-    all_train_df.to_parquet(os.path.join(local_dir, 'train_code.parquet')) #train parquet for all code dataset
+    # all_train_df = pd.DataFrame(all_train_data)
+    # all_train_df.to_parquet(os.path.join(local_dir, 'train_code.parquet')) #train parquet for all code dataset
 
     #Process and save each test dataset separately
     all_test_data = []
@@ -134,8 +148,8 @@ if __name__ == '__main__':
         test_df = pd.DataFrame(test_data)
         test_df.to_parquet(os.path.join(local_dir, f'test_{test_datasets_name}.parquet')) #test parquet for each code dataset
     #save all code dataset
-    all_test_df = pd.DataFrame(all_test_data)
-    all_test_df.to_parquet(os.path.join(local_dir, 'test_code.parquet')) #test parquet for all code dataset
+    # all_test_df = pd.DataFrame(all_test_data)
+    # all_test_df.to_parquet(os.path.join(local_dir, 'test_code.parquet')) #test parquet for all code dataset
     # Optionally copy to HDFS
     if hdfs_dir is not None:
         makedirs(hdfs_dir)
