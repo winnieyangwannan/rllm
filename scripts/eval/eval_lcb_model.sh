@@ -3,9 +3,9 @@ set -x
 export VLLM_ATTENTION_BACKEND=XFORMERS
 
 # Default values
-MODEL_PATH="$HOME/DeepScaleR-1.5B-Preview"
+MODEL_PATH="deepseek-ai/DeepSeek-R1-Distill-Qwen-1.5B"
 # Possible values: aime, amc, math, minerva, olympiad_bench
-DATATYPES=("aime")
+DATATYPES=("livecodebench")
 OUTPUT_DIR="$HOME"  # Add default output directory
 
 # Parse named arguments
@@ -41,18 +41,23 @@ echo "Model Path: ${MODEL_PATH}"
 echo "Datasets: ${DATATYPES[@]}"
 echo "Output Directory: ${OUTPUT_DIR}"
 
+# Set default model path if not provided
+if [ -z "$MODEL_PATH" ]; then
+    MODEL_PATH="deepseek-ai/DeepSeek-R1-Distill-Qwen-1.5B"
+fi
+
 # Loop through all datatypes
 for DATA_TYPE in "${DATATYPES[@]}"; do
     python3 -m verl.trainer.main_generation \
         trainer.nnodes=1 \
-        trainer.n_gpus_per_node=8 \
-        data.path=$HOME/deepscaler/data/${DATA_TYPE}.parquet \
-        data.output_path=${OUTPUT_DIR}/${DATA_TYPE}.parquet \
-        data.n_samples=16 \
-        data.batch_size=128 \
+        trainer.n_gpus_per_node=4 \
+        data.path=/home/xiaoxiang/data/data/test_livecodebench.parquet \
+        data.output_path=/home/xiaoxiang/data/data/lcb/${DATA_TYPE}.parquet \
+        data.n_samples=2 \
+        data.batch_size=64 \
         model.path=${MODEL_PATH} \
         rollout.temperature=0.6 \
-        rollout.response_length=32768 \
+        rollout.response_length=16 \
         rollout.top_k=-1 \
         rollout.top_p=0.95 \
         rollout.gpu_memory_utilization=0.9 \

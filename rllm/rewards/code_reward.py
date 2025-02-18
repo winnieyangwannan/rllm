@@ -20,6 +20,7 @@ from rllm.rewards.code_contests.testing_util import run_test as code_contests_ru
 from rllm.rewards.codeforces.testing_util import run_test as codeforces_run_test
 from rllm.rewards.livecodebench.testing_util import unsafe_lcb_runTests
 import json
+import ast 
 
 def _temp_run(problem, generation, debug, result, test_fn):
     try:
@@ -93,14 +94,40 @@ class RewardCodeFn(RewardFn):
         problem = input.problem
         model_response= input.model_response
         metadata= input.metadata
+        if isinstance(metadata, str):
+            try:
+                metadata = json.loads(metadata)
+            except json.JSONDecodeError as e:
+                print(f"code reward Json Error parsing: {e}")
+                return RewardOutput(reward=self.config.incorrect_reward, is_correct=False)
         # Check correctness of the generated code
         if metadata.get("input_output") is not None:#apps/TACO:
             is_correct = check_correctness(metadata, model_response, taco_run_test)
         elif metadata.get("public_tests") is not None:#codetests
             is_correct = check_correctness(metadata, model_response, code_contests_run_test)
         elif metadata.get("test_cases") is not None:#codeforces #TODO(xiaoxiang):fix the codeforces_run_test
+            test_cases= metadata.get("test_cases")
+            if isinstance(test_case, str):
+                try:
+                    test_cases= json.loads(test_case)
+                except json.JSONDecodeError as e:
+                    print(f"code reward Json Error parsing codeforces : {e}")
+                    return RewardOutput(reward=self.config.incorrect_reward, is_correct=False)
+            for test_case in test_cases:
+                assert isinstance(test_case, dict)
+            metadata["test_cases"] = test_cases
             is_correct = check_correctness(metadata, model_response, codeforces_run_test)
         elif metadata.get("public_test_cases") is not None:#livecodebench
+            public_test_cases =  metadata.get("public_test_cases")
+            if isinstance(public_test_cases, str):
+                try:
+                    public_test_cases = json.loads(public_test_cases)
+                except json.JSONDecodeError as e:
+                    print(f"code reward Json Error parsing livecodebench: {e}")
+                    return RewardOutput(reward=self.config.incorrect_reward, is_correct=False)
+            for test_cases in public_test_cases:
+                assert isinstance(test_cases, dict)
+            metadata["public_test_cases"] = public_test_cases
             is_extrcted = not metadata["public_test_cases"][0].get("testtype") == "stdin"
             is_correct = lcb_check_correctness(metadata, model_response, is_extracted=is_extrcted)
         else:
@@ -119,7 +146,7 @@ def rllm_reward_fn(solution_str: str, ground_truth: Dict, enable_llm = False):
 
 
 if __name__ == "__main__":
-    #test the codetest
+    #test the code_contest
     model_response = """
 import sys
 from itertools import permutations
