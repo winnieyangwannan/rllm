@@ -28,7 +28,6 @@ def _temp_run(problem, generation, debug, result, test_fn):
         print(f"Error in _temp_run: {e}")
 
 def all_true(result):
-    print(result)
     if isinstance(result, list):  # Check if it's a list
         return all(all_true(item) for item in result)  # Recursively check all elements
     return result is True
