@@ -55,7 +55,6 @@ def extract_code(llm_output):
 
 def check_correctness(problem, generation, test_fn):
     TIME_OUT = 300
-    print(generation)
     cleaned_code = extract_code(generation)
     # print(f"cleaned_code: {cleaned_code}")   
 
