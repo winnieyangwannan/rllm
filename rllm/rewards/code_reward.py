@@ -56,7 +56,6 @@ def extract_code(llm_output):
 def check_correctness(problem, generation, test_fn):
     TIME_OUT = 300
     cleaned_code = extract_code(generation)
-    # print(f"cleaned_code: {cleaned_code}")   
 
     manager = Manager()
     result = manager.list()
@@ -68,7 +67,8 @@ def check_correctness(problem, generation, test_fn):
     return bool(result and all_true(result[0]))
 
 def lcb_check_correctness(problem, generation, timeout =6,runtime_debug=False, is_extracted=False):
-    result_list = unsafe_lcb_runTests(problem, generation, timeout, runtime_debug, is_extracted)
+    cleaned_code = extract_code(generation)
+    result_list = unsafe_lcb_runTests(problem, cleaned_code, timeout, runtime_debug, is_extracted)
     details = [r[0] for r in result_list]
 
     all_passed = all(details)
@@ -214,7 +214,7 @@ def main():
     if a+(n-1)*10<=m: 
         print((m-a)//5) 
     else: 
-        print(01)
+        print(-1)
 if __name__ == "__main__":
     main()
     """
@@ -246,7 +246,9 @@ def main(phone_numbers):
             seen.add(number)
     
     return len(duplicates)+1
-
+```
+And run it with this
+```python
 if __name__ == "__main__":
     main(input.strip().split())
 ```
@@ -280,5 +282,24 @@ Sorry I can't help with that!
     reward = RewardCodeFn(RewardConfig)
     input = RewardInput(problem="", problem_type=RewardType.CODE, model_response=model_response, metadata=metadata)
     output = reward(input)
-    print(f"code_forces output:{output}")
+    print(f"bad code_forces output:{output}")
+
+    model_response = """
+No I'm sorry
+""" 
+    #public_test_case = [{"input": "6\nabc\nacb\nbac\nbca\ncab\ncba\n", "output": "YES\nYES\nYES\nNO\nNO\nYES\n", "testtype": "stdin"}]
+    public_test_case = [
+    {
+        'input': '["12345", "530391", "12345"]',
+        'output': '2',
+        'testtype': 'functional'
+    }
+    ]
+    metadata = {
+        "public_test_cases": public_test_case,
+    }
+    reward = RewardCodeFn(RewardConfig)
+    input = RewardInput(problem="", problem_type=RewardType.CODE, model_response=model_response, metadata=metadata)
+    output = reward(input)
+    print(f"livecodebench output:{output}")
     
