@@ -214,7 +214,7 @@ def main():
     if a+(n-1)*10<=m: 
         print((m-a)//5) 
     else: 
-        print(01)
+        print(-1)
 if __name__ == "__main__":
     main()
     """
@@ -246,7 +246,9 @@ def main(phone_numbers):
             seen.add(number)
     
     return len(duplicates)+1
-
+```
+And run it with this
+```python
 if __name__ == "__main__":
     main(input.strip().split())
 ```
@@ -280,7 +282,7 @@ Sorry I can't help with that!
     reward = RewardCodeFn(RewardConfig)
     input = RewardInput(problem="", problem_type=RewardType.CODE, model_response=model_response, metadata=metadata)
     output = reward(input)
-    print(f"code_forces output:{output}")
+    print(f"bad code_forces output:{output}")
 
     model_response = """
 No I'm sorry
