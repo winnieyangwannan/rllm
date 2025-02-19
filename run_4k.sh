@@ -1,1 +1,0 @@
-bash scripts/train/run_deepscaler_1.5b_4k.sh > 4k.log 2>&1 & 
