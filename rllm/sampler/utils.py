@@ -14,8 +14,10 @@ def convert_openai_response_to_samples(response: ChatCompletion) -> List[Sample]
     choices = response.choices
     samples = []
     for choice in choices:
+        finish_reason = choice.finish_reason
         response = choice.message.content
         choice_log_probs = choice.logprobs.content
+        tool_calls = choice.message.tool_calls
         log_probs = []
         for token_log_prob in choice_log_probs:
             log_probs.append(token_log_prob.logprob)
@@ -28,6 +30,8 @@ def convert_openai_response_to_samples(response: ChatCompletion) -> List[Sample]
             log_probs=log_probs,
             reward=None,
             is_correct=None,
+            tool_calls=tool_calls,
+            finish_reason=finish_reason
         )
         samples.append(sample)
     return samples

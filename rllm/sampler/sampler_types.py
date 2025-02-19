@@ -51,6 +51,8 @@ class Sample:
     log_probs: List[float]
     reward: float
     is_correct: bool
+    tool_calls: list
+    finish_reason: str
 
 
 @dataclass(slots=True, kw_only=True)

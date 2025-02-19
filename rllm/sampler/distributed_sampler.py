@@ -128,7 +128,7 @@ class DistributedSampler:
                 print(f"Found existing worker: {worker_name}")
             except ValueError:
                 print(f"Creating new worker: {worker_name}")
-                # Create worker with fault tolerance settings and signal handling
+                # Create worker with fault tolerance settings
                 worker = WorkerClass.options(
                     name=worker_name,
                     lifetime="detached",
@@ -138,8 +138,7 @@ class DistributedSampler:
                     max_concurrency=4096,
                     runtime_env={
                         "env_vars": {
-                            "PYTHONUNBUFFERED": "1",
-                            "IGNORE_SIGINT": "1"  # Environment variable to ignore SIGINT in worker
+                            "PYTHONUNBUFFERED": "1"
                         }
                     }
                 ).remote(
@@ -167,7 +166,7 @@ class DistributedSampler:
             self.active_requests[least_busy_idx] += 1
             return least_busy_idx
 
-    def chat_completion(self, messages: List[Dict[str, str]], **kwargs) -> SampleBatch:
+    async def chat_completion(self, messages: List[Dict[str, str]], **kwargs) -> SampleBatch:
         """Send chat completion request to least busy worker.
 
         Args:
@@ -184,8 +183,8 @@ class DistributedSampler:
         print(f"Using worker {worker_idx}; {self.active_requests}")
 
         try:
-            sample_batch = ray.get(self.workers[worker_idx].chat_completion.remote(
-                messages=messages, **kwargs))
+            sample_batch = await self.workers[worker_idx].chat_completion.remote(
+                messages=messages, **kwargs)
             with self._worker_lock:
                 self.active_requests[worker_idx] -= 1
             return sample_batch
@@ -217,7 +216,7 @@ if __name__ == "__main__":
         num_workers=1,
         tensor_parallel_size=2,
         backend="sglang",
-        model="deepseek-ai/DeepSeek-R1-Distill-Qwen-32B"
+        model="deepseek-ai/DeepSeek-R1-Distill-Qwen-1.5B"
     )
     print(sampler.chat_completion([{
         "role": "user",
