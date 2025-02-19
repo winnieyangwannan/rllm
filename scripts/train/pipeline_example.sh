@@ -24,20 +24,21 @@ if [ -z "$MODEL_PATH" ]; then
 fi
 
 # Train over a single node, 8 A100-80GB GPUs.
-python3 -m verl.trainer.main_ppo \
+python3 -m verl.trainer.main_ppo_pipeline \
     algorithm.adv_estimator=grpo \
     data.train_files=$HOME/rllm/data/math_train.parquet \
     data.val_files=$HOME/rllm/data/math.parquet \
     data.train_batch_size=64 \
     data.val_batch_size=512 \
     data.max_prompt_length=1024 \
-    data.max_response_length=2048 \
+    data.max_response_length=16384 \
     actor_rollout_ref.model.path=$MODEL_PATH  \
     actor_rollout_ref.actor.optim.lr=1e-6 \
+    actor_rollout_ref.hybrid_engine=False \
     actor_rollout_ref.model.use_remove_padding=True \
     actor_rollout_ref.actor.ppo_mini_batch_size=16 \
     actor_rollout_ref.actor.use_dynamic_bsz=True \
-    actor_rollout_ref.actor.ppo_max_token_len_per_gpu=4000 \
+    actor_rollout_ref.actor.ppo_max_token_len_per_gpu=24000 \
     actor_rollout_ref.actor.use_kl_loss=True \
     actor_rollout_ref.actor.kl_loss_coef=0.001 \
     actor_rollout_ref.actor.kl_loss_type=low_var_kl \
@@ -60,7 +61,7 @@ python3 -m verl.trainer.main_ppo \
     trainer.critic_warmup=0 \
     trainer.logger=['console','wandb'] \
     trainer.project_name='deepscaler' \
-    trainer.experiment_name='deepscaler-math-debug' \
+    trainer.experiment_name='deepscaler-pipeline' \
     +trainer.val_before_train=False \
     trainer.n_gpus_per_node=8 \
     trainer.nnodes=1 \
