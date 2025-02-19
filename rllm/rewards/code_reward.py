@@ -16,6 +16,8 @@ from rllm.rewards.livecodebench.testing_util import unsafe_lcb_runTests
 import json
 import ast
 import re
+import time
+import wandb
 from rllm.rewards.swebench.testing_util import swebench_check_correctness
 
 def _temp_run(problem, generation, debug, result, test_fn):
@@ -84,6 +86,8 @@ class RewardCodeFn(RewardFn):
     the reward based on the correctness of the unit tests provided
     """
     def __call__(self, input: RewardInput) -> RewardOutput:
+        total_start_time = time.time()
+
         assert input.problem_type == RewardType.CODE, \
             "Invalid problem type: expected 'CODE', but got '{}'".format(input.problem_type)
 
@@ -147,7 +151,18 @@ class RewardCodeFn(RewardFn):
             is_correct = lcb_check_correctness(metadata, model_response, is_extracted=is_extrcted)
         else:
             raise ValueError("No supported dataset found")
+        
+        wandb.log({
+            "dataset_name": dataset_name,
+            "total_execution_time": total_time,
+            "is_correct": is_correct,
+            "reward_value": self.config.correct_reward if is_correct else self.config.incorrect_reward
+        })
+        
         print(f"Is correct: {is_correct}")
+        total_time = time.time() - total_start_time
+        print(f"Total reward function execution time: {total_time:.2f} seconds")
+
         if is_correct:
             return RewardOutput(reward=self.config.correct_reward, is_correct=True)
         else:
