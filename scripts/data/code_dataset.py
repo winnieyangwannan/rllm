@@ -38,20 +38,20 @@ def make_map_fn(split: str):
             answer = example.pop('answer')#str
         elif dataset_name== "taco" or dataset_name == "apps": #taco/apps code datasets
             answer = dict()
-            answer["input_output"] = example.pop('input_output') #dict
+            answer["tests"] = example.pop('input_output') #dict
             answer = json.dumps(answer)
         elif dataset_name == "codeforces":
             answer = dict()
-            answer["test_cases"] = example.pop('test_cases')
+            answer["tests"] = example.pop('test_cases')
             problem = CODEFORCES_SYSTEM_MESSAGE + "\n" + question
             answer = json.dumps(answer)
         elif dataset_name == "code_contests":
             answer = dict()
-            answer["public_tests"] = example.pop('public_tests')
+            answer["tests"] = example.pop('public_tests')
             answer = json.dumps(answer)
         elif dataset_name == "livecodebench":
             answer = dict()
-            answer["public_test_cases"] = example.pop('public_test_cases')
+            answer["tests"] = example.pop('public_test_cases')
             question = LCB_SYSTEM_MESSAGE_GENERIC + "\n" + question
             starter_code = example.pop("starter_code")
             if starter_code:

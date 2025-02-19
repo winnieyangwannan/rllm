@@ -105,7 +105,7 @@ class RewardCodeFn(RewardFn):
         
         if dataset_name == "TACO":#apps/TACO:
             is_correct = check_correctness(metadata, model_response, taco_run_test)
-        elif dataset_name == "codecontests":#codetests
+        elif dataset_name == "code_contests":#codetests
             is_correct = check_correctness(metadata, model_response, code_contests_run_test)
         elif dataset_name == "codeforces":#codeforces 
             is_correct = check_correctness(metadata, model_response, codeforces_run_test)
