@@ -99,7 +99,8 @@ class RayVLLMWorker:
         
         # Initialize server args
         openai_parser = make_arg_parser(FlexibleArgumentParser())
-        self.server_args = openai_parser.parse_args(["--enable-auto-tool-choice", "--tool-call-parser", "hermes"])
+
+        self.server_args = openai_parser.parse_args([])
         
         # Configure server args
         self.server_args.host = "0.0.0.0"
@@ -115,7 +116,6 @@ class RayVLLMWorker:
             setattr(self.server_args, key, value)
 
         self.server_process = None
-        # self.oai_client = OpenAI(api_key='EMPTY', base_url=f"http://0.0.0.0:{self.port}/v1", timeout=int(1e9))
         self.oai_client = AsyncOpenAI(api_key='EMPTY', base_url=f"http://0.0.0.0:{self.port}/v1", timeout=int(1e9))
         os.environ["TOKENIZERS_PARALLELISM"] = "true"
         self.tokenizer = AutoTokenizer.from_pretrained(self.model)
