@@ -52,7 +52,7 @@ def run_test(sample, test=None, debug=False):
     otherwise it'll just return an input and output pair.
     """
 
-    in_outs = sample["test_cases"]
+    in_outs = sample["tests"]
     if in_outs is None or len(in_outs) == 0: 
         return []
     #test_cases:[ { "input": "3 6 9", "output": "6" }, { "input": "4 4 4", "output": "4" }, { "input": "0 0 0", "output": "0" } ]

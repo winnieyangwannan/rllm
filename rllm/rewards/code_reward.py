@@ -1,26 +1,22 @@
 """
 This module contains the RewardCode class, which evaluates code datasets answers
-and assigns rewards based on their correctness. It utilizes a language model to 
-validate answers when necessary.
+and assigns rewards based on their correctness on unit tests.
 """
-from rllm.globals import THOUGHT_DELIMITER_START, THOUGHT_DELIMITER_END
+from typing import List, Union
+from rllm.globals import MODEL_NAME_OR_PATH
 from rllm.rewards.reward_types import RewardConfig, RewardFn, RewardInput, RewardOutput, RewardType
-import copy
-import json
 import multiprocessing
-import os
-import random
-import re
 import numpy as np
 from typing import Dict
-from typing import List, Union
 from multiprocessing import Manager
 from rllm.rewards.taco.testing_util import run_test as taco_run_test
 from rllm.rewards.code_contests.testing_util import run_test as code_contests_run_test
 from rllm.rewards.codeforces.testing_util import run_test as codeforces_run_test
 from rllm.rewards.livecodebench.testing_util import unsafe_lcb_runTests
 import json
-import ast 
+import ast
+import re
+from rllm.rewards.swebench.testing_util import swebench_check_correctness
 
 def _temp_run(problem, generation, debug, result, test_fn):
     try:
@@ -98,15 +94,32 @@ class RewardCodeFn(RewardFn):
             try:
                 metadata = json.loads(metadata)
             except json.JSONDecodeError as e:
-                print(f"code reward Json Error parsing: {e}")
+                print(f"Code Reward Json Parsing Error: {e}")
                 return RewardOutput(reward=self.config.incorrect_reward, is_correct=False)
-        # Check correctness of the generated code
-        if metadata.get("input_output") is not None:#apps/TACO:
+
+        dataset_name = metadata.get("dataset_flag", None)
+        tests = metadata.get("tests", None)
+        if tests is None:
+            print("No tests found in metadata")
+            return RewardOutput(reward=self.config.incorrect_reward, is_correct=False)
+        
+        if dataset_name == "TACO":#apps/TACO:
             is_correct = check_correctness(metadata, model_response, taco_run_test)
-        elif metadata.get("public_tests") is not None:#codetests
+        elif dataset_name == "codecontests":#codetests
             is_correct = check_correctness(metadata, model_response, code_contests_run_test)
-        elif metadata.get("test_cases") is not None:#codeforces #TODO(xiaoxiang):fix the codeforces_run_test
-            test_cases= metadata.get("test_cases")
+        elif dataset_name == "codeforces":#codeforces 
+            is_correct = check_correctness(metadata, model_response, codeforces_run_test)
+        elif dataset_name == "swebench":#swebench
+            resolve_rate = swebench_check_correctness(
+                model_response=model_response,
+                metadata=metadata
+            )
+
+            reward = 2 * resolve_rate - 1
+
+            return RewardOutput(reward=reward, is_correct=reward == 1)
+        elif dataset_name == "codeforces":#codeforces #TODO(xiaoxiang):fix the codeforces_run_test
+            test_cases = metadata.get("tests")
             if isinstance(test_case, str):
                 try:
                     test_cases= json.loads(test_case)
@@ -115,10 +128,10 @@ class RewardCodeFn(RewardFn):
                     return RewardOutput(reward=self.config.incorrect_reward, is_correct=False)
             for test_case in test_cases:
                 assert isinstance(test_case, dict)
-            metadata["test_cases"] = test_cases
+            metadata["tests"] = test_cases
             is_correct = check_correctness(metadata, model_response, codeforces_run_test)
-        elif metadata.get("public_test_cases") is not None:#livecodebench
-            public_test_cases =  metadata.get("public_test_cases")
+        elif dataset_name == "livecodebench":#livecodebench
+            public_test_cases =  metadata.get("tests")
             if isinstance(public_test_cases, str):
                 try:
                     public_test_cases = json.loads(public_test_cases)
@@ -127,14 +140,14 @@ class RewardCodeFn(RewardFn):
                     return RewardOutput(reward=self.config.incorrect_reward, is_correct=False)
             for test_cases in public_test_cases:
                 assert isinstance(test_cases, dict)
-            metadata['public_test_cases'] = public_test_cases
-            print(f"len(metadata['public_test_cases']):{len(metadata['public_test_cases'])}")#TODO(Xiao):for the len(metadata['public_test_cases'],maybe we can ignore it when data preprocess. scripts/data/code_dataset.py
-            if len(metadata["public_test_cases"]) == 0:
+            metadata['tests'] = public_test_cases
+            if len(metadata['tests']) == 0:
                 return RewardOutput(reward=self.config.incorrect_reward, is_correct=False)
-            is_extrcted = not metadata["public_test_cases"][0].get("testtype") == "stdin"
+            is_extrcted = not metadata["tests"][0].get("testtype") == "stdin"
             is_correct = lcb_check_correctness(metadata, model_response, is_extracted=is_extrcted)
         else:
-            raise ValueError("Invalid metadata format")
+            raise ValueError("No supported dataset found")
+        print(f"Is correct: {is_correct}")
         if is_correct:
             return RewardOutput(reward=self.config.correct_reward, is_correct=True)
         else:
@@ -144,7 +157,13 @@ def rllm_reward_fn(solution_str: str, ground_truth: Dict, enable_llm = False):
     reward_config = RewardConfig()
     reward_config.use_math_orm = enable_llm
     reward_fn = RewardCodeFn(reward_config)
-    reward_response = reward_fn(RewardInput(problem=solution_str, problem_type=RewardType.CODE, model_response=solution_str, metadata=ground_truth))
+    reward_response = reward_fn(
+        RewardInput(
+            problem=solution_str,
+            problem_type=RewardType.CODE,
+            model_response=solution_str,
+            metadata=ground_truth
+        ))
     return reward_response.is_correct
 
 
@@ -330,4 +349,3 @@ No I'm sorry
     input = RewardInput(problem="", problem_type=RewardType.CODE, model_response=model_response, metadata=metadata)
     output = reward(input)
     print(f"livecodebench output:{output}")
-    

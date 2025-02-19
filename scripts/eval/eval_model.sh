@@ -1,6 +1,6 @@
 set -x
 
-export VLLM_ATTENTION_BACKEND=XFORMERS
+export VLLM_ATTENTION_BACKEND=FLASH_ATTN
 
 # Default values
 MODEL_PATH="$HOME/DeepScaleR-1.5B-Preview"

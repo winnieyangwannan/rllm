@@ -1,14 +1,18 @@
 # rllm
+
 Get to O3 performance
 
 ## Install
+
 Install Verl Submodule:
+
 ```bash
 git submodule init
 git submodule update
 ```
 
-Install Python Dependencies: 
+Install Python Dependencies:
+
 ```bash
 pip install -r ./verl/requirements.txt
 pip install -e ./verl
@@ -18,6 +22,7 @@ pip install -e .
 ```
 
 ### Download training/testing data from Google Drive
+
 ```bash
 gdown "https://drive.google.com/uc?id=1q5Z0Xi98f1Zt-x4R3ubWLxkIIHsZPlum" -O "rllm/data/train/coding/apps.json"
 gdown "https://drive.google.com/uc?id=1tAG36FB32ZLeUUckB6AHyEROkQ8lFhJ6" -O "rllm/data/train/coding/code_contests.json"
@@ -26,7 +31,14 @@ gdown "https://drive.google.com/uc?id=1ek936L0N57jVaF1YA0vCPv4GRWae4R5C" -O "rll
 ```
 
 ### WandB
-```bash
+
+````bash
 wandb login
 wandb init
-```
+### Run Unit Tests
+
+Unit tests are in the `test/` folder and uses pytest. To run them, you can do something like this.
+
+```bash
+PYTHONPATH=. pytest tests/rllm/rewards/tests.py
+````

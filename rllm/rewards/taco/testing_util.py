@@ -52,7 +52,7 @@ def run_test(sample, test=None, debug=False):
     if test(generated_code) is not None it'll try to run the code.
     otherwise it'll just return an input and output pair.
     """
-    in_outs = sample["input_output"]
+    in_outs = sample["tests"]
     if isinstance(in_outs, str):
         try:
             in_outs =  ast.literal_eval(in_outs)
@@ -60,6 +60,7 @@ def run_test(sample, test=None, debug=False):
         except (ValueError, SyntaxError) as e:
             print(f"run_tests app/taco, Error parsing string: {e}")
             return []
+
     if in_outs:
         if in_outs.get("fn_name") is None:
             fn_name = in_outs.get("fn_name")

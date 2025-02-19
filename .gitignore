@@ -185,3 +185,7 @@ rllm/data/preprocess/*.json
 tmp/
 scripts/train/debug_code_dataloader.sh
 debug.sh
+
+# Ignore debug logs and run result logs
+logs/
+rllm.*.json
