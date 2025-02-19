@@ -278,7 +278,7 @@ def run_test_std(completion, test_input, test_output):
     return output_value == test_output, output_value
 
 def unsafe_lcb_runTests(problem, completion, timeout, runtime_debug, is_extracted):
-    test_cases = problem["public_test_cases"]
+    test_cases = problem["tests"]
     manager = multiprocessing.Manager()
     result = manager.list()
     p = multiprocessing.Process(target=run_tests_for_one_example, args=(test_cases, completion, result, runtime_debug, is_extracted))

@@ -150,7 +150,7 @@ class RewardCodeFn(RewardFn):
             is_extrcted = not metadata["tests"][0].get("testtype") == "stdin"
             is_correct = lcb_check_correctness(metadata, model_response, is_extracted=is_extrcted)
         else:
-            raise ValueError("No supported dataset found")
+            raise ValueError(f"No supported dataset found for {dataset_name}")
         
         print(f"Is correct: {is_correct}")
         total_time = time.time() - total_start_time
@@ -169,10 +169,11 @@ class RewardCodeFn(RewardFn):
         else:
             return RewardOutput(reward=self.config.incorrect_reward, is_correct=False)
 
-def rllm_reward_fn(solution_str: str, ground_truth: Dict, enable_llm = False):
+def rllm_reward_fn(data_source: str, solution_str: str, ground_truth: Dict, enable_llm = False):
     reward_config = RewardConfig()
     reward_config.use_math_orm = enable_llm
     reward_fn = RewardCodeFn(reward_config)
+    ground_truth['dataset_flag'] = data_source
     reward_response = reward_fn(
         RewardInput(
             problem=solution_str,

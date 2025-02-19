@@ -108,12 +108,16 @@ if __name__ == '__main__':
     test_datasets = [TestDataset.TACO, TestDataset.APPS, TestDataset.CODE_CONTESTS, TestDataset.CODEFORCES]
     test_datasets_names = ["taco", "apps","code_contests", "codeforces"]
     test_datasets_names = ["livecodebench"]
+    test_datasets = [TestDataset.LIVECODEBENCH]
     #test_datasets = [TestDataset.AIME, TestDataset.AMC, TestDataset.MATH, TestDataset.MINERVA, TestDataset.OLYMPIAD_BENCH]
     # test_datasets = [TestDataset.LIVECODEBENCH]
     # test_datasets = [TestDataset.CODEFORCES]
     # test_datasets_names = ["codeforces"]
     # train_datasets = [TrainDataset.CODEFORCES]
     # train_dataset_names = ["codeforces"]
+    # train_datasets = []
+    # train_dataset_names = []
+
     
     test_datasets_data = [load_dataset(d, local_dir) for d in test_datasets]
     train_dataset_data = [load_dataset(d, local_dir) for d in train_datasets]

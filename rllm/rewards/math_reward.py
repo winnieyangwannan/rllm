@@ -108,7 +108,7 @@ def rllm_reward_fn(data_source, solution_str: str, ground_truth: Union[str, List
             ground_truth = json.loads(ground_truth)
         except json.JSONDecodeError:
             return False 
-        return code_rllm_reward_fn(solution_str, ground_truth)
+        return code_rllm_reward_fn(data_source, solution_str, ground_truth)
     else:
         return rllm_reward_fn_math(solution_str, ground_truth, enable_llm)
 
