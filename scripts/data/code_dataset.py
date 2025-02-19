@@ -43,7 +43,7 @@ def make_map_fn(split: str):
         elif dataset_name == "codeforces":
             answer = dict()
             answer["tests"] = example.pop('test_cases')
-            problem = CODEFORCES_SYSTEM_MESSAGE + "\n" + question
+            question = CODEFORCES_SYSTEM_MESSAGE + "\n" + question
             answer = json.dumps(answer)
         elif dataset_name == "code_contests":
             answer = dict()

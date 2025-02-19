@@ -1,8 +1,14 @@
 import pytest
+from unittest.mock import patch
+import os
 from rllm.rewards import RewardConfig, RewardInput, RewardType
 from rllm.rewards.code_reward import RewardCodeFn
 
-def test_reward_code_contests():
+@patch("wandb.log")
+@patch("wandb.init")
+def test_reward_code_contests(mock_init, mock_log):
+    mock_init.return_value = None
+    mock_log.return_value = None
     model_response = """
     import sys
     from itertools import permutations
@@ -39,13 +45,17 @@ def test_reward_code_contests():
     if __name__ == "__main__":
         main()
     """
-    metadata = {"tests": {"input": ["3\n4 5\n6 3\n10 2\n"], "output": ["5\n3 4\n4 4 1 2\n"]}, "dataset_flag": "codecontests"}
+    metadata = {"tests": {"input": ["3\n4 5\n6 3\n10 2\n"], "output": ["5\n3 4\n4 4 1 2\n"]}, "dataset_flag": "code_contests"}
     reward = RewardCodeFn(RewardConfig)
     input = RewardInput(problem="", problem_type=RewardType.CODE, model_response=model_response, metadata=metadata)
     output = reward(input)
     assert output is not None
 
-def test_reward_codeforces():
+@patch("wandb.log")
+@patch("wandb.init")
+def test_reward_codeforces(mock_init, mock_log):
+    mock_init.return_value = None
+    mock_log.return_value = None
     model_response = """
     import sys
     from itertools import permutations
@@ -65,7 +75,11 @@ def test_reward_codeforces():
     output = reward(input)
     assert output is not None
 
-def test_reward_swebench():
+@patch("wandb.log")
+@patch("wandb.init")
+def test_reward_swebench(mock_init, mock_log):
+    mock_init.return_value = None
+    mock_log.return_value = None
     reward = RewardCodeFn(RewardConfig)
     tests = {
         "instance_id": "astropy__astropy-12907",
@@ -137,7 +151,11 @@ This feels like a bug to me, but I might be missing something?
     output = reward(input)
     assert output.is_correct == True
 
-def test_reward_taco():
+@patch("wandb.log")
+@patch("wandb.init")
+def test_reward_taco(mock_init, mock_log):
+    mock_init.return_value = None
+    mock_log.return_value = None
     model_response = """
     import sys
     from itertools import permutations

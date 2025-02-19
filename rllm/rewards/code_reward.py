@@ -152,15 +152,16 @@ class RewardCodeFn(RewardFn):
         else:
             raise ValueError("No supported dataset found")
         
+        print(f"Is correct: {is_correct}")
+        total_time = time.time() - total_start_time
+
         wandb.log({
             "dataset_name": dataset_name,
             "total_execution_time": total_time,
             "is_correct": is_correct,
             "reward_value": self.config.correct_reward if is_correct else self.config.incorrect_reward
         })
-        
-        print(f"Is correct: {is_correct}")
-        total_time = time.time() - total_start_time
+
         print(f"Total reward function execution time: {total_time:.2f} seconds")
 
         if is_correct:
