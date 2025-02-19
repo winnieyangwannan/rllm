@@ -102,18 +102,18 @@ if __name__ == '__main__':
     if not os.path.exists(local_dir):
         makedirs(local_dir)
 
-    # Initialize datasets
-    # train_datasets = [TrainDataset.TACO, TrainDataset.APPS,TrainDataset.CODE_CONTESTS, TrainDataset.CODEFORCES]
-    # train_dataset_names = ["taco", "apps", "code_contests", "codeforces"]
-    # test_datasets = [TestDataset.TACO, TestDataset.APPS, TestDataset.CODE_CONTESTS, TestDataset.CODEFORCES]
-    # test_datasets_names = ["taco", "apps","code_contests", "codeforces"]
-    # test_datasets_names = ["livecodebench"]
-    # #test_datasets = [TestDataset.AIME, TestDataset.AMC, TestDataset.MATH, TestDataset.MINERVA, TestDataset.OLYMPIAD_BENCH]
+    #Initialize datasets
+    train_datasets = [TrainDataset.TACO, TrainDataset.APPS,TrainDataset.CODE_CONTESTS, TrainDataset.CODEFORCES]
+    train_dataset_names = ["taco", "apps", "code_contests", "codeforces"]
+    test_datasets = [TestDataset.TACO, TestDataset.APPS, TestDataset.CODE_CONTESTS, TestDataset.CODEFORCES]
+    test_datasets_names = ["taco", "apps","code_contests", "codeforces"]
+    test_datasets_names = ["livecodebench"]
+    #test_datasets = [TestDataset.AIME, TestDataset.AMC, TestDataset.MATH, TestDataset.MINERVA, TestDataset.OLYMPIAD_BENCH]
     # test_datasets = [TestDataset.LIVECODEBENCH]
-    test_datasets = [TestDataset.CODEFORCES]
-    test_datasets_names = ["codeforces"]
-    train_datasets = [TrainDataset.CODEFORCES]
-    train_dataset_names = ["codeforces"]
+    # test_datasets = [TestDataset.CODEFORCES]
+    # test_datasets_names = ["codeforces"]
+    # train_datasets = [TrainDataset.CODEFORCES]
+    # train_dataset_names = ["codeforces"]
     
     test_datasets_data = [load_dataset(d, local_dir) for d in test_datasets]
     train_dataset_data = [load_dataset(d, local_dir) for d in train_datasets]

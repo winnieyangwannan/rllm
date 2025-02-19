@@ -265,7 +265,6 @@ Yes of course!
 import json
 
 def main(phone_numbers):
-    # 假设输入是一个电话号码的列表，返回重复的电话号码个数
     seen = set()
     duplicates = set()
     for number in phone_numbers:

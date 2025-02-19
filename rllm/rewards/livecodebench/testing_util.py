@@ -309,7 +309,6 @@ def run_tests_for_one_example(test_cases, completion, result_list, runtime_debug
             else:
                 test_input, test_output = prepare_test_input_output_std(test_case)
                 passed, output_value = run_test_std(completion, copy.deepcopy(test_input), copy.deepcopy(test_output))
-            # print(test_input, test_output, output_value)
             if not passed:
                 output_error = f"For test input: {test_input}. Expected output is: {test_output}, but got: {output_value}."
             time_elapsed = time.time() - time_start
