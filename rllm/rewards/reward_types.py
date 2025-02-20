@@ -11,6 +11,9 @@ class RewardConfig:
     # Config for math-bsed rewards
     math_reward_weight: float = 1.0
     use_math_orm: bool = False
+
+    # Config for code-based rewards
+    code_reward_weight: float = 1.0
     
     # Config for cot-based rewards
     cot_reward_weight: float = 0.0

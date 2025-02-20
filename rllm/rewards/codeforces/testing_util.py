@@ -52,7 +52,7 @@ def run_test(sample, test=None, debug=False):
     otherwise it'll just return an input and output pair.
     """
 
-    in_outs = sample["test_cases"]
+    in_outs = sample["tests"]
     #test_cases:[ { "input": "3 6 9", "output": "6" }, { "input": "4 4 4", "output": "4" }, { "input": "0 0 0", "output": "0" } ]
     #test_cases: [ { "input": "20 40 60 80 100\n0 1 2 3 4\n1 0", "output": "4900" }, { "input": "119 119 119 119 119\n0 0 0 0 0\n10 0", "output": "4930" }]
 
