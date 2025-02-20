@@ -33,3 +33,11 @@ Unit tests are in the `test/` folder and uses pytest. To run them, you can do so
 ```bash
 PYTHONPATH=. pytest tests/rllm/rewards/tests.py
 ````
+
+
+Train your Math/Coding Agents
+```bash
+cd scripts/data
+python3 deepscaler_dataset.py
+python3 code_dataset.py
+```

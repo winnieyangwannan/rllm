@@ -22,7 +22,7 @@ from rllm.system_prompts import (LCB_FORMATTING_MESSAGE_WITH_STARTER_CODE,
                                LCB_SYSTEM_MESSAGE_GENERIC)
 
 
-def fetch_live_code_bench_sytem_prmopt(prompt: str, starter_code: str = None):
+def fetch_live_code_bench_sytem_prompt(prompt: str, starter_code: str = None):
     # https://github.com/LiveCodeBench/LiveCodeBench/blob/main/lcb_runner/prompts/code_generation.py
     prompt= LCB_SYSTEM_MESSAGE_GENERIC + "\n\n" + prompt
     if starter_code:
@@ -52,7 +52,7 @@ def make_map_fn(split: str):
 
         if dataset_name == "livecodebench":
             starter_code = example.get("starter_code", None)
-            question = fetch_live_code_bench_sytem_prmopt(question, starter_code)
+            question = fetch_live_code_bench_sytem_prompt(question, starter_code)
         
         data = {
             "data_source": dataset_name,
@@ -77,14 +77,14 @@ def make_map_fn(split: str):
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='Process datasets for DeepScaler training')
-    parser.add_argument('--local_dir', default=os.path.join('./data'),
+    parser.add_argument('--local_dir', default=os.path.expanduser('~/rllm/data'),
                        help='Local directory to save processed datasets')#Xiao:hardcode,need to change 
     parser.add_argument('--hdfs_dir', default=None,
                        help='Optional HDFS directory to copy datasets to')
     args = parser.parse_args()
 
     local_dir = args.local_dir
-    print(f"local_dir:{local_dir}")
+    print(f"Local_dir:{local_dir}")
     hdfs_dir = args.hdfs_dir
     
     # Make local directory if it doesn't exist
@@ -110,8 +110,8 @@ if __name__ == '__main__':
             if processed_example is not None:
                 train_data.append(processed_example)
                 all_train_data.append(processed_example)
-        train_df = pd.DataFrame(train_data)
-        train_df.to_parquet(os.path.join(local_dir, f'train_{dataset_name}.parquet'))
+        # train_df = pd.DataFrame(train_data)
+        # train_df.to_parquet(os.path.join(local_dir, f'train_{dataset_name}.parquet'))
     
     # save all code dataset
     all_train_df = pd.DataFrame(all_train_data)

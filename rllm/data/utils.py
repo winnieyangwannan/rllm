@@ -69,5 +69,14 @@ if __name__ == '__main__':
     aime_data = load_dataset(TrainDataset.Math.AIME)
     print(f"Loaded {len(aime_data)} AIME training problems")
     
-    apps_data = load_dataset(TestDataset.Code.APPS) 
+    apps_data = load_dataset(TrainDataset.Code.APPS) 
     print(f"Loaded {len(apps_data)} APPS test problems")
+
+    lcb_data = load_dataset(TestDataset.Code.LIVECODEBENCH) 
+    print(f"Loaded {len(lcb_data)} Livecodebench test problems")
+
+    code_contests_data = load_dataset(TestDataset.Code.CODE_CONTESTS) 
+    print(f"Loaded {len(code_contests_data)} Code Contests test problems")
+
+    codeforces_data = load_dataset(TestDataset.Code.CODEFORCES) 
+    print(f"Loaded {len(codeforces_data)} Codeforces test problems")
