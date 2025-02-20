@@ -3,7 +3,7 @@ import enum
 from typing import Any, Dict, List, Union
 
 class TrainDataset:
-    
+
     class Math(enum.Enum):
         # The standard American beginner competitions.
         AIME = 'AIME'
@@ -25,7 +25,7 @@ class TrainDataset:
         CODE_CONTESTS = "CODE_CONTESTS"
 
 class TestDataset:
-    
+
     class Math(enum.Enum):
         AIME = 'AIME'
         AMC =  'AMC'

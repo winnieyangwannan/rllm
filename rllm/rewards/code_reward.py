@@ -13,12 +13,13 @@ from rllm.rewards.code_utils.taco.testing_util import run_test as taco_run_test
 from rllm.rewards.code_utils.code_contests.testing_util import run_test as code_contests_run_test
 from rllm.rewards.code_utils.codeforces.testing_util import run_test as codeforces_run_test
 from rllm.rewards.code_utils.livecodebench.testing_util import unsafe_lcb_runTests
+
 import json
 import ast
 import re
 import time
 import wandb
-from rllm.rewards.swebench.testing_util import swebench_check_correctness
+from rllm.rewards.code_utils.swebench import swebench_check_correctness
 
 def _temp_run(problem, generation, debug, result, test_fn):
     try:
