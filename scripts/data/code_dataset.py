@@ -1,24 +1,25 @@
-"""Script to prepare DeepScaler training and test datasets.
+"""Script to prepare code datasets for training and testing.
 
-This script processes math problem datasets into a standardized format for training
-and testing DeepScaler models. It loads problems from specified datasets, adds
-instruction prompts, and saves the processed data as parquet files.
+This script processes code problem datasets into a standardized format for training
+and testing models. It loads problems from various code datasets (APPS, CodeForces,
+LiveCodeBench etc.), adds appropriate instruction prompts, and saves the processed
+data as parquet files.
 """
 
 import argparse
+import json
 import os
-from typing import Dict, List, Optional, Any
+from typing import Any, Dict, List, Optional
 
 import pandas as pd
-import json 
 
-from verl.utils.hdfs_io import copy, makedirs
-from verl.utils.reward_score.math import last_boxed_only_string, remove_boxed
-
+from rllm.data.dataset_types import TestDataset, TrainDataset
 from rllm.data.utils import load_dataset
-from rllm.data.dataset_types import TrainDataset, TestDataset
-from rllm.data.dataloader import DatasetMix 
-from rllm.system_prompts import LCB_SYSTEM_MESSAGE_GENERIC, LCB_FORMATTING_MESSAGE_WITH_STARTER_CODE, LCB_FORMATTING_WITHOUT_STARTER_CODE, CODEFORCES_SYSTEM_MESSAGE
+from rllm.system_prompts import (CODEFORCES_SYSTEM_MESSAGE,
+                               LCB_FORMATTING_MESSAGE_WITH_STARTER_CODE,
+                               LCB_FORMATTING_WITHOUT_STARTER_CODE,
+                               LCB_SYSTEM_MESSAGE_GENERIC)
+from verl.utils.hdfs_io import copy, makedirs
 
 def make_map_fn(split: str):
     """Create a mapping function to process dataset examples.
@@ -34,11 +35,9 @@ def make_map_fn(split: str):
         instruction = "Let's think step by step and output the final answer within \\boxed{}."
         if dataset_name != "livecodebench":
             question = f"{question} {instruction}"
-        if dataset_name == "MATH":
-            answer = example.pop('answer')#str
-        elif dataset_name== "taco" or dataset_name == "apps": #taco/apps code datasets
+        elif dataset_name in ["taco","apps"]: #taco/apps code datasets
             answer = dict()
-            answer["tests"] = example.pop('input_output') #dict
+            answer["tests"] = example.pop('tests') #dict
             answer = json.dumps(answer)
         elif dataset_name == "codeforces":
             answer = dict()
@@ -103,12 +102,12 @@ if __name__ == '__main__':
         makedirs(local_dir)
 
     #Initialize datasets
-    train_datasets = [TrainDataset.TACO, TrainDataset.APPS,TrainDataset.CODE_CONTESTS, TrainDataset.CODEFORCES]
+    train_datasets = [TrainDataset.Code.TACO, TrainDataset.Code.APPS,TrainDataset.Code.CODE_CONTESTS, TrainDataset.Code.CODEFORCES]
     train_dataset_names = ["taco", "apps", "code_contests", "codeforces"]
-    test_datasets = [TestDataset.TACO, TestDataset.APPS, TestDataset.CODE_CONTESTS, TestDataset.CODEFORCES]
+    test_datasets = [TestDataset.Code.TACO, TestDataset.Code.APPS, TestDataset.Code.CODE_CONTESTS, TestDataset.Code.CODEFORCES]
     test_datasets_names = ["taco", "apps","code_contests", "codeforces"]
     test_datasets_names = ["livecodebench"]
-    test_datasets = [TestDataset.LIVECODEBENCH]
+    test_datasets = [TestDataset.Code.LIVECODEBENCH]
     #test_datasets = [TestDataset.AIME, TestDataset.AMC, TestDataset.MATH, TestDataset.MINERVA, TestDataset.OLYMPIAD_BENCH]
     # test_datasets = [TestDataset.LIVECODEBENCH]
     # test_datasets = [TestDataset.CODEFORCES]
