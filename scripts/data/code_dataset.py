@@ -5,7 +5,6 @@ and testing models. It loads problems from various code datasets (APPS, CodeForc
 LiveCodeBench etc.), adds appropriate instruction prompts, and saves the processed
 data as parquet files.
 """
-
 import argparse
 import json
 import os
@@ -14,15 +13,28 @@ from typing import Any, Dict, List, Optional
 import pandas as pd
 import json 
 
-from verl.utils.hdfs_io import copy, makedirs
+from verl.utils.hdfs_io import makedirs
 
 from rllm.data.dataset_types import TestDataset, TrainDataset
 from rllm.data.utils import load_dataset
-from rllm.system_prompts import (CODEFORCES_SYSTEM_MESSAGE,
-                               LCB_FORMATTING_MESSAGE_WITH_STARTER_CODE,
+from rllm.system_prompts import (LCB_FORMATTING_MESSAGE_WITH_STARTER_CODE,
                                LCB_FORMATTING_WITHOUT_STARTER_CODE,
                                LCB_SYSTEM_MESSAGE_GENERIC)
-from verl.utils.hdfs_io import copy, makedirs
+
+
+def fetch_live_code_bench_sytem_prmopt(prompt: str, starter_code: str = None):
+    # https://github.com/LiveCodeBench/LiveCodeBench/blob/main/lcb_runner/prompts/code_generation.py
+    prompt= LCB_SYSTEM_MESSAGE_GENERIC + "\n\n" + prompt
+    if starter_code:
+        prompt += (
+                f"### Format: {LCB_FORMATTING_MESSAGE_WITH_STARTER_CODE}\n"
+        )
+        prompt += f"```python\n{starter_code}\n```\n\n"
+    else:
+        prompt += f"### Format: {LCB_FORMATTING_WITHOUT_STARTER_CODE}\n"
+    prompt += "```python\n# YOUR CODE HERE\n```\n\n"
+    prompt += f"### Answer: (use the provided format with backticks)\n\n"
+    return prompt
 
 def make_map_fn(split: str):
     """Create a mapping function to process dataset examples.
@@ -35,39 +47,13 @@ def make_map_fn(split: str):
     """
     def process_fn(example: Dict[str, Any], idx: int, dataset_name=None) -> Optional[Dict[str, Any]]:
         question = example.pop('problem')
-        instruction = "Let's think step by step and output the final answer within \\boxed{}."
-        if dataset_name != "livecodebench":
-            question = f"{question} {instruction}"
-        if dataset_name in ["taco","apps"]: #taco/apps code datasets
-            answer = dict()
-            answer["tests"] = example.pop('tests') #dict
-            answer = json.dumps(answer)
-        elif dataset_name == "codeforces":
-            answer = dict()
-            answer["tests"] = example.pop('tests')
-            question = CODEFORCES_SYSTEM_MESSAGE + "\n" + question
-            answer = json.dumps(answer)
-        elif dataset_name == "code_contests":
-            answer = dict()
-            answer["tests"] = example.pop('public_tests')
-            answer = json.dumps(answer)
-        elif dataset_name == "livecodebench":
-            answer = dict()
-            answer["tests"] = example.pop('public_test_cases')
-            question = LCB_SYSTEM_MESSAGE_GENERIC + "\n" + question
-            starter_code = example.pop("starter_code")
-            if starter_code:
-                question+= (
-                     f"### Format: {LCB_FORMATTING_MESSAGE_WITH_STARTER_CODE}\n"
-                )
-                question += f"```python\n{starter_code}\n```\n\n"
-            else:
-                question += f"### Format: {LCB_FORMATTING_WITHOUT_STARTER_CODE}\n"
-            question += "```python\n# YOUR CODE HERE\n```\n\n"
-            question += f"### Answer: (use the provided format with backticks)\n\n"
-            answer = json.dumps(answer)
-        else:
-            raise ValueError(f"Unknown dataset name: {dataset_name}")
+        tests = example.pop('tests')
+        tests = json.dumps(tests)
+
+        if dataset_name == "livecodebench":
+            starter_code = example.get("starter_code", None)
+            question = fetch_live_code_bench_sytem_prmopt(question, starter_code)
+        
         data = {
             "data_source": dataset_name,
             "prompt": [{
@@ -77,7 +63,7 @@ def make_map_fn(split: str):
             "ability": "code",
             "reward_model": {
                 "style": "rule",
-                "ground_truth": answer#set for the different dataset 
+                "ground_truth": tests
             },
             "extra_info": {
                 'split': split,
@@ -144,8 +130,3 @@ if __name__ == '__main__':
                 all_test_data.append(processed_example)
         test_df = pd.DataFrame(test_data)
         test_df.to_parquet(os.path.join(local_dir, f'test_{dataset_name}.parquet'))
-
-    # Optionally copy to HDFS
-    # if hdfs_dir is not None:
-    #     makedirs(hdfs_dir)
-    #     copy(src=local_dir, dst=hdfs_dir)
