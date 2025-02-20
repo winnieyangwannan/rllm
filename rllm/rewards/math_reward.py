@@ -110,10 +110,10 @@ def rllm_reward_fn(data_source, solution_str: str, ground_truth: Union[str, List
             return False 
         return code_rllm_reward_fn(data_source, solution_str, ground_truth)
     else:
-        return rllm_reward_fn_math(solution_str, ground_truth, enable_llm)
+        return rllm_reward_fn_math(data_source, solution_str, ground_truth, enable_llm)
 
 
-def rllm_reward_fn_math(solution_str: str, ground_truth: Union[str, List[str]], enable_llm = False):
+def rllm_reward_fn_math(data_source: str, solution_str: str, ground_truth: Union[str, List[str]], enable_llm = False):
     reward_config = RewardConfig()
     reward_config.use_math_orm = enable_llm
     reward_fn = RewardMathFn(reward_config)
