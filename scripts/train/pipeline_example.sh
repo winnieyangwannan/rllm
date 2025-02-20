@@ -31,7 +31,7 @@ python3 -m verl.trainer.main_ppo_pipeline \
     data.train_batch_size=64 \
     data.val_batch_size=512 \
     data.max_prompt_length=1024 \
-    data.max_response_length=16384 \
+    data.max_response_length=2048 \
     actor_rollout_ref.model.path=$MODEL_PATH  \
     actor_rollout_ref.actor.optim.lr=1e-6 \
     actor_rollout_ref.hybrid_engine=False \
@@ -61,7 +61,7 @@ python3 -m verl.trainer.main_ppo_pipeline \
     trainer.critic_warmup=0 \
     trainer.logger=['console','wandb'] \
     trainer.project_name='deepscaler' \
-    trainer.experiment_name='deepscaler-pipeline' \
+    trainer.experiment_name='deepscaler-math-pipeline-debug' \
     +trainer.val_before_train=False \
     trainer.n_gpus_per_node=8 \
     trainer.nnodes=1 \

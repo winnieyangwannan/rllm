@@ -100,7 +100,7 @@ class RewardMathFn(RewardFn):
                 
         return RewardOutput(reward=self.config.incorrect_reward, is_correct=False)
 
-def rllm_reward_fn(solution_str: str, ground_truth: Union[str, List[str]], enable_llm = False):
+def rllm_reward_fn(data_source: str,solution_str: str, ground_truth: Union[str, List[str]], enable_llm = False):
     reward_config = RewardConfig()
     reward_config.use_math_orm = enable_llm
     reward_fn = RewardMathFn(reward_config)
