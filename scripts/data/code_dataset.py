@@ -38,9 +38,9 @@ def make_map_fn(split: str):
         instruction = "Let's think step by step and output the final answer within \\boxed{}."
         if dataset_name != "livecodebench":
             question = f"{question} {instruction}"
-        elif dataset_name in ["taco","apps"]: #taco/apps code datasets
+        if dataset_name in ["taco","apps"]: #taco/apps code datasets
             answer = dict()
-            answer["tests"] = example.pop('tests') #dict
+            answer["tests"] = example.pop('input_output') #dict
             answer = json.dumps(answer)
         elif dataset_name == "codeforces":
             answer = dict()
@@ -91,7 +91,7 @@ def make_map_fn(split: str):
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='Process datasets for DeepScaler training')
-    parser.add_argument('--local_dir', default=os.path.expanduser('~/rllm/data/code'),
+    parser.add_argument('--local_dir', default=os.path.join('./data'),
                        help='Local directory to save processed datasets')#Xiao:hardcode,need to change 
     parser.add_argument('--hdfs_dir', default=None,
                        help='Optional HDFS directory to copy datasets to')
@@ -146,6 +146,6 @@ if __name__ == '__main__':
         test_df.to_parquet(os.path.join(local_dir, f'test_{dataset_name}.parquet'))
 
     # Optionally copy to HDFS
-    if hdfs_dir is not None:
-        makedirs(hdfs_dir)
-        copy(src=local_dir, dst=hdfs_dir)
+    # if hdfs_dir is not None:
+    #     makedirs(hdfs_dir)
+    #     copy(src=local_dir, dst=hdfs_dir)
