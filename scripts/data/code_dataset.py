@@ -40,11 +40,11 @@ def make_map_fn(split: str):
             question = f"{question} {instruction}"
         if dataset_name in ["taco","apps"]: #taco/apps code datasets
             answer = dict()
-            answer["tests"] = example.pop('input_output') #dict
+            answer["tests"] = example.pop('tests') #dict
             answer = json.dumps(answer)
         elif dataset_name == "codeforces":
             answer = dict()
-            answer["tests"] = example.pop('test_cases')
+            answer["tests"] = example.pop('tests')
             question = CODEFORCES_SYSTEM_MESSAGE + "\n" + question
             answer = json.dumps(answer)
         elif dataset_name == "code_contests":
