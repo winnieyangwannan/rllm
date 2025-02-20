@@ -13,7 +13,6 @@ import pandas as pd
 import json 
 
 from verl.utils.hdfs_io import copy, makedirs
-from verl.utils.reward_score.math import last_boxed_only_string, remove_boxed
 
 from rllm.data.utils import load_dataset
 from rllm.data.dataset_types import TrainDataset, TestDataset
@@ -89,7 +88,7 @@ def make_map_fn(split: str):
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='Process datasets for DeepScaler training')
-    parser.add_argument('--local_dir', default=os.path.expanduser('~/rllm/data'),
+    parser.add_argument('--local_dir', default=os.path.expanduser('~/rllm/data/code'),
                        help='Local directory to save processed datasets')#Xiao:hardcode,need to change 
     parser.add_argument('--hdfs_dir', default=None,
                        help='Optional HDFS directory to copy datasets to')
@@ -103,21 +102,12 @@ if __name__ == '__main__':
         makedirs(local_dir)
 
     #Initialize datasets
-    train_datasets = [TrainDataset.TACO, TrainDataset.APPS,TrainDataset.CODE_CONTESTS, TrainDataset.CODEFORCES]
+    train_datasets = [TrainDataset.Code.TACO, TrainDataset.Code.APPS,TrainDataset.Code.CODE_CONTESTS, TrainDataset.Code.CODEFORCES]
     train_dataset_names = ["taco", "apps", "code_contests", "codeforces"]
-    test_datasets = [TestDataset.TACO, TestDataset.APPS, TestDataset.CODE_CONTESTS, TestDataset.CODEFORCES]
+    test_datasets = [TestDataset.Code.TACO, TestDataset.Code.APPS, TestDataset.Code.CODE_CONTESTS, TestDataset.Code.CODEFORCES]
     test_datasets_names = ["taco", "apps","code_contests", "codeforces"]
     test_datasets_names = ["livecodebench"]
-    test_datasets = [TestDataset.LIVECODEBENCH]
-    #test_datasets = [TestDataset.AIME, TestDataset.AMC, TestDataset.MATH, TestDataset.MINERVA, TestDataset.OLYMPIAD_BENCH]
-    # test_datasets = [TestDataset.LIVECODEBENCH]
-    # test_datasets = [TestDataset.CODEFORCES]
-    # test_datasets_names = ["codeforces"]
-    # train_datasets = [TrainDataset.CODEFORCES]
-    # train_dataset_names = ["codeforces"]
-    # train_datasets = []
-    # train_dataset_names = []
-
+    test_datasets = [TestDataset.Code.LIVECODEBENCH]
     
     test_datasets_data = [load_dataset(d, local_dir) for d in test_datasets]
     train_dataset_data = [load_dataset(d, local_dir) for d in train_datasets]

@@ -182,6 +182,8 @@ data/*.parquet
 **/checkpoints/
 
 rllm/data/preprocess/*.json
+rllm/data/preprocess/code/*.json
+rllm/data/preprocess/math/*.json
 tmp/
 scripts/train/debug_code_dataloader.sh
 debug.sh
@@ -189,3 +191,5 @@ debug.sh
 # Ignore debug logs and run result logs
 logs/
 rllm.*.json
+
+

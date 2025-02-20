@@ -1,5 +1,8 @@
 from rllm.rewards.reward_types import RewardConfig, RewardFn, RewardInput, RewardOutput, RewardType
 from rllm.rewards.math_reward import RewardMathFn
+from rllm.rewards.code_reward import rllm_reward_fn_code 
+from rllm.rewards.math_reward import rllm_reward_fn_math
+import json 
 
 # Check RewardConfig to understand the config values.
 class RLRewardFn(RewardFn):
@@ -29,3 +32,13 @@ class RLRewardFn(RewardFn):
             reward=reward,
             is_correct=is_correct
         )
+
+def rllm_reward_fn(data_source: str, llm_solution: str, ground_truth: Union[str, List[str]], **kwargs):
+    if data_source in ["apps", "taco", "code_contests", "codeforces", "livecodebench"]:
+        try:
+            ground_truth = json.loads(ground_truth)
+        except json.JSONDecodeError:
+            return False 
+        return rllm_reward_fn_code(data_source, llm_solution, ground_truth, **kwargs)
+    else:
+        return rllm_reward_fn_math(data_source, llm_solution, ground_truth, **kwargs)

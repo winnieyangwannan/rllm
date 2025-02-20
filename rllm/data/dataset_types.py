@@ -2,7 +2,7 @@ from dataclasses import dataclass, field
 import enum
 from typing import Any, Dict, List, Union
 
-class TrainDataset(enum.Enum):
+class TrainDataset:
     
     class Math(enum.Enum):
         # The standard American beginner competitions.
@@ -24,7 +24,7 @@ class TrainDataset(enum.Enum):
         CODEFORCES = "CODEFORCES"
         CODE_CONTESTS = "CODE_CONTESTS"
 
-class TestDataset(enum.Enum):
+class TestDataset:
     
     class Math(enum.Enum):
         AIME = 'AIME'

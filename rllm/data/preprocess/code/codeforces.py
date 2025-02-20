@@ -76,7 +76,7 @@ for entry in ds:
 
 print(f"train dataset size: {len(dataset)}")
 
-with open("train_codeforces.json", "w") as f:
+with open("../../train/code/train_codeforces.json", "w") as f:
     json.dump(dataset, f, indent=4)
 
 # %%
@@ -115,7 +115,7 @@ for entry in ds:
 
 print(f"test dataset size: {len(dataset)}")
 
-with open("test_codeforces.json", "w") as f:
+with open("../../test/code/test_codeforces.json", "w") as f:
     json.dump(dataset, f, indent=4)
 
 # %%

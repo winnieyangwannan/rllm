@@ -8,7 +8,7 @@ from typing import List, Union
 from rllm.globals import THOUGHT_DELIMITER_START, THOUGHT_DELIMITER_END, OAI_RM_MODEL
 from rllm.rewards import RewardConfig, RewardFn, RewardInput, RewardOutput, RewardType
 from rllm.rewards.math_utils.utils import extract_answer, grade_answer_sympy, grade_answer_mathd
-from rllm.rewards.code_reward import rllm_reward_fn as code_rllm_reward_fn 
+
 from rllm.system_prompts import ORM_PROMPT
 from rllm.utils import call_gemini_llm, call_oai_rm_llm
 import json 
@@ -102,17 +102,9 @@ class RewardMathFn(RewardFn):
                 
         return RewardOutput(reward=self.config.incorrect_reward, is_correct=False)
 
-def rllm_reward_fn(data_source: str, llm_solution: str, ground_truth: Union[str, List[str]], **kwargs):
-    if data_source in ["apps", "taco", "code_contests", "codeforces", "livecodebench"]:
-        try:
-            ground_truth = json.loads(ground_truth)
-        except json.JSONDecodeError:
-            return False 
-        return code_rllm_reward_fn(data_source, llm_solution, ground_truth, **kwargs)
-    else:
-        return rllm_reward_fn_math(data_source, llm_solution, ground_truth, **kwargs)
 
-def rllm_reward_fn_math(data_source: str, llm_solution: str, ground_truth: Union[str, List[str]], enable_llm = False, **kwargs):
+
+def rllm_reward_fn_math(data_source: str, llm_solution: str, ground_truth: Union[str, List[str]], **kwargs):
     """Evaluates mathematical solutions against ground truth answers.
 
     This function creates a reward function to evaluate mathematical solutions by comparing
@@ -133,7 +125,6 @@ def rllm_reward_fn_math(data_source: str, llm_solution: str, ground_truth: Union
         True
     """
     reward_config = RewardConfig()
-    reward_config.use_math_orm = enable_llm
     reward_fn = RewardMathFn(reward_config)
     reward_response = reward_fn(RewardInput(problem=None,
                                             problem_type=RewardType.MATH,
