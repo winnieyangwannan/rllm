@@ -186,5 +186,45 @@ def test_reward_taco():
     output = reward(input)
     assert output is not None
 
+
+def test_reward_livecodebench():
+    model_response = """
+Yes of course!
+```python
+import json
+
+def main(phone_numbers):
+    seen = set()
+    duplicates = set()
+    for number in phone_numbers:
+        if number in seen:
+            duplicates.add(number)
+        else:
+            seen.add(number)
+    
+    return len(duplicates)+1
 if __name__ == "__main__":
+    main(input.strip().split())
+```
+""" 
+    public_test_case = [
+        {
+            'input': '["12345", "530391", "12345"]',
+            'output': '2',
+            'testtype': 'functional'
+        }
+    ]
+    metadata = {
+        "tests": public_test_case,
+        "data_source": "livecodebench",
+    }
+    reward = RewardCodeFn(RewardConfig)
+    input = RewardInput(problem="", problem_type=RewardType.CODE, model_response=model_response, metadata=metadata)
+    output = reward(input)
+    print(f"Livecodebench output:{output}")
+
+if __name__ == "__main__":
+    test_reward_livecodebench()
+    test_reward_taco()
+    test_reward_codeforces()
     test_reward_code_contests()
