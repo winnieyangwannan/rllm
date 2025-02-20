@@ -45,6 +45,7 @@ def test_reward_code_contests():
     input = RewardInput(problem="", problem_type=RewardType.CODE, model_response=model_response, metadata=metadata, data_source="code_contests")
     output = reward(input)
     assert output is not None
+    return output
 
 def test_reward_codeforces():
     model_response = """
@@ -67,6 +68,7 @@ def test_reward_codeforces():
     input = RewardInput(problem="", problem_type=RewardType.CODE, model_response=model_response, metadata=metadata, data_source="codeforces")
     output = reward(input)
     assert output is not None
+    return output
 
 
 def test_reward_swebench():
@@ -140,6 +142,7 @@ This feels like a bug to me, but I might be missing something?
     )
     output = reward(input)
     assert output.is_correct == True
+    return output
 
 def test_reward_taco():
     model_response = """
@@ -185,6 +188,7 @@ def test_reward_taco():
     input = RewardInput(problem="", problem_type=RewardType.CODE, model_response=model_response, metadata=metadata, data_source="taco")
     output = reward(input)
     assert output is not None
+    return output
 
 
 def test_reward_livecodebench():
@@ -221,9 +225,10 @@ if __name__ == "__main__":
     input = RewardInput(problem="", problem_type=RewardType.CODE, model_response=model_response, metadata=metadata, data_source="livecodebench")
     output = reward(input)
     print(f"Livecodebench output:{output}")
+    return output
 
 if __name__ == "__main__":
-    test_reward_livecodebench()
-    test_reward_taco()
-    test_reward_codeforces()
-    test_reward_code_contests()
+    print(test_reward_livecodebench())
+    print(test_reward_taco())
+    print(test_reward_codeforces())
+    print(test_reward_code_contests())
