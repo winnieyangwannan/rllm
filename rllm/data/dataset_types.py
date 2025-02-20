@@ -36,7 +36,6 @@ class TestDataset:
     
     class Code(enum.Enum):
         TACO = "TACO"
-        APPS = "APPS"
         CODEFORCES = "CODEFORCES"
         CODE_CONTESTS = "CODE_CONTESTS"
         LIVECODEBENCH = "LIVECODEBENCH"
