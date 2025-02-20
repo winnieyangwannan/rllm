@@ -84,9 +84,6 @@ class LiveCodebenchInput:
     problem: dict
     difficult:str='easy'
 
-
-
-
 @dataclass(slots=True, kw_only=True)
 class RewardOutput:
     """Data structure for the output of reward calculations.
