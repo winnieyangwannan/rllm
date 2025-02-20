@@ -95,6 +95,7 @@ if __name__ == '__main__':
     args = parser.parse_args()
 
     local_dir = args.local_dir
+    print(f"local_dir:{local_dir}")
     hdfs_dir = args.hdfs_dir
     
     # Make local directory if it doesn't exist
@@ -109,9 +110,9 @@ if __name__ == '__main__':
     test_datasets_names = ["livecodebench"]
     test_datasets = [TestDataset.Code.LIVECODEBENCH]
     
-    test_datasets_data = [load_dataset(d, local_dir) for d in test_datasets]
-    train_dataset_data = [load_dataset(d, local_dir) for d in train_datasets]
-    
+    test_datasets_data = [load_dataset(d) for d in test_datasets]
+    train_dataset_data = [load_dataset(d) for d in train_datasets]
+
     # Process training data
     all_train_data = [] 
     process_fn = make_map_fn('train')
