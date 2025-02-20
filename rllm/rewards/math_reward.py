@@ -143,7 +143,20 @@ def rllm_reward_fn_math(data_source: str, llm_solution: str, ground_truth: Union
 
 if __name__ == "__main__":
     reward = RewardMathFn(RewardConfig)
-    input = RewardInput(problem="Let $P(x)=x^{4}+2 x^{3}-13 x^{2}-14 x+24$ be a polynomial with roots $r_{1}, r_{2}, r_{3}, r_{4}$. Let $Q$ be the quartic polynomial with roots $r_{1}^{2}, r_{2}^{2}, r_{3}^{2}, r_{4}^{2}$, such that the coefficient of the $x^{4}$ term of $Q$ is 1. Simplify the quotient $Q\\left(x^{2}\\right) / P(x)$, leaving your answer in terms of $x$. (You may assume that $x$ is not equal to any of $\\left.r_{1}, r_{2}, r_{3}, r_{4}\\right)$.", problem_type=RewardType.MATH, model_response="The answer is \\boxed{the function is 24 + 14*x + (-13)*x^2 - 2*x^3 + x^4}.",
-                        metadata={"answer": ["10", "$x^{4}-2 x^{3}-13 x^{2}+14 x+24$"]})
-    output = reward(input)
+    test_input = RewardInput(
+        problem=(
+            "Let $P(x)=x^{4}+2 x^{3}-13 x^{2}-14 x+24$ be a polynomial with roots "
+            "$r_{1}, r_{2}, r_{3}, r_{4}$. Let $Q$ be the quartic polynomial with roots "
+            "$r_{1}^{2}, r_{2}^{2}, r_{3}^{2}, r_{4}^{2}$, such that the coefficient "
+            "of the $x^{4}$ term of $Q$ is 1. Simplify the quotient $Q\\left(x^{2}\\right) / P(x)$, "
+            "leaving your answer in terms of $x$. (You may assume that $x$ is not equal to "
+            "any of $\\left.r_{1}, r_{2}, r_{3}, r_{4}\\right)$."
+        ),
+        problem_type=RewardType.MATH,
+        model_response=(
+            "The answer is \\boxed{the function is 24 + 14*x + (-13)*x^2 - 2*x^3 + x^4}."
+        ),
+        metadata={"answer": ["10", "$x^{4}-2 x^{3}-13 x^{2}+14 x+24$"]}
+    )
+    output = reward(test_input)
     print(output)
