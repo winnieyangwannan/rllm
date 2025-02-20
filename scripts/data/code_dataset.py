@@ -106,11 +106,7 @@ if __name__ == '__main__':
         makedirs(local_dir)
 
     #Initialize datasets
-    train_datasets = [TrainDataset.Code.TACO, TrainDataset.Code.APPS,TrainDataset.Code.CODE_CONTESTS, TrainDataset.Code.CODEFORCES]
-    train_dataset_names = ["taco", "apps", "code_contests", "codeforces"]
-    test_datasets = [TestDataset.Code.TACO, TestDataset.Code.APPS, TestDataset.Code.CODE_CONTESTS, TestDataset.Code.CODEFORCES]
-    test_datasets_names = ["taco", "apps","code_contests", "codeforces"]
-    test_datasets_names = ["livecodebench"]
+    train_datasets = [TrainDataset.Code.TACO, TrainDataset.Code.APPS, TrainDataset.Code.CODE_CONTESTS, TrainDataset.Code.CODEFORCES]
     test_datasets = [TestDataset.Code.LIVECODEBENCH]
     
     test_datasets_data = [load_dataset(d) for d in test_datasets]
@@ -120,36 +116,35 @@ if __name__ == '__main__':
     all_train_data = [] 
     process_fn = make_map_fn('train')
 
-    for train_dataset, train_dataset_name in zip(train_dataset_data, train_dataset_names):
+    for train_dataset, train_dataset_data in zip(train_datasets, train_dataset_data):
         train_data: List[Dict[str, Any]] = []
-        for idx, example in enumerate(train_dataset):
-            processed_example = process_fn(example, idx, train_dataset_name)
+        dataset_name = train_dataset.value.lower()  # Extract name from enum
+        for idx, example in enumerate(train_dataset_data):
+            processed_example = process_fn(example, idx, dataset_name)
             if processed_example is not None:
                 train_data.append(processed_example)
                 all_train_data.append(processed_example)
         train_df = pd.DataFrame(train_data)
-        train_df.to_parquet(os.path.join(local_dir, f'train_{train_dataset_name}.parquet'))#train parquet for each code dataset
+        train_df.to_parquet(os.path.join(local_dir, f'train_{dataset_name}.parquet'))
     
     # save all code dataset
     all_train_df = pd.DataFrame(all_train_data)
-    all_train_df.to_parquet(os.path.join(local_dir, 'train_code.parquet')) #train parquet for all code dataset
+    all_train_df.to_parquet(os.path.join(local_dir, 'deepscaler_code.parquet'))
 
     #Process and save each test dataset separately
     all_test_data = []
-    for test_dataset, test_data_list, test_datasets_name in zip(test_datasets, test_datasets_data, test_datasets_names):
+    for test_dataset, test_data_list in zip(test_datasets, test_datasets_data):
         test_data: List[Dict[str, Any]] = []
         process_fn = make_map_fn('test')
+        dataset_name = test_dataset.value.lower()  # Extract name from enum
         for idx, example in enumerate(test_data_list):
-            processed_example = process_fn(example, idx, test_datasets_name)
+            processed_example = process_fn(example, idx, dataset_name)
             if processed_example is not None:
                 test_data.append(processed_example)
                 all_test_data.append(processed_example)
-        dataset_name = test_dataset.value.lower()
         test_df = pd.DataFrame(test_data)
-        test_df.to_parquet(os.path.join(local_dir, f'test_{test_datasets_name}.parquet')) #test parquet for each code dataset
-    #save all code dataset
-    # all_test_df = pd.DataFrame(all_test_data)
-    # all_test_df.to_parquet(os.path.join(local_dir, 'test_code.parquet')) #test parquet for all code dataset
+        test_df.to_parquet(os.path.join(local_dir, f'test_{dataset_name}.parquet'))
+
     # Optionally copy to HDFS
     if hdfs_dir is not None:
         makedirs(hdfs_dir)
