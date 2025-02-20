@@ -40,9 +40,9 @@ def test_reward_code_contests():
         main()
     ```
     """
-    metadata = {"tests": {"input": ["3\n4 5\n6 3\n10 2\n"], "output": ["5\n3 4\n4 4 1 2\n"]}, "data_source": "code_contests"}
+    metadata = {"tests": {"input": ["3\n4 5\n6 3\n10 2\n"], "output": ["5\n3 4\n4 4 1 2\n"]}}
     reward = RewardCodeFn(RewardConfig)
-    input = RewardInput(problem="", problem_type=RewardType.CODE, model_response=model_response, metadata=metadata)
+    input = RewardInput(problem="", problem_type=RewardType.CODE, model_response=model_response, metadata=metadata, data_source="code_contests")
     output = reward(input)
     assert output is not None
 
@@ -62,9 +62,9 @@ def test_reward_codeforces():
         main()
     ```
     """
-    metadata = {"tests": [{"input": "3 30\n2 2 1", "output": "5"}, {"input": "3 20\n2 1 1", "output": "-1"}], "data_source": "codeforces"}
+    metadata = {"tests": [{"input": "3 30\n2 2 1", "output": "5"}, {"input": "3 20\n2 1 1", "output": "-1"}]}
     reward = RewardCodeFn(RewardConfig)
-    input = RewardInput(problem="", problem_type=RewardType.CODE, model_response=model_response, metadata=metadata)
+    input = RewardInput(problem="", problem_type=RewardType.CODE, model_response=model_response, metadata=metadata, data_source="codeforces")
     output = reward(input)
     assert output is not None
 
@@ -75,7 +75,6 @@ def test_reward_swebench():
         "instance_id": "astropy__astropy-12907",
     }
     metadata = {
-        "data_source": "swebench",
         "tests": tests,
     }
     model_response = """\
@@ -137,6 +136,7 @@ This feels like a bug to me, but I might be missing something?
         problem_type=RewardType.CODE,
         model_response=model_response,
         metadata=metadata,
+        data_source="swebench",
     )
     output = reward(input)
     assert output.is_correct == True
@@ -180,9 +180,9 @@ def test_reward_taco():
         main()
     ```
     """
-    metadata = {"tests": {"inputs": ["3\n4 5\n6 3\n10 2\n"], "outputs": ["5\n3 4\n4 4 1 2\n"]}, "data_source": "taco"}
+    metadata = {"tests": {"inputs": ["3\n4 5\n6 3\n10 2\n"], "outputs": ["5\n3 4\n4 4 1 2\n"]}}
     reward = RewardCodeFn(RewardConfig)
-    input = RewardInput(problem="", problem_type=RewardType.CODE, model_response=model_response, metadata=metadata)
+    input = RewardInput(problem="", problem_type=RewardType.CODE, model_response=model_response, metadata=metadata, data_source="taco")
     output = reward(input)
     assert output is not None
 
@@ -216,10 +216,9 @@ if __name__ == "__main__":
     ]
     metadata = {
         "tests": public_test_case,
-        "data_source": "livecodebench",
     }
     reward = RewardCodeFn(RewardConfig)
-    input = RewardInput(problem="", problem_type=RewardType.CODE, model_response=model_response, metadata=metadata)
+    input = RewardInput(problem="", problem_type=RewardType.CODE, model_response=model_response, metadata=metadata, data_source="livecodebench")
     output = reward(input)
     print(f"Livecodebench output:{output}")
 

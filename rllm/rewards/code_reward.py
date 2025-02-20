@@ -86,7 +86,7 @@ class RewardCodeFn(RewardFn):
                 print(f"Unable to parse metadata: {e}")
                 return RewardOutput(reward=self.config.format_error_reward, is_correct=False)
         
-        dataset_name = metadata.get("data_source", None)
+        dataset_name = input.data_source
         tests = metadata.get("tests", None)
         if tests is None:
             print("No tests found in metadata")
@@ -162,11 +162,11 @@ if __name__ == "__main__":
     """
     reward_config = RewardConfig()
     reward_fn = RewardCodeFn(reward_config)
-    ground_truth['data_source'] = data_source
     reward_response = reward_fn(
         RewardInput(
             problem=None,
             problem_type=RewardType.CODE,
+            data_source=data_source,
             model_response=llm_solution,
             metadata=ground_truth
         ))
