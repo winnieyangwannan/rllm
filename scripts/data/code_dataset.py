@@ -12,6 +12,9 @@ import os
 from typing import Any, Dict, List, Optional
 
 import pandas as pd
+import json 
+
+from verl.utils.hdfs_io import copy, makedirs
 
 from rllm.data.dataset_types import TestDataset, TrainDataset
 from rllm.data.utils import load_dataset
@@ -88,13 +91,14 @@ def make_map_fn(split: str):
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='Process datasets for DeepScaler training')
-    parser.add_argument('--local_dir', default=os.path.expanduser('~/rllm/data'),
+    parser.add_argument('--local_dir', default=os.path.expanduser('~/rllm/data/code'),
                        help='Local directory to save processed datasets')#Xiao:hardcode,need to change 
     parser.add_argument('--hdfs_dir', default=None,
                        help='Optional HDFS directory to copy datasets to')
     args = parser.parse_args()
 
     local_dir = args.local_dir
+    print(f"local_dir:{local_dir}")
     hdfs_dir = args.hdfs_dir
     
     # Make local directory if it doesn't exist
@@ -108,19 +112,10 @@ if __name__ == '__main__':
     test_datasets_names = ["taco", "apps","code_contests", "codeforces"]
     test_datasets_names = ["livecodebench"]
     test_datasets = [TestDataset.Code.LIVECODEBENCH]
-    #test_datasets = [TestDataset.AIME, TestDataset.AMC, TestDataset.MATH, TestDataset.MINERVA, TestDataset.OLYMPIAD_BENCH]
-    # test_datasets = [TestDataset.LIVECODEBENCH]
-    # test_datasets = [TestDataset.CODEFORCES]
-    # test_datasets_names = ["codeforces"]
-    # train_datasets = [TrainDataset.CODEFORCES]
-    # train_dataset_names = ["codeforces"]
-    # train_datasets = []
-    # train_dataset_names = []
+    
+    test_datasets_data = [load_dataset(d) for d in test_datasets]
+    train_dataset_data = [load_dataset(d) for d in train_datasets]
 
-    
-    test_datasets_data = [load_dataset(d, local_dir) for d in test_datasets]
-    train_dataset_data = [load_dataset(d, local_dir) for d in train_datasets]
-    
     # Process training data
     all_train_data = [] 
     process_fn = make_map_fn('train')

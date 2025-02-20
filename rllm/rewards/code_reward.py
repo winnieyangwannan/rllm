@@ -9,10 +9,11 @@ import multiprocessing
 import numpy as np
 from typing import Dict
 from multiprocessing import Manager
-from rllm.rewards.code_utils.taco import run_test as taco_run_test
-from rllm.rewards.code_utils.code_contests import run_test as code_contests_run_test
-from rllm.rewards.code_utils.codeforces import run_test as codeforces_run_test
-from rllm.rewards.code_utils.livecodebench import unsafe_lcb_runTests
+from rllm.rewards.code_utils.taco.testing_util import run_test as taco_run_test
+from rllm.rewards.code_utils.code_contests.testing_util import run_test as code_contests_run_test
+from rllm.rewards.code_utils.codeforces.testing_util import run_test as codeforces_run_test
+from rllm.rewards.code_utils.livecodebench.testing_util import unsafe_lcb_runTests
+
 import json
 import ast
 import re
@@ -124,14 +125,12 @@ class RewardCodeFn(RewardFn):
             return RewardOutput(reward=reward, is_correct=reward == 1)
         elif dataset_name == "codeforces":
             test_cases = metadata.get("tests")
-            if isinstance(test_case, str):
+            if isinstance(test_cases, str):
                 try:
-                    test_cases= json.loads(test_case)
+                    test_cases= json.loads(test_cases)
                 except json.JSONDecodeError as e:
                     print(f"code reward Json Error parsing codeforces : {e}")
                     return RewardOutput(reward=self.config.incorrect_reward, is_correct=False)
-            for test_case in test_cases:
-                assert isinstance(test_case, dict)
             metadata["tests"] = test_cases
             is_correct = check_correctness(metadata, model_response, codeforces_run_test)
         elif dataset_name == "livecodebench":#livecodebench
@@ -169,7 +168,43 @@ class RewardCodeFn(RewardFn):
         else:
             return RewardOutput(reward=self.config.incorrect_reward, is_correct=False)
 
-def rllm_reward_fn(data_source: str, llm_solution: str, ground_truth: Dict, **kwargs):
+def rllm_reward_fn_code(data_source: str, llm_solution: str, ground_truth: Dict, **kwargs):
+    """Evaluate code solutions against ground truth ansters
+    
+    This function creates a reward function to evaluate code solutions by pass the test_case from groun_truth. It can optionally use a language model
+    for more sophisticated answer validation.
+
+    Args:
+        data_source: The source/dataset the problem comes from
+        llm_solution: The solution string provided by the language model to evaluate
+        ground_truth: some test_cases for this llm_solution
+        enable_llm: Whether to enable language model validation for complex cases (default: False)
+
+    Returns:
+        bool: True if the solution passes all the test_case, False otherwise
+
+    Example:
+            model_response = '''
+import sys
+from itertools import permutations
+def main():
+    n,m=map(int, input().split()) 
+    a=sum(list(map(int, input().split()))) 
+    if a+(n-1)*10<=m: 
+        print(5) 
+    else: 
+        print(5)
+if __name__ == "__main__":
+    main()
+'''
+    
+    print(f"test the code_forces")
+    # test_cases = [ { "input": "3 30\n2 2 1", "output": "5" }, { "input": "3 10\n3 2 1", "output": "5" } ] 
+    metadata = {
+         "test_cases": test_cases,
+    }
+    True
+    """
     reward_config = RewardConfig()
     reward_fn = RewardCodeFn(reward_config)
     ground_truth['dataset_flag'] = data_source
