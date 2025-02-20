@@ -16,6 +16,8 @@ class RLRewardFn(RewardFn):
             math_reward_output = self.math_reward_fn(input)
             reward += self.config.math_reward_weight * math_reward_output.reward
             is_correct = math_reward_output.is_correct
+        elif reward_type == RewardType.CODE:
+            pass
         else:
             raise ValueError(f"Unsupported reward type: {reward_type}")
         

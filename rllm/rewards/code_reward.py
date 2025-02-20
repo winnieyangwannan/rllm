@@ -122,7 +122,7 @@ class RewardCodeFn(RewardFn):
             reward = 2 * resolve_rate - 1
 
             return RewardOutput(reward=reward, is_correct=reward == 1)
-        elif dataset_name == "codeforces":#codeforces #TODO(xiaoxiang):fix the codeforces_run_test
+        elif dataset_name == "codeforces":
             test_cases = metadata.get("tests")
             if isinstance(test_case, str):
                 try:
@@ -169,16 +169,15 @@ class RewardCodeFn(RewardFn):
         else:
             return RewardOutput(reward=self.config.incorrect_reward, is_correct=False)
 
-def rllm_reward_fn(data_source: str, solution_str: str, ground_truth: Dict, enable_llm = False):
+def rllm_reward_fn(data_source: str, llm_solution: str, ground_truth: Dict, **kwargs):
     reward_config = RewardConfig()
-    reward_config.use_math_orm = enable_llm
     reward_fn = RewardCodeFn(reward_config)
     ground_truth['dataset_flag'] = data_source
     reward_response = reward_fn(
         RewardInput(
-            problem=solution_str,
+            problem=None,
             problem_type=RewardType.CODE,
-            model_response=solution_str,
+            model_response=llm_solution,
             metadata=ground_truth
         ))
     return reward_response.is_correct

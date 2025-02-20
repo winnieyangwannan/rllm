@@ -3,35 +3,43 @@ import enum
 from typing import Any, Dict, List, Union
 
 class TrainDataset(enum.Enum):
-    # The standard American beginner competitions.
-    AIME = 'AIME'
-    AMC =  'AMC'
-    # Omni math dataset
-    OMNI_MATH = 'OMNI_MATH'
-    # Unique Olympiad problems from NUMINA
-    NUMINA_OLYMPIAD = 'OLYMPIAD'
-    # Dan Hendrycks math
-    MATH = 'MATH'
-    GSM8k = 'GSM8K'
-    STILL = "STILL"
-    DEEPSCALER = "DEEPSCALER"
-    TACO = "TACO"
-    APPS = "APPS"
-    CODEFORCES = "CODEFORCES"
-    CODE_CONTESTS = "CODE_CONTESTS"
+    
+    class Math(enum.Enum):
+        # The standard American beginner competitions.
+        AIME = 'AIME'
+        AMC =  'AMC'
+        # Omni math dataset
+        OMNI_MATH = 'OMNI_MATH'
+        # Unique Olympiad problems from NUMINA
+        NUMINA_OLYMPIAD = 'OLYMPIAD'
+        # Dan Hendrycks math
+        MATH = 'MATH'
+        GSM8k = 'GSM8K'
+        STILL = "STILL"
+        DEEPSCALER = "DEEPSCALER"
+    
+    class Code(enum.Enum):
+        TACO = "TACO"
+        APPS = "APPS"
+        CODEFORCES = "CODEFORCES"
+        CODE_CONTESTS = "CODE_CONTESTS"
 
 class TestDataset(enum.Enum):
-    AIME = 'AIME'
-    AMC =  'AMC'
-    MATH = 'MATH'
-    GSM8k = 'GSM8k'
-    MINERVA = 'MINERVA'
-    OLYMPIAD_BENCH = 'OLYMPIAD_BENCH'
-    TACO = "TACO"
-    APPS = "APPS"
-    CODEFORCES = "CODEFORCES"
-    CODE_CONTESTS = "CODE_CONTESTS"
-    LIVECODEBENCH = "LIVECODEBENCH"
+    
+    class Math(enum.Enum):
+        AIME = 'AIME'
+        AMC =  'AMC'
+        MATH = 'MATH'
+        GSM8k = 'GSM8k'
+        MINERVA = 'MINERVA'
+        OLYMPIAD_BENCH = 'OLYMPIAD_BENCH'
+    
+    class Code(enum.Enum):
+        TACO = "TACO"
+        APPS = "APPS"
+        CODEFORCES = "CODEFORCES"
+        CODE_CONTESTS = "CODE_CONTESTS"
+        LIVECODEBENCH = "LIVECODEBENCH"
 
 
 Dataset = Union[TrainDataset, TestDataset]

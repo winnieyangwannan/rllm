@@ -102,22 +102,43 @@ class RewardMathFn(RewardFn):
                 
         return RewardOutput(reward=self.config.incorrect_reward, is_correct=False)
 
-def rllm_reward_fn(data_source, solution_str: str, ground_truth: Union[str, List[str]], enable_llm = False):
+def rllm_reward_fn(data_source: str, llm_solution: str, ground_truth: Union[str, List[str]], **kwargs):
     if data_source in ["apps", "taco", "code_contests", "codeforces", "livecodebench"]:
         try:
             ground_truth = json.loads(ground_truth)
         except json.JSONDecodeError:
             return False 
-        return code_rllm_reward_fn(data_source, solution_str, ground_truth)
+        return code_rllm_reward_fn(data_source, llm_solution, ground_truth, **kwargs)
     else:
-        return rllm_reward_fn_math(data_source, solution_str, ground_truth, enable_llm)
+        return rllm_reward_fn_math(data_source, llm_solution, ground_truth, **kwargs)
 
+def rllm_reward_fn_math(data_source: str, llm_solution: str, ground_truth: Union[str, List[str]], enable_llm = False, **kwargs):
+    """Evaluates mathematical solutions against ground truth answers.
 
-def rllm_reward_fn_math(data_source: str, solution_str: str, ground_truth: Union[str, List[str]], enable_llm = False):
+    This function creates a reward function to evaluate mathematical solutions by comparing
+    them against provided ground truth answers. It can optionally use a language model
+    for more sophisticated answer validation.
+
+    Args:
+        data_source: The source/dataset the problem comes from
+        llm_solution: The solution string provided by the language model to evaluate
+        ground_truth: Either a single string or list of strings containing valid answers
+        enable_llm: Whether to enable language model validation for complex cases (default: False)
+
+    Returns:
+        bool: True if the solution is deemed correct, False otherwise
+
+    Example:
+        >>> rllm_reward_fn_math("gsm8k", "x = 5", "5", False)
+        True
+    """
     reward_config = RewardConfig()
     reward_config.use_math_orm = enable_llm
     reward_fn = RewardMathFn(reward_config)
-    reward_response = reward_fn(RewardInput(problem=solution_str, problem_type=RewardType.MATH, model_response=solution_str, metadata={"answer": ground_truth}))
+    reward_response = reward_fn(RewardInput(problem=None,
+                                            problem_type=RewardType.MATH,
+                                            model_response=llm_solution,
+                                            metadata={"answer": ground_truth}))
     return reward_response.is_correct
 
 if __name__ == "__main__":
