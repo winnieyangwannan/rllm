@@ -1,4 +1,5 @@
 # modifed from https://github.com/hendrycks/apps/blob/main/eval/testing_util.py to fix some evaluation bugs and add instructions
+# https://github.com/NovaSky-AI/SkyThought/blob/main/skythought/skythought_evals/tasks/taco/taco_util.py
 from rllm.rewards.code_utils.pyext2 import RuntimeModule
 import signal
 import numpy as np
@@ -47,12 +48,11 @@ TIMEOUT = 4  # seconds
 
 EXECUTION_RESULTS = {1: "passed", 0: "false", -1: "timeout", -2: "runtime_error", -3: "returncode:{code}", -4: "compile_error"}
 
-def run_test(sample, test=None, debug=False):
+def run_test(in_outs, test=None, debug=False):
     """
     if test(generated_code) is not None it'll try to run the code.
     otherwise it'll just return an input and output pair.
     """
-    in_outs = sample["tests"]
     if isinstance(in_outs, str):
         try:
             in_outs =  ast.literal_eval(in_outs)

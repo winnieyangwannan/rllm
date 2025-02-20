@@ -7,65 +7,56 @@ import multiprocessing
 import re
 import time
 from multiprocessing import Manager
-from typing import Dict
+from typing import List, Dict, Union
 
-import wandb
 
-from rllm.rewards.code_utils.codeforces import run_test as code_contests_run_test
-from rllm.rewards.code_utils.livecodebench import unsafe_lcb_runTests
+from rllm.rewards.code_utils.code_contests import run_test as code_contests_run_test
+from rllm.rewards.code_utils.livecodebench import run_test as lcb_run_test
+from rllm.rewards.code_utils.codeforces import run_test as codeforces_run_test
 from rllm.rewards.code_utils.swebench import swebench_check_correctness
 from rllm.rewards.code_utils.taco import run_test as taco_run_test
 from rllm.rewards.reward_types import RewardConfig, RewardFn, RewardInput, RewardOutput, RewardType
 
-def _temp_run(problem, generation, debug, result, test_fn):
-    try:
-        result.append(test_fn(problem, test=generation, debug=debug))
-    except Exception as e:
-        print(f"Error in _temp_run: {e}")
 
 def all_true(result):
     if isinstance(result, list):  # Check if it's a list
         return all(all_true(item) for item in result)  # Recursively check all elements
     return result is True
 
-def extract_code(llm_output):
+
+def extract_code_from_model(model_response: str):
     """
     Extracts the code from a Markdown-style code block in an LLM output.
 
     Parameters:
-        llm_output (str): The text output from the LLM.
+        model_response (str): The text output from the LLM.
 
     Returns:
         str: The extracted code, or an empty string if no code block is found.
     """
-    # Regular expression to match code blocks (both with and without language specifiers)
-    code_block_pattern = re.findall(r"```(?:\w+)?\n(.*?)```", llm_output, re.DOTALL)
+    code_blocks = re.findall(r"```(?:\w+)?\n(.*?)```", model_response, re.DOTALL)
+    return "\n".join(code_blocks).strip() if code_blocks else None
 
-    # If multiple code blocks exist, join them with a newline
-    if code_block_pattern:
-        return "\n".join(code_block_pattern).strip()
-    
-    return llm_output  # Return original string if not found
-
-
-def check_correctness(problem, generation, test_fn):
-    TIME_OUT = 300
-    cleaned_code = extract_code(generation)
-
+def check_correctness(tests: Union[List[Dict[str, str]], Dict[str, List[str]]], code: str, test_fn, timeout=300):
     manager = Manager()
-    result = manager.list()
-    p = multiprocessing.Process(target=_temp_run, args=(problem, cleaned_code, False, result, test_fn))
+    test_results = manager.list()
+ 
+    def evaluate_code(tests, generation, debug, test_results, test_fn):
+        try:
+            test_results.append(test_fn(tests, test=generation, debug=debug))
+        except Exception as e:
+            print(f"Error in evaluate_code: {e}")   
+    
+    p = multiprocessing.Process(target=evaluate_code, args=(tests, code, False, test_results, test_fn))
     p.start()
-    p.join(timeout=TIME_OUT + 1)
+    p.join(timeout=timeout + 1)
     if p.is_alive():
         p.kill()
-    return bool(result and all_true(result[0]))
+    return bool(test_results and all_true(test_results[0]))
 
-def lcb_check_correctness(problem, generation, timeout =6,runtime_debug=False, is_extracted=False):
-    cleaned_code = extract_code(generation)
-    result_list = unsafe_lcb_runTests(problem, cleaned_code, timeout, runtime_debug, is_extracted)
+def lcb_check_correctness(tests, code: str, timeout=30, runtime_debug=False, is_extracted=False):
+    result_list = lcb_run_test(tests, code, timeout, runtime_debug, is_extracted)
     details = [r[0] for r in result_list]
-
     all_passed = all(details)
     result = ""
     if result_list and all_passed:
@@ -73,9 +64,7 @@ def lcb_check_correctness(problem, generation, timeout =6,runtime_debug=False, i
     return result == "passed"
     
 
-
 class RewardCodeFn(RewardFn):
-
     """
     Reward function for evaluating code dataset answers.
 
@@ -88,75 +77,45 @@ class RewardCodeFn(RewardFn):
         assert input.problem_type == RewardType.CODE, \
             "Invalid problem type: expected 'CODE', but got '{}'".format(input.problem_type)
 
-        problem = input.problem
         model_response= input.model_response
         metadata= input.metadata
         if isinstance(metadata, str):
             try:
                 metadata = json.loads(metadata)
             except json.JSONDecodeError as e:
-                print(f"Code Reward Json Parsing Error: {e}")
-                return RewardOutput(reward=self.config.incorrect_reward, is_correct=False)
-
-        dataset_name = metadata.get("dataset_flag", None)
+                print(f"Unable to parse metadata: {e}")
+                return RewardOutput(reward=self.config.format_error_reward, is_correct=False)
+        
+        dataset_name = metadata.get("data_source", None)
         tests = metadata.get("tests", None)
         if tests is None:
             print("No tests found in metadata")
-            return RewardOutput(reward=self.config.incorrect_reward, is_correct=False)
-        
-        if dataset_name == "TACO":#apps/TACO:
-            is_correct = check_correctness(metadata, model_response, taco_run_test)
-        elif dataset_name == "code_contests":#codetests
-            is_correct = check_correctness(metadata, model_response, code_contests_run_test)
-        elif dataset_name == "codeforces":#codeforces 
-            is_correct = check_correctness(metadata, model_response, codeforces_run_test)
-        elif dataset_name == "swebench":#swebench
-            resolve_rate = swebench_check_correctness(
-                model_response=model_response,
-                metadata=metadata
-            )
+            return RewardOutput(reward=self.config.format_error_reward, is_correct=False)
 
-            reward = 2 * resolve_rate - 1
+        model_code = extract_code_from_model(model_response)
+        print(f"model_code: {model_code}")
+        if model_code is None:
+            print("No code found in model response")
+            return RewardOutput(reward=self.config.format_error_reward, is_correct=False)
 
-            return RewardOutput(reward=reward, is_correct=reward == 1)
+        # Tests: List[Dictionary] - Codeforces, LiveCodeBench
+        # Tests: Dictionary[Lists] - CodeContests, Taco/Apps
+        # Tests: str - TACO/Apps -> Diciotnary[Lists]
+        is_correct = False
+        if dataset_name in ["taco", "apps"]:
+            test_fn = taco_run_test
+        elif dataset_name == "code_contests":
+            test_fn = code_contests_run_test
         elif dataset_name == "codeforces":
-            test_cases = metadata.get("tests")
-            if isinstance(test_cases, str):
-                try:
-                    test_cases= json.loads(test_cases)
-                except json.JSONDecodeError as e:
-                    print(f"code reward Json Error parsing codeforces : {e}")
-                    return RewardOutput(reward=self.config.incorrect_reward, is_correct=False)
-            metadata["tests"] = test_cases
-            is_correct = check_correctness(metadata, model_response, codeforces_run_test)
-        elif dataset_name == "livecodebench":#livecodebench
-            public_test_cases =  metadata.get("tests")
-            if isinstance(public_test_cases, str):
-                try:
-                    public_test_cases = json.loads(public_test_cases)
-                except json.JSONDecodeError as e:
-                    print(f"code reward Json Error parsing livecodebench: {e}")
-                    return RewardOutput(reward=self.config.incorrect_reward, is_correct=False)
-            for test_cases in public_test_cases:
-                assert isinstance(test_cases, dict)
-            metadata['tests'] = public_test_cases
-            if len(metadata['tests']) == 0:
-                return RewardOutput(reward=self.config.incorrect_reward, is_correct=False)
-            is_extrcted = not metadata["tests"][0].get("testtype") == "stdin"
-            is_correct = lcb_check_correctness(metadata, model_response, is_extracted=is_extrcted)
-        else:
-            raise ValueError(f"No supported dataset found for {dataset_name}")
+            test_fn = codeforces_run_test
         
-        print(f"Is correct: {is_correct}")
+        if dataset_name != "livecodebench":
+            is_correct = check_correctness(tests, model_code, test_fn)
+        else:
+            is_extracted = not metadata["tests"][0].get("testtype") == "stdin"
+            is_correct = lcb_check_correctness(tests, model_code, is_extracted=is_extracted)
+        
         total_time = time.time() - total_start_time
-
-        wandb.log({
-            "dataset_name": dataset_name,
-            "total_execution_time": total_time,
-            "is_correct": is_correct,
-            "reward_value": self.config.correct_reward if is_correct else self.config.incorrect_reward
-        })
-
         print(f"Total reward function execution time: {total_time:.2f} seconds")
 
         if is_correct:
@@ -173,7 +132,7 @@ def rllm_reward_fn_code(data_source: str, llm_solution: str, ground_truth: Dict,
     Args:
         data_source: The source/dataset the problem comes from
         llm_solution: The solution string provided by the language model to evaluate
-        ground_truth: some test_cases for this llm_solution
+        ground_truth: some tests for this llm_solution
         enable_llm: Whether to enable language model validation for complex cases (default: False)
 
     Returns:
@@ -195,15 +154,15 @@ if __name__ == "__main__":
 '''
     
     print(f"test the code_forces")
-    # test_cases = [ { "input": "3 30\n2 2 1", "output": "5" }, { "input": "3 10\n3 2 1", "output": "5" } ] 
+    # tests = [ { "input": "3 30\n2 2 1", "output": "5" }, { "input": "3 10\n3 2 1", "output": "5" } ] 
     metadata = {
-         "test_cases": test_cases,
+         "tests": tests,
     }
-    True
+    Truez
     """
     reward_config = RewardConfig()
     reward_fn = RewardCodeFn(reward_config)
-    ground_truth['dataset_flag'] = data_source
+    ground_truth['data_source'] = data_source
     reward_response = reward_fn(
         RewardInput(
             problem=None,
@@ -212,187 +171,3 @@ if __name__ == "__main__":
             metadata=ground_truth
         ))
     return reward_response.is_correct
-
-
-if __name__ == "__main__":
-    #test the code_contest
-    model_response = """
-import sys
-from itertools import permutations
-def main():
-    # Read input
-    N, M, R = map(int, sys.stdin.readline().split())
-    r = list(map(int, sys.stdin.readline().split()))
-    A, B, C = [], [], []
-    for _ in range(M):
-        a, b, c = map(int, sys.stdin.readline().split())
-        A.append(a)
-        B.append(b)
-        C.append(c)
-
-    # Initialize distance matrix
-    INF = float('inf')
-    dist = [[INF for _ in range(N+1)] for _ in range(N+1)]
-    for i in range(1, N+1):
-        dist[i][i] = 0
-
-    # Set initial distances
-    for i in range(M):
-        a, b, c = A[i], B[i], C[i]
-        dist[a][b] = c
-        dist[b][a] = c
-
-    # Floyd-Warshall algorithm
-    for k in range(1, N+1):
-        for i in range(1, N+1):
-            for j in range(1, N+1):
-                if dist[i][k] != INF and dist[k][j] != INF:
-                    dist[i][j] = min(dist[i][j], dist[i][k] + dist[k][j])
-
-    # Generate all permutations of R towns
-    min_dist = INF
-    for perm in permutations(r):
-        total = 0
-        for i in range(R-1):
-            total += dist[perm[i]][perm[i+1]]
-        if total < min_dist:
-            min_dist = total
-
-    # Output the minimum distance
-    print(min_dist)
-
-if __name__ == "__main__":
-    main()
-    """
-
-
-
-    public_tests= {"input": ["3\n4 5\n6 3\n10 2\n"], "output": ["5\n3 4\n4 4 1 2\n"]}
-    metadata = {
-        "public_tests": public_tests,
-    }
-    reward = RewardCodeFn(RewardConfig)
-    input = RewardInput(problem="", problem_type=RewardType.CODE, model_response=model_response, metadata=metadata)
-    output = reward(input)
-    print(f"codetest output:{output}")
-
-    # test app/taco
-    model_response = """
-import sys
-from itertools import permutations
-def main():
-    # Read input
-    x= map(int, sys.stdin.readline().split())
-    print(5)
-
-
-if __name__ == "__main__":
-    main()
-    """
-
-    input_output = {"inputs": ["3\n4\n6\n"], "outputs": ["5\n5\n5\n"]}
-    metadata = {
-        "input_output": input_output,
-    }
-    reward = RewardCodeFn(RewardConfig)
-    input = RewardInput(problem="", problem_type=RewardType.CODE, model_response=model_response, metadata=metadata)
-    output = reward(input)
-    print(f"app/taco output:{output}")
-
-    #test the code_forces
-    model_response = """
-import sys
-from itertools import permutations
-def main():
-    n,m=map(int, input().split()) 
-    a=sum(list(map(int, input().split()))) 
-    if a+(n-1)*10<=m: 
-        print((m-a)//5) 
-    else: 
-        print(-1)
-if __name__ == "__main__":
-    main()
-    """
-    print(f"test the code_forces")
-    test_cases = [ { "input": "3 30\n2 2 1", "output": "5" }, { "input": "3 20\n2 1 1", "output": "-1" }, { "input": "50 10000\n5 4 10 9 9 6 7 7 7 3 3 7 7 4 7 4 10 10 1 7 10 3 1 4 5 7 2 10 10 10 2 3 4 7 6 1 8 4 7 3 8 8 4 10 1 1 9 2 6 1", "output": "1943" }, { "input": "50 10000\n4 7 15 9 11 12 20 9 14 14 10 13 6 13 14 17 6 8 20 12 10 15 13 17 5 12 13 11 7 5 5 2 3 15 13 7 14 14 19 2 13 14 5 15 3 19 15 16 4 1", "output": "1891" }]
-    # test_cases = [ { "input": "3 30\n2 2 1", "output": "5" }, { "input": "3 10\n3 2 1", "output": "5" } ] 
-    metadata = {
-         "test_cases": test_cases,
-    }
-    reward = RewardCodeFn(RewardConfig)
-    input = RewardInput(problem="", problem_type=RewardType.CODE, model_response=model_response, metadata=metadata)
-    output = reward(input)
-    print(f"code_forces output:{output}")
-
-    #livecodebench
-    model_response = """
-Yes of course!
-```python
-import json
-
-def main(phone_numbers):
-    seen = set()
-    duplicates = set()
-    for number in phone_numbers:
-        if number in seen:
-            duplicates.add(number)
-        else:
-            seen.add(number)
-    
-    return len(duplicates)+1
-```
-And run it with this
-```python
-if __name__ == "__main__":
-    main(input.strip().split())
-```
-""" 
-    #public_test_case = [{"input": "6\nabc\nacb\nbac\nbca\ncab\ncba\n", "output": "YES\nYES\nYES\nNO\nNO\nYES\n", "testtype": "stdin"}]
-    public_test_case = [
-    {
-        'input': '["12345", "530391", "12345"]',
-        'output': '2',
-        'testtype': 'functional'
-    }
-    ]
-    metadata = {
-        "public_test_cases": public_test_case,
-    }
-    reward = RewardCodeFn(RewardConfig)
-    input = RewardInput(problem="", problem_type=RewardType.CODE, model_response=model_response, metadata=metadata)
-    output = reward(input)
-    print(f"livecodebench output:{output}")
-
-    #test the code_forces
-    model_response = """
-Sorry I can't help with that!
-    """
-    print(f"test the code_forces")
-    test_cases = [ { "input": "3 30\n2 2 1", "output": "5" }, { "input": "3 20\n2 1 1", "output": "-1" }, { "input": "50 10000\n5 4 10 9 9 6 7 7 7 3 3 7 7 4 7 4 10 10 1 7 10 3 1 4 5 7 2 10 10 10 2 3 4 7 6 1 8 4 7 3 8 8 4 10 1 1 9 2 6 1", "output": "1943" }, { "input": "50 10000\n4 7 15 9 11 12 20 9 14 14 10 13 6 13 14 17 6 8 20 12 10 15 13 17 5 12 13 11 7 5 5 2 3 15 13 7 14 14 19 2 13 14 5 15 3 19 15 16 4 1", "output": "1891" }]
-    # test_cases = [ { "input": "3 30\n2 2 1", "output": "5" }, { "input": "3 10\n3 2 1", "output": "5" } ] 
-    metadata = {
-         "test_cases": test_cases,
-    }
-    reward = RewardCodeFn(RewardConfig)
-    input = RewardInput(problem="", problem_type=RewardType.CODE, model_response=model_response, metadata=metadata)
-    output = reward(input)
-    print(f"bad code_forces output:{output}")
-
-    model_response = """
-No I'm sorry
-""" 
-    #public_test_case = [{"input": "6\nabc\nacb\nbac\nbca\ncab\ncba\n", "output": "YES\nYES\nYES\nNO\nNO\nYES\n", "testtype": "stdin"}]
-    public_test_case = [
-    {
-        'input': '["12345", "530391", "12345"]',
-        'output': '2',
-        'testtype': 'functional'
-    }
-    ]
-    metadata = {
-        "public_test_cases": public_test_case,
-    }
-    reward = RewardCodeFn(RewardConfig)
-    input = RewardInput(problem="", problem_type=RewardType.CODE, model_response=model_response, metadata=metadata)
-    output = reward(input)
-    print(f"livecodebench output:{output}")

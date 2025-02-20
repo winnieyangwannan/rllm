@@ -2,6 +2,7 @@ from rllm.rewards.reward_types import RewardConfig, RewardFn, RewardInput, Rewar
 from rllm.rewards.math_reward import RewardMathFn
 from rllm.rewards.code_reward import rllm_reward_fn_code 
 from rllm.rewards.math_reward import rllm_reward_fn_math
+from typing import Union, List
 import json 
 
 # Check RewardConfig to understand the config values.
