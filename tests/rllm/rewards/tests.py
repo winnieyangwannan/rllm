@@ -219,7 +219,7 @@ if __name__ == "__main__":
     """
     metadata = {
     "tests": {
-        "input": [
+        "inputs": [
             # Test case 1: Simple path with 3 cities
             "4 3 3\n1 2 3\n1 2 3\n2 3 2\n3 4 4\n",
             # Test case 2: Complete graph with 5 cities
@@ -227,7 +227,7 @@ if __name__ == "__main__":
             # Test case 3: Larger graph with 7 cities
             "7 21 4\n1 3 5 7\n1 2 4\n1 3 8\n1 4 1\n1 5 7\n1 6 3\n1 7 9\n2 3 5\n2 4 2\n2 5 6\n2 6 8\n2 7 4\n3 4 7\n3 5 9\n3 6 1\n3 7 6\n4 5 3\n4 6 5\n4 7 8\n5 6 2\n5 7 4\n6 7 7\n"
         ],
-        "output": [
+        "outputs": [
             "5\n",  
             "15\n",
             "11\n"
@@ -274,7 +274,6 @@ if __name__ == "__main__":
     reward = RewardCodeFn(RewardConfig)
     input = RewardInput(problem="", problem_type=RewardType.CODE, model_response=model_response, metadata=metadata, data_source="livecodebench")
     output = reward(input)
-    print(f"Livecodebench output:{output}")
     return output
 
 if __name__ == "__main__":

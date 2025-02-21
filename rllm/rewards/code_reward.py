@@ -18,11 +18,6 @@ from rllm.rewards.code_utils.taco import run_test as taco_run_test
 from rllm.rewards.reward_types import RewardConfig, RewardFn, RewardInput, RewardOutput, RewardType
 
 
-def all_true(result):
-    if isinstance(result, list):  # Check if it's a list
-        return all(all_true(item) for item in result)  # Recursively check all elements
-    return result is True
-
 def extract_code_from_model(model_response: str):
     """
     Extracts the code from a Markdown-style code block in an LLM output.
@@ -38,32 +33,65 @@ def extract_code_from_model(model_response: str):
         return None
     return code_blocks[-1].strip()
 
-def check_correctness(tests: Union[List[Dict[str, str]], Dict[str, List[str]]], code: str, test_fn, timeout=300):
+def check_correctness(tests: Union[List[Dict[str, str]], Dict[str, List[str]]], code: str, test_fn, timeout: int = 300) -> bool:
+    """
+    Check if generated code passes all test cases within a timeout period.
+
+    Args:
+        tests: Test cases in either list of dictionaries or dictionary of lists format
+        code: Generated code to test
+        test_fn: Function to run tests
+        timeout: Maximum execution time in seconds before killing process
+
+    Returns:
+        bool: True if all tests pass, False otherwise
+
+    Raises:
+        AssertionError: If test results list is empty
+    """
     manager = Manager()
     test_results = manager.list()
+
     def evaluate_code(tests, generation, debug, test_results, test_fn):
+        """Helper function to run tests in separate process."""
         try:
             test_results.append(test_fn(tests, test=generation, debug=debug))
         except Exception as e:
-            print(f"Error in evaluate_code: {e}")   
-    
-    p = multiprocessing.Process(target=evaluate_code, args=(tests, code, True, test_results, test_fn))
-    p.start()
-    p.join(timeout=timeout + 1)
-    if p.is_alive():
-        p.kill()
-    test_results = test_results[:]
-    return bool(test_results and all_true(test_results[0]))
+            print(f"Error in evaluate_code: {e}")
 
-def lcb_check_correctness(tests, code: str, timeout=30, runtime_debug=False, is_extracted=False):
+    process = multiprocessing.Process(
+        target=evaluate_code,
+        args=(tests, code, False, test_results, test_fn)
+    )
+    process.start()
+    process.join(timeout=timeout + 1)
+
+    if process.is_alive():
+        process.kill()
+
+    test_results = test_results[:]
+    assert len(test_results) == 1, "Expected exactly one test result"
+    return all(test_results[0])
+
+def lcb_check_correctness(tests: List[Dict[str, str]], code: str, timeout: int = 30, 
+                         runtime_debug: bool = False, is_extracted: bool = False) -> bool:
+    """
+    Check if generated code passes all LiveCodeBench test cases.
+
+    Args:
+        tests: List of test cases, each containing input/output pairs
+        code: Generated code to test
+        timeout: Maximum execution time in seconds before killing process
+        runtime_debug: Whether to print debug info during test execution
+        is_extracted: Whether the code needs to be extracted from a larger response
+
+    Returns:
+        bool: True if all tests pass and result list exists, False otherwise
+    """
     result_list = lcb_run_test(tests, code, timeout, runtime_debug, is_extracted)
     details = [r[0] for r in result_list]
     all_passed = all(details)
-    result = ""
-    if result_list and all_passed:
-        result = "passed"
-    return result == "passed"
-    
+    return result_list is not None and all_passed
 
 class RewardCodeFn(RewardFn):
     """
@@ -94,7 +122,6 @@ class RewardCodeFn(RewardFn):
             return RewardOutput(reward=self.config.format_error_reward, is_correct=False)
 
         model_code = extract_code_from_model(model_response)
-        print(f"model_code: {model_code}")
         if model_code is None:
             print("No code found in model response")
             return RewardOutput(reward=self.config.format_error_reward, is_correct=False)
@@ -159,7 +186,7 @@ if __name__ == "__main__":
     metadata = {
          "tests": tests,
     }
-    Truez
+    True
     """
     reward_config = RewardConfig()
     reward_fn = RewardCodeFn(reward_config)
