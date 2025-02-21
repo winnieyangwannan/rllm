@@ -3,41 +3,41 @@ from rllm.rewards.code_reward import RewardCodeFn
 
 def test_reward_code_contests():
     model_response = """
-    ```python
-    import sys
-    from itertools import permutations
-    def main():
-        N, M, R = map(int, sys.stdin.readline().split())
-        r = list(map(int, sys.stdin.readline().split()))
-        A, B, C = [], [], []
-        for _ in range(M):
-            a, b, c = map(int, sys.stdin.readline().split())
-            A.append(a)
-            B.append(b)
-            C.append(c)
-        INF = float('inf')
-        dist = [[INF for _ in range(N+1)] for _ in range(N+1)]
+```python
+import sys
+from itertools import permutations
+def main():
+    N, M, R = map(int, sys.stdin.readline().split())
+    r = list(map(int, sys.stdin.readline().split()))
+    A, B, C = [], [], []
+    for _ in range(M):
+        a, b, c = map(int, sys.stdin.readline().split())
+        A.append(a)
+        B.append(b)
+        C.append(c)
+    INF = float('inf')
+    dist = [[INF for _ in range(N+1)] for _ in range(N+1)]
+    for i in range(1, N+1):
+        dist[i][i] = 0
+    for i in range(M):
+        a, b, c = A[i], B[i], C[i]
+        dist[a][b] = c
+        dist[b][a] = c
+    for k in range(1, N+1):
         for i in range(1, N+1):
-            dist[i][i] = 0
-        for i in range(M):
-            a, b, c = A[i], B[i], C[i]
-            dist[a][b] = c
-            dist[b][a] = c
-        for k in range(1, N+1):
-            for i in range(1, N+1):
-                for j in range(1, N+1):
-                    if dist[i][k] != INF and dist[k][j] != INF:
-                        dist[i][j] = min(dist[i][j], dist[i][k] + dist[k][j])
-        min_dist = INF
-        for perm in permutations(r):
-            total = 0
-            for i in range(R-1):
-                total += dist[perm[i]][perm[i+1]]
-            if total < min_dist:
-                min_dist = total
-        print(min_dist)
-    if __name__ == "__main__":
-        main()
+            for j in range(1, N+1):
+                if dist[i][k] != INF and dist[k][j] != INF:
+                    dist[i][j] = min(dist[i][j], dist[i][k] + dist[k][j])
+    min_dist = INF
+    for perm in permutations(r):
+        total = 0
+        for i in range(R-1):
+            total += dist[perm[i]][perm[i+1]]
+        if total < min_dist:
+            min_dist = total
+    print(min_dist)
+if __name__ == "__main__":
+    main()
     ```
     """
     metadata = {"tests": {"input": ["3\n4 5\n6 3\n10 2\n"], "output": ["5\n3 4\n4 4 1 2\n"]}}
@@ -47,20 +47,21 @@ def test_reward_code_contests():
     assert output is not None
     return output
 
+
 def test_reward_codeforces():
     model_response = """
-    ```python
-    import sys
-    from itertools import permutations
-    def main():
-        n,m=map(int, input().split())
-        a=sum(list(map(int, input().split())))
-        if a+(n-1)*10<=m:
-            print((m-a)//5)
-        else:
-            print(-1)
-    if __name__ == "__main__":
-        main()
+```python
+import sys
+from itertools import permutations
+def main():
+    n,m=map(int, input().split())
+    a=sum(list(map(int, input().split())))
+    if a+(n-1)*10<=m:
+        print((m-a)//5)
+    else:
+        print(-1)
+if __name__ == "__main__":
+    main()
     ```
     """
     metadata = {"tests": [{"input": "3 30\n2 2 1", "output": "5"}, {"input": "3 20\n2 1 1", "output": "-1"}]}
@@ -146,41 +147,41 @@ This feels like a bug to me, but I might be missing something?
 
 def test_reward_taco():
     model_response = """
-    ```python
-    import sys
-    from itertools import permutations
-    def main():
-        N, M, R = map(int, sys.stdin.readline().split())
-        r = list(map(int, sys.stdin.readline().split()))
-        A, B, C = [], [], []
-        for _ in range(M):
-            a, b, c = map(int, sys.stdin.readline().split())
-            A.append(a)
-            B.append(b)
-            C.append(c)
-        INF = float('inf')
-        dist = [[INF for _ in range(N+1)] for _ in range(N+1)]
+```python
+import sys
+from itertools import permutations
+def main():
+    N, M, R = map(int, sys.stdin.readline().split())
+    r = list(map(int, sys.stdin.readline().split()))
+    A, B, C = [], [], []
+    for _ in range(M):
+        a, b, c = map(int, sys.stdin.readline().split())
+        A.append(a)
+        B.append(b)
+        C.append(c)
+    INF = float('inf')
+    dist = [[INF for _ in range(N+1)] for _ in range(N+1)]
+    for i in range(1, N+1):
+        dist[i][i] = 0
+    for i in range(M):
+        a, b, c = A[i], B[i], C[i]
+        dist[a][b] = c
+        dist[b][a] = c
+    for k in range(1, N+1):
         for i in range(1, N+1):
-            dist[i][i] = 0
-        for i in range(M):
-            a, b, c = A[i], B[i], C[i]
-            dist[a][b] = c
-            dist[b][a] = c
-        for k in range(1, N+1):
-            for i in range(1, N+1):
-                for j in range(1, N+1):
-                    if dist[i][k] != INF and dist[k][j] != INF:
-                        dist[i][j] = min(dist[i][j], dist[i][k] + dist[k][j])
-        min_dist = INF
-        for perm in permutations(r):
-            total = 0
-            for i in range(R-1):
-                total += dist[perm[i]][perm[i+1]]
-            if total < min_dist:
-                min_dist = total
-        print(min_dist)
-    if __name__ == "__main__":
-        main()
+            for j in range(1, N+1):
+                if dist[i][k] != INF and dist[k][j] != INF:
+                    dist[i][j] = min(dist[i][j], dist[i][k] + dist[k][j])
+    min_dist = INF
+    for perm in permutations(r):
+        total = 0
+        for i in range(R-1):
+            total += dist[perm[i]][perm[i+1]]
+        if total < min_dist:
+            min_dist = total
+    print(min_dist)
+if __name__ == "__main__":
+    main()
     ```
     """
     metadata = {"tests": {"inputs": ["3\n4 5\n6 3\n10 2\n"], "outputs": ["5\n3 4\n4 4 1 2\n"]}}
@@ -228,7 +229,7 @@ if __name__ == "__main__":
     return output
 
 if __name__ == "__main__":
-    print(test_reward_livecodebench())
+    # print(test_reward_livecodebench())
     print(test_reward_taco())
-    print(test_reward_codeforces())
-    print(test_reward_code_contests())
+    #print(test_reward_codeforces())
+    #print(test_reward_code_contests())

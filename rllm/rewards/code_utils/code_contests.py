@@ -59,6 +59,7 @@ def run_test(in_outs, test=None, debug=False):
         else:
             which_type = CODE_TYPE.call_based  # Call-based
             method_name = in_outs["fn_name"]
+
     inputs_list = []
     outputs_list = []
     for index, inputs in enumerate(in_outs["input"]):

@@ -23,7 +23,6 @@ def all_true(result):
         return all(all_true(item) for item in result)  # Recursively check all elements
     return result is True
 
-
 def extract_code_from_model(model_response: str):
     """
     Extracts the code from a Markdown-style code block in an LLM output.
@@ -35,23 +34,25 @@ def extract_code_from_model(model_response: str):
         str: The extracted code, or an empty string if no code block is found.
     """
     code_blocks = re.findall(r"```(?:\w+)?\n(.*?)```", model_response, re.DOTALL)
-    return "\n".join(code_blocks).strip() if code_blocks else None
+    if not code_blocks:
+        return None
+    return code_blocks[-1].strip()
 
 def check_correctness(tests: Union[List[Dict[str, str]], Dict[str, List[str]]], code: str, test_fn, timeout=300):
     manager = Manager()
     test_results = manager.list()
- 
     def evaluate_code(tests, generation, debug, test_results, test_fn):
         try:
             test_results.append(test_fn(tests, test=generation, debug=debug))
         except Exception as e:
             print(f"Error in evaluate_code: {e}")   
     
-    p = multiprocessing.Process(target=evaluate_code, args=(tests, code, False, test_results, test_fn))
+    p = multiprocessing.Process(target=evaluate_code, args=(tests, code, True, test_results, test_fn))
     p.start()
     p.join(timeout=timeout + 1)
     if p.is_alive():
         p.kill()
+    test_results = test_results[:]
     return bool(test_results and all_true(test_results[0]))
 
 def lcb_check_correctness(tests, code: str, timeout=30, runtime_debug=False, is_extracted=False):
