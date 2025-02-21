@@ -4,8 +4,8 @@ import shutil
 
 # Define the Google Drive file IDs for the JSON files
 FILE_IDS = {
-    "test_taco.json": "1T3IKyJceSPijxbKsJyWkFwPKU0eTVC3I",
-    "train_taco.json": "1fA7SzLjCKP2u33n_WkBytN2e6iDxKL6h",
+    "test_taco.json": "1npifFETbwclxAL9Mpwp9V485Ox3UjfPz",
+    "train_taco.json": "1XpZYH9MP7N-YR9mCLCxs9181zedxivOU",
     "olympiad.json": "1TxTUkXR5WIXS1586XbkrkfpKLEyHiNJS",
 }
 
