@@ -22,7 +22,7 @@ from rllm.system_prompts import (LCB_FORMATTING_MESSAGE_WITH_STARTER_CODE,
                                LCB_SYSTEM_MESSAGE_GENERIC)
 
 
-def fetch_live_code_bench_sytem_prompt(prompt: str, starter_code: str = None):
+def fetch_live_code_bench_system_prompt(prompt: str, starter_code: str = None):
     # https://github.com/LiveCodeBench/LiveCodeBench/blob/main/lcb_runner/prompts/code_generation.py
     prompt= LCB_SYSTEM_MESSAGE_GENERIC + "\n\n" + prompt
     if starter_code:
@@ -52,7 +52,7 @@ def make_map_fn(split: str):
 
         if dataset_name == "livecodebench":
             starter_code = example.get("starter_code", None)
-            question = fetch_live_code_bench_sytem_prompt(question, starter_code)
+            question = fetch_live_code_bench_system_prompt(question, starter_code)
         
         data = {
             "data_source": dataset_name,

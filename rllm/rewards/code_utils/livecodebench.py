@@ -21,6 +21,42 @@ import base64
 import zlib
 import pickle
 import scipy.stats as stats
+import re
+
+BASE_IMPORTS = """from itertools import accumulate, chain, combinations, count, permutations, product, groupby, islice, repeat
+from copy import deepcopy
+from string import ascii_lowercase
+from math import floor, log2, log10, sqrt, comb, gcd, ceil, inf, isqrt
+from collections import defaultdict, deque, Counter
+from bisect import bisect, bisect_left, bisect_right, insort
+from heapq import heappush, heappop, heapify, merge
+from functools import reduce, cache, lru_cache
+from random import randrange, shuffle
+from operator import itemgetter, sub
+from re import search as re_search  # Assuming 're' refers to a regex search
+from os.path import commonprefix
+from typing import List, Tuple, Dict, Set, Optional, Union, Any, Callable, Iterable, Iterator, Generator
+import copy
+import string
+import math
+import collections
+import bisect
+import heapq
+import functools
+import random
+import itertools
+import operator
+import re
+import numpy as np
+import pandas as pd
+from math import log, prod  # 'log' and 'prod' are functions in the math module
+from collections import deque, defaultdict, Counter, OrderedDict
+from itertools import accumulate, permutations, combinations, product, groupby, islice, chain, repeat, zip_longest, cycle
+from functools import lru_cache, reduce, partial
+from operator import iand
+import sys
+"""
+
 
 def post_process_code(code):
     code = code.split("</code>")[0]
@@ -277,6 +313,27 @@ def run_test_std(completion, test_input, test_output):
     output_value = output.getvalue().strip()
     return output_value == test_output, output_value
 
+# def compile_code(code: str, timeout: int):
+#     signal.alarm(timeout)
+#     try:
+#         tmp_sol = ModuleType("tmp_sol", "")
+#         exec(code, tmp_sol.__dict__)
+#         if "class Solution" in code:
+#             # leetcode wraps solutions in `Solution`
+#             # this is a hack to check if it is leetcode solution or not
+#             # currently livecodebench only supports LeetCode but
+#             # else condition allows future extensibility to other platforms
+#             compiled_sol = tmp_sol.Solution()
+#         else:
+#             # do nothing in the other case since function is accesible
+#             compiled_sol = tmp_sol
+
+#         assert compiled_sol is not None
+#     finally:
+#         signal.alarm(0)
+
+#     return compiled_sol
+
 def run_test(test_cases, completion, timeout, runtime_debug, is_extracted):
     manager = multiprocessing.Manager()
     result = manager.list()
@@ -294,6 +351,10 @@ def run_test(test_cases, completion, timeout, runtime_debug, is_extracted):
 def run_tests_for_one_example(test_cases, completion, result_list, runtime_debug, is_extracted):
     time_elapsed = float("inf")
     test_type = test_cases[0]["testtype"]
+    print("##########", test_type, "###########")
+    print(completion)
+    print("##########"*4)
+    completion = f"{BASE_IMPORTS}\n{completion}"
     reliability_guard()
     for i, test_case in enumerate(test_cases):
         output_error = ""
@@ -302,7 +363,7 @@ def run_tests_for_one_example(test_cases, completion, result_list, runtime_debug
             time_start = time.time()
             if test_type == "functional":
                 test_input, test_output = prepare_test_input_output_functional(test_case, is_extracted)
-                print(test_input, test_output)
+                # print(test_input, test_output)
                 passed, output_value = run_test_func(
                     completion, is_extracted, copy.deepcopy(test_input), copy.deepcopy(test_output)
                 )

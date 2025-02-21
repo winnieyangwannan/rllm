@@ -267,8 +267,35 @@ if __name__ == "__main__":
     assert output.is_correct == True
     return output
 
+def test_reward_livecodebench_leetcode():
+    model_response = """
+Yes of course!
+```python
+class Solution:
+    def numberOfEmployeesWhoMetTarget(self, hours: List[int], target: int) -> int:
+        count = 0
+        for hour in hours:
+            if hour >= target:
+                count += 1
+        return count
+```
+""" 
+    public_test_case = [
+        {
+            "input": "5\n5 3 10 8 2\n5\n",
+            "output": "3\n",
+            "testtype": "functional"
+        }
+    ]
+    metadata = public_test_case
+    reward = RewardCodeFn(RewardConfig)
+    input = RewardInput(problem="", problem_type=RewardType.CODE, model_response=model_response, metadata=metadata, data_source="livecodebench")
+    output = reward(input)
+    assert output.is_correct == True
+    return output
+
 if __name__ == "__main__":
-    print(test_reward_livecodebench())
-    print(test_reward_taco())
-    print(test_reward_codeforces())
-    print(test_reward_code_contests())
+    print(test_reward_livecodebench_leetcode())
+    # print(test_reward_taco())
+    # print(test_reward_codeforces())
+    # print(test_reward_code_contests())
