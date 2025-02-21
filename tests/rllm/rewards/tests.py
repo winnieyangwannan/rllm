@@ -212,7 +212,6 @@ if __name__ == "__main__":
     ```
     """
     metadata = {
-    "tests": {
         "inputs": [
             # Test case 1: Simple path with 3 cities
             "4 3 3\n1 2 3\n1 2 3\n2 3 2\n3 4 4\n",
@@ -226,7 +225,6 @@ if __name__ == "__main__":
             "15\n",
             "11\n"
         ]
-    }
     }
     reward = RewardCodeFn(RewardConfig)
     input = RewardInput(problem="", problem_type=RewardType.CODE, model_response=model_response, metadata=metadata, data_source="taco")
