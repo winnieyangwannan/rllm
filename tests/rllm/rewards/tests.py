@@ -40,7 +40,23 @@ if __name__ == "__main__":
     main()
     ```
     """
-    metadata = {"tests": {"input": ["3\n4 5\n6 3\n10 2\n"], "output": ["5\n3 4\n4 4 1 2\n"]}}
+    metadata = {
+    "tests": {
+        "input": [
+            # Test case 1: Simple path with 3 cities
+            "4 3 3\n1 2 3\n1 2 3\n2 3 2\n3 4 4\n",
+            # Test case 2: Complete graph with 5 cities
+            "5 10 4\n1 2 3 4\n1 2 5\n1 3 5\n1 4 5\n1 5 5\n2 3 5\n2 4 5\n2 5 5\n3 4 5\n3 5 5\n4 5 5\n"
+            # Test case 3: Larger graph with 7 cities
+            "7 21 4\n1 3 5 7\n1 2 4\n1 3 8\n1 4 1\n1 5 7\n1 6 3\n1 7 9\n2 3 5\n2 4 2\n2 5 6\n2 6 8\n2 7 4\n3 4 7\n3 5 9\n3 6 1\n3 7 6\n4 5 3\n4 6 5\n4 7 8\n5 6 2\n5 7 4\n6 7 7\n"
+        ],
+        "output": [
+            "5\n",  
+            "15\n",
+            "11\n"
+        ]
+        }
+    }
     reward = RewardCodeFn(RewardConfig)
     input = RewardInput(problem="", problem_type=RewardType.CODE, model_response=model_response, metadata=metadata, data_source="code_contests")
     output = reward(input)
@@ -64,7 +80,24 @@ if __name__ == "__main__":
     main()
     ```
     """
-    metadata = {"tests": [{"input": "3 30\n2 2 1", "output": "5"}, {"input": "3 20\n2 1 1", "output": "-1"}]}
+    metadata = {
+        "tests": [
+            # Basic case
+            {"input": "3 30\n2 2 1", "output": "5"},
+            # Impossible case
+            {"input": "3 20\n2 1 1", "output": "-1"},
+            # Exact fit case
+            {"input": "4 45\n5 5 5 5", "output": "-1"},
+            # Large numbers
+            {"input": "5 100\n10 10 10 10 10", "output": "10"},
+            # Single task
+            {"input": "1 20\n5", "output": "3"},
+            # Maximum possible breaks
+            {"input": "2 100\n1 1", "output": "19"},
+            # Edge case - just barely possible
+            {"input": "3 35\n5 5 5", "output": "4"}
+        ]
+    }
     reward = RewardCodeFn(RewardConfig)
     input = RewardInput(problem="", problem_type=RewardType.CODE, model_response=model_response, metadata=metadata, data_source="codeforces")
     output = reward(input)
@@ -184,7 +217,23 @@ if __name__ == "__main__":
     main()
     ```
     """
-    metadata = {"tests": {"inputs": ["3\n4 5\n6 3\n10 2\n"], "outputs": ["5\n3 4\n4 4 1 2\n"]}}
+    metadata = {
+    "tests": {
+        "input": [
+            # Test case 1: Simple path with 3 cities
+            "4 3 3\n1 2 3\n1 2 3\n2 3 2\n3 4 4\n",
+            # Test case 2: Complete graph with 5 cities
+            "5 10 4\n1 2 3 4\n1 2 5\n1 3 5\n1 4 5\n1 5 5\n2 3 5\n2 4 5\n2 5 5\n3 4 5\n3 5 5\n4 5 5\n"
+            # Test case 3: Larger graph with 7 cities
+            "7 21 4\n1 3 5 7\n1 2 4\n1 3 8\n1 4 1\n1 5 7\n1 6 3\n1 7 9\n2 3 5\n2 4 2\n2 5 6\n2 6 8\n2 7 4\n3 4 7\n3 5 9\n3 6 1\n3 7 6\n4 5 3\n4 6 5\n4 7 8\n5 6 2\n5 7 4\n6 7 7\n"
+        ],
+        "output": [
+            "5\n",  
+            "15\n",
+            "11\n"
+        ]
+        }
+    }
     reward = RewardCodeFn(RewardConfig)
     input = RewardInput(problem="", problem_type=RewardType.CODE, model_response=model_response, metadata=metadata, data_source="taco")
     output = reward(input)
@@ -229,7 +278,7 @@ if __name__ == "__main__":
     return output
 
 if __name__ == "__main__":
-    # print(test_reward_livecodebench())
+    print(test_reward_livecodebench())
     print(test_reward_taco())
-    #print(test_reward_codeforces())
-    #print(test_reward_code_contests())
+    print(test_reward_codeforces())
+    print(test_reward_code_contests())
