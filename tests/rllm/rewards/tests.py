@@ -41,7 +41,6 @@ if __name__ == "__main__":
     ```
     """
     metadata = {
-    "tests": {
         "input": [
             # Test case 1: Simple path with 3 cities
             "4 3 3\n1 2 3\n1 2 3\n2 3 2\n3 4 4\n",
@@ -55,12 +54,11 @@ if __name__ == "__main__":
             "15\n",
             "11\n"
         ]
-        }
     }
     reward = RewardCodeFn(RewardConfig)
     input = RewardInput(problem="", problem_type=RewardType.CODE, model_response=model_response, metadata=metadata, data_source="code_contests")
     output = reward(input)
-    assert output is not None
+    assert output.is_correct == True
     return output
 
 
@@ -80,8 +78,7 @@ if __name__ == "__main__":
     main()
     ```
     """
-    metadata = {
-        "tests": [
+    metadata = [
             # Basic case
             {"input": "3 30\n2 2 1", "output": "5"},
             # Impossible case
@@ -97,11 +94,10 @@ if __name__ == "__main__":
             # Edge case - just barely possible
             {"input": "3 35\n5 5 5", "output": "4"}
         ]
-    }
     reward = RewardCodeFn(RewardConfig)
     input = RewardInput(problem="", problem_type=RewardType.CODE, model_response=model_response, metadata=metadata, data_source="codeforces")
     output = reward(input)
-    assert output is not None
+    assert output.is_correct == True
     return output
 
 
@@ -110,9 +106,7 @@ def test_reward_swebench():
     tests = {
         "instance_id": "astropy__astropy-12907",
     }
-    metadata = {
-        "tests": tests,
-    }
+    metadata = tests
     model_response = """\
 diff --git a/astropy/modeling/separable.py b/astropy/modeling/separable.py
 --- a/astropy/modeling/separable.py
@@ -218,7 +212,6 @@ if __name__ == "__main__":
     ```
     """
     metadata = {
-    "tests": {
         "input": [
             # Test case 1: Simple path with 3 cities
             "4 3 3\n1 2 3\n1 2 3\n2 3 2\n3 4 4\n",
@@ -232,12 +225,11 @@ if __name__ == "__main__":
             "15\n",
             "11\n"
         ]
-        }
     }
     reward = RewardCodeFn(RewardConfig)
     input = RewardInput(problem="", problem_type=RewardType.CODE, model_response=model_response, metadata=metadata, data_source="taco")
     output = reward(input)
-    assert output is not None
+    assert output.is_correct == True
     return output
 
 
@@ -268,13 +260,12 @@ if __name__ == "__main__":
             'testtype': 'functional'
         }
     ]
-    metadata = {
-        "tests": public_test_case,
-    }
+    metadata = public_test_case
     reward = RewardCodeFn(RewardConfig)
     input = RewardInput(problem="", problem_type=RewardType.CODE, model_response=model_response, metadata=metadata, data_source="livecodebench")
     output = reward(input)
     print(f"Livecodebench output:{output}")
+    assert output.is_correct == True
     return output
 
 if __name__ == "__main__":
