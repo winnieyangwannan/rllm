@@ -116,7 +116,7 @@ class RewardCodeFn(RewardFn):
                 return RewardOutput(reward=self.config.format_error_reward, is_correct=False)
         
         dataset_name = input.data_source
-        tests = metadata.get("tests", None)
+        tests = metadata
         if tests is None:
             print("No tests found in metadata")
             return RewardOutput(reward=self.config.format_error_reward, is_correct=False)
@@ -140,7 +140,7 @@ class RewardCodeFn(RewardFn):
         if dataset_name != "livecodebench":
             is_correct = check_correctness(tests, model_code, test_fn)
         else:
-            is_extracted = not metadata["tests"][0].get("testtype") == "stdin"
+            is_extracted = not metadata[0].get("testtype") == "stdin"
             is_correct = lcb_check_correctness(tests, model_code, is_extracted=is_extracted)
         
         total_time = time.time() - total_start_time
