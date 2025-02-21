@@ -239,7 +239,9 @@ Yes of course!
 ```python
 import json
 
-def main(phone_numbers):
+def main():
+    n = input()
+    phone_numbers = input().strip().split()
     seen = set()
     duplicates = set()
     for number in phone_numbers:
@@ -248,16 +250,16 @@ def main(phone_numbers):
         else:
             seen.add(number)
     
-    return len(duplicates)+1
+    print(len(duplicates)+1)
 if __name__ == "__main__":
-    main(input.strip().split())
+    main()
 ```
 """ 
     public_test_case = [
         {
-            'input': '["12345", "530391", "12345"]',
-            'output': '2',
-            'testtype': 'functional'
+            'input': '3\n12345 530391 12345\n',
+            'output': '2\n',
+            'testtype': 'stdin'
         }
     ]
     metadata = public_test_case
@@ -282,8 +284,8 @@ class Solution:
 """ 
     public_test_case = [
         {
-            "input": "5\n5 3 10 8 2\n5\n",
-            "output": "3\n",
+            "input": "[5, 3, 10, 8, 2]\n5",
+            "output": "3",
             "testtype": "functional"
         }
     ]
@@ -296,6 +298,7 @@ class Solution:
 
 if __name__ == "__main__":
     print(test_reward_livecodebench_leetcode())
+    print(test_reward_livecodebench())
     # print(test_reward_taco())
     # print(test_reward_codeforces())
     # print(test_reward_code_contests())
