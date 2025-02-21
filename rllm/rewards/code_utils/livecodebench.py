@@ -302,6 +302,7 @@ def run_tests_for_one_example(test_cases, completion, result_list, runtime_debug
             time_start = time.time()
             if test_type == "functional":
                 test_input, test_output = prepare_test_input_output_functional(test_case, is_extracted)
+                print(test_input, test_output)
                 passed, output_value = run_test_func(
                     completion, is_extracted, copy.deepcopy(test_input), copy.deepcopy(test_output)
                 )

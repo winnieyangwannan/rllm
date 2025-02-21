@@ -32,7 +32,7 @@ def fetch_live_code_bench_sytem_prompt(prompt: str, starter_code: str = None):
         prompt += f"```python\n{starter_code}\n```\n\n"
     else:
         prompt += f"### Format: {LCB_FORMATTING_WITHOUT_STARTER_CODE}\n"
-    prompt += "```python\n# YOUR CODE HERE\n```\n\n"
+        prompt += "```python\n# YOUR CODE HERE\n```\n\n"
     prompt += f"### Answer: (use the provided format with backticks)\n\n"
     return prompt
 
@@ -110,8 +110,8 @@ if __name__ == '__main__':
             if processed_example is not None:
                 train_data.append(processed_example)
                 all_train_data.append(processed_example)
-        # train_df = pd.DataFrame(train_data)
-        # train_df.to_parquet(os.path.join(local_dir, f'train_{dataset_name}.parquet'))
+        train_df = pd.DataFrame(train_data)
+        train_df.to_parquet(os.path.join(local_dir, f'train_{dataset_name}.parquet'))
     
     # save all code dataset
     all_train_df = pd.DataFrame(all_train_data)
