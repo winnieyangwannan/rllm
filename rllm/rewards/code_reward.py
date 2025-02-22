@@ -33,7 +33,7 @@ def extract_code_from_model(model_response: str):
         return None
     return code_blocks[-1].strip()
 
-def check_correctness(tests: Union[List[Dict[str, str]], Dict[str, List[str]]], code: str, test_fn, timeout: int = 300) -> bool:
+def check_correctness(tests: Union[List[Dict[str, str]], Dict[str, List[str]]], code: str, test_fn, timeout: int = 60) -> bool:
     """
     Check if generated code passes all test cases within a timeout period.
 
@@ -73,7 +73,7 @@ def check_correctness(tests: Union[List[Dict[str, str]], Dict[str, List[str]]], 
     assert len(test_results) == 1, "Expected exactly one test result"
     return all(test_results[0])
 
-def lcb_check_correctness(tests: List[Dict[str, str]], code: str, timeout: int = 30, 
+def lcb_check_correctness(tests: List[Dict[str, str]], code: str, timeout: int = 60, 
                          runtime_debug: bool = False, is_extracted: bool = False) -> bool:
     """
     Check if generated code passes all LiveCodeBench test cases.
