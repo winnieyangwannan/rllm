@@ -21,15 +21,6 @@ pip install -e .
 # Don't forget to install this, or training run will crash!
 ```
 
-### Download training/testing data from Google Drive
-
-```bash
-gdown "https://drive.google.com/uc?id=1q5Z0Xi98f1Zt-x4R3ubWLxkIIHsZPlum" -O "rllm/data/train/coding/apps.json"
-gdown "https://drive.google.com/uc?id=1tAG36FB32ZLeUUckB6AHyEROkQ8lFhJ6" -O "rllm/data/train/coding/code_contests.json"
-gdown "https://drive.google.com/uc?id=1K2kP8r8_jjGDbdwvTsRo2TEFEpJjMJxp" -O "rllm/data/train/coding/taco.json"
-gdown "https://drive.google.com/uc?id=1ek936L0N57jVaF1YA0vCPv4GRWae4R5C" -O "rllm/data/train/coding/codeforces.json"
-```
-
 ### WandB
 
 ````bash
@@ -42,3 +33,11 @@ Unit tests are in the `test/` folder and uses pytest. To run them, you can do so
 ```bash
 PYTHONPATH=. pytest tests/rllm/rewards/tests.py
 ````
+
+
+Train your Math/Coding Agents
+```bash
+cd scripts/data
+python3 deepscaler_dataset.py
+python3 code_dataset.py
+```
