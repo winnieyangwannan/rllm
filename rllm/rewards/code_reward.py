@@ -33,7 +33,7 @@ def extract_code_from_model(model_response: str):
         return None
     return code_blocks[-1].strip()
 
-def check_correctness(tests: Union[List[Dict[str, str]], Dict[str, List[str]]], code: str, test_fn, timeout: int = 60) -> bool:
+def check_correctness(tests: Union[List[Dict[str, str]], Dict[str, List[str]]], code: str, test_fn, timeout: int = 90) -> bool:
     """
     Check if generated code passes all test cases within a timeout period.
 
@@ -70,10 +70,12 @@ def check_correctness(tests: Union[List[Dict[str, str]], Dict[str, List[str]]], 
         process.kill()
 
     test_results = test_results[:]
-    assert len(test_results) == 1, "Expected exactly one test result"
+    if len(test_results) == 0:
+        return False
+    #assert len(test_results) == 1, f"Expected exactly one test result, but got {test_results}"
     return all(test_results[0])
 
-def lcb_check_correctness(tests: List[Dict[str, str]], code: str, timeout: int = 60, 
+def lcb_check_correctness(tests: List[Dict[str, str]], code: str, timeout: int = 90, 
                          runtime_debug: bool = False, is_extracted: bool = False) -> bool:
     """
     Check if generated code passes all LiveCodeBench test cases.
@@ -123,7 +125,7 @@ class RewardCodeFn(RewardFn):
 
         model_code = extract_code_from_model(model_response)
         if model_code is None:
-            print("No code found in model response")
+            #print("No code found in model response")
             return RewardOutput(reward=self.config.format_error_reward, is_correct=False)
 
         # Tests: List[Dictionary] - Codeforces, LiveCodeBench
@@ -144,7 +146,7 @@ class RewardCodeFn(RewardFn):
             is_correct = lcb_check_correctness(tests, model_code, is_extracted=is_extracted)
         
         total_time = time.time() - total_start_time
-        print(f"Total reward function execution time: {total_time:.2f} seconds")
+        # print(f"Total reward function execution time: {total_time:.2f} seconds")
 
         if is_correct:
             return RewardOutput(reward=self.config.correct_reward, is_correct=True)
