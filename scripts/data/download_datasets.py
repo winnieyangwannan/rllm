@@ -11,9 +11,9 @@ FILE_IDS = {
 
 # Define the destination paths
 DEST_PATHS = {
-    "test_taco.json": "rllm/data/test/code/taco.json",
-    "train_taco.json": "rllm/data/train/code/taco.json",
-    "olympiad.json": "rllm/data/train/math/olympiad.json",
+    "test_taco.json": os.path.expanduser("~/rllm/rllm/data/test/code/taco.json"),
+    "train_taco.json": os.path.expanduser("~/rllm/rllm/data/train/code/taco.json"),
+    "olympiad.json": os.path.expanduser("~/rllm/rllm/data/train/math/olympiad.json"),
 }
 
 # Create the necessary directories
