@@ -26,8 +26,8 @@ fi
 # Train over a single node, 8 A100-80GB GPUs.
 python3 -m verl.trainer.main_ppo \
     algorithm.adv_estimator=grpo \
-    data.train_files=$HOME/deepscaler/data/train.parquet \
-    data.val_files=$HOME/deepscaler/data/aime.parquet \
+    data.train_files=$HOME/rllm/data/train.parquet \
+    data.val_files=$HOME/rllm/data/aime.parquet \
     data.train_batch_size=256 \
     data.val_batch_size=500 \
     data.max_prompt_length=512 \
@@ -41,6 +41,8 @@ python3 -m verl.trainer.main_ppo \
     actor_rollout_ref.actor.use_kl_loss=True \
     actor_rollout_ref.actor.kl_loss_coef=0.001 \
     actor_rollout_ref.actor.kl_loss_type=low_var_kl \
+    actor_rollout_ref.rollout.vllm_log_prob=True \
+    actor_rollout_ref.rollout.async_engine=False \
     actor_rollout_ref.model.enable_gradient_checkpointing=True \
     actor_rollout_ref.actor.fsdp_config.param_offload=False \
     actor_rollout_ref.actor.fsdp_config.optimizer_offload=False \
@@ -50,7 +52,7 @@ python3 -m verl.trainer.main_ppo \
     actor_rollout_ref.rollout.val_temperature=0.6 \
     actor_rollout_ref.rollout.gpu_memory_utilization=0.9 \
     actor_rollout_ref.rollout.n=8 \
-    actor_rollout_ref.rollout.n_val=8 \
+    actor_rollout_ref.rollout.n_val=16 \
     actor_rollout_ref.ref.fsdp_config.param_offload=True \
     algorithm.kl_ctrl.kl_coef=0.001 \
     trainer.critic_warmup=0 \
