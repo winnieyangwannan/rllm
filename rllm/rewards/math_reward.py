@@ -129,7 +129,8 @@ def rllm_reward_fn_math(data_source: str, llm_solution: str, ground_truth: Union
     reward_response = reward_fn(RewardInput(problem=None,
                                             problem_type=RewardType.MATH,
                                             model_response=llm_solution,
-                                            metadata={"answer": ground_truth}))
+                                            metadata={"answer": ground_truth},
+                                            data_source=data_source))
     return reward_response.is_correct
 
 if __name__ == "__main__":
