@@ -1,6 +1,7 @@
 #!/bin/bash
 set -x
 
+ulimit -n 1048576 
 # Warning: Export VLLM_ATTENTION_BACKEND on every machine before starting Ray cluster.
 # vLLM without XFORMERS will results in CUDA errors.
 export VLLM_ATTENTION_BACKEND=FLASH_ATTN
