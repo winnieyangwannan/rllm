@@ -35,6 +35,8 @@ def init_rollout_engine(config):
 def main(config):
     number_of_tasks = 2
     seed = 42
+    safe_batch_size = 64
+    episode_len = 2
     metric_file = "evaluate_metrics_verl.csv"
     trajectory_file = 'evaluate_trajectories_verl.pt'
 
@@ -43,7 +45,7 @@ def main(config):
         os.environ["MINIWOB_URL"] = miniwob_url
         print(f"MINIWOB_URL set to {miniwob_url}")
 
-    model_path = "Qwen/Qwen2.5-7B-Instruct-1M"
+    model_path = "Qwen/Qwen2.5-0.5B-Instruct" #"Qwen/Qwen2.5-7B-Instruct-1M"
     # Init output dir
     output_dir = "miniwob_evaluator_verl_test"
     
@@ -91,7 +93,7 @@ def main(config):
     )
 
     # Init agent
-    agent = BatchAgent(rollout_engine=rollout_engine, engine_name="verl", tokenizer=tokenizer, agent_class=WebAgent, n_parallel_agents=len(selected_envs), env=env)
+    agent = BatchAgent(rollout_engine=rollout_engine, engine_name="verl", tokenizer=tokenizer, agent_class=WebAgent, n_parallel_agents=len(selected_envs), safe_batch_size=safe_batch_size, episode_len=episode_len, env=env)
 
     timing_raw = {}
     evaluate_trajectories = agent.interact_environment(timing_raw=timing_raw)

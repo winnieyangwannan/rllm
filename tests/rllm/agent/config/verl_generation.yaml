@@ -19,11 +19,13 @@ model:
 
 rollout:
   name: vllm
+  vllm_log_prob: True # Append log_prob from vllm rollout, disables FSDP log_prob.
+  async_engine: True # Enable async engine for vllm rollout.
   temperature: 0.6
   top_k: -1 # 0 for hf rollout, -1 for vllm rollout
   top_p: 0.95
-  prompt_length: 1536
-  response_length: 32768
+  prompt_length: 512
+  response_length: 64
   # for vllm rollout
   dtype: bfloat16 # should align with FSDP
   gpu_memory_utilization: 0.9
@@ -43,6 +45,7 @@ rollout:
   n: 1
   n_val: 1
   enable_chunked_prefill: True
+  disable_log_stats: True
 
 # Unneccessary parameters for generation.
 # Just for properly instantiating FSDP workers.

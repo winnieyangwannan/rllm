@@ -48,7 +48,7 @@ def main():
         os.environ["MINIWOB_URL"] = miniwob_url
         print(f"MINIWOB_URL set to {miniwob_url}")
 
-    model_path = "Qwen/Qwen2.5-7B-Instruct-1M"
+    model_path ="Qwen/Qwen2.5-0.5B-Instruct" # "Qwen/Qwen2.5-7B-Instruct-1M"
     # Init output dir
     output_dir = "miniwob_evaluator_vllm_test"
     
@@ -74,7 +74,7 @@ def main():
     )
 
     engine, tokenizer, sampling_params = init_vllm_engine(model_path)
-    agent = BatchAgent(rollout_engine=engine, engine_name="vllm", tokenizer=tokenizer, agent_class=WebAgent, n_parallel_agents=len(selected_envs), sampling_params=sampling_params, env=env)
+    agent = BatchAgent(rollout_engine=engine, engine_name="vllm", tokenizer=tokenizer, agent_class=WebAgent, n_parallel_agents=len(selected_envs), safe_batch_size=safe_batch_size, episode_len=episode_len, sampling_params=sampling_params, env=env)
     
     timing_raw = {}
     evaluate_trajectories = agent.interact_environment(timing_raw=timing_raw)

@@ -41,7 +41,7 @@ def main(config):
     pprint(OmegaConf.to_container(config, resolve=True))  # resolve=True will eval symbol values
     OmegaConf.resolve(config)
 
-    config.model.path = "meta-llama/Llama-3.1-8B-Instruct"
+    config.model.path = "Qwen/Qwen2.5-0.5B-Instruct" #"meta-llama/Llama-3.1-8B-Instruct"
 
     local_path = copy_local_path_from_hdfs(config.model.path)
     from verl.utils import hf_tokenizer

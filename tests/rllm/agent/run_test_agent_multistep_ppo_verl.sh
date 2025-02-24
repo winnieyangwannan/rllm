@@ -1,5 +1,6 @@
 set -x
 
+# Also add more test to pipelined agent and finish
 export VLLM_ATTENTION_BACKEND=XFORMERS
 export PYTORCH_CUDA_ALLOC_CONF="expandable_segments:True"
 
