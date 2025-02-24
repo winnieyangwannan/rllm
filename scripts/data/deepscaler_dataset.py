@@ -76,12 +76,12 @@ if __name__ == '__main__':
     hdfs_dir = args.hdfs_dir
     
     # Make local directory if it doesn't exist
-    makedirs(local_dir)
+    makedirs(local_dir, exist_ok=True)
 
     # Initialize datasets
-    train_datasets = [TrainDataset.DEEPSCALER]
+    train_datasets = [TrainDataset.Math.DEEPSCALER]
     train_dataset = load_dataset(train_datasets[0])
-    test_datasets = [TestDataset.AIME, TestDataset.AMC, TestDataset.MATH, TestDataset.MINERVA, TestDataset.OLYMPIAD_BENCH]
+    test_datasets = [TestDataset.Math.AIME, TestDataset.Math.AMC, TestDataset.Math.MATH, TestDataset.Math.MINERVA, TestDataset.Math.OLYMPIAD_BENCH]
     
     test_datasets_data = [load_dataset(d) for d in test_datasets]
 
