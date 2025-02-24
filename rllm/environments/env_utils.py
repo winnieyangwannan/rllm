@@ -1,0 +1,74 @@
+import numpy as np
+
+def add_trajectory_reward(trajectory):
+    """
+    add trajectory reward to the dict of each interaction
+    """
+    trajectory_reward = np.sum([d["reward"] for d in trajectory])
+    for d in trajectory:
+        d.update({"trajectory_reward": trajectory_reward})
+    return trajectory
+
+def add_mc_return(trajectory, gamma = 0.95):
+    """
+    add trajectory reward to the dict of each interaction using Monte Carlo returns for each step
+    """
+    trajectory_rewards = np.array([d["reward"] for d in trajectory]).reshape(1, -1)
+    gamma_row = np.cumprod(np.ones((1, trajectory_rewards.shape[1]))*gamma)
+    gamma_matrix = np.triu(gamma_row.reshape(1, -1 )/ gamma_row.reshape(-1, 1))
+    mc_returns = np.sum(trajectory_rewards*gamma_matrix, axis = 1)
+    for d, mc in zip(trajectory, mc_returns):
+        d.update({"mc_return": mc})
+    return trajectory
+
+def compute_trajectory_score(trajectory):
+    return trajectory[0]["trajectory_reward"] if trajectory else 0
+
+def convert_observation_to_prompt(env, i, obs):
+    env_id = env.env_id[i]
+    if env_id.startswith("browsergym/miniwob"):
+        return convert_miniwob_observation(obs, with_system_prompt=True)
+    raise ValueError(f"Unknown environment: {env_id}")
+
+def convert_observation(env, i, obs):
+    env_id = env.env_id[i]
+    if env_id.startswith("browsergym/miniwob"):
+        return convert_miniwob_observation(obs)
+    raise ValueError(f"Unknown environment: {env_id}")
+
+# TODO: may have better ways to convert miniwob observation to string representation
+def convert_miniwob_observation(obs, with_system_prompt=False):
+    """Convert MiniWoB observation to a readable string for LLMs."""
+    from rllm.models.web_agent import WebAgent
+    # Currently converts using a dummy WebAgent and reuses related methods
+    dummy_agent = WebAgent(rollout_engine=None, engine_name=None, tokenizer=None)
+    obs = dummy_agent._preproc_obs(obs)
+    result = ""
+
+    if with_system_prompt:
+        result += dummy_agent._get_system_prompt()
+
+    result += "# Goal\n"
+
+    result += "".join(msg["text"] for msg in dummy_agent._format_open_tabs(
+        obs["open_pages_urls"],
+        obs["open_pages_titles"], 
+        obs["active_page_index"]
+    ))
+
+    if dummy_agent.use_axtree:
+        result += f"# Current page Accessibility Tree\n\n{obs['axtree_txt']}\n\n"
+
+    if dummy_agent.use_html:
+        result += f"# Current page DOM\n\n{obs['pruned_html']}\n\n"
+
+    if dummy_agent.use_screenshot:
+        result += "".join(msg["text"] for msg in dummy_agent._format_screenshot(obs["screenshot"]))
+
+    # Add action space description
+    result += dummy_agent._get_action_space_description()
+
+    # Add next action prompt
+    result += "# Next action\n\nDecide what action you want to perform next and wrap your action in ```action````"
+
+    return result
