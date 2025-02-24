@@ -92,7 +92,7 @@ if __name__ == '__main__':
         makedirs(local_dir)
 
     #Initialize datasets
-    train_datasets = [TrainDataset.Code.TACO, TrainDataset.Code.APPS, TrainDataset.Code.CODE_CONTESTS, TrainDataset.Code.CODEFORCES]
+    train_datasets = [TrainDataset.Code.TACO, TrainDataset.Code.APPS, TrainDataset.Code.CODE_CONTESTS, TrainDataset.Code.CODEFORCES, TrainDataset.Code.LIVECODEBENCH]
     test_datasets = [TestDataset.Code.LIVECODEBENCH]
     
     test_datasets_data = [load_dataset(d) for d in test_datasets]

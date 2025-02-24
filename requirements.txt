@@ -10,5 +10,6 @@ sentence_transformers
 sglang[all]
 sglang-router
 swebench
+tabulate
 torchmetrics
 flash-attn

@@ -23,6 +23,7 @@ class TrainDataset:
         APPS = "APPS"
         CODEFORCES = "CODEFORCES"
         CODE_CONTESTS = "CODE_CONTESTS"
+        LIVECODEBENCH = "LIVECODEBENCH"
 
 class TestDataset:
 

@@ -75,7 +75,7 @@ def check_correctness(tests: Union[List[Dict[str, str]], Dict[str, List[str]]], 
     #assert len(test_results) == 1, f"Expected exactly one test result, but got {test_results}"
     return all(test_results[0])
 
-def lcb_check_correctness(tests: List[Dict[str, str]], code: str, timeout: int = 90, 
+def lcb_check_correctness(tests: List[Dict[str, str]], code: str, timeout: int = 6, 
                          runtime_debug: bool = False, is_extracted: bool = False) -> bool:
     """
     Check if generated code passes all LiveCodeBench test cases.
