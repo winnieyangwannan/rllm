@@ -82,29 +82,24 @@ class BatchAgent:
             raise NotImplementedError
 
     def _get_actions_verl(self, observations, obs_idxs=[], **kwargs):
+        from verl.protocol import pad_dataproto_to_divisor, unpad_dataproto
 
         prompts = [
             self.agents[obs_idxs[i]]._pre_get_action(obs)
             for i, obs in enumerate(observations)
         ]
 
+        batch = self._convert_prompt_verl(prompts, **kwargs)
+
         # because of veRL's chunking. we need to pad number of prompts to be a multiple of worker group world size
-        padding_needed = (
-            self.rollout_engine.world_size
-            - len(prompts) % self.rollout_engine.world_size
-        ) % self.rollout_engine.world_size
-        if padding_needed > 0:
-            prompts.extend([[{"role": "system", "content": ""}]] * padding_needed)
+        batch_padded, pad_size = pad_dataproto_to_divisor(batch, self.rollout_engine.world_size)
+        
+        output_padded = self.rollout_engine.generate_sequences(batch_padded)
+        output = unpad_dataproto(output_padded, pad_size=pad_size)
 
-        data = self._convert_prompt_verl(prompts, **kwargs)
-
-        output = self.rollout_engine.generate_sequences(data)
         output_text = self.tokenizer.batch_decode(
             output.batch["responses"], skip_special_tokens=False
         )
-        # remove the padding
-        if padding_needed > 0:
-            output_text = output_text[:-padding_needed]
 
         pad_token = self.tokenizer.pad_token
         responses = []
@@ -387,26 +382,22 @@ class BatchAgent:
         yield from self._get_actions_verl_yield(observations, obs_idxs, **kwargs)
 
     def _get_actions_verl_yield(self, observations, obs_idxs=[], **kwargs):
+        from verl.protocol import pad_dataproto_to_divisor, unpad_dataproto
 
         prompts = [
             self.agents[obs_idxs[i]]._pre_get_action(obs)
             for i, obs in enumerate(observations)
         ]
+
+        batch = self._convert_prompt_verl(prompts, **kwargs)
         # because of veRL's chunking. we need to pad number of prompts to be a multiple of worker group world size
-        padding_needed = (
-            self.rollout_engine.world_size
-            - len(prompts) % self.rollout_engine.world_size
-        ) % self.rollout_engine.world_size
-        if padding_needed > 0:
-            prompts.extend([[{"role": "system", "content": ""}]] * padding_needed)
-
-        data = self._convert_prompt_verl(prompts, **kwargs)
-
+        batch_padded, pad_size = pad_dataproto_to_divisor(batch, self.rollout_engine.world_size)
+        
         # augment the data with non_tensor_batch "rollout_generator_id" to tell which agent/trajectory it belongs to. -1 mean padding
-        rollout_generator_id = np.array(obs_idxs + [-1] * padding_needed)
-        data.non_tensor_batch["rollout_generator_id"] = rollout_generator_id
+        rollout_generator_id = np.array(obs_idxs + [-1] * pad_size)
+        batch_padded.non_tensor_batch["rollout_generator_id"] = rollout_generator_id
 
-        gen_seq_generator = self.rollout_engine.generate_sequences_async(prompts=data)
+        gen_seq_generator = self.rollout_engine.generate_sequences_async(prompts=batch_padded)
         for output in gen_seq_generator:
             # TODO: check if this is correct to do output.non_tensor_batch['rollout_generator_id'] for int
             idx = output.non_tensor_batch["rollout_generator_id"]

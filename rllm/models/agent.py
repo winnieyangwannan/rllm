@@ -53,35 +53,27 @@ class BaseAgent(ABC):
     def reset(self):
         return
 
-    def get_action(self, obs,  **kwargs):
+    def get_action(self, obs, **kwargs):
         """
         Ideally should NOT be modified or override
         """
         if self.engine_name == "verl":
-            return self._get_action_verl(obs,  **kwargs)
+            return self._get_action_verl(obs, **kwargs)
         elif self.engine_name == "vllm":
-            return self._get_action_vllm(obs,  **kwargs)
+            return self._get_action_vllm(obs, **kwargs)
         elif self.engine_name == "openai":
-            return self._get_action_openai(obs,  **kwargs)
+            return self._get_action_openai(obs, **kwargs)
         else:
             raise NotImplementedError
 
-    def _get_action_verl(self, obs,  **kwargs):
+    def _get_action_verl(self, obs, **kwargs):
         from verl.utils.model import compute_position_id_with_mask
         from verl import DataProto
-        from verl.protocol import union_two_dict
+        from verl.protocol import union_two_dict, pad_dataproto_to_divisor, unpad_dataproto
 
-        prompt = self._pre_get_action(obs,  **kwargs)
+        prompt = self._pre_get_action(obs)
         prompts = [prompt]
-        # because of veRL's chunking. we need to pad number of prompts to be a multiple of worker group world size
-        padding_needed = (
-            self.rollout_engine.world_size
-            - len(prompts) % self.rollout_engine.world_size
-        ) % self.rollout_engine.world_size
-
-        if padding_needed > 0:
-            prompts.extend([[{"role": "system", "content": ""}]] * padding_needed)
-
+        
         inputs = self.tokenizer.apply_chat_template(
             prompts,
             add_generation_prompt=True,
@@ -101,21 +93,23 @@ class BaseAgent(ABC):
             "attention_mask": attention_mask,
             "position_ids": position_ids,
         }
-        data = DataProto.from_dict(batch_dict)
-
+        batch = DataProto.from_dict(batch_dict)
+    
         # original_batch contains the extra info needed for generation
         if "original_batch" in kwargs and kwargs["original_batch"]:
             original_batch = kwargs["original_batch"]
             # only use the original_batch's meta_info since tensor_batch is from batch_dict and non_tensor_batch is not neeeded
-            data.meta_info = union_two_dict(data.meta_info, original_batch.meta_info)
+            batch.meta_info = union_two_dict(batch.meta_info, original_batch.meta_info)
 
-        output = self.rollout_engine.generate_sequences(data)
+        # because of veRL's chunking. we need to pad number of prompts to be a multiple of worker group world size
+        batch_padded, pad_size = pad_dataproto_to_divisor(batch, self.rollout_engine.world_size)
+
+        output_padded = self.rollout_engine.generate_sequences(batch_padded)
+        output = unpad_dataproto(output_padded, pad_size=pad_size)
+
         output_text = self.tokenizer.batch_decode(
             output.batch["responses"], skip_special_tokens=False
         )
-        # remove the padding
-        if padding_needed > 0:
-            output_text = output_text[:-padding_needed]
 
         pad_token = self.tokenizer.pad_token
 
@@ -128,12 +122,12 @@ class BaseAgent(ABC):
             len(responses) == 1
         ), f"Only 1 answer should be generated, but {len(responses)} is"
         response = responses[0]
-        action = self._post_get_action(obs, prompt, response,  **kwargs)
+        action = self._post_get_action(response)
 
         return action
 
-    def _get_action_vllm(self, obs,  **kwargs):
-        prompt = self._pre_get_action(obs,  **kwargs)
+    def _get_action_vllm(self, obs, **kwargs):
+        prompt = self._pre_get_action(obs)
 
         prompts = [prompt]
         prompts = self.tokenizer.apply_chat_template(
@@ -155,12 +149,12 @@ class BaseAgent(ABC):
             len(responses) == 1
         ), f"Only 1 answer should be generated, but {len(responses)} is"
         response = responses[0]
-        action = self._post_get_action(obs, prompt, response,  **kwargs)
+        action = self._post_get_action(response)
 
         return action
 
-    def _get_action_openai(self, obs,  **kwargs):
-        prompt = self._pre_get_action(obs,  **kwargs)
+    def _get_action_openai(self, obs, **kwargs):
+        prompt = self._pre_get_action(obs)
 
         openai.api_key = self.api_key
 
@@ -181,6 +175,6 @@ class BaseAgent(ABC):
             except Exception as e:
                 return f"Error processing content: {e}"
 
-        action = self._post_get_action(obs, prompt, response,  **kwargs)
+        action = self._post_get_action(response)
 
         return action
