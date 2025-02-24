@@ -1,14 +1,27 @@
-# rllm
+# RLLM - Democratizing Reinforcement Learning for Language Models
 
-Get to O3 performance
-
-## Install
-
-Install Verl Submodule:
+## Installation
 
 ```bash
-git submodule init
-git submodule update
+# Fetch both rllm and verl.
+git clone --recurse-submodules https://github.com/deepscaler/rllm.git
+# Install dependencies.
+cd rllm
+pip install -e ./verl
+pip install -e .
+pip install -r requirements.txt
+```
+
+## Dataset Setup
+
+```bash
+cd scripts/data
+# Download large datasets.
+python download_datasets.py
+# Math Datasets
+python deepscaler_dataset.py
+# Code Ddatasets
+python code_dataset.py
 ```
 
 Install Python Dependencies:
@@ -21,14 +34,14 @@ pip install -e .
 # Don't forget to install this, or training run will crash!
 ```
 
-### Download training/testing data from Google Drive
 
+## Train
 ```bash
-gdown "https://drive.google.com/uc?id=1q5Z0Xi98f1Zt-x4R3ubWLxkIIHsZPlum" -O "rllm/data/train/coding/apps.json"
-gdown "https://drive.google.com/uc?id=1tAG36FB32ZLeUUckB6AHyEROkQ8lFhJ6" -O "rllm/data/train/coding/code_contests.json"
-gdown "https://drive.google.com/uc?id=1K2kP8r8_jjGDbdwvTsRo2TEFEpJjMJxp" -O "rllm/data/train/coding/taco.json"
-gdown "https://drive.google.com/uc?id=1ek936L0N57jVaF1YA0vCPv4GRWae4R5C" -O "rllm/data/train/coding/codeforces.json"
+cd scripts/train
+# 8k training run, for example.
+./run_deepscaler_1.5b_8k.sh --model agentica-org/DeepScaleR-1.5B-Preview
 ```
+
 
 ### WandB
 
@@ -37,7 +50,7 @@ wandb login
 wandb init
 ### Run Unit Tests
 
-Unit tests are in the `test/` folder and uses pytest. To run them, you can do something like this.
+Unit tests are in the `test/` folder and uses pytest. To run:
 
 ```bash
 PYTHONPATH=. pytest tests/rllm/rewards/tests.py

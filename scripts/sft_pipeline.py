@@ -3,7 +3,7 @@ import json
 from rllm.data.dataset_types import TrainDataset
 from rllm.data.utils import load_dataset
 from rllm.globals import THOUGHT_DELIMITER_START
-from rllm.rewards.math_reward import rllm_reward_fn
+from rllm.rewards.rl_reward import rllm_reward_fn
 from rllm.sampler import DistributedSampler
 from rllm.sampler.sampler_types import SampleBatch
 

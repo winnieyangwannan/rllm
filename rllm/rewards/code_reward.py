@@ -2,38 +2,100 @@
 This module contains the RewardCode class, which evaluates code datasets answers
 and assigns rewards based on their correctness on unit tests.
 """
-from typing import List, Union
-from rllm.globals import MODEL_NAME_OR_PATH
-from rllm.rewards.reward_types import RewardConfig, RewardFn, RewardInput, RewardOutput, RewardType
+import json
 import multiprocessing
-import numpy as np
+import re
+import time
 from multiprocessing import Manager
-from rllm.rewards.taco.testing_util import run_test as taco_run_test
-from rllm.rewards.code_contests.testing_util import run_test as code_contests_run_test
-from rllm.rewards.codeforces.testing_util import run_test as codeforces_run_test
-from rllm.rewards.swebench.testing_util import swebench_check_correctness
+from typing import List, Dict, Union
 
-def _temp_run(problem, generation, debug, result, test_fn):
-    try:
-        result.append(test_fn(problem, test=generation, debug=debug))
-    except Exception as e:
-        print(f"Error in _temp_run: {e}")
 
-def check_correctness(problem, generation, test_fn):
-    TIME_OUT = 300
+from rllm.rewards.code_utils.code_contests import run_test as code_contests_run_test
+from rllm.rewards.code_utils.livecodebench import run_test as lcb_run_test
+from rllm.rewards.code_utils.codeforces import run_test as codeforces_run_test
+from rllm.rewards.code_utils.swebench import swebench_check_correctness
+from rllm.rewards.code_utils.taco import run_test as taco_run_test
+from rllm.rewards.reward_types import RewardConfig, RewardFn, RewardInput, RewardOutput, RewardType
 
+
+def extract_code_from_model(model_response: str):
+    """
+    Extracts the code from a Markdown-style code block in an LLM output.
+
+    Parameters:
+        model_response (str): The text output from the LLM.
+
+    Returns:
+        str: The extracted code, or an empty string if no code block is found.
+    """
+    code_blocks = re.findall(r"```(?:\w+)?\n(.*?)```", model_response, re.DOTALL)
+    if not code_blocks:
+        return None
+    return code_blocks[-1].strip()
+
+def check_correctness(tests: Union[List[Dict[str, str]], Dict[str, List[str]]], code: str, test_fn, timeout: int = 90) -> bool:
+    """
+    Check if generated code passes all test cases within a timeout period.
+
+    Args:
+        tests: Test cases in either list of dictionaries or dictionary of lists format
+        code: Generated code to test
+        test_fn: Function to run tests
+        timeout: Maximum execution time in seconds before killing process
+
+    Returns:
+        bool: True if all tests pass, False otherwise
+
+    Raises:
+        AssertionError: If test results list is empty
+    """
     manager = Manager()
-    result = manager.list()
-    p = multiprocessing.Process(target=_temp_run, args=(problem, generation, False, result, test_fn))
-    p.start()
-    p.join(timeout=TIME_OUT + 1)
-    if p.is_alive():
-        p.kill()
-    return bool(result and np.all(result[0]))
+    test_results = manager.list()
 
+    def evaluate_code(tests, generation, debug, test_results, test_fn):
+        """Helper function to run tests in separate process."""
+        try:
+            test_results.append(test_fn(tests, test=generation, debug=debug))
+        except Exception as e:
+            print(f"Error in evaluate_code: {e}")
+
+    process = multiprocessing.Process(
+        target=evaluate_code,
+        args=(tests, code, False, test_results, test_fn)
+    )
+    process.start()
+    process.join(timeout=timeout + 1)
+
+    if process.is_alive():
+        process.kill()
+
+    test_results = test_results[:]
+    if len(test_results) == 0:
+        return False
+    #assert len(test_results) == 1, f"Expected exactly one test result, but got {test_results}"
+    return all(test_results[0])
+
+def lcb_check_correctness(tests: List[Dict[str, str]], code: str, timeout: int = 6, 
+                         runtime_debug: bool = False, is_extracted: bool = False) -> bool:
+    """
+    Check if generated code passes all LiveCodeBench test cases.
+
+    Args:
+        tests: List of test cases, each containing input/output pairs
+        code: Generated code to test
+        timeout: Maximum execution time in seconds before killing process
+        runtime_debug: Whether to print debug info during test execution
+        is_extracted: Whether the code needs to be extracted from a larger response
+
+    Returns:
+        bool: True if all tests pass and result list exists, False otherwise
+    """
+    result_list = lcb_run_test(tests, code, timeout, runtime_debug, is_extracted)
+    details = [r[0] for r in result_list]
+    all_passed = all(details)
+    return result_list is not None and all_passed
 
 class RewardCodeFn(RewardFn):
-
     """
     Reward function for evaluating code dataset answers.
 
@@ -41,51 +103,101 @@ class RewardCodeFn(RewardFn):
     the reward based on the correctness of the unit tests provided
     """
     def __call__(self, input: RewardInput) -> RewardOutput:
+        total_start_time = time.time()
+
         assert input.problem_type == RewardType.CODE, \
             "Invalid problem type: expected 'CODE', but got '{}'".format(input.problem_type)
 
-        problem = input.problem
         model_response= input.model_response
         metadata= input.metadata
-        dataset_name = metadata.get("dataset_flag", None)
-        tests = metadata.get("tests", None)
-        if tests is None:
-            raise ValueError("No tests found in metadata")
+        if isinstance(metadata, str):
+            try:
+                metadata = json.loads(metadata)
+            except json.JSONDecodeError as e:
+                print(f"Unable to parse metadata: {e}")
+                return RewardOutput(reward=self.config.format_error_reward, is_correct=False)
         
-        if dataset_name == "TACO":#apps/TACO:
-            is_correct = check_correctness(metadata, model_response, taco_run_test)
-        elif dataset_name == "codecontests":#codetests
-            is_correct = check_correctness(metadata, model_response, code_contests_run_test)
-        elif dataset_name == "codeforces":#codeforces 
-            is_correct = check_correctness(metadata, model_response, codeforces_run_test)
-        elif dataset_name == "swebench":#swebench
-            resolve_rate = swebench_check_correctness(
-                model_response=model_response,
-                metadata=metadata
-            )
+        dataset_name = input.data_source
+        tests = metadata
+        if tests is None:
+            print("No tests found in metadata")
+            return RewardOutput(reward=self.config.format_error_reward, is_correct=False)
 
-            reward = 2 * resolve_rate - 1
+        model_code = extract_code_from_model(model_response)
+        if model_code is None:
+            #print("No code found in model response")
+            return RewardOutput(reward=self.config.format_error_reward, is_correct=False)
 
-            return RewardOutput(reward=reward, is_correct=reward == 1)
+        # Tests: List[Dictionary] - Codeforces, LiveCodeBench
+        # Tests: Dictionary[Lists] - CodeContests, Taco/Apps
+        # Tests: str - TACO/Apps -> Diciotnary[Lists]
+        is_correct = False
+        if dataset_name in ["taco", "apps"]:
+            test_fn = taco_run_test
+        elif dataset_name == "code_contests":
+            test_fn = code_contests_run_test
+        elif dataset_name == "codeforces":
+            test_fn = codeforces_run_test
+        
+        if dataset_name != "livecodebench":
+            is_correct = check_correctness(tests, model_code, test_fn)
         else:
-            raise ValueError("No supported dataset found")
-        print(f"Is correct: {is_correct}")
+            is_extracted = not metadata[0].get("testtype") == "stdin"
+            is_correct = lcb_check_correctness(tests, model_code, is_extracted=is_extracted)
+        
+        total_time = time.time() - total_start_time
+        # print(f"Total reward function execution time: {total_time:.2f} seconds")
+
         if is_correct:
             return RewardOutput(reward=self.config.correct_reward, is_correct=True)
         else:
             return RewardOutput(reward=self.config.incorrect_reward, is_correct=False)
 
-def rllm_code_reward_fn(data_source: str, solution_str: str, ground_truth):
+def rllm_reward_fn_code(data_source: str, llm_solution: str, ground_truth: Dict, **kwargs):
+    """Evaluate code solutions against ground truth ansters
+    
+    This function creates a reward function to evaluate code solutions by pass the test_case from groun_truth. It can optionally use a language model
+    for more sophisticated answer validation.
+
+    Args:
+        data_source: The source/dataset the problem comes from
+        llm_solution: The solution string provided by the language model to evaluate
+        ground_truth: some tests for this llm_solution
+        enable_llm: Whether to enable language model validation for complex cases (default: False)
+
+    Returns:
+        bool: True if the solution passes all the test_case, False otherwise
+
+    Example:
+            model_response = '''
+import sys
+from itertools import permutations
+def main():
+    n,m=map(int, input().split()) 
+    a=sum(list(map(int, input().split()))) 
+    if a+(n-1)*10<=m: 
+        print(5) 
+    else: 
+        print(5)
+if __name__ == "__main__":
+    main()
+'''
+    
+    print(f"test the code_forces")
+    # tests = [ { "input": "3 30\n2 2 1", "output": "5" }, { "input": "3 10\n3 2 1", "output": "5" } ] 
+    metadata = {
+         "tests": tests,
+    }
+    True
+    """
     reward_config = RewardConfig()
     reward_fn = RewardCodeFn(reward_config)
     reward_response = reward_fn(
         RewardInput(
-            problem=solution_str,
+            problem=None,
             problem_type=RewardType.CODE,
-            model_response=solution_str,
-            metadata={
-                "dataset_flag": data_source,
-                "tests": ground_truth
-            }
+            data_source=data_source,
+            model_response=llm_solution,
+            metadata=ground_truth
         ))
     return reward_response.is_correct
