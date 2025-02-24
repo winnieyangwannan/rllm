@@ -1,7 +1,7 @@
 import argparse
 import os
 import pandas as pd
-import gym
+import gymnasium as gym
 import browsergym.miniwob 
 
 from rllm.data.dataloader import DatasetMix
@@ -9,6 +9,11 @@ from rllm.data.dataset_types import TrainDataset, TestDataset
 from verl.utils.hdfs_io import copy, makedirs
 
 if __name__ == '__main__':
+    import os
+    import importlib
+    import browsergym.miniwob
+    importlib.reload(browsergym.miniwob)
+
     parser = argparse.ArgumentParser()
     parser.add_argument('--local_dir', default='~/data/rllm-miniwob')
     parser.add_argument('--hdfs_dir', default=None)

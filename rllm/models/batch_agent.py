@@ -31,7 +31,7 @@ class BatchAgent:
         safe_batch_size=100,
         gamma=0.95,
         retry_limit=5,
-        episode_len=20,
+        episode_len=2,
         **kwargs,
     ):
         self.rollout_engine = rollout_engine
@@ -42,6 +42,7 @@ class BatchAgent:
         self.kwargs = kwargs
         self.agent_class = agent_class
         self.sampling_params = kwargs.get("sampling_params", None)
+        self.n_parallel_agents = n_parallel_agents
 
         self.agents = [
             agent_class(
@@ -112,7 +113,7 @@ class BatchAgent:
         ), f"Number of responses {len(responses)} should equal to the number of observations ({len(observations)})"
 
         actions = [
-            self.agents[obs_idxs[i]]._post_get_action(obs, prompts[i], responses[i])
+            self.agents[obs_idxs[i]]._post_get_action(responses[i])
             for i, obs in enumerate(observations)
         ]
         return actions
@@ -181,7 +182,7 @@ class BatchAgent:
         ), f"Number of responses {len(responses)} should equal to the number of observations ({len(observations)})"
 
         actions = [
-            self.agents[obs_idxs[i]]._post_get_action(obs, prompts[i], responses[i])
+            self.agents[obs_idxs[i]]._post_get_action(responses[i])
             for i, obs in enumerate(observations)
         ]
         return actions
@@ -205,7 +206,7 @@ class BatchAgent:
         ), f"Number of responses {len(responses)} should equal to the number of observations ({len(observations)})"
 
         actions = [
-            self.agents[obs_idxs[i]]._post_get_action(obs, prompts[i], responses[i])
+            self.agents[obs_idxs[i]]._post_get_action(responses[i])
             for i, obs in enumerate(observations)
         ]
         return actions
@@ -407,9 +408,7 @@ class BatchAgent:
                 )
                 pad_token = self.tokenizer.pad_token
                 response = output_text.replace(pad_token, "")
-                action = self.agents[idx]._post_get_action(
-                    observations[idx], prompts[idx], response
-                )
+                action = self.agents[idx]._post_get_action(response)
                 yield action, idx
 
     def interact_environment_generator(self, reset_seed=0, timing_raw={}, **kwargs):

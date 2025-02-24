@@ -74,8 +74,4 @@ export MINIWOB_URL="file://<PATH_TO_MINIWOB_PLUSPLUS_CLONED_REPO>/miniwob/html/m
 
 cd rllm
 python scripts/data/miniwob_dataset.py --local_dir ~/data/rllm-miniwob
-
-# To run ppo
-cd scripts
-./run_test_agent_multistep_ppo_verl.sh
 ```

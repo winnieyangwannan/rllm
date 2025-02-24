@@ -108,12 +108,12 @@ class BatchBrowserGym:
             assert len(actions) == self.batch_size, "Number of actions must match batch size"
             env_idxs = list(range(len(actions)))
 
-        assert len(actions) == env_idxs, "Number of actions must match the env used"
+        assert len(actions) == len(env_idxs), f"Number of actions ({len(actions)}) must match the env used {len(env_idxs)}"
 
 
         # Send step command with actions
         for i in env_idxs:
-            self.connections[i].send("step", actions[i])
+            self.connections[i].send(("step", actions[i]))
 
         # Collect results
         results = [self.connections[i].recv() for i in env_idxs]

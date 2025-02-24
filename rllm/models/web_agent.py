@@ -6,7 +6,6 @@ import numpy as np
 from browsergym.core.action.highlevel import HighLevelActionSet
 from browsergym.utils.obs import flatten_axtree_to_str, flatten_dom_to_str, prune_html
 from PIL import Image
-from typing import override
 
 from rllm.models.system_prompts import *
 from rllm.models.agent import BaseAgent
@@ -48,7 +47,6 @@ class WebAgent(BaseAgent):
 
         self.action_history = [] # all are in string
 
-    @override
     def _pre_get_action(self, obs):
         obs = self._preproc_obs(obs)
 
@@ -115,11 +113,9 @@ class WebAgent(BaseAgent):
 
         return messages
 
-    @override
     def _post_get_action(self, response):
         return response
 
-    @override
     def update(self, action, observation, next_observation, reward, terminated, truncated, info):
         self.action_history.append(action)
 
