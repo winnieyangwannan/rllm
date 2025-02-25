@@ -65,11 +65,23 @@ def main(config):
         {
             "start_url": "https://www.google.com/maps",
             "goal": "Locate a parking lot near the Brooklyn Bridge that open 24 hours. Review the user comments about it.",
+        },
+        {
+            "start_url": "https://www.google.com/maps",
+            "goal": "Locate a parking lot near the Brooklyn Bridge that open 24 hours. Review the user comments about it.",
+        },
+        {
+            "start_url": "https://www.google.com/maps",
+            "goal": "Locate a parking lot near the Brooklyn Bridge that open 24 hours. Review the user comments about it.",
+        },
+        {
+            "start_url": "https://www.google.com/maps",
+            "goal": "Locate a parking lot near the Brooklyn Bridge that open 24 hours. Review the user comments about it.",
         }
     ]
     env = BatchBrowserGym(
         tasks=tasks,
-        batch_size=2,
+        batch_size=len(tasks),
     )
     output_dir = "./agent_batch_test"
     # Set output directory
@@ -79,12 +91,15 @@ def main(config):
         output_dir = os.path.dirname(os.path.abspath(__file__))
     os.makedirs(output_dir, exist_ok=True)
 
-    agent = BatchAgent(rollout_engine=rollout_engine, engine_name="verl", tokenizer=tokenizer, agent_class=WebAgent, n_parallel_agents=2, env=env)
+    agent = BatchAgent(rollout_engine=rollout_engine, engine_name="verl", tokenizer=tokenizer, agent_class=WebAgent, n_parallel_agents=len(tasks), env=env)
     
     generator = agent.interact_environment_generator()
+    all_traj = []
     for i, traj in enumerate(generator):
-        print(f"some traj finished, its step 0 is: {traj[0]}")
+        print(f"some traj finished")
+        all_traj.append(traj)
 
+    assert(len(all_traj) == len(tasks))
     env.close()
 
 

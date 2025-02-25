@@ -515,7 +515,7 @@ class BatchAgent:
                             f"Trajectory {traj_idx} completed due to {termination_reason}. Reward is {rewards[i]}. \n",
                             "green",
                         )
-                        batch_done[i] = True
+                        batch_done[traj_idx] = True
                         result = add_mc_return(
                             add_trajectory_reward(trajectory=trajectories[traj_idx]),
                             gamma=self.gamma,
@@ -530,14 +530,15 @@ class BatchAgent:
 
             await results_queue.put(None) 
 
-        loop.run_until_complete(async_loop())
         loop.create_task(async_loop())  
 
         try:
             while True:
                 result = loop.run_until_complete(results_queue.get())
                 if result is None:
+                    print("here 2")
                     break  
+                print("here")
                 yield result
 
         finally:
