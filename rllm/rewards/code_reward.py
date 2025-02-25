@@ -51,7 +51,6 @@ def check_correctness(tests: Union[List[Dict[str, str]], Dict[str, List[str]]], 
     """
     manager = Manager()
     test_results = manager.list()
-
     def evaluate_code(tests, generation, debug, test_results, test_fn):
         """Helper function to run tests in separate process."""
         try:
@@ -68,12 +67,13 @@ def check_correctness(tests: Union[List[Dict[str, str]], Dict[str, List[str]]], 
 
     if process.is_alive():
         process.kill()
-
     test_results = test_results[:]
     if len(test_results) == 0:
         return False
     #assert len(test_results) == 1, f"Expected exactly one test result, but got {test_results}"
-    return all(test_results[0])
+    test_results = test_results[0]
+    test_results = [r==True for r in test_results]
+    return all(test_results)
 
 def lcb_check_correctness(tests: List[Dict[str, str]], code: str, timeout: int = 6, 
                          runtime_debug: bool = False, is_extracted: bool = False) -> bool:

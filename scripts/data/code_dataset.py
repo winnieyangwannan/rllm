@@ -97,6 +97,12 @@ if __name__ == '__main__':
     
     test_datasets_data = [load_dataset(d) for d in test_datasets]
     train_dataset_data = [load_dataset(d) for d in train_datasets]
+    
+    # Print dataset sizes
+    for test_dataset, data in zip(test_datasets, test_datasets_data):
+        print(f"Test dataset {test_dataset.value}: {len(data)} examples")
+    for train_dataset, data in zip(train_datasets, train_dataset_data):
+        print(f"Train dataset {train_dataset.value}: {len(data)} examples")
 
     # Process training data
     all_train_data = [] 
