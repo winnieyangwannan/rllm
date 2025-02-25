@@ -536,9 +536,7 @@ class BatchAgent:
             while True:
                 result = loop.run_until_complete(results_queue.get())
                 if result is None:
-                    print("here 2")
                     break  
-                print("here")
                 yield result
 
         finally:
