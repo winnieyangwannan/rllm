@@ -36,9 +36,12 @@ class PythonInterpreter:
 
     async def _init_sandbox(self):
         """Initialize the sandbox environment."""
-        PythonInterpreter.sandbox = await AsyncSandbox.create(
-            api_key=""
-        )  # need an API key here for e2b sandbox
+        if self.sandbox is None:
+            print("create sandbox")
+            self.sandbox = await AsyncSandbox.create(
+                api_key="",
+                timeout=3600
+            )  # need an API key here for e2b sandbox
 
     async def _kill_sandbox(self):
         """Clean up sandbox resources."""
@@ -56,7 +59,10 @@ class PythonInterpreter:
         Returns:
             Execution result as string
         """
-        print("Execute SANDBOX")
-        execution = await PythonInterpreter.sandbox.run_code(code)
-        print(execution)
-        return str(execution)
+        # print("Execute SANDBOX")
+        execution = await self.sandbox.run_code(code)
+        if execution.error:
+            return f"Error: {execution.error.name} - {execution.error.value}"
+        if len(execution.results) == 0:
+            return "Empty results"
+        return execution.results[0].text

@@ -33,15 +33,17 @@ class ToolCaller:
 
 
 async def _apply_tool(completion, messages, tool_caller):
-    if "```json" in completion.choices[0].message.content:
-        tool_call = parse_tool_calls(completion.choices[0].message.content)
+    tool_calls = parse_tool_calls(completion.choices[0].message.content)
 
-        if tool_call:
-            tool_call_result = await tool_caller(
-                tool_call["name"], tool_call["parameters"]
-            )
-            messages.append(tool_call_result)
-            return True
+    if len(tool_calls) > 0:
+        tool_call = tool_calls[0]
+        tool_call_result = await tool_caller(
+            tool_call["name"], tool_call["parameters"]
+        )
+        print("tool_call_result", tool_call_result)
+        messages.append(tool_call_result)
+        return True
+    
     return False
 
 
@@ -106,12 +108,13 @@ if __name__ == "__main__":
 
     dataset = load_dataset(TrainDataset.Math.DEEPSCALER)
 
+    idx = 1
+
     messages = [
         [
-            {"role": "system", "content": ""},
             {
                 "role": "user",
-                "content": dataset[3]["problem"]
+                "content": dataset[idx]["problem"]
                 + "Let's think step by step, put your final answer within \\boxed{}, and use tools to evaluate math expressions if needed.",
             },
         ]
@@ -127,5 +130,7 @@ if __name__ == "__main__":
     tool_caller = ToolCaller(tools=[interpreter])
 
     chat_completion_with_tool(
-        client, tool_caller, messages, model="deepseek-ai/DeepSeek-R1-Distill-Qwen-7B"
+        client, tool_caller, messages, model="deepscaler-toolcall"
     )
+
+    print("answer:", dataset[idx]['answer'])
