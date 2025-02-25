@@ -41,7 +41,7 @@ def main(config):
     pprint(OmegaConf.to_container(config, resolve=True))  # resolve=True will eval symbol values
     OmegaConf.resolve(config)
 
-    config.model.path = "meta-llama/Llama-3.1-8B-Instruct"
+    config.model.path = "Qwen/Qwen2.5-7B-Instruct-1M"
 
     local_path = copy_local_path_from_hdfs(config.model.path)
     from verl.utils import hf_tokenizer
@@ -81,7 +81,10 @@ def main(config):
 
     agent = BatchAgent(rollout_engine=rollout_engine, engine_name="verl", tokenizer=tokenizer, agent_class=WebAgent, n_parallel_agents=2, env=env)
     
-    trajectories = agent.interact_environment()
+    generator = agent.interact_environment_generator()
+    for traj in generator:
+        print(traj)
+
     env.close()
 
 

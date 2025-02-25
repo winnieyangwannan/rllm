@@ -12,7 +12,7 @@ python3 -m verl.trainer.main_ppo_agent \
     data.val_batch_size=8 \
     data.max_prompt_length=8192 \
     data.max_response_length=512 \
-    actor_rollout_ref.model.path=Qwen/Qwen2.5-0.5B-Instruct \
+    actor_rollout_ref.model.path=Qwen/Qwen2.5-7B-Instruct \
     actor_rollout_ref.model.use_remove_padding=True \
     actor_rollout_ref.model.enable_gradient_checkpointing=True \
     actor_rollout_ref.model.use_remove_padding=False \

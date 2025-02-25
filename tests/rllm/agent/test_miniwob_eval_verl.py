@@ -45,7 +45,7 @@ def main(config):
         os.environ["MINIWOB_URL"] = miniwob_url
         print(f"MINIWOB_URL set to {miniwob_url}")
 
-    model_path = "Qwen/Qwen2.5-0.5B-Instruct" #"Qwen/Qwen2.5-7B-Instruct-1M"
+    model_path ="Qwen/Qwen2.5-7B-Instruct-1M"
     # Init output dir
     output_dir = "miniwob_evaluator_verl_test"
     
