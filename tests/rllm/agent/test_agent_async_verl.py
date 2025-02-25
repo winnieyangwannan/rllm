@@ -82,8 +82,8 @@ def main(config):
     agent = BatchAgent(rollout_engine=rollout_engine, engine_name="verl", tokenizer=tokenizer, agent_class=WebAgent, n_parallel_agents=2, env=env)
     
     generator = agent.interact_environment_generator()
-    for traj in generator:
-        print(traj)
+    for i, traj in enumerate(generator):
+        print(f"some traj finished, its step 0 is: {traj[0]}")
 
     env.close()
 

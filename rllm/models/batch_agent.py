@@ -533,9 +533,48 @@ class BatchAgent:
         loop.run_until_complete(async_loop())
         loop.create_task(async_loop())  
 
-        while True:
-            result = loop.run_until_complete(results_queue.get())
-            if result is None:
-                break  
-            yield result
+        try:
+            while True:
+                result = loop.run_until_complete(results_queue.get())
+                if result is None:
+                    break  
+                yield result
 
+        finally:
+            # Clean up
+            pending = asyncio.all_tasks(loop)
+            for task in pending:
+                print("One trajectory generation task is cancelled")
+                task.cancel()
+            
+            if not loop.is_closed():
+                # Run loop one final time to execute any remaining callbacks
+                loop.run_until_complete(loop.shutdown_asyncgens())
+                loop.close()
+
+        
+
+    def reset(self):
+        """reset all the agents"""
+        for agent in self.agents:
+            agent.reset()
+
+    def update_env(self, env):
+        """
+        update the environment. new agents are created instead of reusing old ones
+        """
+        self.n_parallel_agents = env.batch_size
+
+        self.agents = [
+            self.agent_class(
+                rollout_engine=self.rollout_engine,
+                engine_name=self.engine_name,
+                tokenizer=self.tokenizer,
+                api_key=self.api_key,
+                api_retries=self.api_retries,
+                **self.kwargs,
+            )
+            for _ in range(self.n_parallel_agents)
+        ]
+
+        self.env = env

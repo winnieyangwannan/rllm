@@ -112,8 +112,8 @@ class BatchBrowserGym:
 
 
         # Send step command with actions
-        for i in env_idxs:
-            self.connections[i].send(("step", actions[i]))
+        for i, env_idx in enumerate(env_idxs):
+            self.connections[env_idx].send(("step", actions[i]))
 
         # Collect results
         results = [self.connections[i].recv() for i in env_idxs]
