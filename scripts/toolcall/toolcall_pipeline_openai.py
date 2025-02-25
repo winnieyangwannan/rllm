@@ -106,7 +106,7 @@ if __name__ == "__main__":
     from rllm.data.dataset_types import TrainDataset
     from rllm.data.utils import load_dataset
 
-    dataset = load_dataset(TrainDataset.DEEPSCALER)
+    dataset = load_dataset(TrainDataset.Math.DEEPSCALER)
 
     idx = 1
 

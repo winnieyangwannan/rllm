@@ -176,7 +176,7 @@ def convert_to_sharegpt_format(messages, tools_list):
 
 
 def load_data():
-    dataset = load_dataset(TrainDataset.DEEPSCALER)
+    dataset = load_dataset(TrainDataset.Math.DEEPSCALER) 
     train_data = []
     for example in dataset:
         train_data.append(process_fn(example))

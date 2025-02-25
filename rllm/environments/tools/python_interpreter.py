@@ -3,10 +3,10 @@ from e2b_code_interpreter import AsyncSandbox
 
 class PythonInterpreter:
     """A tool for executing Python code in a sandboxed environment."""
+    sandbox = None
 
     def __init__(self):
         self.name = "python_interpreter"
-        self.sandbox = None
         
     @property
     def info(self):
@@ -30,25 +30,30 @@ class PythonInterpreter:
 
     async def execute(self, **kwargs):
         """Execute Python code in sandbox with given arguments."""
-        if self.sandbox is None:
+        if PythonInterpreter.sandbox is None:
             await self._init_sandbox()
         return await self._execute_python(**kwargs)
 
     async def _init_sandbox(self):
         """Initialize the sandbox environment."""
+<<<<<<< HEAD
         if self.sandbox is None:
             print("create sandbox")
             self.sandbox = await AsyncSandbox.create(
                 api_key="",
                 timeout=3600
             )  # need an API key here for e2b sandbox
+=======
+        PythonInterpreter.sandbox = await AsyncSandbox.create(
+            api_key=""
+        )  # need an API key here for e2b sandbox
+>>>>>>> 43f9f2690377ab9ff1031ac79df1b2ebc1bc50f1
 
     async def _kill_sandbox(self):
         """Clean up sandbox resources."""
-        if self.sandbox is not None:
-            print("kill sandbox")
-            await self.sandbox.kill()
-            self.sandbox = None
+        if PythonInterpreter.sandbox is not None:
+            await PythonInterpreter.sandbox.kill()
+            PythonInterpreter.sandbox = None
 
     async def _execute_python(self, code: str = "", **kwargs) -> str:
         """

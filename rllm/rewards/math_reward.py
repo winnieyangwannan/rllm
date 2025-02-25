@@ -8,8 +8,10 @@ from typing import List, Union
 from rllm.globals import THOUGHT_DELIMITER_START, THOUGHT_DELIMITER_END, OAI_RM_MODEL
 from rllm.rewards import RewardConfig, RewardFn, RewardInput, RewardOutput, RewardType
 from rllm.rewards.math_utils.utils import extract_answer, grade_answer_sympy, grade_answer_mathd
+
 from rllm.system_prompts import ORM_PROMPT
 from rllm.utils import call_gemini_llm, call_oai_rm_llm
+import json 
 
 ORM_USER_TEMPLATE = """
 Problem: {problem}
@@ -100,16 +102,53 @@ class RewardMathFn(RewardFn):
                 
         return RewardOutput(reward=self.config.incorrect_reward, is_correct=False)
 
-def rllm_reward_fn(solution_str: str, ground_truth: Union[str, List[str]], enable_llm = False):
+
+
+def rllm_reward_fn_math(data_source: str, llm_solution: str, ground_truth: Union[str, List[str]], **kwargs):
+    """Evaluates mathematical solutions against ground truth answers.
+
+    This function creates a reward function to evaluate mathematical solutions by comparing
+    them against provided ground truth answers. It can optionally use a language model
+    for more sophisticated answer validation.
+
+    Args:
+        data_source: The source/dataset the problem comes from
+        llm_solution: The solution string provided by the language model to evaluate
+        ground_truth: Either a single string or list of strings containing valid answers
+        enable_llm: Whether to enable language model validation for complex cases (default: False)
+
+    Returns:
+        bool: True if the solution is deemed correct, False otherwise
+
+    Example:
+        >>> rllm_reward_fn_math("gsm8k", "x = 5", "5", False)
+        True
+    """
     reward_config = RewardConfig()
-    reward_config.use_math_orm = enable_llm
     reward_fn = RewardMathFn(reward_config)
-    reward_response = reward_fn(RewardInput(problem=solution_str, problem_type=RewardType.MATH, model_response=solution_str, metadata={"answer": ground_truth}))
+    reward_response = reward_fn(RewardInput(problem=None,
+                                            problem_type=RewardType.MATH,
+                                            model_response=llm_solution,
+                                            metadata={"answer": ground_truth},
+                                            data_source=data_source))
     return reward_response.is_correct
 
 if __name__ == "__main__":
     reward = RewardMathFn(RewardConfig)
-    input = RewardInput(problem="Let $P(x)=x^{4}+2 x^{3}-13 x^{2}-14 x+24$ be a polynomial with roots $r_{1}, r_{2}, r_{3}, r_{4}$. Let $Q$ be the quartic polynomial with roots $r_{1}^{2}, r_{2}^{2}, r_{3}^{2}, r_{4}^{2}$, such that the coefficient of the $x^{4}$ term of $Q$ is 1. Simplify the quotient $Q\\left(x^{2}\\right) / P(x)$, leaving your answer in terms of $x$. (You may assume that $x$ is not equal to any of $\\left.r_{1}, r_{2}, r_{3}, r_{4}\\right)$.", problem_type=RewardType.MATH, model_response="The answer is \\boxed{the function is 24 + 14*x + (-13)*x^2 - 2*x^3 + x^4}.",
-                        metadata={"answer": ["10", "$x^{4}-2 x^{3}-13 x^{2}+14 x+24$"]})
-    output = reward(input)
+    test_input = RewardInput(
+        problem=(
+            "Let $P(x)=x^{4}+2 x^{3}-13 x^{2}-14 x+24$ be a polynomial with roots "
+            "$r_{1}, r_{2}, r_{3}, r_{4}$. Let $Q$ be the quartic polynomial with roots "
+            "$r_{1}^{2}, r_{2}^{2}, r_{3}^{2}, r_{4}^{2}$, such that the coefficient "
+            "of the $x^{4}$ term of $Q$ is 1. Simplify the quotient $Q\\left(x^{2}\\right) / P(x)$, "
+            "leaving your answer in terms of $x$. (You may assume that $x$ is not equal to "
+            "any of $\\left.r_{1}, r_{2}, r_{3}, r_{4}\\right)$."
+        ),
+        problem_type=RewardType.MATH,
+        model_response=(
+            "The answer is \\boxed{the function is 24 + 14*x + (-13)*x^2 - 2*x^3 + x^4}."
+        ),
+        metadata={"answer": ["10", "$x^{4}-2 x^{3}-13 x^{2}+14 x+24$"]}
+    )
+    output = reward(test_input)
     print(output)
