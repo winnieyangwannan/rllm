@@ -36,18 +36,12 @@ class PythonInterpreter:
 
     async def _init_sandbox(self):
         """Initialize the sandbox environment."""
-<<<<<<< HEAD
         if self.sandbox is None:
             print("create sandbox")
             self.sandbox = await AsyncSandbox.create(
                 api_key="",
                 timeout=3600
             )  # need an API key here for e2b sandbox
-=======
-        PythonInterpreter.sandbox = await AsyncSandbox.create(
-            api_key=""
-        )  # need an API key here for e2b sandbox
->>>>>>> 43f9f2690377ab9ff1031ac79df1b2ebc1bc50f1
 
     async def _kill_sandbox(self):
         """Clean up sandbox resources."""
