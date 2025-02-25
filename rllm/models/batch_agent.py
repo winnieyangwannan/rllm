@@ -94,8 +94,8 @@ class BatchAgent:
 
         # because of veRL's chunking. we need to pad number of prompts to be a multiple of worker group world size
         batch_padded, pad_size = pad_dataproto_to_divisor(batch, self.rollout_engine.world_size)
-        
         output_padded = self.rollout_engine.generate_sequences(batch_padded)
+        
         output = unpad_dataproto(output_padded, pad_size=pad_size)
 
         output_text = self.tokenizer.batch_decode(

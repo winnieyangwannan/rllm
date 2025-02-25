@@ -20,3 +20,6 @@ nltk
 browsergym
 gradio
 fire
+vertexai
+sentence_transformers
+swebench
