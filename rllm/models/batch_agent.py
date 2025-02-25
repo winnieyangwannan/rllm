@@ -400,8 +400,9 @@ class BatchAgent:
 
         gen_seq_generator = self.rollout_engine.generate_sequences_async(prompts=batch_padded)
         for output in gen_seq_generator:
-            # TODO: check if this is correct to do output.non_tensor_batch['rollout_generator_id'] for int
+            # TODO: check if this is correct to do output.non_tensor_batch['rollout_generator_id'] for int  
             idx = output.non_tensor_batch["rollout_generator_id"]
+            print(idx)
             if idx != -1:
                 output_text = self.tokenizer.batch_decode(
                     output.batch["responses"], skip_special_tokens=False
@@ -414,6 +415,8 @@ class BatchAgent:
     def interact_environment_generator(self, reset_seed=0, timing_raw={}, **kwargs):
         """
         Same as interact_environment but async and yielding trajectories as they terminate. May be out of order.
+
+        Yield both the trajectory and the index it is from
         """
         assert self.env, f"Env cannot be empty, but got {self.env}"
         assert hasattr(self.env, "batch_size"), "Env does not have batch_size attribute"
@@ -479,7 +482,7 @@ class BatchAgent:
                     actions_map[traj_idx] = action
 
                 if not actions_map:
-                    os.sleep(0.01)  # Prevent busy waiting
+                    time.sleep(0.01)  # Prevent busy waiting
                     continue
 
                 traj_idx_list = list(actions_map.keys())
@@ -539,7 +542,7 @@ class BatchAgent:
                         yield add_mc_return(
                             add_trajectory_reward(trajectory=trajectories[traj_idx]),
                             gamma=self.gamma,
-                        )
+                        ), traj_idx
                     else:
                         # put back into the pending lists
                         pending_obs_queue.append(next_observations[i])
