@@ -39,7 +39,8 @@ class PythonInterpreter:
         if self.sandbox is None:
             print("create sandbox")
             self.sandbox = await AsyncSandbox.create(
-                api_key=""
+                api_key="",
+                timeout=3600
             )  # need an API key here for e2b sandbox
 
     async def _kill_sandbox(self):
@@ -59,7 +60,10 @@ class PythonInterpreter:
         Returns:
             Execution result as string
         """
-        print("Execute SANDBOX")
+        # print("Execute SANDBOX")
         execution = await self.sandbox.run_code(code)
-        print(execution)
-        return str(execution)
+        if execution.error:
+            return f"Error: {execution.error.name} - {execution.error.value}"
+        if len(execution.results) == 0:
+            return "Empty results"
+        return execution.results[0].text
