@@ -48,6 +48,7 @@ python3 -m verl.trainer.main_ppo_async \
     actor_rollout_ref.actor.fsdp_config.optimizer_offload=False \
     actor_rollout_ref.rollout.tensor_model_parallel_size=1 \
     actor_rollout_ref.rollout.name=vllm \
+    actor_rollout_ref.rollout.compute_reward=True \
     actor_rollout_ref.rollout.async_engine=True \
     actor_rollout_ref.rollout.vllm_log_prob=True \
     actor_rollout_ref.rollout.temperature=0.6 \
