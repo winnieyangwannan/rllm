@@ -5,6 +5,7 @@ ulimit -n 1048576
 # Warning: Export VLLM_ATTENTION_BACKEND on every machine before starting Ray cluster.
 # vLLM without XFORMERS will results in CUDA errors.
 export VLLM_ATTENTION_BACKEND=FLASH_ATTN
+export VLLM_ENGINE_ITERATION_TIMEOUT_S=1000000000
 
 # Parse command line arguments
 while [[ $# -gt 0 ]]; do
@@ -29,7 +30,7 @@ python3 -m verl.trainer.main_ppo_async \
     algorithm.adv_estimator=grpo \
     data.train_files=$HOME/rllm/data/deepscaler_code.parquet \
     data.val_files=$HOME/rllm/data/test_livecodebench.parquet \
-    data.train_batch_size=128 \
+    data.train_batch_size=64 \
     data.val_batch_size=512 \
     data.max_prompt_length=1024 \
     data.max_response_length=16384 \
