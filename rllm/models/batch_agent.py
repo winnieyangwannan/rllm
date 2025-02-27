@@ -502,7 +502,6 @@ class BatchAgent:
 
                 for i, traj_idx in enumerate(traj_idx_list):
 
-                    # TODO: make sure it works
                     aug_reward= self.agents[traj_idx].augment_reward(responses_list[i], next_observations[i], rewards[i])
 
                     trajectories[traj_idx].append({

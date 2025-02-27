@@ -29,6 +29,12 @@ def compute_trajectory_score(trajectory):
     return [d["augmented_reward"] for d in trajectory] if trajectory else []
     # return [d["reward"] for d in trajectory] if trajectory else []
 
+def compute_environment_score(trajectory):
+    """
+    given a trajectory, return the environment score
+    """
+    return trajectory[0]["trajectory_reward"] if trajectory else 0
+
 def convert_observation_to_prompt(env, i, obs):
     env_id = env.env_id[i]
     if env_id.startswith("browsergym/miniwob"):
