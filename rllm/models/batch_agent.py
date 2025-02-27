@@ -65,6 +65,8 @@ class BatchAgent:
         """
         Return a list of actions with same size as the observations list
         obs_idxs: The list of indexes that the observations are from. Used to index into self.agents
+
+        return: Tuple (List of actions, List of responses)
         """
         if obs_idxs:
             assert len(observations) == len(
@@ -114,7 +116,7 @@ class BatchAgent:
             self.agents[obs_idxs[i]]._post_get_action(responses[i])
             for i, obs in enumerate(observations)
         ]
-        return actions
+        return actions, responses
 
     def _convert_prompt_verl(self, prompts, **kwargs):
         """
@@ -183,7 +185,7 @@ class BatchAgent:
             self.agents[obs_idxs[i]]._post_get_action(responses[i])
             for i, obs in enumerate(observations)
         ]
-        return actions
+        return actions, responses
 
     def _get_actions_openai(self, observations, obs_idxs=[], **kwargs):
         prompts = [
@@ -207,7 +209,7 @@ class BatchAgent:
             self.agents[obs_idxs[i]]._post_get_action(responses[i])
             for i, obs in enumerate(observations)
         ]
-        return actions
+        return actions, responses
 
     def _get_openai_response(self, prompt):
         # GPT prompt
@@ -233,20 +235,24 @@ class BatchAgent:
         new_observations = []
         obs_idxs = []
         actions = [""] * len(observations)
+        responses = [""] * len(observations)
         for i, done in enumerate(batch_done):
             if not done and observations[i] is not None:
                 new_observations.append(observations[i])
                 obs_idxs.append(i)
 
         if len(new_observations) > 0:
-            outputs = []
+            gen_responses = []
+            gen_actions = []
             for i in range(0, len(new_observations), self.safe_batch_size):
                 try:
-                    outputs += self.get_actions(
+                    new_actions, new_responses = self.get_actions(
                         new_observations[i : i + self.safe_batch_size],
                         obs_idxs[i : i + self.safe_batch_size],
                         **kwargs,
                     )
+                    gen_actions.extend(new_actions)
+                    gen_responses.extend(new_responses)
                 except Exception as e:
                     # sometime it says unable to infer image channel error
                     colorful_print(f"Error in getting action: {e}", "red")
@@ -254,19 +260,20 @@ class BatchAgent:
                     raise e
 
             for i, idx in enumerate(obs_idxs):
-                actions[idx] = outputs[i]
+                actions[idx] = gen_actions[i]
+                responses[idx] = gen_responses[i]
 
         for action, obs in zip(actions, observations):
             if obs is None:
                 assert action == "", "Action should be empty, First assert"
 
-        return actions
+        return actions, responses
 
     def interact_environment(self, reset_seed=0, timing_raw={}, **kwargs):
         """
         Run environment interactions in batches.
         Collects trajectories in the format:
-        [[{"observation":, "next_observation":, "reward":, "done":, "action": },...],...]
+        [[{"observation":, "next_observation":, "reward":, "done":, "action": , "response": , "augmented_reward": },...],...]
         Returned trajectories are in order of the environments they are from.
         """
         assert self.env, f"Env cannot be empty, but got {self.env}"
@@ -290,7 +297,7 @@ class BatchAgent:
                 while not all(batch_done) and steps < self.episode_len:
                     steps += 1
                     with _timer("get_actions", timing_raw):
-                        actions = self._safe_get_actions(
+                        actions, responses = self._safe_get_actions(
                             observations, batch_done, **kwargs
                         )
 
@@ -321,6 +328,8 @@ class BatchAgent:
                         if batch_done[i]:
                             continue
 
+                        aug_reward = self.agents[i].augment_reward(responses[i], next_observations[i], rewards[i])
+
                         self.agents[i].update(
                             actions[i],
                             observations[i],
@@ -338,7 +347,7 @@ class BatchAgent:
                                 f"Trajectory {i} completed due to {'termination' if terminateds[i] else 'truncation'}. Reward is {rewards[i]}. \n",
                                 "green",
                             )
-
+                       
                         trajectories[i].append(
                             {
                                 "observation": observations[i],
@@ -347,6 +356,8 @@ class BatchAgent:
                                 "done": terminateds[i] or truncateds[i],
                                 "action": actions[i],
                                 "info": infos[i],
+                                "augmented_reward": aug_reward,
+                                "response": responses[i],
                             }
                         )
                         observations[i] = next_observations[i]
@@ -368,8 +379,10 @@ class BatchAgent:
 
     def get_actions_yield(self, observations, obs_idxs=[], **kwargs):
         """
-        Yield actions with same size as the observations list, may be out of order. Yielding the tuple (response, obs_idx it corresponds to)
+        Yield actions with same size as the observations list, may be out of order. 
         obs_idxs: The list of indexes that the observations are from. Used to index into self.agents
+
+        Yield: the tuple (action, obs_idx it corresponds to, response)
         """
         if obs_idxs:
             assert len(observations) == len(
@@ -406,7 +419,7 @@ class BatchAgent:
                     pad_token = self.tokenizer.pad_token
                     response = text.replace(pad_token, "")
                     action = self.agents[idx]._post_get_action(response)
-                    yield action, idx
+                    yield action, idx, response
 
 
     def interact_environment_generator(self, reset_seed=0, timing_raw={}, **kwargs):
@@ -441,8 +454,8 @@ class BatchAgent:
 
         async def async_action_worker(obs_batch, traj_idxs):
             """Runs `get_actions_yield()` asynchronously in a thread."""
-            for action, traj_idx in await asyncio.to_thread(self.get_actions_yield, obs_batch, traj_idxs, **kwargs):
-                await responses_queue.put((action, traj_idx))
+            for action, traj_idx, response in await asyncio.to_thread(self.get_actions_yield, obs_batch, traj_idxs, **kwargs):
+                await responses_queue.put((action, traj_idx, response))
 
         async def flush_pending_actions():
             """Flush accumulated actions when conditions are met."""
@@ -459,25 +472,28 @@ class BatchAgent:
             loop.create_task(async_action_worker(observations, list(range(env_batch_size))))
 
             while not all(batch_done):
-                actions_map = {}
+                traj_idx_list = []
+                actions_list = []
+                responses_list = []
 
                 # Process available actions without blocking
                 while not responses_queue.empty():
-                    action, traj_idx = await responses_queue.get()
-                    actions_map[traj_idx] = action
+                    action, traj_idx, response = await responses_queue.get()
+                    traj_idx_list.append(traj_idx)
+                    actions_list.append(action)
+                    responses_list.append(response)
 
-                if not actions_map:
+                if not actions_list:
                     if time.time() - last_submit_time > timeout_seconds:
                         await flush_pending_actions()
                     await asyncio.sleep(0.01)  # Yield control to prevent blocking
                     continue
 
-                traj_idx_list = list(actions_map.keys())
-                actions = list(actions_map.values())
+                
 
                 try:
                     next_observations, rewards, terminateds, truncateds, infos = (
-                        self.env.step(actions=actions, env_idxs=traj_idx_list)
+                        self.env.step(actions=actions_list, env_idxs=traj_idx_list)
                     )
                 except Exception as e:
                     print(e)
@@ -485,17 +501,23 @@ class BatchAgent:
                     raise (e)
 
                 for i, traj_idx in enumerate(traj_idx_list):
+
+                    # TODO: make sure it works
+                    aug_reward= self.agents[traj_idx].augment_reward(responses_list[i], next_observations[i], rewards[i])
+
                     trajectories[traj_idx].append({
                         "observation": observations[traj_idx],
                         "next_observation": next_observations[i],
                         "reward": rewards[i],
                         "done": terminateds[i] or truncateds[i],
-                        "action": actions[i],
+                        "action": actions_list[i],
                         "info": infos[i],
+                        "augmented_reward": aug_reward,
+                        "response": responses_list[i],
                     })
 
                     self.agents[traj_idx].update(
-                        actions[i],
+                        actions_list[i],
                         observations[traj_idx],
                         next_observations[i],
                         rewards[i],

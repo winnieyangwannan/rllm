@@ -21,8 +21,13 @@ def add_mc_return(trajectory, gamma = 0.95):
         d.update({"mc_return": mc})
     return trajectory
 
+# TODO: add flag for different reward schemes, augmented_reward, reward, mc_return, trajectory_reward
 def compute_trajectory_score(trajectory):
-    return trajectory[0]["trajectory_reward"] if trajectory else 0
+    """
+    given a trajectory, return a list of rewards, one value for each step.
+    """
+    return [d["augmented_reward"] for d in trajectory] if trajectory else []
+    # return [d["reward"] for d in trajectory] if trajectory else []
 
 def convert_observation_to_prompt(env, i, obs):
     env_id = env.env_id[i]

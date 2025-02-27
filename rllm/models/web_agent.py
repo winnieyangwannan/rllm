@@ -1,6 +1,7 @@
 import base64
 import io
 import logging
+import re
 
 import numpy as np
 from browsergym.core.action.highlevel import HighLevelActionSet
@@ -114,7 +115,14 @@ class WebAgent(BaseAgent):
         return messages
 
     def _post_get_action(self, response):
-        return response
+        """
+        Return the last content between last pair of ``` ```, and the whole response if there is no match
+        """
+        matches = re.findall(r'```(.*?)```', response, re.DOTALL)  # Find all occurrences
+        if matches:
+            return matches[-1] 
+        return response 
+
 
     def update(self, action, observation, next_observation, reward, terminated, truncated, info):
         self.action_history.append(action)
@@ -244,3 +252,17 @@ Action: ```send_msg_to_user("The price for a 15\\" laptop is 1499 USD.")```
 
     def reset(self):
         self.action_history = []
+
+    def augment_reward(self, response, next_observation, reward):
+        """
+        Augment the reward based on response format and if the last action resulted in error.
+        """
+        new_reward = reward
+        pattern = r"```(.*?)```"
+        match = re.search(pattern, response, re.DOTALL)
+
+        if next_observation["last_action_error"] or not match:
+            new_reward -= 0.1
+
+        return new_reward
+        
