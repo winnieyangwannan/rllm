@@ -3,6 +3,7 @@ from multiprocessing import Process, Pipe
 from typing import Dict, List, Any, Tuple
 import numpy as np
 from typing import Dict, Any, List, Optional, Union
+from .batch_env import BatchedEnv
 
 def browser_gym_worker(connection, env_id: str, env_kwargs: Dict[str, Any]):
     """
@@ -34,7 +35,7 @@ def browser_gym_worker(connection, env_id: str, env_kwargs: Dict[str, Any]):
         except EOFError:
             break
 
-class BatchBrowserGym:
+class BatchBrowserGym(BatchedEnv):
     def __init__(
         self,
         batch_size: int = 1,
@@ -57,8 +58,8 @@ class BatchBrowserGym:
         else:
             assert len(env_id) == batch_size, "Number of env_id entries must match batch size"
 
-        self.batch_size = batch_size
-        self.env_id = env_id
+        self._batch_size = batch_size
+        self._env_id = env_id
         self.tasks = tasks
         self.env_kwargs = env_kwargs
 
@@ -82,7 +83,14 @@ class BatchBrowserGym:
             self.processes.append(process)
             self.connections.append(parent_conn)
 
+    @property
+    def env_id(self) -> List[str]:
+        return self._env_id
 
+    @property
+    def batch_size(self) -> int:
+        return self._batch_size
+    
     def reset(self, seed=0) -> Tuple[List, List]:
         """Reset all environments in parallel"""
         # Send reset command to all workers
@@ -97,11 +105,27 @@ class BatchBrowserGym:
 
     def step(self, actions: List[Any], env_idxs: List[int]=[]) -> Tuple[List, List, List, List, List]:
         """
-        Step environments in parallel. If env_idx is [], then all environment is used.
-        
+        Steps the selected environments in parallel. If no specific environment indices are provided (`env_idxs=[]`), all environments are stepped.
+
         Args:
-            actions: List of actions for each environment
-            env_idx: List of environment indexs used. If [], then all environment is used.
+            actions (List[Any]): A list of actions, one per selected environment.
+            env_idxs (List[int], optional): A list of environment indices to step. 
+                                            If empty, all environments are stepped.
+
+        Returns:
+            Tuple[List, List, List, List, List]: A tuple containing:
+                - observations (List): The new observations after stepping the environments.
+                - rewards (List): The rewards received for each environment.
+                - terminateds (List): Boolean flags indicating if each environment has reached 
+                                    a terminal state.
+                - truncateds (List): Boolean flags indicating if each environment was truncated 
+                                    due to a limit (e.g., max steps).
+                - infos (List): Additional environment-specific information.
+
+        Raises:
+            AssertionError: If the number of actions does not match the batch size when stepping all environments.
+            AssertionError: If the number of actions does not match the number of specified environment indices.
+
         """
 
         if not env_idxs:

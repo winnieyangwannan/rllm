@@ -38,7 +38,6 @@ def init_vllm_engine(model_name):
 def main():
     number_of_tasks = 2
     seed = 42
-    safe_batch_size = 64
     episode_len = 2
     metric_file = "evaluate_metrics_vllm.csv"
     trajectory_file = 'evaluate_trajectories_vllm.pt'
@@ -74,7 +73,7 @@ def main():
     )
 
     engine, tokenizer, sampling_params = init_vllm_engine(model_path)
-    agent = BatchAgent(rollout_engine=engine, engine_name="vllm", tokenizer=tokenizer, agent_class=WebAgent, n_parallel_agents=len(selected_envs), safe_batch_size=safe_batch_size, episode_len=episode_len, sampling_params=sampling_params, env=env)
+    agent = BatchAgent(rollout_engine=engine, engine_name="vllm", tokenizer=tokenizer, agent_class=WebAgent, n_parallel_agents=len(selected_envs), episode_len=episode_len, sampling_params=sampling_params, env=env)
     
     timing_raw = {}
     evaluate_trajectories = agent.interact_environment(timing_raw=timing_raw)

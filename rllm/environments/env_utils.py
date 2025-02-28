@@ -21,38 +21,69 @@ def add_mc_return(trajectory, gamma = 0.95):
         d.update({"mc_return": mc})
     return trajectory
 
-# TODO: add flag for different reward schemes, augmented_reward, reward, mc_return, trajectory_reward
-def compute_trajectory_score(trajectory):
+def compute_step_score(trajectory):
     """
-    given a trajectory, return a list of rewards, one value for each step.
+    Computes the reward for each step in a given trajectory.
+
+    This function extracts and returns a list of augmented rewards for each step 
+    in the trajectory. If the trajectory is empty, it returns an empty list.
+
+    Args:
+        trajectory (List[Dict]): A list of step dictionaries, where each step 
+                                 contains at least the key "augmented_reward".
+
+    Returns:
+        List[float]: A list of rewards corresponding to each step in the trajectory.
+                     Returns an empty list if the trajectory is empty.
     """
     return [d["augmented_reward"] for d in trajectory] if trajectory else []
-    # return [d["reward"] for d in trajectory] if trajectory else []
+
 
 def compute_environment_score(trajectory):
     """
-    given a trajectory, return the environment score
+    Computes the overall environment score for a given trajectory.
+
+    This function extracts the total trajectory reward from the first step in the trajectory.
+    If the trajectory is empty, it returns a default score of 0.
+
+    Args:
+        trajectory (List[Dict]): A list of step dictionaries, where the first step 
+                                 contains the key "trajectory_reward".
+
+    Returns:
+        float: The environment score extracted from the first step. Returns 0 if the 
+               trajectory is empty.
     """
     return trajectory[0]["trajectory_reward"] if trajectory else 0
 
-def convert_observation_to_prompt(env, i, obs):
-    env_id = env.env_id[i]
+
+def convert_observation_to_string(env_id, obs, with_system_prompt=False):
+    """
+    Converts an observation into a format suitable for LLM based on the environment type. 
+
+    Args:
+        env_id (str): The identifier of the environment.
+        obs (Any): The raw observation data from the environment.
+        with_system_prompt (bool, optional): Whether to include a system prompt 
+                                             in the formatted observation. Default is False.
+
+    Returns:
+        Any: The processed observation in the appropriate format for the environment.
+
+    Raises:
+        ValueError: If the provided `env_id` is not recognized.
+
+    """
     if env_id.startswith("browsergym/miniwob"):
-        return convert_miniwob_observation(obs, with_system_prompt=True)
+        return convert_miniwob_observation(obs, with_system_prompt)
     raise ValueError(f"Unknown environment: {env_id}")
 
-def convert_observation(env, i, obs):
-    env_id = env.env_id[i]
-    if env_id.startswith("browsergym/miniwob"):
-        return convert_miniwob_observation(obs)
-    raise ValueError(f"Unknown environment: {env_id}")
 
-# TODO: may have better ways to convert miniwob observation to string representation
 def convert_miniwob_observation(obs, with_system_prompt=False):
     """Convert MiniWoB observation to a readable string for LLMs."""
     from rllm.models.web_agent import WebAgent
     # Currently converts using a dummy WebAgent and reuses related methods
-    dummy_agent = WebAgent(rollout_engine=None, engine_name=None, tokenizer=None)
+    dummy_agent = WebAgent()
     obs = dummy_agent._preproc_obs(obs)
     result = ""
 

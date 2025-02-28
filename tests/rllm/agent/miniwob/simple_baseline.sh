@@ -21,8 +21,7 @@ python -m verl.trainer.main_trajectory \
     env.subtask=miniwob \
     env.miniwob_url="$MINIWOB_URL" \
     agent.name=webagent \
-    agent.trajectory_episode_len=10 \
-    agent.safe_batch_size=64
+    agent.trajectory_episode_len=10  > output_baseline.log
     
     
     

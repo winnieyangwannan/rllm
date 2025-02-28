@@ -26,10 +26,10 @@ class BatchAgent:
         api_key=None,
         api_retries=3,
         env=None,
-        safe_batch_size=100,
         gamma=0.95,
         retry_limit=5,
-        episode_len=2,
+        episode_len=5,
+        agent_args={},
         **kwargs,
     ):
         self.rollout_engine = rollout_engine
@@ -37,57 +37,46 @@ class BatchAgent:
         self.engine_name = engine_name
         self.api_key = api_key
         self.api_retries = api_retries
-        self.kwargs = kwargs
         self.agent_class = agent_class
         self.sampling_params = kwargs.get("sampling_params", None)
         self.n_parallel_agents = n_parallel_agents
 
-        self.agents = [
-            agent_class(
-                rollout_engine=rollout_engine,
-                engine_name=engine_name,
-                tokenizer=tokenizer,
-                api_key=api_key,
-                api_retries=api_retries,
-                **kwargs,
-            )
-            for _ in range(n_parallel_agents)
-        ]
+        self.agents = [agent_class(**agent_args)for _ in range(n_parallel_agents)]
 
         # For interaction
         self.env = env
-        self.safe_batch_size = safe_batch_size
         self.gamma = gamma
         self.retry_limit = retry_limit
         self.episode_len = episode_len
+        self.agent_args = agent_args
 
-    def get_actions(self, observations, trajectories, obs_idxs=[], **kwargs):
+    def get_actions(self, obs_action_sequences, seq_idxs=[], **kwargs):
         """
-        Return a list of actions with same size as the observations list
-        obs_idxs: The list of indexes that the observations are from. Used to index into self.agents
+        Return a list of actions with same size as the obs_action_sequences list
+        seq_idxs: The list of indexes that the obs_action_sequences are from. Used to index into self.agents
 
         return: Tuple (List of actions, List of responses)
         """
-        if obs_idxs:
-            assert len(observations) == len(
-                obs_idxs
-            ), f"Number of observations {len(observations)} should equal to the number of agents they are for ({len(obs_idxs)})"
+        if seq_idxs:
+            assert len(obs_action_sequences) == len(
+                seq_idxs
+            ), f"Number of sequences {len(obs_action_sequences)} should equal to the number of agents they are for ({len(seq_idxs)})"
 
         if self.engine_name == "verl":
-            return self._get_actions_verl(observations, trajectories, obs_idxs, **kwargs)
+            return self._get_actions_verl(obs_action_sequences, seq_idxs, **kwargs)
         elif self.engine_name == "vllm":
-            return self._get_actions_vllm(observations, trajectories, obs_idxs, **kwargs)
+            return self._get_actions_vllm(obs_action_sequences, seq_idxs, **kwargs)
         elif self.engine_name == "openai":
-            return self._get_actions_openai(observations, trajectories, obs_idxs, **kwargs)
+            return self._get_actions_openai(obs_action_sequences, seq_idxs, **kwargs)
         else:
             raise NotImplementedError
 
-    def _get_actions_verl(self, observations, trajectories, obs_idxs=[], **kwargs):
+    def _get_actions_verl(self, obs_action_sequences, seq_idxs, **kwargs):
         from verl.protocol import pad_dataproto_to_divisor, unpad_dataproto
 
         prompts = [
-            self.agents[obs_idxs[i]]._pre_get_action(obs, trajs)
-            for i, (obs, trajs) in enumerate(zip(observations, trajectories))
+            self.agents[seq_idxs[i]]._pre_get_action(obs_act_seq)
+            for i, obs_act_seq in enumerate(obs_action_sequences)
         ]
 
         batch = self._convert_prompt_verl(prompts, **kwargs)
@@ -109,12 +98,12 @@ class BatchAgent:
             responses.append(rsp)
 
         assert len(responses) == len(
-            observations
-        ), f"Number of responses {len(responses)} should equal to the number of observations ({len(observations)})"
+            obs_action_sequences
+        ), f"Number of responses {len(responses)} should equal to the number of obs_action_sequences ({len(obs_action_sequences)})"
 
         actions = [
-            self.agents[obs_idxs[i]]._post_get_action(responses[i])
-            for i, obs in enumerate(observations)
+            self.agents[seq_idxs[i]]._post_get_action(responses[i])
+            for i in range(len(obs_action_sequences))
         ]
         return actions, responses
 
@@ -128,18 +117,6 @@ class BatchAgent:
 
         old_padding_side = self.tokenizer.padding_side
         self.tokenizer.padding_side = "left"
-        '''
-        prompts = self.tokenizer.apply_chat_template(
-                prompts, tokenize=False, add_generation_prompt=True
-        )
-        prompts = [prompt + "Thought: " for prompt in prompts]
-        inputs = self.tokenizer(
-                prompts, 
-                padding=True,
-                truncation=True,
-                return_tensors="pt",
-        )
-        '''
         inputs = self.tokenizer.apply_chat_template(
             prompts,
             add_generation_prompt=True,
@@ -163,23 +140,24 @@ class BatchAgent:
         data = DataProto.from_dict(batch_dict)
 
         # original_batch contains the extra info needed for generation
-        if "original_batch" in kwargs and kwargs["original_batch"]:
-            original_batch = kwargs["original_batch"]
+        if "meta_info" in kwargs and kwargs["meta_info"]:
+            meta_info = kwargs["meta_info"]
             # only use the original_batch's meta_info since tensor_batch is from batch_dict and non_tensor_batch is not neeeded
-            data.meta_info = union_two_dict(data.meta_info, original_batch.meta_info)
+            data.meta_info = union_two_dict(data.meta_info, meta_info)
 
         return data
 
-    def _get_actions_vllm(self, observations, obs_idxs=[], **kwargs):
+    def _get_actions_vllm(self, obs_action_sequences, seq_idxs, **kwargs):
         # Format each observation into a prompt
         prompts = [
-            self.agents[obs_idxs[i]]._pre_get_action(obs)
-            for i, obs in enumerate(observations)
+            self.agents[seq_idxs[i]]._pre_get_action(obs_act_seq)
+            for i, obs_act_seq in enumerate(obs_action_sequences)
         ]
 
         prompts_token = self.tokenizer.apply_chat_template(
             prompts, add_generation_prompt=True, tokenize=False
         )
+
         # Generate responses using vLLM
         outputs = self.rollout_engine.generate(
             prompts=prompts_token, sampling_params=self.sampling_params, use_tqdm=False
@@ -193,19 +171,20 @@ class BatchAgent:
             responses.append(rsp)
 
         assert len(responses) == len(
-            observations
-        ), f"Number of responses {len(responses)} should equal to the number of observations ({len(observations)})"
+            obs_action_sequences
+        ), f"Number of responses {len(responses)} should equal to the number of obs_action_sequences ({len(obs_action_sequences)})"
 
         actions = [
-            self.agents[obs_idxs[i]]._post_get_action(responses[i])
-            for i, obs in enumerate(observations)
+            self.agents[seq_idxs[i]]._post_get_action(responses[i])
+            for i in range(len(obs_action_sequences))
         ]
         return actions, responses
 
-    def _get_actions_openai(self, observations, obs_idxs=[], **kwargs):
+
+    def _get_actions_openai(self, obs_action_sequences, seq_idxs, **kwargs):
         prompts = [
-            self.agents[obs_idxs[i]]._pre_get_action(obs)
-            for i, obs in enumerate(observations)
+            self.agents[seq_idxs[i]]._pre_get_action(obs_act_seq)
+            for i, oobs_act_seqbs in enumerate(obs_action_sequences)
         ]
 
         openai.api_key = self.api_key
@@ -217,14 +196,15 @@ class BatchAgent:
                 responses.append(response)
 
         assert len(responses) == len(
-            observations
-        ), f"Number of responses {len(responses)} should equal to the number of observations ({len(observations)})"
+            obs_action_sequences
+        ), f"Number of responses {len(responses)} should equal to the number of obs_action_sequences ({len(obs_action_sequences)})"
 
         actions = [
-            self.agents[obs_idxs[i]]._post_get_action(responses[i])
-            for i, obs in enumerate(observations)
+            self.agents[seq_idxs[i]]._post_get_action(responses[i])
+            for i in range(len(obs_action_sequences))
         ]
         return actions, responses
+
 
     def _get_openai_response(self, prompt):
         # GPT prompt
@@ -246,59 +226,31 @@ class BatchAgent:
                 return f"Error processing content: {e}"
 
     # deals with the case when the trajectory is done
-    def _safe_get_actions(self, observations, trajectories, batch_done, **kwargs):
-        new_observations = []
-        new_trajectories = []
-        new_actions = []
-        obs_idxs = []
-        responses = [""] * len(observations)
-        actions = [""]*len(observations)
+    def _safe_get_actions(self, obs_action_sequences, batch_done, **kwargs):
+        new_obs_action_sequences = []
+        seq_idxs = []
+        responses = [""] * len(obs_action_sequences)
+        actions = [""]*len(obs_action_sequences)
+
         for i, done in enumerate(batch_done):
-            if not done and observations[i] is not None:
-                new_observations.append(observations[i])
-                if len(trajectories[i]) > 0:
-                    new_trajectories.append([x["observation"] for x in trajectories[i]])
-                    new_actions.append([x["action"] for x in trajectories[i]])
-                else:
-                    new_trajectories.append([])
-                    new_actions.append([])
-                obs_idxs.append(i)
+            if not done and obs_action_sequences[i][-1] is not None:
+                new_obs_action_sequences.append(obs_action_sequences[i])
+                seq_idxs.append(i)
 
-        if len(new_observations) > 0:
-            # format observation
-            trajectories = []
-            for i in range(0, len(new_observations)):
-                trajectory = []
-                for obs, action in zip(new_trajectories[i], new_actions[i]):
-                    trajectory.extend([obs, action])
-                trajectory.append(new_observations[i])
-                assert len(trajectory) % 2 == 1
-                trajectories.append(trajectory)
+        if len(new_obs_action_sequences) > 0:
+            gen_actions, gen_responses = self.get_actions(
+                new_obs_action_sequences,
+                seq_idxs,
+                **kwargs,
+            )
 
-            gen_responses = []
-            gen_actions = []
-            for i in range(0, len(new_observations), self.safe_batch_size):
-                try:
-                    new_actions, new_responses = self.get_actions(
-                        new_observations[i : i + self.safe_batch_size],
-                        trajectories[i : i + self.safe_batch_size],
-                        obs_idxs[i : i + self.safe_batch_size],
-                        **kwargs,
-                    )
-                    gen_actions.extend(new_actions)
-                    gen_responses.extend(new_responses)
-                except Exception as e:
-                    # sometime it says unable to infer image channel error
-                    colorful_print(f"Error in getting action: {e}", "red")
-                    # outputs += ["ERROR"]*len(new_observations[i:i+safe_batch_size])
-                    raise e
+            for i, idx in enumerate(seq_idxs):
+                actions[idx] = gen_actions[i].replace("<|im_end|>", "").replace("<|im_start|>assistant\n", "")
+                responses[idx] = gen_responses[i].replace("<|im_end|>", "").replace("<|im_start|>assistant\n", "")
 
-            for i, idx in enumerate(obs_idxs):
-                actions[idx] = gen_actions[i].replace("<|im_end|>", "")
-                responses[idx] = gen_responses[i].replace("<|im_end|>", "")
-
-        for action, obs in zip(actions, observations):
-            if obs is None:
+        for action, obs_act_seq in zip(actions, obs_action_sequences):
+            new_obs = obs_act_seq[-1]
+            if new_obs is None:
                 assert action == "", "Action should be empty, First assert"
 
         return actions, responses
@@ -308,6 +260,7 @@ class BatchAgent:
         Run environment interactions in batches.
         Collects trajectories in the format:
         [[{"observation":, "next_observation":, "reward":, "done":, "action": , "response": , "augmented_reward": },...],...]
+
         Returned trajectories are in order of the environments they are from.
         """
         assert self.env, f"Env cannot be empty, but got {self.env}"
@@ -317,28 +270,35 @@ class BatchAgent:
             env_batch_size == self.n_parallel_agents
         ), "Number of parallel environments should match number of parallel agents."
 
-        trajectories = []
+        trajectories = [[] for _ in range(env_batch_size)]
 
-        for k in range(self.retry_limit):
+        for _ in range(self.retry_limit):
             try:
                 done = False
                 trajectories = [[] for _ in range(env_batch_size)]
+                obs_action_sequences = [[] for _ in range(env_batch_size)]
 
                 steps = 0
                 observations, infos = self.env.reset(seed=reset_seed)
                 batch_done = [False for _ in range(env_batch_size)]
 
+                # put initial observation into the sequence
+                for i, obs in enumerate(observations):
+                    obs_action_sequences[i].append(obs)
+
+                # get model actions and responses
                 while not all(batch_done) and steps < self.episode_len:
                     steps += 1
                     with _timer("get_actions", timing_raw):
                         actions, responses = self._safe_get_actions(
-                            observations, trajectories, batch_done, **kwargs
+                            obs_action_sequences, batch_done, **kwargs
                         )
 
                     for action, done in zip(actions, batch_done):
                         if done:
                             assert action == ""
 
+                    # environment step
                     try:
                         with _timer("env_step", timing_raw):
                             (
@@ -354,7 +314,7 @@ class BatchAgent:
                         raise (e)
 
                     colorful_print(
-                        f"Step {steps} in environment interation done. {len(actions)} actions generated. actions: {responses} \n",
+                        f"Step {steps} in environment interation done. {len(actions)} actions generated. responses: {responses} \n",
                         "green",
                     )
 
@@ -362,8 +322,7 @@ class BatchAgent:
                         if batch_done[i]:
                             continue
 
-                        aug_reward = self.agents[i].augment_reward(responses[i], next_observations[i], rewards[i])
-
+                        # Update the agent
                         self.agents[i].update(
                             actions[i],
                             observations[i],
@@ -374,6 +333,10 @@ class BatchAgent:
                             infos[i],
                         )
 
+                        # Add action and next observation for next round of generation
+                        obs_action_sequences[i].append(actions[i])
+                        obs_action_sequences[i].append(next_observations[i])
+
                         # If an environment is done, handle the completed trajectory
                         if terminateds[i] or truncateds[i]:
                             batch_done[i] = True
@@ -382,6 +345,10 @@ class BatchAgent:
                                 "green",
                             )
                        
+                        # Compute augmented reward
+                        aug_reward = self.agents[i].augment_reward(responses[i], next_observations[i], rewards[i])
+
+                        # Update the trajectory
                         trajectories[i].append(
                             {
                                 "observation": observations[i],
@@ -412,26 +379,22 @@ class BatchAgent:
         ]
 
     def reset(self):
-        """reset all the agents"""
+        """
+        Resets all agents.
+        """
         for agent in self.agents:
             agent.reset()
 
     def update_env(self, env):
         """
-        update the environment. new agents are created instead of reusing old ones
+        Updates the environment and recreates all agents. Instead of reusing existing agents, this method creates new agent instances to match 
+        the batch size of the new environment.
+
+        Args:
+            env: The new environment instance to be assigned.
         """
         self.n_parallel_agents = env.batch_size
 
-        self.agents = [
-            self.agent_class(
-                rollout_engine=self.rollout_engine,
-                engine_name=self.engine_name,
-                tokenizer=self.tokenizer,
-                api_key=self.api_key,
-                api_retries=self.api_retries,
-                **self.kwargs,
-            )
-            for _ in range(self.n_parallel_agents)
-        ]
+        self.agents = [self.agent_class(**self.agent_args)for _ in range(self.n_parallel_agents)]
 
         self.env = env

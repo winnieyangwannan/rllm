@@ -30,9 +30,7 @@ def image_to_jpg_base64_url(image: np.ndarray | Image.Image):
 
 
 class WebAgent(BaseAgent):
-    def __init__(self, rollout_engine, engine_name, tokenizer, api_key=None, api_retries=3, **kwargs):
-        super().__init__(rollout_engine=rollout_engine, engine_name=engine_name, tokenizer=tokenizer, api_key=api_key, api_retries=api_retries, **kwargs)
-
+    def __init__(self):
         self.chat_mode = False
         self.use_html = False
         self.use_axtree = True
@@ -48,8 +46,8 @@ class WebAgent(BaseAgent):
 
         self.action_history = [] # all are in string
 
-    def _pre_get_action(self, obs, trajs):
-        obs = self._preproc_obs(trajs[0])
+    def _pre_get_action(self, obs_act_seq):
+        obs = self._preproc_obs(obs_act_seq[0]) # initial state
         system_msgs = []
         system_msgs.append({
             "type": "text",
@@ -120,7 +118,7 @@ class WebAgent(BaseAgent):
             {"role": "system", "content": self._format_msgs_as_str(system_msgs)},
             {"role": "user", "content": self._format_msgs_as_str(get_user_msg(obs))},
         ]
-        for step_idx, obs in enumerate(trajs[1:]):
+        for step_idx, obs in enumerate(obs_act_seq[1:]):
             # 0 is assistant, 1 is user
             if step_idx % 2 == 1:
                 obs = self._preproc_obs(obs)
@@ -131,19 +129,6 @@ class WebAgent(BaseAgent):
                 messages.append({"role": "assistant", "content": obs})
 
         return messages
-
-    def _post_get_action(self, response):
-        """
-        Return the last content between last pair of ``` ```, and the whole response if there is no match
-        """
-        matches = re.findall(r'```(.*?)```', response, re.DOTALL)  # Find all occurrences
-        if matches:
-            return matches[-1] 
-        return response 
-
-
-    def update(self, action, observation, next_observation, reward, terminated, truncated, info):
-        self.action_history.append(action)
 
     def _preproc_obs(self, obs: dict) -> dict:
         return {
@@ -268,21 +253,46 @@ Action: ```send_msg_to_user("The price for a 15\\" laptop is 1499 USD.")```
         return " ".join(prompt_text_strings)
 
 
+    def _post_get_action(self, response):
+        """
+        Extracts the last content enclosed within triple backticks (``` ```) from the response.
+
+        If the response contains multiple segments wrapped in triple backticks, 
+        this function returns the content of the **last** occurrence. 
+        If no such formatting is found, it returns the entire response unmodified.
+
+        Args:
+            response (str): The raw text response to be processed.
+
+        Returns:
+            str: The extracted content from the last occurrence of triple backticks, 
+                or the full response if no match is found.
+        """
+        matches = re.findall(r'```(.*?)```', response, re.DOTALL)  # Find all occurrences
+        if matches:
+            return matches[-1] 
+        return response 
+
+
+    def update(self, action, observation, next_observation, reward, terminated, truncated, info):
+        self.action_history.append(action)
+
+
     def reset(self):
         self.action_history = []
+
 
     def augment_reward(self, response, next_observation, reward):
         """
         Augment the reward based on response format and if the last action resulted in error.
         """
         new_reward = reward
-        '''
+
         pattern = r"```(.*?)```"
         match = re.search(pattern, response, re.DOTALL)
 
         if next_observation["last_action_error"] or not match:
             new_reward -= 0.1
-        '''
 
         return new_reward
         
