@@ -48,69 +48,87 @@ class WebAgent(BaseAgent):
 
         self.action_history = [] # all are in string
 
-    def _pre_get_action(self, obs):
-        obs = self._preproc_obs(obs)
-
+    def _pre_get_action(self, obs, trajs):
+        obs = self._preproc_obs(trajs[0])
         system_msgs = []
-        user_msgs = []
-
         system_msgs.append({
             "type": "text",
             "text": self._get_system_prompt()
         })
 
         # Add goal information
-        user_msgs.append({
-            "type": "text", 
+        system_msgs.append({
+            "type": "text",
             "text": "# Goal (Below is the goal you want to accomplish)\n"
         })
-        user_msgs.extend(obs["goal_object"])
+        system_msgs.extend(obs["goal_object"])
 
-        # Add open tabs information
-        user_msgs.extend(self._format_open_tabs(
-            obs["open_pages_urls"],
-            obs["open_pages_titles"], 
-            obs["active_page_index"]
-        ))
-
-        # Add page information based on settings
-        if self.use_axtree:
-            user_msgs.append({
-                "type": "text",
-                "text": f"# Current page Accessibility Tree\n\n{obs['axtree_txt']}\n\n"
-            })
-
-        if self.use_html:
-            user_msgs.append({
-                "type": "text", 
-                "text": f"# Current page DOM\n\n{obs['pruned_html']}\n\n"
-            })
-
-        if self.use_screenshot:
-            user_msgs.extend(self._format_screenshot(obs["screenshot"]))
-
-        # Add action space description
-        user_msgs.append({
-            "type": "text",
-            "text": self._get_action_space_description()
-        })
-
-        # Add action history if exists
-        if self.action_history:
-            user_msgs.extend(self._format_action_history(
-                obs["last_action_error"],
+        def get_user_msg(user_obs, append_action=True):
+            user_msgs = []
+            # Add open tabs information
+            user_msgs.extend(self._format_open_tabs(
+                user_obs["open_pages_urls"],
+                user_obs["open_pages_titles"],
+                user_obs["active_page_index"]
             ))
 
-        # Add next action prompt
-        user_msgs.append({
-            "type": "text",
-            "text": "# Next action\nYou will now think step by step and produce your next best action. Reflect on your past actions, any resulting error message, and the current state of the page before deciding on your next action. MAKE SURE TO WRAP YOU FINAL ACTION in ```action``` YOU MUST PUT IN THIS EXACT STYLE FOR THE ACTION TO BE VALID. The content must be in the same format as shown before in the Action Space. Don't just include the chain-of-thought, place the FINAL ACTION from Action Space in ```action```"
-        })
+            # Add page information based on settings
+            if self.use_axtree:
+                user_msgs.append({
+                    "type": "text",
+                    "text": f"# Current page Accessibility Tree\n\n{user_obs['axtree_txt']}\n\n"
+                })
+
+            if self.use_html:
+                user_msgs.append({
+                    "type": "text",
+                    "text": f"# Current page DOM\n\n{user_obs['pruned_html']}\n\n"
+                })
+
+            if self.use_screenshot:
+                user_msgs.extend(self._format_screenshot(user_obs["screenshot"]))
+
+            if user_obs["last_action_error"]:
+                user_msgs.append(
+                    {
+                        "type": "text",
+                        "text": f"""\
+# Error message from last action
+
+{user_obs["last_action_error"]}
+
+""",
+                    }
+                )
+
+            if append_action:
+                # Add action space description
+                user_msgs.append({
+                    "type": "text",
+                    "text": self._get_action_space_description()
+                })
+
+            # Add next action prompt
+            user_msgs.append({
+                "type": "text",
+                "text": "# Next action\nYou will now think step by step and produce your next best action. Reflect on your past actions, any resulting error message, and the current state of the page before deciding on your next action. MAKE SURE TO WRAP YOU FINAL ACTION in ```action``` YOU MUST PUT IN THIS EXACT STYLE FOR THE ACTION TO BE VALID. The content must be in the same format as shown before in the Action Space. Don't just include the chain-of-thought, place the FINAL ACTION from Action Space in ```action```"
+            })
+
+            return user_msgs
 
         messages = [
             {"role": "system", "content": self._format_msgs_as_str(system_msgs)},
-            {"role": "user", "content": self._format_msgs_as_str(user_msgs)},
+            {"role": "user", "content": self._format_msgs_as_str(get_user_msg(obs))},
         ]
+        for step_idx, obs in enumerate(trajs[1:]):
+            # 0 is assistant, 1 is user
+            if step_idx % 2 == 1:
+                obs = self._preproc_obs(obs)
+                usr_msg = get_user_msg(obs, append_action=False)
+                messages.append({"role": "user", "content": self._format_msgs_as_str(usr_msg)})
+            else:
+                assert obs != ""
+                messages.append({"role": "assistant", "content": obs})
 
         return messages
 
@@ -258,11 +276,13 @@ Action: ```send_msg_to_user("The price for a 15\\" laptop is 1499 USD.")```
         Augment the reward based on response format and if the last action resulted in error.
         """
         new_reward = reward
+        '''
         pattern = r"```(.*?)```"
         match = re.search(pattern, response, re.DOTALL)
 
         if next_observation["last_action_error"] or not match:
             new_reward -= 0.1
+        '''
 
         return new_reward
         

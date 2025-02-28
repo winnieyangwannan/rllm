@@ -76,10 +76,11 @@ def convert_miniwob_observation(obs, with_system_prompt=False):
     if dummy_agent.use_screenshot:
         result += "".join(msg["text"] for msg in dummy_agent._format_screenshot(obs["screenshot"]))
 
-    # Add action space description
-    result += dummy_agent._get_action_space_description()
+    if with_system_prompt:
+        # Add action space description
+        result += dummy_agent._get_action_space_description()
 
-    # Add next action prompt
-    result += "# Next action\n\nDecide what action you want to perform next and wrap your action in ```action````"
+        # Add next action prompt
+        result += "# Next action\nYou will now think step by step and produce your next best action. Reflect on your past actions, any resulting error message, and the current state of the page before deciding on your next action. MAKE SURE TO WRAP YOU FINAL ACTION in ```action``` YOU MUST PUT IN THIS EXACT STYLE FOR THE ACTION TO BE VALID. The content must be in the same format as shown before in the Action Space. Don't just include the chain-of-thought, place the FINAL ACTION from Action Space in ```action```"
 
     return result
