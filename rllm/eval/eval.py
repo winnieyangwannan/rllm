@@ -29,6 +29,8 @@ def parse_args(parser: argparse.ArgumentParser):
                         help='Maximum number of output tokens')
     parser.add_argument('--output_dir', type=str, default=None,
                        help='Output directory for results (default: current directory)')
+    parser.add_argument('--engine', type=str, default="vllm", help="serving engine")
+
     return parser.parse_args()
 
 def evaluate_dataset_wrapper(args: Dict[str, Any]) -> tuple[str, Dict[str, Any]]:
@@ -48,12 +50,11 @@ if __name__ == "__main__":
     
     # Initialize the distributed VLLM engine
     engine = DistributedSampler(
-        backend="vllm",
+        backend=args.engine,
         num_workers=args.num_workers,
         tensor_parallel_size=args.tensor_parallel_size,
         model=args.model
     )
-    print('Engine initialized. Ready to generate trajectories.')
     
     # Set output directory
     if args.output_dir:
@@ -67,7 +68,7 @@ if __name__ == "__main__":
     print(f"Output directory set to: {output_dir}")
     
     # Process each dataset in parallel
-    dataset_enum = TrainDataset if args.split == 'train' else TestDataset
+    dataset_enum = TrainDataset.Math if args.split == 'train' else TestDataset.Math
     results_summary = {}
     
     # Prepare arguments for each dataset
