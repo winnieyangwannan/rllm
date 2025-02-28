@@ -61,7 +61,7 @@ class BatchAgent:
         self.retry_limit = retry_limit
         self.episode_len = episode_len
 
-    def get_actions(self, observations, obs_idxs=[], **kwargs):
+    def get_actions(self, observations, trajectories, obs_idxs=[], **kwargs):
         """
         Return a list of actions with same size as the observations list
         obs_idxs: The list of indexes that the observations are from. Used to index into self.agents
@@ -74,20 +74,20 @@ class BatchAgent:
             ), f"Number of observations {len(observations)} should equal to the number of agents they are for ({len(obs_idxs)})"
 
         if self.engine_name == "verl":
-            return self._get_actions_verl(observations, obs_idxs, **kwargs)
+            return self._get_actions_verl(observations, trajectories, obs_idxs, **kwargs)
         elif self.engine_name == "vllm":
-            return self._get_actions_vllm(observations, obs_idxs, **kwargs)
+            return self._get_actions_vllm(observations, trajectories, obs_idxs, **kwargs)
         elif self.engine_name == "openai":
-            return self._get_actions_openai(observations, obs_idxs, **kwargs)
+            return self._get_actions_openai(observations, trajectories, obs_idxs, **kwargs)
         else:
             raise NotImplementedError
 
-    def _get_actions_verl(self, observations, obs_idxs=[], **kwargs):
+    def _get_actions_verl(self, observations, trajectories, obs_idxs=[], **kwargs):
         from verl.protocol import pad_dataproto_to_divisor, unpad_dataproto
 
         prompts = [
-            self.agents[obs_idxs[i]]._pre_get_action(obs)
-            for i, obs in enumerate(observations)
+            self.agents[obs_idxs[i]]._pre_get_action(obs, trajs)
+            for i, (obs, trajs) in enumerate(zip(observations, trajectories))
         ]
 
         batch = self._convert_prompt_verl(prompts, **kwargs)
@@ -126,6 +126,20 @@ class BatchAgent:
         from verl import DataProto
         from verl.protocol import union_two_dict
 
+        old_padding_side = self.tokenizer.padding_side
+        self.tokenizer.padding_side = "left"
+        '''
+        prompts = self.tokenizer.apply_chat_template(
+                prompts, tokenize=False, add_generation_prompt=True
+        )
+        prompts = [prompt + "Thought: " for prompt in prompts]
+        inputs = self.tokenizer(
+                prompts, 
+                padding=True,
+                truncation=True,
+                return_tensors="pt",
+        )
+        '''
         inputs = self.tokenizer.apply_chat_template(
             prompts,
             add_generation_prompt=True,
@@ -135,6 +149,7 @@ class BatchAgent:
             return_dict=True,
             tokenize=True,
         )
+        self.tokenizer.padding_side = old_padding_side
 
         input_ids = inputs["input_ids"]
         attention_mask = inputs["attention_mask"]
@@ -231,23 +246,42 @@ class BatchAgent:
                 return f"Error processing content: {e}"
 
     # deals with the case when the trajectory is done
-    def _safe_get_actions(self, observations, batch_done, **kwargs):
+    def _safe_get_actions(self, observations, trajectories, batch_done, **kwargs):
         new_observations = []
+        new_trajectories = []
+        new_actions = []
         obs_idxs = []
-        actions = [""] * len(observations)
         responses = [""] * len(observations)
+        actions = [""]*len(observations)
         for i, done in enumerate(batch_done):
             if not done and observations[i] is not None:
                 new_observations.append(observations[i])
+                if len(trajectories[i]) > 0:
+                    new_trajectories.append([x["observation"] for x in trajectories[i]])
+                    new_actions.append([x["action"] for x in trajectories[i]])
+                else:
+                    new_trajectories.append([])
+                    new_actions.append([])
                 obs_idxs.append(i)
 
         if len(new_observations) > 0:
+            # format observation
+            trajectories = []
+            for i in range(0, len(new_observations)):
+                trajectory = []
+                for obs, action in zip(new_trajectories[i], new_actions[i]):
+                    trajectory.extend([obs, action])
+                trajectory.append(new_observations[i])
+                assert len(trajectory) % 2 == 1
+                trajectories.append(trajectory)
+
             gen_responses = []
             gen_actions = []
             for i in range(0, len(new_observations), self.safe_batch_size):
                 try:
                     new_actions, new_responses = self.get_actions(
                         new_observations[i : i + self.safe_batch_size],
+                        trajectories[i : i + self.safe_batch_size],
                         obs_idxs[i : i + self.safe_batch_size],
                         **kwargs,
                     )
@@ -260,8 +294,8 @@ class BatchAgent:
                     raise e
 
             for i, idx in enumerate(obs_idxs):
-                actions[idx] = gen_actions[i]
-                responses[idx] = gen_responses[i]
+                actions[idx] = gen_actions[i].replace("<|im_end|>", "")
+                responses[idx] = gen_responses[i].replace("<|im_end|>", "")
 
         for action, obs in zip(actions, observations):
             if obs is None:
@@ -298,7 +332,7 @@ class BatchAgent:
                     steps += 1
                     with _timer("get_actions", timing_raw):
                         actions, responses = self._safe_get_actions(
-                            observations, batch_done, **kwargs
+                            observations, trajectories, batch_done, **kwargs
                         )
 
                     for action, done in zip(actions, batch_done):
@@ -320,7 +354,7 @@ class BatchAgent:
                         raise (e)
 
                     colorful_print(
-                        f"Step {steps} in environment interation done. {len(actions)} actions generated. actions: {actions} \n",
+                        f"Step {steps} in environment interation done. {len(actions)} actions generated. actions: {responses} \n",
                         "green",
                     )
 
