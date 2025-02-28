@@ -288,11 +288,12 @@ Action: ```send_msg_to_user("The price for a 15\\" laptop is 1499 USD.")```
         """
         new_reward = reward
 
-        pattern = r"```(.*?)```"
-        match = re.search(pattern, response, re.DOTALL)
+        # pattern = r"```(.*?)```"
+        # match = re.search(pattern, response, re.DOTALL)
 
-        if next_observation["last_action_error"] or not match:
-            new_reward -= 0.1
-
+        # if not match:
+        #     new_reward -= 0.2
+        # elif next_observation["last_action_error"] :
+        #     new_reward -= 0.1
         return new_reward
         

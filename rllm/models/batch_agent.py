@@ -245,9 +245,9 @@ class BatchAgent:
             )
 
             for i, idx in enumerate(seq_idxs):
-                actions[idx] = gen_actions[i].replace("<|im_end|>", "").replace("<|im_start|>assistant\n", "")
-                responses[idx] = gen_responses[i].replace("<|im_end|>", "").replace("<|im_start|>assistant\n", "")
-
+                actions[idx] = gen_actions[i].replace("<|im_end|>", "")
+                responses[idx] = gen_responses[i].replace("<|im_end|>", "")
+                
         for action, obs_act_seq in zip(actions, obs_action_sequences):
             new_obs = obs_act_seq[-1]
             if new_obs is None:

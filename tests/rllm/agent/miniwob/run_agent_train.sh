@@ -3,7 +3,6 @@ set -x
 export VLLM_ATTENTION_BACKEND=FLASH_ATTN
 export PYTORCH_CUDA_ALLOC_CONF="expandable_segments:True"
 
-# use_remove_padding has to be false because attention masks more than padding
 python3 -m verl.trainer.main_ppo_agent \
     algorithm.adv_estimator=grpo \
     data.train_files=$HOME/data/rllm-miniwob/train.parquet \
@@ -14,7 +13,7 @@ python3 -m verl.trainer.main_ppo_agent \
     data.max_response_length=128 \
     actor_rollout_ref.hybrid_engine=True \
     actor_rollout_ref.model.path=Qwen/Qwen2.5-7B-Instruct-1M \
-    actor_rollout_ref.model.use_remove_padding=False \
+    actor_rollout_ref.model.use_remove_padding=True \
     actor_rollout_ref.model.enable_gradient_checkpointing=True \
     actor_rollout_ref.actor.optim.lr=1e-6 \
     actor_rollout_ref.actor.ppo_micro_batch_size_per_gpu=1 \
@@ -34,7 +33,7 @@ python3 -m verl.trainer.main_ppo_agent \
     actor_rollout_ref.ref.log_prob_micro_batch_size_per_gpu=1 \
     algorithm.kl_ctrl.kl_coef=0.001 \
     trainer.critic_warmup=0 \
-    trainer.logger=['console'] \
+    trainer.logger=['console', 'wandb'] \
     trainer.project_name='rllm-agent' \
     trainer.experiment_name='7b-ppo-miniwob_agent' \
     +trainer.val_before_train=True \
