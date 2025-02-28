@@ -18,6 +18,7 @@ from enum import Enum
 import os
 import signal
 import threading
+import asyncio
 from typing import Dict, List, Any
 
 import ray
@@ -215,11 +216,15 @@ if __name__ == "__main__":
     sampler = DistributedSampler(
         num_workers=1,
         tensor_parallel_size=2,
-        backend="sglang",
-        model="deepseek-ai/DeepSeek-R1-Distill-Qwen-1.5B"
+        backend="vllm",
+        # model="deepseek-ai/DeepSeek-R1-Distill-Qwen-1.5B"
+        model = "agentica-org/DeepScaleR-1.5B-Preview"
     )
-    print(sampler.chat_completion([{
+    x = asyncio.run( sampler.chat_completion([{
         "role": "user",
         "content": "Find the minimum value of $\\frac{9x^2\\sin^2 x + 4}{x\\sin x}$ for $0 < x < \\pi$."
     }]))
+    
+    assert len(x.samples) == 1
+    print (x.samples[0].response[-100:])
     sampler.shutdown()

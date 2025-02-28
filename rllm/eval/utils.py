@@ -3,6 +3,7 @@ import json
 import os
 
 from tqdm import tqdm
+import asyncio
 
 from rllm.data.dataset_types import Dataset
 from rllm.data.utils import load_dataset
@@ -12,7 +13,7 @@ from rllm.rewards import RewardInput, RewardType, RewardConfig
 from rllm.rewards.math_reward import RewardMathFn
 
 
-def evaluate_dataset_entry(idx, engine, entry, n=8, temperature=0.6, max_tokens=32000):
+def evaluate_dataset_entry(idx, engine, entry, data_source, n=8, temperature=0.6, max_tokens=32000):
     """
     Process a single problem using the distributed VLLM engine.
     
@@ -30,11 +31,12 @@ def evaluate_dataset_entry(idx, engine, entry, n=8, temperature=0.6, max_tokens=
     retry_limit = 5
     for retry_idx in range(retry_limit):
         try:
-            sample_batch = engine.chat_completion(content_dict,
+            sample_batch = asyncio.run(engine.chat_completion(content_dict,
                                               n=n,
                                               temperature=temperature,
                                               max_tokens=max_tokens,
-                                              top_p=0.95,)
+                                              top_p=0.95,))
+            
             # Extract responses from Sample objects in the batch
             llm_responses = [sample.response for sample in sample_batch.samples]
             break
@@ -45,7 +47,7 @@ def evaluate_dataset_entry(idx, engine, entry, n=8, temperature=0.6, max_tokens=
                 raise e
     
     reward_fn = RewardMathFn(RewardConfig(use_math_orm=False))
-    reward_inputs = [RewardInput(problem=problem, problem_type=RewardType.MATH, model_response=r, metadata={"answer": answer}) for r in llm_responses]
+    reward_inputs = [RewardInput(problem=problem, problem_type=RewardType.MATH, model_response=r, data_source=data_source, metadata={"answer": answer}) for r in llm_responses]
     reward_outputs = [reward_fn(r) for r in reward_inputs]
     # Grade the answer
     grades = [1 if r.is_correct else 0 for r in reward_outputs]
@@ -64,6 +66,7 @@ def evaluate_dataset_entry(idx, engine, entry, n=8, temperature=0.6, max_tokens=
 def evaluate_dataset(dataset: Dataset, output_dir: str, engine: DistributedSampler, n=8, temperature=0.6, max_tokens=32000):
     print(f"\nProcessing dataset: {dataset}")
     problems = load_dataset(dataset)
+    data_source = dataset.name
     print(f"Number of problems: {len(problems)}")
     
     # Set output file path
@@ -86,6 +89,7 @@ def evaluate_dataset(dataset: Dataset, output_dir: str, engine: DistributedSampl
                 idx,
                 engine,
                 entry,
+                data_source,
                 n=n,
                 temperature=temperature,
                 max_tokens=max_tokens
