@@ -1,7 +1,6 @@
 set -x
 
 export MINIWOB_URL="file:///home/tianjunz/miniwob-plusplus/miniwob/html/miniwob/"
-# Also add more test to pipelined agent and finish
 export VLLM_ATTENTION_BACKEND=FLASH_ATTN
 export PYTORCH_CUDA_ALLOC_CONF="expandable_segments:True"
 
