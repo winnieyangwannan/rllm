@@ -36,7 +36,11 @@ def compute_step_score(trajectory):
         List[float]: A list of rewards corresponding to each step in the trajectory.
                      Returns an empty list if the trajectory is empty.
     """
-    return [d["augmented_reward"] for d in trajectory] if trajectory else []
+    if not trajectory:
+        return []
+    result = [0] * (len(trajectory) - 1)
+    result.append(np.sum([d["augmented_reward"] for d in trajectory]))
+    return result
 
 
 def compute_environment_score(trajectory):
