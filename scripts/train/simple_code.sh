@@ -29,7 +29,7 @@ python3 -m verl.trainer.main_ppo_pipeline \
     data.train_files=$HOME/rllm/data/deepscaler_code.parquet \
     data.val_files=$HOME/rllm/data/test_livecodebench.parquet \
     data.train_batch_size=64 \
-    data.val_batch_size=-1 \
+    data.val_batch_size=512 \
     data.max_prompt_length=1024 \
     data.max_response_length=8192 \
     actor_rollout_ref.model.path=$MODEL_PATH  \
