@@ -8,6 +8,7 @@ import argparse
 from collections import defaultdict
 from typing import Dict, List, Tuple, Optional, Set
 from tqdm import tqdm
+from codeforces.sorted_ratings import SORTED_RATINGS
 
 def get_percentile(rating: float, sorted_ratings: List[float]) -> float:
     """Calculate the percentile of a given rating."""
@@ -156,15 +157,10 @@ def main():
     
     current_dir = os.path.dirname(os.path.abspath(__file__))
     metadata_path = os.path.join(current_dir, "./codeforces/metadata_cf.json")
-    ratings_path = os.path.join(current_dir, "sorted_ratings.json")
     results_path = os.path.abspath(args.results_path)
     
     # Load required files
     try:
-        # Load sorted ratings
-        with open(ratings_path, "r") as f:
-            sorted_ratings = json.load(f)
-        
         # Load results
         with open(results_path, 'r') as file:
             results = json.load(file)
@@ -188,7 +184,7 @@ def main():
         # Calculate Elo ratings for each contest with progress bar
         contest_elos = []
         for contest_id, problems in tqdm(model_results, desc="Processing contests"):
-            elo_result = calc_elo_rating(contest_id, problems, sorted_ratings)
+            elo_result = calc_elo_rating(contest_id, problems, SORTED_RATINGS)
             if elo_result is not None:
                 contest_elos.append((contest_id, elo_result))
         
