@@ -2,6 +2,7 @@ import base64
 import io
 import logging
 import re
+import collections
 
 import numpy as np
 from browsergym.core.action.highlevel import HighLevelActionSet
@@ -288,9 +289,28 @@ Action: ```send_msg_to_user("The price for a 15\\" laptop is 1499 USD.")```
         """
         new_reward = reward
 
+        # Penalize if response does NOT match "Thought: ... Action: ..."
+        format_pattern = r"Thought:.*?Action:.*?"
+        if not re.search(format_pattern, response, re.DOTALL):
+            new_reward -= 0.1
+
+        def contains_repeated_tokens(text, threshold=0.7):
+            words = text.split()
+            if not words:
+                return False
+            
+            counter = collections.Counter(words)
+            _, most_common_count = counter.most_common(1)[0]
+            
+            # If the most common word appears in >70% of the response
+            return most_common_count / len(words) > threshold
+
+        if contains_repeated_tokens(response):
+            new_reward -= 0.3 
+
+        # Penalize if no code block exists OR last action resulted in an error
         pattern = r"```(.*?)```"
         match = re.search(pattern, response, re.DOTALL)
-
         if not match or next_observation["last_action_error"]:
             new_reward -= 0.1
             
