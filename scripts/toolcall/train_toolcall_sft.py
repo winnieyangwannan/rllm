@@ -17,7 +17,7 @@ def load_jsonl(file_path):
     return data
 
 
-def preprocess_messages(messages, tokenizer):
+def preprocess_messages(messages, tokenizer, use_tools=True):
     """
     Creates masks for tokens to focus on assistant responses and tool calls.
     
@@ -39,15 +39,22 @@ def preprocess_messages(messages, tokenizer):
             add_generation_prompt = False
 
         msg_text = tokenizer.apply_chat_template(
-            [msg], tools=[PythonInterpreter().info], tokenize=False, add_generation_prompt=add_generation_prompt
+            [msg], tools=[PythonInterpreter().info] if use_tools else [], tokenize=False, add_generation_prompt=add_generation_prompt
         )
         
         msg_tokens = tokenizer.encode(msg_text, add_special_tokens=False)
         mask_value = 1 if msg["role"] == "assistant" else 0
         msg_mask = [mask_value] * len(msg_tokens)
-        
+
         all_tokens.extend(msg_tokens)
         all_masks.extend(msg_mask)
+
+    # Print tokens where mask is 1 (assistant content/tool calls)
+    # masked_tokens = [token for token, mask in zip(all_tokens, all_masks)]
+    # Check for consecutive Assistant tokens
+    # decoded = tokenizer.decode(all_tokens)
+    # print("all tokens:", decoded)
+    # import pdb; pdb.set_trace()
 
     return all_tokens, all_masks
     
@@ -69,6 +76,7 @@ class ToolCallDataCollator:
     def __call__(self, features: List[Dict[str, Any]]) -> Dict[str, torch.Tensor]:
         # Extract messages from each example
         batch_messages = [feature['messages'] for feature in features]
+        batch_use_tools = [feature['use_tools'] for feature in features]
         
         # Process each example
         batch_tokens = []
@@ -76,8 +84,8 @@ class ToolCallDataCollator:
         batch_labels = []
         
         max_length = 0
-        for messages in batch_messages:
-            tokens, loss_mask = preprocess_messages(messages, self.tokenizer)
+        for messages, use_tools in zip(batch_messages, batch_use_tools):
+            tokens, loss_mask = preprocess_messages(messages, self.tokenizer, use_tools)
             batch_tokens.append(tokens)
             # Create attention mask (1 for all non-padding tokens)
             attention_mask = [1] * len(tokens)
@@ -106,8 +114,9 @@ def prepare_training_dataset(data):
     # Convert the data to the format expected by datasets
     dataset_dict = {
         'messages': [item['messages'] for item in data],
+        'use_tools': [item['use_tools'] if 'use_tools' in item else True for item in data]
     }
-    return Dataset.from_dict(dataset_dict)
+    return Dataset.from_dict(dataset_dict).shuffle(42)
 
 
 def main(args):
@@ -122,7 +131,7 @@ def main(args):
     # Define training arguments
     training_args = TrainingArguments(
         output_dir=args.output_dir,
-        num_train_epochs=2,
+        num_train_epochs=3,
         per_device_train_batch_size=1,
         gradient_accumulation_steps=16,
         learning_rate=2e-5,
@@ -160,7 +169,7 @@ if __name__ == "__main__":
     import argparse
     parser = argparse.ArgumentParser(description='Train a model with tool call data')
     parser.add_argument('--data_path', type=str, 
-                      default='./datasets/filtered_toolcall_r1.jsonl',
+                      default='./data/filtered_toolcall_claude_verified_processed.jsonl',
                       help='Path to the JSONL data file')
     parser.add_argument('--model_path', type=str,
                       default='agentica-org/DeepScaleR-1.5B-Preview',
@@ -169,11 +178,11 @@ if __name__ == "__main__":
                       default='./results',
                       help='Directory for training outputs and checkpoints')
     parser.add_argument('--model_output_dir', type=str,
-                      default='./deepscaler-toolcall',
+                      default='./deepscaler-toolcall-verified',
                       help='Directory to save the final model')
     parser.add_argument('--chat_template', type=str,
-                      default='../../rllm/templates/r1.jinja',
+                      default='../../rllm/templates/r1-toolcall-json.jinja',
                       help='Path to the chat template file')
     args = parser.parse_args()
    
-    main()
+    main(args)

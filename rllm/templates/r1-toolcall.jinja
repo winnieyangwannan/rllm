@@ -2,46 +2,68 @@
     {% set add_generation_prompt = false %}
 {% endif %}
 
-{% set ns = namespace(is_first=false, is_tool=false, is_output_first=true, system_prompt='') %}
+{% set ns = namespace(is_first=false, is_tool=false, is_output_first=true, system_prompt='', is_first_sp=true) %}
 
-{% if add_generation_prompt %}
-{{ bos_token }}
-{%- if tools %}
-You are a reasoning models that generates long thoughts before answering a question, and use tools to verify your results while you are thinking.
-The following tools are available when needed for specific tasks:
-<tools>
-{%-  for tool in tools  %}
-    {{-  tool | tojson }}
-{%-  endfor  %}
-{%- endif %}
-</tools>
-When using a tool, format it in the following format:
-<tool_call>{\"name\": \"function_name\", \"arguments\": {\"param1\": \"value1\"}}</tool_call>
+{%- for message in messages %}
+    {%- if message['role'] == 'system' %}
+        {%- if ns.is_first_sp %}
+            {% set ns.system_prompt = ns.system_prompt + message['content'] %}
+            {% set ns.is_first_sp = false %}
+        {%- else %}
+            {% set ns.system_prompt = ns.system_prompt + '\n\n' + message['content'] %}
+        {%- endif %}
+    {%- endif %}
+{%- endfor %}
 
-The tool response will be returned in the following format:
-<tool_response>Response from the tool call</tool_resoponse>
-
-If the tool response contains no output or an error, then realize that you have not properly used the tool and try again using proper formatting.
-{% endif %}
-
+{{- bos_token }}{{ ns.system_prompt }}
 {%- for message in messages %}
     {%- if message['role'] == 'user' %}
         {%- set ns.is_tool = false -%}
-        {{- '<｜User｜>' + message['content'] -}}
+        {{'<｜User｜>' + message['content']}}
     {%- endif %}
 
-    {%- if message['role'] == 'assistant' and message['function_call'] is not none %}
-        {{- '\n<tool_call>{"name": "' + message['function_call']['name'] + 
-            '", "arguments": ' + message['function_call']['arguments'] + 
-            '}</tool_call>\n' -}}
+    {%- if message['role'] == 'assistant' and 'tool_calls' in message and message['tool_calls'] is not none %}
+        {%- set ns.is_tool = false -%}
+        {%- for tool in message['tool_calls'] %}
+            {%- if not ns.is_first %}
+                {%- if message['content'] is none %}
+                    {{'<｜Assistant｜><｜tool▁calls▁begin｜><｜tool▁call▁begin｜>' + tool['type'] + '<｜tool▁sep｜>' + tool['function']['name'] + '\n' + '```json' + '\n' + tool['function']['arguments'] + '\n' + '```' + '<｜tool▁call▁end｜>'}}
+                {%- else %}
+                    {{'<｜Assistant｜>' + message['content'] + '<｜tool▁calls▁begin｜><｜tool▁call▁begin｜>' + tool['type'] + '<｜tool▁sep｜>' + tool['function']['name'] + '\n' + '```json' + '\n' + tool['function']['arguments'] + '\n' + '```' + '<｜tool▁call▁end｜>'}}
+                {%- endif %}
+                {%- set ns.is_first = true -%}
+            {%- else %}
+                {{'\n' + '<｜tool▁call▁begin｜>' + tool['type'] + '<｜tool▁sep｜>' + tool['function']['name'] + '\n' + '```json' + '\n' + tool['function']['arguments'] + '\n' + '```' + '<｜tool▁call▁end｜>'}}
+            {%- endif %}
+        {%- endfor %}
+        {{'<｜tool▁calls▁end｜><｜end▁of▁sentence｜>'}}
     {%- endif %}
 
-    {%- if message['role'] == 'assistant' and message['content'] != '' and message['content'] is not none %}
-        {{- '<｜Assistant｜>' + message['content']-}}
+    {%- if message['role'] == 'assistant' and ('tool_calls' not in message or message['tool_calls'] is none) %}
+        {%- if ns.is_tool %}
+            {{'<｜tool▁outputs▁end｜>' + message['content'] + '<｜end▁of▁sentence｜>'}}
+            {%- set ns.is_tool = false -%}
+        {%- else %}
+            {% set content = message['content'] %}
+            {% if '</think>' in content %}
+                {% set content = content.split('</think>')[-1] %}
+            {% endif %}
+            {{'<｜Assistant｜>' + content + '<｜end▁of▁sentence｜>'}}
+        {%- endif %}
     {%- endif %}
 
     {%- if message['role'] == 'tool' or message['role'] == 'function' %}
         {%- set ns.is_tool = true -%}
-        {{- '\n<tool_response>' + message['content'] + '</tool_response>\n' }}
+        {%- if ns.is_output_first %}
+            {{'<｜tool▁outputs▁begin｜><｜tool▁output▁begin｜>' + message['content'] + '<｜tool▁output▁end｜>'}}
+            {%- set ns.is_output_first = false %}
+        {%- else %}
+            {{'<｜tool▁output▁begin｜>' + message['content'] + '<｜tool▁output▁end｜>'}}
+        {%- endif %}
     {%- endif %}
 {%- endfor -%}
+
+{% if ns.is_tool %}
+    {{'<｜tool▁outputs▁end｜>'}}
+{% endif %}
+

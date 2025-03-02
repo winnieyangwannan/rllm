@@ -16,25 +16,23 @@
 {%- endfor %}
 
 {{ bos_token }}{{ ns.system_prompt }}
-
 {% if add_generation_prompt %}
 {%- if tools %}
 You are a reasoning models that generates long thoughts before answering a question, and use tools to verify your results while you are thinking.
 The following tools are available when needed for specific tasks:
-<|tools|>
+<｜tools｜>
 {%-  for tool in tools  %}
     {{-  tool | tojson }}
 {%-  endfor  %}
-<|tools|>
+<｜tools｜>
 
 When using a tool, format it in the following format:
-<|tool_calls_begin|><|tool_call_begin|>{\"name\": \"function_name\", \"arguments\": {\"param1\": \"value1\"}}<|tool_call_end|><|tool_calls_end|>
+<｜tool_calls_begin｜><｜tool_call_begin｜>{\"name\": \"function_name\", \"arguments\": {\"param1\": \"value1\"}}<｜tool_call_end｜><｜tool_calls_end｜>
 
 The tool response will be returned in the following format:
-<｜tool_outputs_begin｜><|tool_output_begin|>Response from the tool call<|tool_output_end|><|tool_output_end|>
+<｜tool_outputs_begin｜><｜tool_output_begin｜>Response from the tool call<｜tool_output_end｜><｜tool_output_end｜>
 {%- endif %}
 {%- endif %}
-
 {%- for message in messages %}
     {%- if message['role'] == 'user' %}
         {%- set ns.is_tool = false -%}
