@@ -1,6 +1,7 @@
 from datasets import load_dataset
 import json
 from tqdm import tqdm
+import random
 
 TOOLCALL_REWRITE_PROMPT = """You are a math assistant that shows your work step by step. 
     Given a thinking trajectory that has correct final answer, rewrite it to include Python tool calls to verify intermediate calculations.
@@ -28,7 +29,11 @@ TOOLCALL_REWRITE_PROMPT = """You are a math assistant that shows your work step 
     4. After the thinking process:
        - answer the question by summarizing the key steps in your thinking.
        - Put the final answer in a \\boxed{{}} environment.
-    5. Maintain the same level of detail as the original trajectory
+    5. Only call tools to verify calculations inside the <think></think> tags. After the thinking process, summarize and give the final answer without additional tool calls.
+    6. Only call tools for complex calculations that are error-prone or difficult to verify by hand. For example:
+       - Do not call tools for basic arithmetic like 100+200 or 5*3
+       - Do call tools for calculations involving fractions, decimals, equations, or multiple steps
+    7. Maintain the same level of detail as the original trajectory.
     
     The tool calls should follow this exact format:
     <tool_call>
@@ -38,24 +43,29 @@ TOOLCALL_REWRITE_PROMPT = """You are a math assistant that shows your work step 
     Tool responses should be wrapped in <tool_response> tags."""
 
 
-def rewrite_trajectory(problem, generation, client):
-    response = client.chat.completions.create(
-        model="gpt-4o",
+def rewrite_trajectory(problem, generation, client, model):
+    response = client.messages.create(
+        model=model,
         messages=[
-            {"role": "system", "content": "You are a helpful math assistant that shows work step by step."},
             {"role": "user", "content": TOOLCALL_REWRITE_PROMPT.format(problem=problem, trajectory=generation)}
-        ]
+        ],
+        max_tokens=8192,
     )
     
-    return response.choices[0].message.content
+
+    return response.content[0].text
+    # return response.choices[0].message.content
 
 
 if __name__ == "__main__":
     ds = load_dataset("open-r1/OpenR1-Math-220k", "default")
 
+    print("Available sources:", set(ds['train']['source']))
+    ds = ds['train'].filter(lambda x: x['source'] in ['olympiads', 'amc_aime'])
+
     filtered_problems = []
 
-    for item in ds['train']:
+    for item in ds:
         generations = item['generations']
         for idx, gen in enumerate(generations):
             # Check if reasoning is complete and correct
@@ -70,14 +80,25 @@ if __name__ == "__main__":
 
     print(f"Total filtered problems: {len(filtered_problems)}")
 
-    ds = [p for p in filtered_problems if len(p['reasoning']) <= 8000]
+    ds = [p for p in filtered_problems if len(p['reasoning']) <= 5000]
     print(f"Problems after length filtering: {len(ds)}")
+    ds = [p for p in ds if len(p['reasoning']) > 3000]
+    print(f"Problems after length filtering: {len(ds)}")
+
+    random.seed(42)
+    random.shuffle(ds)
 
     from openai import OpenAI
     client = OpenAI(api_key="")
 
+    import anthropic
+    client = anthropic.Anthropic(
+        api_key="",
+    )
+    model = "claude-3-7-sonnet-20250219"
+
     for example in tqdm(ds):
-        enhanced = rewrite_trajectory(example['problem'], example['reasoning'], client)
+        enhanced = rewrite_trajectory(example['problem'], example['reasoning'], client, model)
         example['reasoning_with_toolcall'] = enhanced
-        with open('./data/tool_calls_raw.jsonl', 'a') as f:
+        with open('./data/tool_calls_claude.jsonl', 'a') as f:
             f.write(json.dumps(example) + '\n')
