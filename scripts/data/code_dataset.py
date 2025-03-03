@@ -67,7 +67,8 @@ def make_map_fn(split: str):
             },
             "extra_info": {
                 'split': split,
-                'index': idx
+                'index': idx,
+                'reference': example.get('completion', None), # For leetcode
             }
         }
         return data
@@ -92,8 +93,8 @@ if __name__ == '__main__':
         makedirs(local_dir)
 
     #Initialize datasets
-    train_datasets = [TrainDataset.Code.TACO, TrainDataset.Code.APPS, TrainDataset.Code.CODE_CONTESTS, TrainDataset.Code.CODEFORCES, TrainDataset.Code.LIVECODEBENCH]
-    test_datasets = [TestDataset.Code.LIVECODEBENCH]
+    train_datasets = [TrainDataset.Code.TACO, TrainDataset.Code.LEETCODE]
+    test_datasets = [TestDataset.Code.LIVECODEBENCH, TestDataset.Code.LEETCODE]
     
     test_datasets_data = [load_dataset(d) for d in test_datasets]
     train_dataset_data = [load_dataset(d) for d in train_datasets]
