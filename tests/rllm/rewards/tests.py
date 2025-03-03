@@ -324,11 +324,46 @@ class Solution:\n    def minOperations(self, nums: List[int], k: int) -> int:\n 
     input = RewardInput(problem="", problem_type=RewardType.CODE, model_response=model_response, metadata=tests, data_source="leetcode")
     output = reward(input)
     assert output.is_correct == False
+    return output 
+
+def test_reward_leetcode_good_1():
+
+    model_response = """
+"To solve this problem, we need to identify the smallest subarray that, when sorted, will result in the entire array being sorted. Here's a step-by-step approach to achieve this:\n\n1. **Identify the Sorted and Unsorted Parts**: Compare the original array with its sorted version to identify the first and last positions where the elements differ. These positions mark the boundaries of the unsorted subarray.\n\n2. **Edge Case**: If the array is already sorted, the length of the subarray to be sorted is 0.\n\nHere's the complete implementation:\n\n```python\nfrom typing import List\n\n
+class Solution:\n    def findUnsortedSubarray(self, nums: List[int]) -> int:\n        # Create a sorted version of the array\n        sorted_nums = sorted(nums)\n        \n        # Initialize the start and end indices\n        start, end = -1, -2\n        \n        # Find the first and last positions where the elements differ\n        for i in range(len(nums)):\n            if nums[i] != sorted_nums[i]:\n                if start == -1:\n                    start = i\n                end = i\n        \n        # The length of the subarray to be sorted\n        return end - start + 1\n```\n\n### Explanation:\n\n- **Sorting**: We first sort the array and store it in `sorted_nums`.\n- **Finding Boundaries**: We iterate through the original array `nums` and compare it with `sorted_nums`. The first mismatch gives us the `start` of the unsorted subarray, and the last mismatch gives us the `end`.\n- **Calculating Length**: The length of the subarray to be sorted is `end - start + 1`. If the array is already sorted, `start` will remain `-1` and `end` will remain `-2`, resulting in a length of 0.\n\nThis approach has a time complexity of O(n log n) due to the sorting step, and a space complexity of O(n) for storing the sorted array.", "split": "train"}}
+
+"""
+    tests = {
+        "functional": "def check(candidate):\n    assert candidate(nums = [2,6,4,8,10,9,15]) == 5\n    assert candidate(nums = [1,2,3,4]) == 0\n    assert candidate(nums = [1]) == 0\n\n\ncheck(Solution().findUnsortedSubarray)"
+    }
+    reward = RewardCodeFn(RewardConfig)
+    input = RewardInput(problem="", problem_type=RewardType.CODE, model_response=model_response, metadata=tests, data_source="leetcode")
+    output = reward(input)
+    assert output.is_correct == True
     return output
 
+def test_reward_leetcode_good_2():
+
+    model_response = """
+To solve this problem with a time complexity of \\(O(\\log(m+n))\\), we can use a binary search approach. The idea is to partition the two arrays such that the left half contains the smaller elements and the right half contains the larger elements. The median will then be the maximum of the left half if the total number of elements is odd, or the average of the maximum of the left half and the minimum of the right half if the total number of elements is even.\n\nHere's the complete code:\n\n```python\nfrom typing import List\n\n
+class Solution:\n    def findMedianSortedArrays(self, nums1: List[int], nums2: List[int]) -> float:\n        # Ensure nums1 is the smaller array\n        if len(nums1) > len(nums2):\n            nums1, nums2 = nums2, nums1\n        \n        x, y = len(nums1), len(nums2)\n        low, high = 0, x\n        \n        while low <= high:\n            partitionX = (low + high) // 2\n            partitionY = (x + y + 1) // 2 - partitionX\n            \n            # If partitionX is 0 it means nothing is there on left side. Use -inf for maxLeftX\n            # If partitionX is length of input then there is nothing on right side. Use +inf for minRightX\n            maxLeftX = float('-inf') if partitionX == 0 else nums1[partitionX - 1]\n            minRightX = float('inf') if partitionX == x else nums1[partitionX]\n            \n            maxLeftY = float('-inf') if partitionY == 0 else nums2[partitionY - 1]\n            minRightY = float('inf') if partitionY == y else nums2[partitionY]\n            \n            if maxLeftX <= minRightY and maxLeftY <= minRightX:\n                # We have partitioned array at correct place\n                if (x + y) % 2 == 0:\n                    return (max(maxLeftX, maxLeftY) + min(minRightX, minRightY)) / 2\n                else:\n                    return max(maxLeftX, maxLeftY)\n            elif maxLeftX > minRightY:\n                # We are too far on right side for partitionX. Go on left side.\n                high = partitionX - 1\n            else:\n                # We are too far on left side for partitionX. Go on right side.\n                low = partitionX + 1\n```\n\n### Explanation:\n1. **Ensure `nums1` is the smaller array**: This helps in minimizing the binary search range.\n2. **Binary Search**: We perform a binary search on the smaller array (`nums1`).\n3. **Partitioning**: For each partition of `nums1`, we calculate the corresponding partition of `nums2` such that the total number of elements on the left side is equal to or one more than the right side.\n4. **Check Conditions**: We check if the maximum element on the left side of `nums1` is less than or equal to the minimum element on the right side of `nums2` and vice versa.\n5. **Calculate Median**: If the partitions are correct, we calculate the median based on whether the total number of elements is odd or even.\n\nThis approach ensures that we find the median in \\(O(\\log(\\min(m, n)))\\) time complexity.", "split": "train"}}
+"""
+    tests = {
+        "functional": "def check(candidate):\n    assert candidate(nums1 = [1,3], nums2 = [2]) == 2.00000\n    assert candidate(nums1 = [1,2], nums2 = [3,4]) == 2.50000\n\n\ncheck(Solution().findMedianSortedArrays)"
+    }
+
+    reward = RewardCodeFn(RewardConfig)
+    input = RewardInput(problem="", problem_type=RewardType.CODE, model_response=model_response, metadata=tests, data_source="leetcode")
+    output = reward(input)
+    assert output.is_correct == True
+    return output
+
+
 if __name__ == "__main__":
-    print(test_reward_leetcode())
-    print(test_reward_leetcode_bad())
+    # print(test_reward_leetcode())
+    # print(test_reward_leetcode_bad())
+    # print(test_reward_leetcode_good_1())
+    print(test_reward_leetcode_good_2())
     # print(test_reward_livecodebench())
     # print(test_reward_taco())
     # print(test_reward_codeforces())

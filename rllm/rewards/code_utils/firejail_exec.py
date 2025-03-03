@@ -57,26 +57,37 @@ def code_exec_firejail(code, stdin: str = None, timeout=_DEFAULT_TIMEOUT_SECONDS
             )
     else:
         code = BASE_IMPORTS + "\n" + code
-        if len(code) < CLI_ARG_SIZE_LIMIT:
-            command.extend(["python3", "-c", code])
-            result = subprocess.run(command,
+
+        command.extend(["python3", "-c", code])
+        result = subprocess.run(command,
                                     input=stdin.encode() if stdin else None,
                                     stdout=subprocess.PIPE,
                                     stderr=subprocess.PIPE,
                                     env=env,
                                     check=False)
-        else:
-            with NamedTemporaryFile() as tmp:
-                tmp.write(code.encode())
-                tmp.flush()
-                command.insert(4, f"--whitelist={tmp.name}")
-                command.extend(["python3", tmp.name])
-                result = subprocess.run(command,
-                                        input=stdin.encode() if stdin else None,
-                                        stdout=subprocess.PIPE,
-                                        stderr=subprocess.PIPE,
-                                        env=env,
-                                        check=False)
+        # if len(code) < CLI_ARG_SIZE_LIMIT:
+        #     command.extend(["python3", "-c", code])
+        #     result = subprocess.run(command,
+        #                             input=stdin.encode() if stdin else None,
+        #                             stdout=subprocess.PIPE,
+        #                             stderr=subprocess.PIPE,
+        #                             env=env,
+        #                             check=False)
+        # else:
+        #     with NamedTemporaryFile() as tmp:
+        #         tmp.write(code.encode())
+        #         tmp.flush()
+        #         print(f"tmp.name: {tmp.name}")
+        #         # command.insert(4, f"--whitelist={tmp.name}")
+        #         # command.extend(["python3", tmp.name])
+        #         command = ["firejail"]  #
+        #         command.extend(["--whitelist=" + tmp.name, "python3", tmp.name])
+        #         result = subprocess.run(command,
+        #                                 input=stdin.encode() if stdin else None,
+        #                                 stdout=subprocess.PIPE,
+        #                                 stderr=subprocess.PIPE,
+        #                                 env=env,
+        #                                 check=False)
 
     stderr = result.stderr.decode().strip()
     stdout = result.stdout.decode()
