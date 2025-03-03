@@ -8,7 +8,7 @@ import re
 import time
 from multiprocessing import Manager
 from typing import List, Dict, Union
-
+import random
 
 from rllm.rewards.code_utils.code_contests import run_test as code_contests_run_test
 from rllm.rewards.code_utils.livecodebench import run_test as lcb_run_test
@@ -33,7 +33,7 @@ def extract_code_from_model(model_response: str):
         return None
     return code_blocks[-1].strip()
 
-def check_correctness(tests: Union[List[Dict[str, str]], Dict[str, List[str]]], code: str, test_fn, timeout_per_test: int = 5) -> bool:
+def check_correctness(tests: Union[List[Dict[str, str]], Dict[str, List[str]]], code: str, test_fn, timeout_per_test: int = 5, max_tests: int = 15) -> bool:
     """
     Check if generated code passes all test cases within a timeout period.
 
@@ -59,9 +59,25 @@ def check_correctness(tests: Union[List[Dict[str, str]], Dict[str, List[str]]], 
             print(f"Error in evaluate_code: {e}")
 
     if isinstance(tests, list):
+        total_tests = len(tests)
+        if total_tests > max_tests:
+            # Randomly select at most 15 test cases
+            selected_indices = random.sample(range(total_tests), max_tests)
+            tests = [tests[i] for i in selected_indices]
         num_tests = len(tests)
     else:
+        total_tests = len(tests['inputs'])
+        if total_tests > max_tests:
+            # Randomly select at most 15 test cases
+            selected_indices = random.sample(range(total_tests), max_tests)
+            # Create a new dict with only the selected test cases
+            selected_tests = {
+                'inputs': [tests['inputs'][i] for i in selected_indices],
+                'outputs': [tests['outputs'][i] for i in selected_indices]
+            }
+            tests = selected_tests
         num_tests = len(tests['inputs'])
+    
     timeout = timeout_per_test * num_tests
     
     process = multiprocessing.Process(
