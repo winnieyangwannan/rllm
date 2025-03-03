@@ -1,1 +1,1 @@
-from .env_utils import compute_step_score, compute_environment_score, convert_observation_to_string
+from .env_utils import compute_training_score, compute_environment_score

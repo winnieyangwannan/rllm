@@ -68,19 +68,29 @@ class BaseAgent(ABC):
         return
     
     @abstractmethod
-    def augment_reward(self, action, next_observation, reward):
+    def compute_training_reward(self, trajectory):
         """
-        Adjusts or augments the reward signal based on the action taken and the next observation.
-
-        This function can be used to modify the reward structure dynamically, 
-        for example, by adding intrinsic motivation or shaping rewards.
+        Adjusts or augments the reward signal based on the entire trajectory to use for RL training.
 
         Args:
-            action (Any): The action taken by the agent.
-            next_observation (Any): The resulting observation after the action.
-            reward (float): The original reward from the environment.
+            trajectory (Any): The complete trajectory.
 
         Returns:
             float: The modified reward value.
         """
-        return reward
+        return trajectory[-1]["reward"]
+    
+    @abstractmethod
+    def convert_observation_to_string(self, obs, with_system_prompt=False):
+        """
+        Convert an observation into a formatted string representation.
+
+        Args:
+            obs (Any): The observation to be converted. The exact structure depends on the environment.
+            with_system_prompt (bool, optional): If True, includes a system prompt in the formatted output.
+                                                 Defaults to False.
+
+        Returns:
+            str: The formatted string representation of the observation.
+        """
+        return ""

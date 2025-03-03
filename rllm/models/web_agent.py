@@ -49,6 +49,26 @@ class WebAgent(BaseAgent):
 
     def _pre_get_action(self, obs_act_seq):
         obs = self._preproc_obs(obs_act_seq[0]) # initial state
+
+        system_msgs = self.get_system_msg(obs)
+
+        messages = [
+            {"role": "system", "content": self._format_msgs_as_str(system_msgs)},
+            {"role": "user", "content": self._format_msgs_as_str(self.get_user_msg(obs))},
+        ]
+        for step_idx, obs in enumerate(obs_act_seq[1:]):
+            # 0 is assistant, 1 is user
+            if step_idx % 2 == 1:
+                obs = self._preproc_obs(obs)
+                usr_msg = self.get_user_msg(obs, append_action=False)
+                messages.append({"role": "user", "content": self._format_msgs_as_str(usr_msg)})
+            else:
+                assert obs != ""
+                messages.append({"role": "assistant", "content": obs})
+
+        return messages
+    
+    def get_system_msg(self, obs):
         system_msgs = []
         system_msgs.append({
             "type": "text",
@@ -60,76 +80,63 @@ class WebAgent(BaseAgent):
             "type": "text",
             "text": "# Goal (Below is the goal you want to accomplish)\n"
         })
-        system_msgs.extend(obs["goal_object"])
+        system_msgs.extend(obs["goal_object"])  
+        return system_msgs
 
-        def get_user_msg(user_obs, append_action=True):
-            user_msgs = []
-            # Add open tabs information
-            user_msgs.extend(self._format_open_tabs(
-                user_obs["open_pages_urls"],
-                user_obs["open_pages_titles"],
-                user_obs["active_page_index"]
-            ))
+    def get_user_msg(self, user_obs, append_action=True):
+        user_msgs = []
+        # Add open tabs information
+        user_msgs.extend(self._format_open_tabs(
+            user_obs["open_pages_urls"],
+            user_obs["open_pages_titles"],
+            user_obs["active_page_index"]
+        ))
 
-            # Add page information based on settings
-            if self.use_axtree:
-                user_msgs.append({
+        # Add page information based on settings
+        if self.use_axtree:
+            user_msgs.append({
+                "type": "text",
+                "text": f"# Current page Accessibility Tree\n\n{user_obs['axtree_txt']}\n\n"
+            })
+
+        if self.use_html:
+            user_msgs.append({
+                "type": "text",
+                "text": f"# Current page DOM\n\n{user_obs['pruned_html']}\n\n"
+            })
+
+        if self.use_screenshot:
+            user_msgs.extend(self._format_screenshot(user_obs["screenshot"]))
+
+        if user_obs["last_action_error"]:
+            user_msgs.append(
+                {
                     "type": "text",
-                    "text": f"# Current page Accessibility Tree\n\n{user_obs['axtree_txt']}\n\n"
-                })
-
-            if self.use_html:
-                user_msgs.append({
-                    "type": "text",
-                    "text": f"# Current page DOM\n\n{user_obs['pruned_html']}\n\n"
-                })
-
-            if self.use_screenshot:
-                user_msgs.extend(self._format_screenshot(user_obs["screenshot"]))
-
-            if user_obs["last_action_error"]:
-                user_msgs.append(
-                    {
-                        "type": "text",
-                        "text": f"""\
+                    "text": f"""\
 # Error message from last action
 
 {user_obs["last_action_error"]}
 
 """,
-                    }
-                )
+                }
+            )
 
-            if append_action:
-                # Add action space description
-                user_msgs.append({
-                    "type": "text",
-                    "text": self._get_action_space_description()
-                })
+        if append_action:
+            # Add action space description
+            user_msgs.append({
+                "type": "text",
+                "text": self._get_action_space_description()
+            })
 
+            # TODO: check whether this should be part of all observation or not
             # Add next action prompt
             user_msgs.append({
                 "type": "text",
-                "text": "# Next action\nYou will now think step by step and produce your next best action. Reflect on your past actions, any resulting error message, and the current state of the page before deciding on your next action. MAKE SURE TO WRAP YOU FINAL ACTION in ```action``` YOU MUST PUT IN THIS EXACT STYLE FOR THE ACTION TO BE VALID. The content must be in the same format as shown before in the Action Space. Don't just include the chain-of-thought, place the FINAL ACTION from Action Space in ```action```"
+                "text": "# Next action\nYou will now think step by step and produce your next best action. Reflect on your past actions, any resulting error message, and the current state of the page before deciding on your next action. MAKE SURE TO WRAP YOU FINAL ACTION in ```action``` YOU MUST PUT IN THIS EXACT STYLE FOR THE ACTION TO BE VALID. The content must be in the same format as shown before in the Action Space. Only 1 action is needed."
             })
 
-            return user_msgs
-
-        messages = [
-            {"role": "system", "content": self._format_msgs_as_str(system_msgs)},
-            {"role": "user", "content": self._format_msgs_as_str(get_user_msg(obs))},
-        ]
-        for step_idx, obs in enumerate(obs_act_seq[1:]):
-            # 0 is assistant, 1 is user
-            if step_idx % 2 == 1:
-                obs = self._preproc_obs(obs)
-                usr_msg = get_user_msg(obs, append_action=False)
-                messages.append({"role": "user", "content": self._format_msgs_as_str(usr_msg)})
-            else:
-                assert obs != ""
-                messages.append({"role": "assistant", "content": obs})
-
-        return messages
+        return user_msgs
+    
 
     def _preproc_obs(self, obs: dict) -> dict:
         return {
@@ -283,17 +290,42 @@ Action: ```send_msg_to_user("The price for a 15\\" laptop is 1499 USD.")```
         self.action_history = []
 
 
-    def augment_reward(self, response, next_observation, reward):
+    def compute_training_reward(self, trajectory):
         """
-        Augment the reward based on response format and if the last action resulted in error.
+        Computes the training reward signal based on the entire trajectory.
         """
-        new_reward = reward
+        if not trajectory:
+            return 0
 
-        # Penalize if response does NOT match "Thought: ... Action: ..."
-        format_pattern = r"Thought:.*?Action:.*?"
-        if not re.search(format_pattern, response, re.DOTALL):
-            new_reward -= 0.1
+        for traj_step in trajectory:
+            if not self.validate_step(traj_step):
+                return -1
+            
+        return trajectory[0]["trajectory_reward"]
 
+    def validate_step(self, trajectory_step):
+        """
+        Validates if the trajectory_step(dict) is valid or malformated.
+        """
+        response = trajectory_step["response"]
+
+        pattern = r"```(.*?)```"
+        match = re.search(pattern, response, re.DOTALL)
+
+        # Response has no action wrapped in ``` ```
+        if not match:
+            return False
+
+        # # Response has action that results in error
+        # if trajectory_step["next_observation"]["last_action_error"]:
+        #     return False
+
+        # # Response not in Thought, Action format
+        # format_pattern = r"Thought:.*?Action:.*?"
+        # if not re.search(format_pattern, response, re.DOTALL):
+        #     return False
+
+        # Response has repeated meaningless tokens
         def contains_repeated_tokens(text, threshold=0.7):
             words = text.split()
             if not words:
@@ -302,17 +334,21 @@ Action: ```send_msg_to_user("The price for a 15\\" laptop is 1499 USD.")```
             counter = collections.Counter(words)
             _, most_common_count = counter.most_common(1)[0]
             
-            # If the most common word appears in >70% of the response
             return most_common_count / len(words) > threshold
-
-        if contains_repeated_tokens(response):
-            new_reward -= 0.3 
-
-        # Penalize if no code block exists OR last action resulted in an error
-        pattern = r"```(.*?)```"
-        match = re.search(pattern, response, re.DOTALL)
-        if not match or next_observation["last_action_error"]:
-            new_reward -= 0.1
-            
-        return new_reward
         
+        if contains_repeated_tokens(response):
+            return False
+        
+        return True
+
+        
+    def convert_observation_to_string(self, obs, with_system_prompt=False):
+        obs = self._preproc_obs(obs)
+
+        messages = []
+        if with_system_prompt:
+            messages.extend(self.get_system_msg(obs))
+
+        messages.extend(self.get_user_msg(obs, append_action=with_system_prompt))
+
+        return self._format_msgs_as_str(messages)

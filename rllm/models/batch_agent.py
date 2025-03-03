@@ -11,7 +11,7 @@ from queue import Queue, Empty
 from verl.trainer.ppo.ray_trainer import _timer
 
 from rllm.misc import colorful_print
-from rllm.environments.env_utils import add_trajectory_reward, add_mc_return
+from rllm.environments.env_utils import add_trajectory_reward, add_mc_return, add_training_reward
 
 
 class BatchAgent:
@@ -184,7 +184,7 @@ class BatchAgent:
     def _get_actions_openai(self, obs_action_sequences, seq_idxs, **kwargs):
         prompts = [
             self.agents[seq_idxs[i]]._pre_get_action(obs_act_seq)
-            for i, oobs_act_seqbs in enumerate(obs_action_sequences)
+            for i, obs_act_seq in enumerate(obs_action_sequences)
         ]
 
         openai.api_key = self.api_key
@@ -259,7 +259,7 @@ class BatchAgent:
         """
         Run environment interactions in batches.
         Collects trajectories in the format:
-        [[{"observation":, "next_observation":, "reward":, "done":, "action": , "response": , "augmented_reward": },...],...]
+        [[{"observation":, "next_observation":, "reward":, "done":, "action":, "response":, "training_reward": },...],...]
 
         Returned trajectories are in order of the environments they are from.
         """
@@ -333,8 +333,8 @@ class BatchAgent:
                             infos[i],
                         )
 
-                        # Add action and next observation for next round of generation
-                        obs_action_sequences[i].append(actions[i])
+                        # Add response and next observation for next round of generation
+                        obs_action_sequences[i].append(responses[i])
                         obs_action_sequences[i].append(next_observations[i])
 
                         # If an environment is done, handle the completed trajectory
@@ -344,9 +344,6 @@ class BatchAgent:
                                 f"Trajectory {i} completed due to {'termination' if terminateds[i] else 'truncation'}. Reward is {rewards[i]}. \n",
                                 "green",
                             )
-                       
-                        # Compute augmented reward
-                        aug_reward = self.agents[i].augment_reward(responses[i], next_observations[i], rewards[i])
 
                         # Update the trajectory
                         trajectories[i].append(
@@ -357,7 +354,6 @@ class BatchAgent:
                                 "done": terminateds[i] or truncateds[i],
                                 "action": actions[i],
                                 "info": infos[i],
-                                "augmented_reward": aug_reward,
                                 "response": responses[i],
                             }
                         )
@@ -373,10 +369,14 @@ class BatchAgent:
                 print(e)
                 continue
 
-        return [
-            add_mc_return(add_trajectory_reward(trajectory), gamma=self.gamma)
-            for trajectory in trajectories
-        ]
+        result = []
+
+        for i, trajectory in enumerate(trajectories):
+            augmented_trajectory = add_mc_return(add_trajectory_reward(trajectory), gamma=self.gamma)
+            training_reward = self.agents[i].compute_training_reward(augmented_trajectory)
+            result.append(add_training_reward(augmented_trajectory, training_reward))
+
+        return result
 
     def reset(self):
         """
