@@ -7,11 +7,12 @@ import numpy as np
 import threading
 import asyncio
 from queue import Queue, Empty
+import torch
 
 from verl.trainer.ppo.ray_trainer import _timer
 
 from rllm.misc import colorful_print
-from rllm.environments.env_utils import add_trajectory_reward, add_mc_return, add_training_reward
+from rllm.environments.env_utils import add_trajectory_reward, add_mc_return, add_training_reward, compute_training_score, compute_environment_score
 
 
 class BatchAgent:
@@ -22,6 +23,7 @@ class BatchAgent:
         engine_name,
         tokenizer,
         agent_class,
+        model_path="",
         n_parallel_agents=1,
         api_key=None,
         api_retries=3,
@@ -29,6 +31,7 @@ class BatchAgent:
         gamma=0.95,
         retry_limit=5,
         episode_len=5,
+        max_trajectory_length=8000,
         agent_args={},
         **kwargs,
     ):
@@ -40,6 +43,7 @@ class BatchAgent:
         self.agent_class = agent_class
         self.sampling_params = kwargs.get("sampling_params", None)
         self.n_parallel_agents = n_parallel_agents
+        self.model_path = model_path
 
         self.agents = [agent_class(**agent_args)for _ in range(n_parallel_agents)]
 
@@ -49,6 +53,7 @@ class BatchAgent:
         self.retry_limit = retry_limit
         self.episode_len = episode_len
         self.agent_args = agent_args
+        self.max_trajectory_length = max_trajectory_length
 
     def get_actions(self, obs_action_sequences, seq_idxs=[], **kwargs):
         """
@@ -255,13 +260,51 @@ class BatchAgent:
 
         return actions, responses
 
-    def interact_environment(self, reset_seed=0, timing_raw={}, **kwargs):
+    def interact_environment(self, reset_seed=0, timing_raw={}, return_tokens=False, **kwargs):
         """
-        Run environment interactions in batches.
-        Collects trajectories in the format:
-        [[{"observation":, "next_observation":, "reward":, "done":, "action":, "response":, "training_reward": },...],...]
+        Execute batched interactions with the environment and collect trajectories.
 
-        Returned trajectories are in order of the environments they are from.
+        This function simulates multiple parallel environments and collects step-wise 
+        interactions in a structured format. Each trajectory consists of multiple 
+        time steps, recording observations, actions, rewards, and other relevant 
+        environment information.
+
+        Args:
+            reset_seed (int, optional): The random seed for resetting the environment. Defaults to 0.
+            timing_raw (dict, optional): Dictionary for tracking execution times of different stages. Defaults to {}.
+            return_tokens (bool, optional): If True, returns tokenized responses instead of raw text. Defaults to False.
+            **kwargs: Additional arguments that may be passed to environment interactions.
+
+        Returns:
+            List[List[Dict]]: A nested list where each inner list represents a trajectory 
+            corresponding to a specific environment. Each step in the trajectory is 
+            represented as a dictionary with the following keys:
+            
+            - "observation" (Any): The state observed before taking an action.
+            - "next_observation" (Any): The state observed after taking an action.
+            - "reward" (float): The reward received at this step.
+            - "done" (bool): Whether the episode has ended.
+            - "action" (Any): The action taken at this step.
+            - "response" (str): The assistant's response.
+            - "training_reward" (float): The computed reward signal for training purposes.
+
+            or
+
+            List[Dict]: A list of dictionary where each represents the token version of the trajectory if `return_tokens=True`
+            Each dict of the list has the following keys:
+
+            - "prompt_tokens" (torch.tensor, dtype=torch.long): the prompt token obtained with initial observation
+            - "response_tokens" (torch.tensor, dtype=torch.long): the response token obtained with the rest of response, next_observation of the trajectory
+            - "response_masks" (torch.tensor, dtype=torch.long): the state masking for the response_tokens
+            - "training_reward" (float): The computed reward signal for training purposes
+            - "environment_reward" (float): The raw reward signal from the environment
+            
+
+        Notes:
+            - The function ensures that trajectories remain in order, matching the environments they originated from.
+            - The `return_tokens` flag controls whether the responses are returned as strings or tokenized sequences.
+            - Timing information, if provided via `timing_raw`, can be used for profiling execution times of different stages.
+
         """
         assert self.env, f"Env cannot be empty, but got {self.env}"
         assert hasattr(self.env, "batch_size"), "Env does not have batch_size attribute"
@@ -282,9 +325,26 @@ class BatchAgent:
                 observations, infos = self.env.reset(seed=reset_seed)
                 batch_done = [False for _ in range(env_batch_size)]
 
+                # For veRL training
+                all_trajectory_token_lens = [0 for _ in range(env_batch_size)]
+                all_prompt_tokens = [[] for _ in range(env_batch_size)]
+                all_response_tokens = [[] for _ in range(env_batch_size)]
+                all_response_masks = [[] for _ in range(env_batch_size)]
+
                 # put initial observation into the sequence
                 for i, obs in enumerate(observations):
                     obs_action_sequences[i].append(obs)
+
+                    # compute initial prompt tokens
+                    initial_msg = {
+                        "role": "user",
+                        "content": self.agents[i].convert_observation_to_string(obs, with_system_prompt=True),
+                    }
+                    prompt_tokens, _ = self._convert_message_to_tokens_and_masks(initial_msg)
+
+                    all_trajectory_token_lens[i] += len(prompt_tokens)
+                    all_prompt_tokens[i] = prompt_tokens
+
 
                 # get model actions and responses
                 while not all(batch_done) and steps < self.episode_len:
@@ -337,13 +397,38 @@ class BatchAgent:
                         obs_action_sequences[i].append(responses[i])
                         obs_action_sequences[i].append(next_observations[i])
 
+                        # Compute the response tokens and response masks for the trajectory
+                        assistant_msg = {"role": "assistant", "content": responses[i]}
+
+                        next_obs = next_observations[i]
+                        next_obs_txt = self.agents[i].convert_observation_to_string(next_obs, with_system_prompt=False)
+                        env_msg = {"role": "user", "content": next_obs_txt}
+
+                        assistant_msg_tokens, assistant_msg_masks = self._convert_message_to_tokens_and_masks(assistant_msg)
+                        env_msg_tokens, env_msg_masks = self._convert_message_to_tokens_and_masks(env_msg)
+
+                        all_trajectory_token_lens[i] += len(assistant_msg_tokens) + len(env_msg_tokens)
+
+                        # Reached maximum number of tokens for the trajectory
+                        if all_trajectory_token_lens[i] >= self.max_trajectory_length:
+                            batch_done[i] = True
+                            colorful_print(
+                                f"Trajectory {i} completed due to maximum trajectory length reached. Reward is {rewards[i]}. \n",
+                                "yellow",
+                            )
+                            continue
+
                         # If an environment is done, handle the completed trajectory
                         if terminateds[i] or truncateds[i]:
                             batch_done[i] = True
                             colorful_print(
-                                f"Trajectory {i} completed due to {'termination' if terminateds[i] else 'truncation'}. Reward is {rewards[i]}. \n",
+                        f"Trajectory {i} completed due to {'terminaion' if terminateds[i] else 'truncation'}. Reward is {rewards[i]}. \n",
                                 "green",
                             )
+
+                        # Update the token version of trajectory
+                        all_response_tokens[i].extend(assistant_msg_tokens + env_msg_tokens)
+                        all_response_masks[i].extend(assistant_msg_masks + env_msg_masks)
 
                         # Update the trajectory
                         trajectories[i].append(
@@ -369,14 +454,32 @@ class BatchAgent:
                 print(e)
                 continue
 
-        result = []
+        trajectory_result = []
 
         for i, trajectory in enumerate(trajectories):
             augmented_trajectory = add_mc_return(add_trajectory_reward(trajectory), gamma=self.gamma)
             training_reward = self.agents[i].compute_training_reward(augmented_trajectory)
-            result.append(add_training_reward(augmented_trajectory, training_reward))
+            trajectory_result.append(add_training_reward(augmented_trajectory, training_reward))
 
-        return result
+        if not return_tokens:
+            return trajectory_result
+        
+        # Collect into dictionary form
+        token_result = []
+        for i, (prompt_tokens, response_tokens, response_masks) in enumerate(zip(all_prompt_tokens, all_response_tokens, all_response_masks)):
+            trajectory = trajectory_result[i]
+            training_reward = compute_training_score(trajectory)
+            env_reward = compute_environment_score(trajectory)
+
+            token_result.append({
+                "prompt_tokens": torch.tensor(prompt_tokens, dtype=torch.long),
+                "response_tokens": torch.tensor(response_tokens, dtype=torch.long),
+                "response_masks": torch.tensor(response_masks, dtype=torch.long),
+                "training_reward": training_reward,
+                "environment_reward": env_reward,
+            })
+        return token_result
+
 
     def reset(self):
         """
@@ -398,3 +501,37 @@ class BatchAgent:
         self.agents = [self.agent_class(**self.agent_args)for _ in range(self.n_parallel_agents)]
 
         self.env = env
+
+    def _postprocess_model_chat_template(self, message_text):
+        """
+        Postprocesses the chat template output by removing any automatically added system message.
+
+        Args:
+            message_text (str): The formatted message text.
+
+        Returns:
+            str: The processed message text without the default system message.
+        """
+        if any(substring in self.model_path.lower() for substring in ('qwen2', 'qwen2.5')):
+            # from https://huggingface.co/Qwen/Qwen2.5-7B-Instruct/blob/main/tokenizer_config.json, a default system message is inserted. So we manually remove the first occurance of default system message.
+            # This is currently assuming no tool call.
+            target = "<|im_start|>system\nYou are Qwen, created by Alibaba Cloud. You are a helpful assistant.<|im_end|>\n"
+            if message_text.startswith(target):
+                return message_text[len(target):]  # Remove only if it’s at the start
+            return message_text
+
+        print("Model not recognized for postprocessing, entire text returned")
+        return message_text
+    
+    def _convert_message_to_tokens_and_masks(self, msg):
+        msg_text = self.tokenizer.apply_chat_template(
+            [msg], tokenize=False, add_generation_prompt=False
+        )
+        msg_text = self._postprocess_model_chat_template(msg_text)
+
+        msg_tokens = self.tokenizer.encode(msg_text, add_special_tokens=False)
+
+        mask_value = 1 if msg["role"] == "assistant" else 0
+        msg_mask = [mask_value] * len(msg_tokens)
+
+        return msg_tokens, msg_mask
