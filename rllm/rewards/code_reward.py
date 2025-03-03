@@ -131,8 +131,6 @@ def leetcode_check_correctness(tests: List[Dict[str, str]], code: str) -> bool:
      Returns:
           bool: True if all tests pass and result list exists, False otherwise
      """
-     print(f"code:\n{code}")
-     print(f'tests["functional"]:\n{tests["functional"]}')
      succ, output = code_exec(code + '\n' + tests["functional"])
      if not succ:
          print(f"Error in code execution: {output}")
