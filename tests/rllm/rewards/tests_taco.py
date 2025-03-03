@@ -14,9 +14,6 @@ def test_reward_taco(data):
     output = reward(input)
     if not output.is_correct :
         print(f"test_reward_taco Failed test case: {id} and model_response:\n{model_response}\ntests:{metadata}")
-        # print(f"test_reward_taco Failed test case solutions:\n{model_response}")
-        # print(f"test_reward_taco Failed test case input_output:\n{metadata}")
-    # assert output.is_correct == True, "Reward is not correct"
     return output.is_correct, id
 
 
