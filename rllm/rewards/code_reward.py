@@ -15,6 +15,7 @@ from rllm.rewards.code_utils.livecodebench import run_test as lcb_run_test
 from rllm.rewards.code_utils.codeforces import run_test as codeforces_run_test
 from rllm.rewards.code_utils.swebench import swebench_check_correctness
 from rllm.rewards.code_utils.taco import run_test as taco_run_test
+from rllm.rewards.code_utils.firejail_exec import code_exec_firejail as code_exec
 from rllm.rewards.reward_types import RewardConfig, RewardFn, RewardInput, RewardOutput, RewardType
 
 
@@ -101,6 +102,24 @@ def lcb_check_correctness(tests: List[Dict[str, str]], code: str, timeout: int =
     all_passed = all(details)
     return result_list is not None and all_passed
 
+def leetcode_check_correctness(tests: List[Dict[str, str]], code: str) -> bool:
+     """
+     Check if generated code passes all LeetCode test cases.
+    
+     Args:
+          tests: List of test cases, each containing input/output pairs
+          code: Generated code to test
+          timeout: Maximum execution time in seconds before killing process
+          runtime_debug: Whether to print debug info during test execution
+    
+     Returns:
+          bool: True if all tests pass and result list exists, False otherwise
+     """
+     succ, output = code_exec(code + '\n' + tests["functional"])
+     if not succ:
+         print(f"Error in code execution: {output}")
+     return succ
+
 class RewardCodeFn(RewardFn):
     """
     Reward function for evaluating code dataset answers.
@@ -145,11 +164,13 @@ class RewardCodeFn(RewardFn):
         elif dataset_name == "codeforces":
             test_fn = codeforces_run_test
         
-        if dataset_name != "livecodebench":
-            is_correct = check_correctness(tests, model_code, test_fn)
-        else:
+        if dataset_name == "leetcodedataset":
+            is_correct = leetcode_check_correctness(tests, model_code)
+        elif dataset_name == "livecodebench":
             is_extracted = not metadata[0].get("testtype") == "stdin"
             is_correct = lcb_check_correctness(tests, model_code, is_extracted=is_extracted)
+        else:
+            is_correct = check_correctness(tests, model_code, test_fn)
         
         total_time = time.time() - total_start_time
         # print(f"Total reward function execution time: {total_time:.2f} seconds")
