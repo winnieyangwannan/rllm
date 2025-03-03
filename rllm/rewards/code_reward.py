@@ -15,6 +15,7 @@ from rllm.rewards.code_utils.livecodebench import run_test as lcb_run_test
 from rllm.rewards.code_utils.codeforces import run_test as codeforces_run_test
 from rllm.rewards.code_utils.swebench import swebench_check_correctness
 from rllm.rewards.code_utils.taco import run_test as taco_run_test
+from rllm.rewards.code_utils.taco_firejal import run_test as firejail_taco_run_test
 from rllm.rewards.code_utils.firejail_exec import code_exec_firejail as code_exec
 from rllm.rewards.reward_types import RewardConfig, RewardFn, RewardInput, RewardOutput, RewardType
 
@@ -164,7 +165,8 @@ class RewardCodeFn(RewardFn):
             print("No tests found in metadata")
             return RewardOutput(reward=self.config.format_error_reward, is_correct=False)
 
-        model_code = extract_code_from_model(model_response)
+        #model_code = extract_code_from_model(model_response)
+        model_code = model_response
         if model_code is None:
             #print("No code found in model response")
             return RewardOutput(reward=self.config.format_error_reward, is_correct=False)

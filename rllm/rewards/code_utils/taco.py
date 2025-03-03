@@ -60,7 +60,6 @@ def run_test(in_outs, test=None, debug=False):
         except (ValueError, SyntaxError) as e:
             print(f"run_tests app/taco, Error parsing string: {e}")
             return []
-
     if in_outs:
         if in_outs.get("fn_name") is None:
             fn_name = in_outs.get("fn_name")
@@ -336,10 +335,11 @@ def execute_std_code(method, synthesized_code, inputs_list, outputs_list, timeou
         remove_tmp_files()
         outputs = outputs_list[i]
         if isinstance(inputs, list):
+            inputs = [str(k) for k in inputs]
             inputs = "\n".join(inputs)
         if isinstance(outputs, list):
+            outputs = [str(k) for k in outputs]
             outputs = "\n".join(outputs)
-        
         try:
             result = subprocess.run(['python3', temp_program_path], input=inputs, text=True, capture_output=True, timeout=timeout)  
             exec_code = 999
@@ -377,6 +377,7 @@ def execute_std_code(method, synthesized_code, inputs_list, outputs_list, timeou
                 exec_code = 1
             else:
                 exec_code = 0
+                print(f"1 execute_std_code==0:\n{synthesized_code}\n and inputs:\n{inputs}\n outputs:\n{outputs}\n\n")
         assert exec_code != -3
         exec_results[i] = (exec_code==1, EXECUTION_RESULTS[exec_code] if exec_code>-3 else EXECUTION_RESULTS[exec_code].format(result.returncode))
         if exec_code >= 0:
