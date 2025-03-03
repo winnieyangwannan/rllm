@@ -296,9 +296,40 @@ class Solution:
     assert output.is_correct == True
     return output
 
+def test_reward_leetcode():
+    model_response = """
+Here is my response
+```python
+class Solution:\n    def minOperations(self, nums: List[int], k: int) -> int:\n        is_added = [False] * k\n        count = 0\n        n = len(nums)\n        for i in range(n - 1, -1, -1):\n            if nums[i] > k or is_added[nums[i] - 1]:\n                continue\n            is_added[nums[i] - 1] = True\n            count += 1\n            if count == k:\n                return n - i\n
+```
+"""
+    tests = {
+        "functional": "def check(candidate):\n    assert candidate(nums = [3,1,5,4,2], k = 2) == 4\n    assert candidate(nums = [3,1,5,4,2], k = 5) == 5\n    assert candidate(nums = [3,2,5,3,1], k = 3) == 4\n\n\ncheck(Solution().minOperations)"
+    }
+    reward = RewardCodeFn(RewardConfig)
+    input = RewardInput(problem="", problem_type=RewardType.CODE, model_response=model_response, metadata=tests, data_source="leetcodedataset")
+    output = reward(input)
+    assert output.is_correct == True
+    return output
+
+def test_reward_leetcode_bad():
+    model_response = """
+Here is my bad response, it is not in markdown oops
+class Solution:\n    def minOperations(self, nums: List[int], k: int) -> int:\n        is_added = [False] * k\n        count = 0\n        n = len(nums)\n        for i in range(n - 1, -1, -1):\n            if nums[i] > k or is_added[nums[i] - 1]:\n                continue\n            is_added[nums[i] - 1] = True\n            count += 1\n            if count == k:\n                return n - i\n
+"""
+    tests = {
+        "functional": "def check(candidate):\n    assert candidate(nums = [3,1,5,4,2], k = 2) == 4\n    assert candidate(nums = [3,1,5,4,2], k = 5) == 5\n    assert candidate(nums = [3,2,5,3,1], k = 3) == 4\n\n\ncheck(Solution().minOperations)"
+    }
+    reward = RewardCodeFn(RewardConfig)
+    input = RewardInput(problem="", problem_type=RewardType.CODE, model_response=model_response, metadata=tests, data_source="leetcodedataset")
+    output = reward(input)
+    assert output.is_correct == False
+    return output
+
 if __name__ == "__main__":
-    print(test_reward_livecodebench_leetcode())
-    print(test_reward_livecodebench())
+    print(test_reward_leetcode())
+    print(test_reward_leetcode_bad())
+    # print(test_reward_livecodebench())
     # print(test_reward_taco())
     # print(test_reward_codeforces())
     # print(test_reward_code_contests())
