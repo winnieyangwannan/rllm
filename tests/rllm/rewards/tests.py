@@ -307,7 +307,7 @@ class Solution:\n    def minOperations(self, nums: List[int], k: int) -> int:\n 
         "functional": "def check(candidate):\n    assert candidate(nums = [3,1,5,4,2], k = 2) == 4\n    assert candidate(nums = [3,1,5,4,2], k = 5) == 5\n    assert candidate(nums = [3,2,5,3,1], k = 3) == 4\n\n\ncheck(Solution().minOperations)"
     }
     reward = RewardCodeFn(RewardConfig)
-    input = RewardInput(problem="", problem_type=RewardType.CODE, model_response=model_response, metadata=tests, data_source="leetcodedataset")
+    input = RewardInput(problem="", problem_type=RewardType.CODE, model_response=model_response, metadata=tests, data_source="leetcode")
     output = reward(input)
     assert output.is_correct == True
     return output
@@ -321,7 +321,7 @@ class Solution:\n    def minOperations(self, nums: List[int], k: int) -> int:\n 
         "functional": "def check(candidate):\n    assert candidate(nums = [3,1,5,4,2], k = 2) == 4\n    assert candidate(nums = [3,1,5,4,2], k = 5) == 5\n    assert candidate(nums = [3,2,5,3,1], k = 3) == 4\n\n\ncheck(Solution().minOperations)"
     }
     reward = RewardCodeFn(RewardConfig)
-    input = RewardInput(problem="", problem_type=RewardType.CODE, model_response=model_response, metadata=tests, data_source="leetcodedataset")
+    input = RewardInput(problem="", problem_type=RewardType.CODE, model_response=model_response, metadata=tests, data_source="leetcode")
     output = reward(input)
     assert output.is_correct == False
     return output

@@ -164,7 +164,7 @@ class RewardCodeFn(RewardFn):
         elif dataset_name == "codeforces":
             test_fn = codeforces_run_test
         
-        if dataset_name == "leetcodedataset":
+        if dataset_name == "leetcode":
             is_correct = leetcode_check_correctness(tests, model_code)
         elif dataset_name == "livecodebench":
             is_extracted = not metadata[0].get("testtype") == "stdin"

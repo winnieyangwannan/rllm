@@ -24,7 +24,7 @@ class TrainDataset:
         CODEFORCES = "CODEFORCES"
         CODE_CONTESTS = "CODE_CONTESTS"
         LIVECODEBENCH = "LIVECODEBENCH"
-        LEETCODE = "LEETCODEDATASET"
+        LEETCODE = "LEETCODE"
 
 class TestDataset:
 
@@ -41,7 +41,7 @@ class TestDataset:
         CODEFORCES = "CODEFORCES"
         CODE_CONTESTS = "CODE_CONTESTS"
         LIVECODEBENCH = "LIVECODEBENCH"
-        LEETCODE = "LEETCODEDATASET"
+        LEETCODE = "LEETCODE"
 
 
 Dataset = Union[TrainDataset, TestDataset]
