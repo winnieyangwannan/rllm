@@ -39,7 +39,7 @@ def preprocess_messages(messages, tokenizer, use_tools=True):
             add_generation_prompt = False
 
         msg_text = tokenizer.apply_chat_template(
-            [msg], tools=[PythonInterpreter().info] if use_tools else [], tokenize=False, add_generation_prompt=add_generation_prompt
+            [msg], tools=[PythonInterpreter.info] if use_tools else [], tokenize=False, add_generation_prompt=add_generation_prompt
         )
         
         msg_tokens = tokenizer.encode(msg_text, add_special_tokens=False)
@@ -131,9 +131,9 @@ def main(args):
     # Define training arguments
     training_args = TrainingArguments(
         output_dir=args.output_dir,
-        num_train_epochs=3,
+        num_train_epochs=10,
         per_device_train_batch_size=1,
-        gradient_accumulation_steps=16,
+        gradient_accumulation_steps=12,
         learning_rate=2e-5,
         warmup_ratio=0.1,
         logging_steps=5,
@@ -141,7 +141,8 @@ def main(args):
         evaluation_strategy="no",
         fp16=True,
         remove_unused_columns=False,
-        save_steps=1000,
+        gradient_checkpointing=True,
+        save_steps=500,
     )
 
     with open(args.chat_template, "r") as f:
@@ -169,7 +170,7 @@ if __name__ == "__main__":
     import argparse
     parser = argparse.ArgumentParser(description='Train a model with tool call data')
     parser.add_argument('--data_path', type=str, 
-                      default='./data/filtered_toolcall_claude_verified_processed.jsonl',
+                      default='./data/still-toolcall.jsonl',
                       help='Path to the JSONL data file')
     parser.add_argument('--model_path', type=str,
                       default='agentica-org/DeepScaleR-1.5B-Preview',
@@ -178,7 +179,7 @@ if __name__ == "__main__":
                       default='./results',
                       help='Directory for training outputs and checkpoints')
     parser.add_argument('--model_output_dir', type=str,
-                      default='./deepscaler-toolcall-verified',
+                      default='./deepscaler-toolcall-still',
                       help='Directory to save the final model')
     parser.add_argument('--chat_template', type=str,
                       default='../../rllm/templates/r1-toolcall-json.jinja',
