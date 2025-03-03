@@ -1,6 +1,6 @@
 from .firejail_exec import code_exec_firejail
 from concurrent.futures import ThreadPoolExecutor, as_completed
-
+import sys
 
 _ERROR_MSG_PREFIX = "Failed to execute program: "
 
@@ -14,8 +14,6 @@ def minimize_stdio(inputs, outputs):
         if isinstance(stdout, list):
             stdout = [str(x) for x in stdout]
             stdout = "\n".join(stdout)
-        # if sys.getsizeof(stdin) > 4 * 1024:
-        #     continue
         stdout.replace("\r\n", "\n")
         stdin_list.append(stdin)
         stdout_list.append(stdout)
