@@ -326,7 +326,8 @@ class BatchAgent:
                 batch_done = [False for _ in range(env_batch_size)]
 
                 # For veRL training
-                all_trajectory_token_lens = [0 for _ in range(env_batch_size)]
+                max_prompt_token_len = 0
+                all_response_token_lens = [0 for _ in range(env_batch_size)]
                 all_prompt_tokens = [[] for _ in range(env_batch_size)]
                 all_response_tokens = [[] for _ in range(env_batch_size)]
                 all_response_masks = [[] for _ in range(env_batch_size)]
@@ -342,7 +343,7 @@ class BatchAgent:
                     }
                     prompt_tokens, _ = self._convert_message_to_tokens_and_masks(initial_msg)
 
-                    all_trajectory_token_lens[i] += len(prompt_tokens)
+                    max_prompt_token_len = max(max_prompt_token_len, len(prompt_tokens))
                     all_prompt_tokens[i] = prompt_tokens
 
 
@@ -407,10 +408,10 @@ class BatchAgent:
                         assistant_msg_tokens, assistant_msg_masks = self._convert_message_to_tokens_and_masks(assistant_msg)
                         env_msg_tokens, env_msg_masks = self._convert_message_to_tokens_and_masks(env_msg)
 
-                        all_trajectory_token_lens[i] += len(assistant_msg_tokens) + len(env_msg_tokens)
+                        all_response_token_lens[i] += len(assistant_msg_tokens) + len(env_msg_tokens)
 
                         # Reached maximum number of tokens for the trajectory
-                        if all_trajectory_token_lens[i] >= self.max_trajectory_length:
+                        if all_response_token_lens[i] + max_prompt_token_len >= self.max_trajectory_length:
                             batch_done[i] = True
                             colorful_print(
                                 f"Trajectory {i} completed due to maximum trajectory length reached. Reward is {rewards[i]}. \n",
