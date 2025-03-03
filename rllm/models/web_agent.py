@@ -316,14 +316,14 @@ Action: ```send_msg_to_user("The price for a 15\\" laptop is 1499 USD.")```
         if not match:
             return False
 
-        # # Response has action that results in error
-        # if trajectory_step["next_observation"]["last_action_error"]:
-        #     return False
+        # Response has action that results in error
+        if trajectory_step["next_observation"]["last_action_error"]:
+            return False
 
-        # # Response not in Thought, Action format
-        # format_pattern = r"Thought:.*?Action:.*?"
-        # if not re.search(format_pattern, response, re.DOTALL):
-        #     return False
+        # Response not in Thought, Action format
+        format_pattern = r"Thought:.*?Action:.*?"
+        if not re.search(format_pattern, response, re.DOTALL):
+            return False
 
         # Response has repeated meaningless tokens
         def contains_repeated_tokens(text, threshold=0.7):

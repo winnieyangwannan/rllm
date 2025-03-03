@@ -32,7 +32,7 @@ python3 -m verl.trainer.main_ppo_agent \
     trainer.critic_warmup=0 \
     trainer.logger=['console','wandb'] \
     trainer.project_name='rllm-agent' \
-    trainer.experiment_name='7b-ppo-miniwob_agent-v2' \
+    trainer.experiment_name='7b-ppo-miniwob_agent' \
     +trainer.val_before_train=True \
     trainer.default_hdfs_dir=null \
     trainer.n_gpus_per_node=8 \
@@ -44,4 +44,5 @@ python3 -m verl.trainer.main_ppo_agent \
     env.subtask=miniwob \
     env.miniwob_url="$MINIWOB_URL" \
     agent.name=webagent \
+    agent.max_trajectory_length=8000 \
     agent.trajectory_episode_len=5
