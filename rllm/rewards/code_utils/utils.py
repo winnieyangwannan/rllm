@@ -26,8 +26,53 @@ import numpy as np
 import pandas as pd
 from math import log, prod  # 'log' and 'prod' are functions in the math module
 from collections import deque, defaultdict, Counter, OrderedDict
-from itertools import accumulate, permutations, combinations, product, groupby, islice, chain, repeat, zip_longest, cycle
+from itertools import accumulate, permutations, combinations, product, groupby, islice, chain, repeat, zip_longest, cycle, pairwise
 from functools import lru_cache, reduce, partial
 from operator import iand
 import sys
+
+class ListNode:
+    def __init__(self, val=0, next=None):
+        self.val = val
+        self.next = next
+
+def is_same_list(l1: Optional[ListNode], l2: Optional[ListNode]) -> bool:
+    while l1 and l2:
+        if l1.val != l2.val:
+            return False
+        l1 = l1.next
+        l2 = l2.next
+    return l1 is None and l2 is None
+
+def list_node(values: List[Any]) -> Optional[ListNode]:
+    dummy = ListNode(0)
+    current = dummy
+    for value in values:
+        current.next = ListNode(value)
+        current = current.next
+    return dummy.next
+
+class TreeNode:
+    def __init__(self, val=0, left=None, right=None):
+        self.val = val
+        self.left = left
+        self.right = right
+
+def tree_node(values: List[Any]) -> Optional[TreeNode]:
+    if not values:
+        return None
+    root = TreeNode(values[0])
+    queue = deque([root])
+    i = 1
+    while queue and i < values.length:
+        node = queue.popleft()
+        if values[i] is not None:
+            node.left = TreeNode(values[i])
+            queue.append(node.left)
+        i += 1
+        if i < values.length and values[i] is not None:
+            node.right = TreeNode(values[i])
+            queue.append(node.right)
+        i += 1
+    return root
 """

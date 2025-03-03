@@ -1,5 +1,8 @@
 from rllm.rewards import RewardConfig, RewardInput, RewardType
 from rllm.rewards.code_reward import RewardCodeFn
+import json
+import os
+from tqdm import tqdm
 
 def test_reward_code_contests():
     model_response = """
@@ -329,7 +332,7 @@ class Solution:\n    def minOperations(self, nums: List[int], k: int) -> int:\n 
 def test_reward_leetcode_good_1():
 
     model_response = """
-"To solve this problem, we need to identify the smallest subarray that, when sorted, will result in the entire array being sorted. Here's a step-by-step approach to achieve this:\n\n1. **Identify the Sorted and Unsorted Parts**: Compare the original array with its sorted version to identify the first and last positions where the elements differ. These positions mark the boundaries of the unsorted subarray.\n\n2. **Edge Case**: If the array is already sorted, the length of the subarray to be sorted is 0.\n\nHere's the complete implementation:\n\n```python\nfrom typing import List\n\n
+To solve this problem, we need to identify the smallest subarray that, when sorted, will result in the entire array being sorted. Here's a step-by-step approach to achieve this:\n\n1. **Identify the Sorted and Unsorted Parts**: Compare the original array with its sorted version to identify the first and last positions where the elements differ. These positions mark the boundaries of the unsorted subarray.\n\n2. **Edge Case**: If the array is already sorted, the length of the subarray to be sorted is 0.\n\nHere's the complete implementation:\n\n```python\nfrom typing import List\n\n
 class Solution:\n    def findUnsortedSubarray(self, nums: List[int]) -> int:\n        # Create a sorted version of the array\n        sorted_nums = sorted(nums)\n        \n        # Initialize the start and end indices\n        start, end = -1, -2\n        \n        # Find the first and last positions where the elements differ\n        for i in range(len(nums)):\n            if nums[i] != sorted_nums[i]:\n                if start == -1:\n                    start = i\n                end = i\n        \n        # The length of the subarray to be sorted\n        return end - start + 1\n```\n\n### Explanation:\n\n- **Sorting**: We first sort the array and store it in `sorted_nums`.\n- **Finding Boundaries**: We iterate through the original array `nums` and compare it with `sorted_nums`. The first mismatch gives us the `start` of the unsorted subarray, and the last mismatch gives us the `end`.\n- **Calculating Length**: The length of the subarray to be sorted is `end - start + 1`. If the array is already sorted, `start` will remain `-1` and `end` will remain `-2`, resulting in a length of 0.\n\nThis approach has a time complexity of O(n log n) due to the sorting step, and a space complexity of O(n) for storing the sorted array.", "split": "train"}}
 
 """
@@ -359,11 +362,31 @@ class Solution:\n    def findMedianSortedArrays(self, nums1: List[int], nums2: L
     return output
 
 
+def test_reward_leetcode_batch(count=10):
+    data_path = os.path.expanduser("~/rllm2/rllm/data/train/code/leetcode.json")
+    with open(data_path, "r") as f:
+        data = json.load(f)
+    for i in tqdm(range(count)):
+        model_response = f"""
+```python
+{data[i]["completion"]}
+```
+"""
+        tests = data[i]["tests"]
+        reward = RewardCodeFn(RewardConfig)
+        input = RewardInput(problem="", problem_type=RewardType.CODE, model_response=model_response, metadata=tests, data_source="leetcode")
+        output = reward(input)
+        assert output.is_correct == True
+    return output
+
 if __name__ == "__main__":
-    print(test_reward_leetcode())
-    print(test_reward_leetcode_bad())
+    # print(test_reward_leetcode())
+    # print(test_reward_leetcode_bad())
     print(test_reward_leetcode_good_1())
     print(test_reward_leetcode_good_2())
+    # print(test_reward_leetcode())
+    # print(test_reward_leetcode_bad())
+    print(test_reward_leetcode_batch(500))
     # print(test_reward_livecodebench())
     # print(test_reward_taco())
     # print(test_reward_codeforces())
