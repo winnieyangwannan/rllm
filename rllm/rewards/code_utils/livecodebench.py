@@ -19,6 +19,7 @@ import zlib
 from io import StringIO
 from typing import Optional
 from .utils import BASE_IMPORTS
+from concurrent.futures import ThreadPoolExecutor, as_completed
 
 
 def post_process_code(code):
@@ -320,16 +321,57 @@ def run_test(test_cases, completion, timeout, runtime_debug, is_extracted):
     print([r[1] for r in result if not r[0]])
     return result
 
+def run_tests_parallel(test_case,completion, is_extracted, test_type):
+    output_error = ""
+    output_value = ""
+    time_start = time.time()
+    try:
+        if test_type == "functional":
+            test_input, test_output = prepare_test_input_output_functional(
+                test_case, is_extracted
+            )
+            passed, output_value = run_test_func(
+                completion,
+                is_extracted,
+                copy.deepcopy(test_input),
+                copy.deepcopy(test_output),
+            )
+        else:
+            test_input, test_output = prepare_test_input_output_std(test_case)
+            passed, output_value = run_test_std(
+                completion, copy.deepcopy(test_input), copy.deepcopy(test_output)
+            )
+            if not passed:
+                output_error = f"The completion:\n{completion}\nFor test input: {test_input}. Expected output is: {test_output}, but got: {output_value}."
+                time_elapsed = time.time() - time_start
+    
+    except Exception as e:
+            print(f"is_extracted: {is_extracted}")
+            print(f"Caught a generic exception: {e}")
+            passed = False
+            output_error = f"For test input: {test_input}. Expected output is: {test_output}, but got error: {e}."
+            output_value = f"Error: {e}."
+    if output_error == "":
+        output_error = f"For test input: {test_input}. Expected output is: {test_output}, your solution correctly passes this test with output {output_value}."  # noqa: E501
+        
+    # result_list.append((passed, output_error, output_value, time_elapsed))
+        # if not passed:
+        #     return
+
 
 def run_tests_for_one_example(
-    test_cases, completion, result_list, runtime_debug, is_extracted
+    test_cases, completion, result_list, runtime_debug, is_extracted, num_threads=4
 ):
     time_elapsed = float("inf")
     test_type = test_cases[0]["testtype"]
     reliability_guard()
-    for _i, test_case in enumerate(test_cases):
+
+    def run_test_parallel(test_case):
         output_error = ""
         output_value = ""
+        passed = False
+        test_input = None
+        test_output = None
         try:
             time_start = time.time()
             if test_type == "functional":
@@ -347,23 +389,72 @@ def run_tests_for_one_example(
                 passed, output_value = run_test_std(
                     completion, copy.deepcopy(test_input), copy.deepcopy(test_output)
                 )
-            # print(test_input, test_output, output_value)
-            if not passed:
-                output_error = f"For test input: {test_input}. Expected output is: {test_output}, but got: {output_value}."
             time_elapsed = time.time() - time_start
 
+            if not passed:
+                output_error = f"For test input: {test_input}. Expected output is: {test_output}, but got: {output_value}."
         except Exception as e:
             print(f"is_extracted: {is_extracted}")
             print(f"Caught a generic exception: {e}")
-            passed = False
             output_error = f"For test input: {test_input}. Expected output is: {test_output}, but got error: {e}."
             output_value = f"Error: {e}."
+
         if output_error == "":
             output_error = f"For test input: {test_input}. Expected output is: {test_output}, your solution correctly passes this test with output {output_value}."  # noqa: E501
 
-        result_list.append((passed, output_error, output_value, time_elapsed))
-        if not passed:
-            return
+        return passed, output_error, output_value, time_elapsed
+
+    with ThreadPoolExecutor(max_workers=num_threads) as executor:
+        futures = [executor.submit(run_test_parallel, test_case) for test_case in test_cases]
+        for future in as_completed(futures):
+            passed, output_error, output_value, time_elapsed = future.result()
+            result_list.append((passed, output_error, output_value, time_elapsed))
+            if not passed:
+                return
+
+# def run_tests_for_one_example(
+#     test_cases, completion, result_list, runtime_debug, is_extracted
+# ):
+#     time_elapsed = float("inf")
+#     test_type = test_cases[0]["testtype"]
+#     reliability_guard()
+#     for _i, test_case in enumerate(test_cases):
+#         output_error = ""
+#         output_value = ""
+#         try:
+#             time_start = time.time()
+#             if test_type == "functional":
+#                 test_input, test_output = prepare_test_input_output_functional(
+#                     test_case, is_extracted
+#                 )
+#                 passed, output_value = run_test_func(
+#                     completion,
+#                     is_extracted,
+#                     copy.deepcopy(test_input),
+#                     copy.deepcopy(test_output),
+#                 )
+#             else:
+#                 test_input, test_output = prepare_test_input_output_std(test_case)
+#                 passed, output_value = run_test_std(
+#                     completion, copy.deepcopy(test_input), copy.deepcopy(test_output)
+#                 )
+#             # print(test_input, test_output, output_value)
+#             if not passed:
+#                 output_error = f"For test input: {test_input}. Expected output is: {test_output}, but got: {output_value}."
+#             time_elapsed = time.time() - time_start
+
+#         except Exception as e:
+#             print(f"is_extracted: {is_extracted}")
+#             print(f"Caught a generic exception: {e}")
+#             passed = False
+#             output_error = f"For test input: {test_input}. Expected output is: {test_output}, but got error: {e}."
+#             output_value = f"Error: {e}."
+#         if output_error == "":
+#             output_error = f"For test input: {test_input}. Expected output is: {test_output}, your solution correctly passes this test with output {output_value}."  # noqa: E501
+
+#         result_list.append((passed, output_error, output_value, time_elapsed))
+#         if not passed:
+#             return
 
 
 @contextlib.contextmanager
