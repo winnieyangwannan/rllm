@@ -334,10 +334,11 @@ def run_test_std(completion, test_input, test_output):
 def run_test(test_cases, completion, timeout, runtime_debug, is_extracted):
     manager = multiprocessing.Manager()
     result = manager.list()
+    result_lock = manager.Lock()
     completion = f"{BASE_IMPORTS}\n{completion}"
     p = multiprocessing.Process(
         target=run_tests_for_one_example,
-        args=(test_cases, completion, result, runtime_debug, is_extracted),
+        args=(test_cases, completion, result, runtime_debug, is_extracted,result_lock),
     )
     p.start()
     p.join(
@@ -354,7 +355,7 @@ def run_test(test_cases, completion, timeout, runtime_debug, is_extracted):
 
 
 def run_tests_for_one_example(
-    test_cases, completion, result_list, runtime_debug, is_extracted
+    test_cases, completion, result_list, runtime_debug, is_extracted, result_lock,
 ):
     time_elapsed = float("inf")
     test_type = test_cases[0]["testtype"]
@@ -392,8 +393,8 @@ def run_tests_for_one_example(
             output_value = f"Error: {e}."
         if output_error == "":
             output_error = f"For test input: {test_input}. Expected output is: {test_output}, your solution correctly passes this test with output {output_value}."  # noqa: E501
-
-        result_list.append((passed, output_error, output_value, time_elapsed))
+        with result_lock:
+            result_list.append((passed, output_error, output_value, time_elapsed))
         if not passed:
             return
 

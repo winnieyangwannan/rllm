@@ -20,6 +20,7 @@ from rllm.data.utils import load_dataset
 from rllm.system_prompts import (LCB_FORMATTING_MESSAGE_WITH_STARTER_CODE,
                                LCB_FORMATTING_WITHOUT_STARTER_CODE,
                                LCB_SYSTEM_MESSAGE_GENERIC)
+from datasets import concatenate_datasets
 
 
 def fetch_live_code_bench_system_prompt(prompt: str, starter_code: str = None):
@@ -53,7 +54,8 @@ def make_map_fn(split: str):
         if dataset_name == "livecodebench":
             starter_code = example.get("starter_code", None)
             question = fetch_live_code_bench_system_prompt(question, starter_code)
-        
+        if isinstance(question, dict):
+            question = json.dumps(question)
         data = {
             "data_source": dataset_name,
             "prompt": [{
@@ -68,17 +70,16 @@ def make_map_fn(split: str):
             "extra_info": {
                 'split': split,
                 'index': idx
-            }
+            },
         }
         return data
     return process_fn
 
-# python3 code_dataset.py --local_dir ~/data/data
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='Process datasets for DeepScaler training')
     parser.add_argument('--local_dir', default=os.path.expanduser('~/rllm/data'),
-                       help='Local directory to save processed datasets')#Xiao:hardcode,need to change 
+                       help='Local directory to save processed datasets')
     parser.add_argument('--hdfs_dir', default=None,
                        help='Optional HDFS directory to copy datasets to')
     args = parser.parse_args()
@@ -91,8 +92,9 @@ if __name__ == '__main__':
     if not os.path.exists(local_dir):
         makedirs(local_dir)
 
+
     #Initialize datasets
-    train_datasets = [TrainDataset.Code.TACO, TrainDataset.Code.APPS, TrainDataset.Code.CODE_CONTESTS, TrainDataset.Code.CODEFORCES, TrainDataset.Code.LIVECODEBENCH]
+    train_datasets = [TrainDataset.Code.TACO, TrainDataset.Code.LIVECODEBENCH,] 
     test_datasets = [TestDataset.Code.LIVECODEBENCH]
     
     test_datasets_data = [load_dataset(d) for d in test_datasets]
@@ -113,6 +115,8 @@ if __name__ == '__main__':
         dataset_name = train_dataset.value.lower()  # Extract name from enum
         for idx, example in enumerate(train_dataset_data):
             processed_example = process_fn(example, idx, dataset_name)
+            if not processed_example:
+                continue# Break here to inspect the problematic example
             if processed_example is not None:
                 train_data.append(processed_example)
                 all_train_data.append(processed_example)
@@ -122,6 +126,8 @@ if __name__ == '__main__':
     # save all code dataset
     all_train_df = pd.DataFrame(all_train_data)
     all_train_df.to_parquet(os.path.join(local_dir, 'deepscaler_code.parquet'))
+    # Save a json version of deepscaler_code.parquet
+    all_train_df.to_json(os.path.join(local_dir, 'deepscaler_code.json'), orient='records')
 
     #Process and save each test dataset separately
     all_test_data = []

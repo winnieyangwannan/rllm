@@ -203,11 +203,11 @@ if __name__ == "__main__":
     from rllm.data.dataset_types import TestDataset, TrainDataset
     from rllm.data.utils import load_dataset
 
-    data = load_data(n=16)
+    data = load_data(n=1)
 
     # This is for model served with vLLM.
     client = AsyncOpenAI(
-        base_url="http://0.0.0.0:8080/v1",
+        base_url="http://0.0.0.0:8081/v1",
         api_key="EMPTY",
     )
 
