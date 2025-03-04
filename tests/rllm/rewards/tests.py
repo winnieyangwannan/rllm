@@ -362,11 +362,16 @@ class Solution:\n    def findMedianSortedArrays(self, nums1: List[int], nums2: L
     return output
 
 
-def test_reward_leetcode_batch(count=10):
+def test_reward_leetcode_batch(count=10, all=False):
     data_path = os.path.expanduser("~/rllm2/rllm/data/train/code/leetcode.json")
+    failure_log_path = os.path.expanduser("~/rllm2/failed_tests.json")
     with open(data_path, "r") as f:
         data = json.load(f)
-    for i in tqdm(range(count)):
+    failed_cases = []
+    if all is True:
+        count = len(data)
+    # for i in tqdm(range(count)):
+    for i in [68]:
         model_response = f"""
 ```python
 {data[i]["completion"]}
@@ -376,17 +381,177 @@ def test_reward_leetcode_batch(count=10):
         reward = RewardCodeFn(RewardConfig)
         input = RewardInput(problem="", problem_type=RewardType.CODE, model_response=model_response, metadata=tests, data_source="leetcode")
         output = reward(input)
-        assert output.is_correct == True
+        if not output.is_correct:
+            failed_cases.append({
+                "index": i,
+                "model_response": model_response,
+                "tests": tests,
+            })
+
+    # Save failed cases to a JSON file
+    if failed_cases:
+        with open(failure_log_path, "w") as f:
+            json.dump(failed_cases, f, indent=4)
+
     return output
 
+def test_lcb_again():
+    model_response = """
+<think>
+Okay, I need to solve this problem where I have to find the number of days in a given year Y based on the Gregorian calendar rules. Let's think about how to approach this.
+
+First, the problem statement says that the number of days depends on whether Y is a leap year or not. So I need to determine if Y is a leap year according to the rules given.
+
+Let's recap the rules:
+
+1. If Y is not a multiple of 4, then it's a common year with 365 days.
+2. If Y is a multiple of 4 but not a multiple of 100, then it's a leap year with 366 days.
+3. If Y is a multiple of 100 but not a multiple of 400, then it's a common year with 365 days.
+4. If Y is a multiple of 400, then it's a leap year with 366 days.
+
+So the steps I need to take are:
+
+- Check if Y is divisible by 400. If yes, then it's a leap year (366 days).
+- Else, check if it's divisible by 100. If yes, then it's not a leap year (365 days).
+- Else, check if it's divisible by 4. If yes, then it's a leap year (366 days).
+- Else, it's a common year (365 days).
+
+Wait, maybe I should structure this as a series of conditions.
+
+Another way: Let's compute whether the year is a leap year based on these conditions.
+
+Let me think about the logic:
+
+A year is a leap year if:
+- It is divisible by 400, OR
+- It is divisible by 4 but not by 100.
+
+So the condition is: (Y % 400 == 0) or (Y % 4 == 0 and Y % 100 != 0).
+
+So that's the condition we can use to determine if the year is a leap year.
+
+If this condition is true, then the number of days is 366. Else, it's 365.
+
+So the plan is:
+
+1. Read Y as an integer.
+2. Check if Y is a leap year using the condition above.
+3. If it's a leap year, print 366. Else, print 365.
+
+Let's test this logic with the sample inputs.
+
+Sample Input 1: 2023
+Check conditions: 2023 % 400 is 2023-5*400=2023-2000=23, so no. Then check if divisible by 100: 2023 is not. So since it's not divisible by 400 and not by 100, but wait wait no: wait the condition is (divisible by 400) OR (divisible by 4 and not by 100). Wait for 2023: it's not divisible by 4, so the first part is false. The second part is Y%4 ==0? 2023 mod 4 is 2023/4 is 505*4=2020, remainder 3. So no. So condition is false. So it's not a leap year. So output is 365. Which matches sample output 1.
+
+Sample Input 2: 1992
+Check: 1992 is divisible by 4. Let's see if it's not divisible by 100. Yes. So condition is true. So it's a leap year, output 366. Which matches sample 2.
+
+Sample Input 3: 1800
+Check: 1800 is divisible by 100. So check if it's divisible by 400. No. So condition is false. So not a leap year. So output 365. Which matches sample 3.
+
+Sample Input 4: 1600
+Check: 1600 is divisible by 400. So condition is true. Output 366. Which matches sample 4.
+
+Great, so the logic seems correct.
+
+Now, in code, how to implement this.
+
+Read Y from input. Then:
+
+is_leap = (Y % 400 == 0) or (Y % 4 == 0 and Y % 100 != 0)
+
+Then, if is_leap, print 366, else print 365.
+
+Wait, wait. Wait, let me think again.
+
+Wait, the condition is: leap year if (Y is divisible by 400) OR (divisible by 4 and not by 100). So the code should be:
+
+if (Y % 400 == 0) or (Y % 4 == 0 and Y % 100 != 0):
+    days = 366
+else:
+    days = 365
+
+Yes.
+
+So now, code structure:
+
+Read Y as integer.
+
+Compute the condition.
+
+Print 366 or 365 accordingly.
+
+So the code will be something like:
+
+y = int(input())
+if (y % 400 == 0) or (y % 4 == 0 and y % 100 != 0):
+    print(366)
+else:
+    print(365)
+
+Let me test this with sample inputs.
+
+Sample Input 1: 2023. 2023%400 is 2023-5*400=2023-2000=23. So first condition is false. Then check if 2023%4 ==0? 2023/4 is 505.75, remainder 3. So condition is false. So print 365.
+
+Sample Input 2:1992. 1992%400 is 392, so first condition false. But 1992%4 is 0. 1992%100 is 92, not zero. So condition is true. Print 366.
+
+Sample Input3:1800. 1800%400= 1800-4*400= 1800-1600=200. Not zero. Then check if 1800%4 is zero: yes. Then check if 1800%100 is zero? Yes. So condition is (1800%400 !=0) and (1800%4==0 and 1800%100 !=0) → since 1800%100 is zero, the second part is false. So overall condition is false. So print 365.
+
+Sample Input4:1600. 1600%400=0 → condition is true. So print 366.
+
+All samples pass.
+
+Thus, the code should work.
+</think>
+
+To solve this problem, we need to determine the number of days in a given year Y based on the rules of the Gregorian calendar. The number of days in a year can be either 365 or 366 depending on whether the year is a leap year or not.
+
+### Approach
+The problem can be broken down into checking if the year Y is a leap year using the following rules:
+1. If Y is a multiple of 400, it is a leap year.
+2. If Y is a multiple of 100 but not a multiple of 400, it is not a leap year.
+3. If Y is a multiple of 4 but not a multiple of 100, it is a leap year.
+4. Otherwise, it is a common year.
+
+We can simplify this into a single condition to check if Y is a leap year:
+- A year is a leap year if it is divisible by 400 or if it is divisible by 4 but not by 100.
+
+Using this condition, we can determine if the year is a leap year and thus calculate the number of days.
+
+### Solution Code
+```python
+y = int(input())
+if (y % 400 == 0) or (y % 4 == 0 and y % 100 != 0):
+    print(366)
+else:
+    print(365)
+```
+
+### Explanation
+1. **Reading Input:** The year Y is read as an integer from the input.
+2. **Leap Year Check:** We check if Y is a leap year using the condition `(y % 400 == 0) or (y % 4 == 0 and y % 100 != 0)`.
+3. **Determine Days:** If Y is a leap year, print 366. Otherwise, print 365.
+
+This approach efficiently determines the number of days in the year by leveraging a single conditional check, ensuring optimal performance and correctness.
+
+    """
+    tests = [{"input": "2023\n", "output": "365\n", "testtype": "stdin"}, {"input": "1992\n", "output": "366\n", "testtype": "stdin"}, {"input": "1800\n", "output": "365\n", "testtype": "stdin"}, {"input": "1600\n", "output": "366\n", "testtype": "stdin"}]
+    reward = RewardCodeFn(RewardConfig)
+    input = RewardInput(problem="", problem_type=RewardType.CODE, model_response=model_response, metadata=tests, data_source="livecodebench")
+    output = reward(input)
+    assert output.is_correct == True
+    return output
+
+
 if __name__ == "__main__":
+    # print(test_lcb_again())
     # print(test_reward_leetcode())
     # print(test_reward_leetcode_bad())
-    print(test_reward_leetcode_good_1())
-    print(test_reward_leetcode_good_2())
-    # print(test_reward_leetcode())
-    # print(test_reward_leetcode_bad())
-    print(test_reward_leetcode_batch(500))
+    # print(test_reward_leetcode_good_1())
+    # print(test_reward_leetcode_good_2())
+    # # print(test_reward_leetcode())
+    # # print(test_reward_leetcode_bad())
+    print(test_reward_leetcode_batch(all=True))
     # print(test_reward_livecodebench())
     # print(test_reward_taco())
     # print(test_reward_codeforces())

@@ -9,6 +9,7 @@ pytest
 sentence_transformers
 sglang[all]
 sglang-router
+sortedcontainers
 swebench
 tabulate
 torchmetrics

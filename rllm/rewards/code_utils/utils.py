@@ -1,16 +1,16 @@
 BASE_IMPORTS = """from itertools import accumulate, chain, combinations, count, permutations, product, groupby, islice, repeat
 from copy import deepcopy
 from string import ascii_lowercase
-from math import floor, log2, log10, sqrt, comb, gcd, ceil, inf, isqrt
+from math import floor, log2, log10, sqrt, comb, gcd, ceil, inf, isqrt, factorial, atan2, pi
 from collections import defaultdict, deque, Counter
 from bisect import bisect, bisect_left, bisect_right, insort
-from heapq import heappush, heappop, heapify, merge
-from functools import reduce, cache, lru_cache
+from heapq import heappush, heappop, heapify, merge, nlargest, nsmallest, heapreplace
+from functools import reduce, cache, lru_cache, cmp_to_key, reduce
 from random import randrange, shuffle
-from operator import itemgetter, sub
+from operator import itemgetter, sub, xor, or_
 from re import search as re_search  # Assuming 're' refers to a regex search
 from os.path import commonprefix
-from typing import List, Tuple, Dict, Set, Optional, Union, Any, Callable, Iterable, Iterator, Generator
+from typing import List, Tuple, Dict, Set, Optional, Union, Any, Callable, Iterable, Iterator, Generator, Deque
 import copy
 import string
 import math
@@ -31,6 +31,7 @@ from functools import lru_cache, reduce, partial
 from operator import iand
 import sys
 
+# Leetcode specials
 class ListNode:
     def __init__(self, val=0, next=None):
         self.val = val
@@ -61,18 +62,30 @@ class TreeNode:
 def tree_node(values: List[Any]) -> Optional[TreeNode]:
     if not values:
         return None
+
     root = TreeNode(values[0])
     queue = deque([root])
     i = 1
-    while queue and i < values.length:
+
+    while queue and i < len(values):
         node = queue.popleft()
+
         if values[i] is not None:
             node.left = TreeNode(values[i])
             queue.append(node.left)
         i += 1
-        if i < values.length and values[i] is not None:
+
+        if i < len(values) and values[i] is not None:
             node.right = TreeNode(values[i])
             queue.append(node.right)
         i += 1
+
     return root
+
+def is_same_tree(p: Optional[TreeNode], q: Optional[TreeNode]) -> bool:
+    if not p and not q:
+        return True
+    if not p or not q:
+        return False
+    return p.val == q.val and is_same_tree(p.left, q.left) and is_same_tree(p.right, q.right)
 """
