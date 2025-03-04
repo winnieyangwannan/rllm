@@ -377,7 +377,6 @@ def execute_std_code(method, synthesized_code, inputs_list, outputs_list, timeou
                 exec_code = 1
             else:
                 exec_code = 0
-                print(f"1 execute_std_code==0:\n{synthesized_code}\n and inputs:\n{inputs}\n outputs:\n{outputs}\n\n")
         assert exec_code != -3
         exec_results[i] = (exec_code==1, EXECUTION_RESULTS[exec_code] if exec_code>-3 else EXECUTION_RESULTS[exec_code].format(result.returncode))
         if exec_code >= 0:
