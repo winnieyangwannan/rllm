@@ -1,6 +1,6 @@
 BASE_IMPORTS = """from itertools import accumulate, chain, combinations, count, permutations, product, groupby, islice, repeat
 from copy import deepcopy
-from string import ascii_lowercase
+from string import ascii_lowercase, ascii_uppercase
 from math import floor, log2, log10, sqrt, comb, gcd, ceil, inf, isqrt, factorial, atan2, pi
 from collections import defaultdict, deque, Counter
 from bisect import bisect, bisect_left, bisect_right, insort
@@ -22,6 +22,7 @@ import random
 import itertools
 import operator
 import re
+import datetime
 import numpy as np
 import pandas as pd
 from math import log, prod  # 'log' and 'prod' are functions in the math module
