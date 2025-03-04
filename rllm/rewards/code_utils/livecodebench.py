@@ -325,7 +325,7 @@ def run_tests_for_one_example(
     test_cases, completion, result_list, runtime_debug, is_extracted
 ):
     time_elapsed = float("inf")
-     num_threads=8
+    num_threads=8
     test_type = test_cases[0]["testtype"]
     reliability_guard()
 
