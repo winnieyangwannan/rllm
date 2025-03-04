@@ -387,7 +387,7 @@ if __name__ == "__main__":
     # print(test_reward_leetcode())
     # print(test_reward_leetcode_bad())
     print(test_reward_leetcode_batch(500))
-    # print(test_reward_livecodebench())
+    print(test_reward_livecodebench())
     # print(test_reward_taco())
     # print(test_reward_codeforces())
     # print(test_reward_code_contests())
