@@ -303,10 +303,11 @@ def run_test_std(completion, test_input, test_output):
 def run_test(test_cases, completion, timeout, runtime_debug, is_extracted):
     manager = multiprocessing.Manager()
     result = manager.list()
+    result_lock = manager.Lock()
     completion = f"{BASE_IMPORTS}\n{completion}"
     p = multiprocessing.Process(
         target=run_tests_for_one_example,
-        args=(test_cases, completion, result, runtime_debug, is_extracted),
+        args=(test_cases, completion, result, runtime_debug, is_extracted, result_lock),
     )
     p.start()
     p.join(
@@ -322,7 +323,7 @@ def run_test(test_cases, completion, timeout, runtime_debug, is_extracted):
     return result
 
 def run_tests_for_one_example(
-    test_cases, completion, result_list, runtime_debug, is_extracted
+    test_cases, completion, result_list, runtime_debug, is_extracted, result_lock
 ):
     time_elapsed = float("inf")
     num_threads=8
@@ -371,7 +372,8 @@ def run_tests_for_one_example(
         futures = [executor.submit(run_test_parallel, test_case) for test_case in test_cases]
         for future in as_completed(futures):
             passed, output_error, output_value, time_elapsed = future.result()
-            result_list.append((passed, output_error, output_value, time_elapsed))
+            with result_lock:
+                result_list.append((passed, output_error, output_value, time_elapsed))
             if not passed:
                 return
 
