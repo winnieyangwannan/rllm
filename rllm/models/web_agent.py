@@ -326,15 +326,12 @@ Action: ```send_msg_to_user("The price for a 15\\" laptop is 1499 USD.")```
             return False
 
         # Response has repeated meaningless tokens
-        def contains_repeated_tokens(text, threshold=0.7):
-            words = text.split()
-            if not words:
-                return False
-            
-            counter = collections.Counter(words)
-            _, most_common_count = counter.most_common(1)[0]
-            
-            return most_common_count / len(words) > threshold
+        def contains_repeated_tokens(response, min_length=5):
+            for index in range(int(len(response)//2), min_length, -1):
+                if response[-index:] == response[-2*index:-index]:
+                    return True
+            return False
+
         
         if contains_repeated_tokens(response):
             return False
