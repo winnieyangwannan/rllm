@@ -5,15 +5,14 @@ from copy import deepcopy
 from openai import AsyncOpenAI
 
 from rllm.environments.tools import PythonInterpreter, ToolCaller
-from rllm.environments.tools.utils import parse_tool_calls
 
 
 async def _apply_tool(completion, messages, tool_caller, id=None):
-    tool_calls = parse_tool_calls(completion.choices[0].message.content)
+    tool_calls = tool_caller.parse_tool_calls(completion.choices[0].message.content)
 
     if len(tool_calls) > 0:
         tool_call = tool_calls[0]
-        if id is not None:
+        if id is not None and isinstance(tool_call["parameters"], dict):
             tool_call["parameters"]["id"] = id
         tool_call_result = await tool_caller(tool_call["name"], tool_call["parameters"])
         print("tool_call_result", tool_call_result)
@@ -32,49 +31,55 @@ def chat_completion_with_tool(
     batch_size=32,  # Added batch_size parameter
 ):
     async def tool_call_flow(example, request_id):
-        messages = example["prompt"]
-        tool_infos = tool_caller.get_tool_infos()
+        try:
+            messages = example["prompt"]
+            tool_infos = tool_caller.get_tool_infos()
 
-        completion = await client.chat.completions.create(
-            model=model,
-            messages=messages,
-            tools=tool_infos,
-            temperature=0.6,
-            max_tokens=4096,
-            top_p=0.95,
-        )
-        messages.append(
-            {
-                "role": "assistant",
-                "content": completion.choices[0].message.content,
-            }
-        )
-        print("round: 0", completion.choices[0].message.content)
-        curr_round = 0
-        while curr_round < max_round:
-            use_tools = await _apply_tool(
-                completion, messages, tool_caller, id=request_id
+            completion = await client.chat.completions.create(
+                model=model,
+                messages=messages,
+                tools=tool_infos,
+                temperature=0.6,
+                max_tokens=8192,
+                top_p=0.95,
+                stop=['```\n\n']
             )
-            if use_tools:
-                completion = await client.chat.completions.create(
-                    model=model,
-                    messages=messages,
-                    tools=tool_infos,
-                    temperature=0.6,
-                    max_tokens=4096,
-                    top_p=0.95,
+            messages.append(
+                {
+                    "role": "assistant",
+                    "content": completion.choices[0].message.content + '```\n\n',
+                }
+            )
+            print("round: 0", completion.choices[0].message.content)
+            curr_round = 0
+            while curr_round < max_round:
+                use_tools = await _apply_tool(
+                    completion, messages, tool_caller, id=request_id
                 )
-                messages.append(
-                    {
-                        "role": "assistant",
-                        "content": completion.choices[0].message.content,
-                    }
-                )
-            else:
-                break
+                if use_tools:
+                    completion = await client.chat.completions.create(
+                        model=model,
+                        messages=messages,
+                        tools=tool_infos,
+                        temperature=0.6,
+                        max_tokens=8192,
+                        top_p=0.95,
+                        stop=['```\n\n']
+                    )
+                    messages.append(
+                        {
+                            "role": "assistant",
+                            "content": completion.choices[0].message.content + '```\n\n',
+                        }
+                    )
+                else:
+                    break
 
-            curr_round += 1
-            print(f"round {curr_round}:", completion.choices[0].message.content)
+                curr_round += 1
+                print(f"round {curr_round}:", completion.choices[0].message.content)
+        except Exception as e:
+            print("Exception:", str(e))
+            pass
 
         return example
 
@@ -207,7 +212,7 @@ if __name__ == "__main__":
     )
 
     interpreter = PythonInterpreter(n_sandboxes=16)
-    tool_caller = ToolCaller(tools=[interpreter])
+    tool_caller = ToolCaller(tools=[interpreter], parser_type="python")
 
     results = chat_completion_with_tool(
         client, tool_caller, data, model="deepscaler-toolcall", batch_size=16

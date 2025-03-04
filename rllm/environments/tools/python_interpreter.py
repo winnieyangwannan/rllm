@@ -32,25 +32,23 @@ class PythonInterpreter:
         except Exception:
             pass
 
-    @property
-    def info(self):
-        return {
-            "type": "function",
-            "function": {
-                "name": self.name,
-                "description": "Execute python code in a sandbox and return result, prefer using this to evaluate mathematical expression instead of calculating it yourself.",
-                "parameters": {
-                    "type": "object",
-                    "properties": {
-                        "code": {
-                            "type": "string",
-                            "description": "The python code to execute in a single cell",
-                        }
-                    },
-                    "required": ["code"],
+    info = {
+        "type": "function",
+        "function": {
+            "name": "python",
+            "description": "Execute python code in a sandbox and return result, prefer using this to evaluate mathematical expression instead of calculating it yourself.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "code": {
+                        "type": "string",
+                        "description": "The python code to execute in a single cell",
+                    }
                 },
+                "required": ["code"],
             },
-        }
+        },
+    }
 
     async def _init_sandbox(self):
         """Initialize multiple sandbox environments."""
