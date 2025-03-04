@@ -359,7 +359,7 @@ def run_tests_for_one_example(
         except Exception as e:
             print(f"is_extracted: {is_extracted}")
             print(f"Caught a generic exception: {e}")
-            output_error = f"For test input: {test_input}. Expected output is: {test_output}, but got error: {e}."
+            output_error = f"The completion:\n{completion}\nFor test input: {test_input}. Expected output is: {test_output}, but got error: {e}."
             output_value = f"Error: {e}."
 
         if output_error == "":
