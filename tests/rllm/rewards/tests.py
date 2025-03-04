@@ -370,8 +370,7 @@ def test_reward_leetcode_batch(count=10, all=False):
     failed_cases = []
     if all is True:
         count = len(data)
-    # for i in tqdm(range(count)):
-    for i in [68]:
+    for i in tqdm(range(count)):
         model_response = f"""
 ```python
 {data[i]["completion"]}
