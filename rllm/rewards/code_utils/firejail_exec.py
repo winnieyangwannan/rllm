@@ -21,20 +21,18 @@ def code_exec_firejail(code, stdin: str = None, timeout=_DEFAULT_TIMEOUT_SECONDS
     env["OPENBLAS_NUM_THREADS"] = "1"
 
     # Build the firejail command with resource limits and cleanup options
-    # command = [
-    #     "firejail",
-    #     "--private",
-    #     "--quiet",
-    #     "--seccomp=socket",
-    #     "--profile=pip",
-    #     "--rlimit-nproc=32",
-    #     "--rlimit-nofile=32",
-    #     "--rlimit-fsize=2m",  # Limit file size
-    #     "--rlimit-as=4096m",
-    #     f"--timeout=00:00:{timeout}",
-    #     "--debug"
-    # ]
-    command = []
+    command = [
+        "firejail",
+        "--private",
+        "--quiet",
+        "--seccomp=socket",
+        "--profile=pip",
+        "--rlimit-nproc=32",
+        "--rlimit-nofile=32",
+        "--rlimit-fsize=2097152",  # Limit file size
+        "--rlimit-as=4294967296",
+        f"--timeout=00:00:{timeout}",
+    ]
 
     if pytest:
         # solution is in {tmpdir}/solution.py
@@ -57,37 +55,26 @@ def code_exec_firejail(code, stdin: str = None, timeout=_DEFAULT_TIMEOUT_SECONDS
             )
     else:
         code = BASE_IMPORTS + "\n" + code
-
-        command.extend(["python3", "-c", code])
-        result = subprocess.run(command,
+        if len(code) < CLI_ARG_SIZE_LIMIT:
+            command.extend(["python3", "-c", code])
+            result = subprocess.run(command,
                                     input=stdin.encode() if stdin else None,
                                     stdout=subprocess.PIPE,
                                     stderr=subprocess.PIPE,
                                     env=env,
                                     check=False)
-        # if len(code) < CLI_ARG_SIZE_LIMIT:
-        #     command.extend(["python3", "-c", code])
-        #     result = subprocess.run(command,
-        #                             input=stdin.encode() if stdin else None,
-        #                             stdout=subprocess.PIPE,
-        #                             stderr=subprocess.PIPE,
-        #                             env=env,
-        #                             check=False)
-        # else:
-        #     with NamedTemporaryFile() as tmp:
-        #         tmp.write(code.encode())
-        #         tmp.flush()
-        #         print(f"tmp.name: {tmp.name}")
-        #         # command.insert(4, f"--whitelist={tmp.name}")
-        #         # command.extend(["python3", tmp.name])
-        #         command = ["firejail"]  #
-        #         command.extend(["--whitelist=" + tmp.name, "python3", tmp.name])
-        #         result = subprocess.run(command,
-        #                                 input=stdin.encode() if stdin else None,
-        #                                 stdout=subprocess.PIPE,
-        #                                 stderr=subprocess.PIPE,
-        #                                 env=env,
-        #                                 check=False)
+        else:
+            with NamedTemporaryFile(dir="/tmp", suffix=".py") as tmp:
+                tmp.write(code.encode())
+                tmp.flush()
+                command.insert(4, f"--whitelist={tmp.name}")
+                command.extend(["python3", tmp.name])
+                result = subprocess.run(command,
+                                        input=stdin.encode() if stdin else None,
+                                        stdout=subprocess.PIPE,
+                                        stderr=subprocess.PIPE,
+                                        env=env,
+                                        check=False)
 
     stderr = result.stderr.decode().strip()
     stdout = result.stdout.decode()

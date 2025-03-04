@@ -5,7 +5,7 @@ from rllm.rewards import RewardConfig, RewardInput, RewardType
 from rllm.rewards.code_reward import RewardCodeFn
 
 def test_reward_taco(data):
-    model_response = data["solutions"]
+    model_response = f"```python\n{data["solutions"]}\n```"
     metadata = data["tests"]
     id = data["id"]
     problem = data["problem"]

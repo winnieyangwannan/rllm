@@ -165,8 +165,7 @@ class RewardCodeFn(RewardFn):
             print("No tests found in metadata")
             return RewardOutput(reward=self.config.format_error_reward, is_correct=False)
 
-        #model_code = extract_code_from_model(model_response)
-        model_code = model_response
+        model_code = extract_code_from_model(model_response)
         if model_code is None:
             #print("No code found in model response")
             return RewardOutput(reward=self.config.format_error_reward, is_correct=False)
