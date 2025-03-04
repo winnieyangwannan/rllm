@@ -3,6 +3,7 @@ from rllm.rewards.code_reward import RewardCodeFn
 import json
 import os
 from tqdm import tqdm
+from concurrent.futures import ProcessPoolExecutor, as_completed
 
 def test_reward_code_contests():
     model_response = """
@@ -361,6 +362,30 @@ class Solution:\n    def findMedianSortedArrays(self, nums1: List[int], nums2: L
     assert output.is_correct == True
     return output
 
+def _process_case_leetcode(i, entry):
+    model_response = f"""
+```python
+{entry["completion"]}
+```
+"""
+    tests = entry["tests"]
+    reward = RewardCodeFn(RewardConfig)
+    input_obj = RewardInput(
+        problem="",
+        problem_type=RewardType.CODE,
+        model_response=model_response,
+        metadata=tests,
+        data_source="leetcode"
+    )
+    output = reward(input_obj)
+    failed = None
+    if not output.is_correct:
+        failed = {
+            "index": i,
+            "model_response": model_response,
+            "tests": tests,
+        }
+    return i, output, failed
 
 def test_reward_leetcode_batch(count=10, all=False):
     data_path = os.path.expanduser("~/rllm2/rllm/data/train/code/leetcode.json")
@@ -370,29 +395,26 @@ def test_reward_leetcode_batch(count=10, all=False):
     failed_cases = []
     if all is True:
         count = len(data)
-    for i in tqdm(range(count)):
-        model_response = f"""
-```python
-{data[i]["completion"]}
-```
-"""
-        tests = data[i]["tests"]
-        reward = RewardCodeFn(RewardConfig)
-        input = RewardInput(problem="", problem_type=RewardType.CODE, model_response=model_response, metadata=tests, data_source="leetcode")
-        output = reward(input)
-        if not output.is_correct:
-            failed_cases.append({
-                "index": i,
-                "model_response": model_response,
-                "tests": tests,
-            })
 
-    # Save failed cases to a JSON file
+    results = {}
+    failed_cases = []
+
+    # Create a process pool and submit tasks
+    with ProcessPoolExecutor() as executor:
+        futures = {executor.submit(_process_case_leetcode, i, data[i]): i for i in range(count)}
+        for future in tqdm(as_completed(futures), total=count):
+            i, output, failed = future.result()
+            results[i] = output
+            if failed is not None:
+                failed_cases.append(failed)
+
+    # Save failed cases to a JSON file if any
     if failed_cases:
         with open(failure_log_path, "w") as f:
             json.dump(failed_cases, f, indent=4)
 
-    return output
+    # Return the output corresponding to the last processed index
+    return results[count - 1]
 
 def test_lcb_again():
     model_response = """
