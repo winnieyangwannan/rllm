@@ -7,8 +7,8 @@ DEFAULT_SEARCH_ENGINE_TIMEOUT = 5
 GOOGLE_SEARCH_ENDPOINT = "https://customsearch.googleapis.com/customsearch/v1"
 
 # must enter secret key and engine id https://programmablesearchengine.google.com/controlpanel/all
-subscription_key = None
-cx = None
+subscription_key = ""
+cx = ""
 
 class GoogleSearch:
     """A tool for searching google."""
@@ -44,7 +44,7 @@ class GoogleSearch:
             await self.init_client()
         contexts = await self.search_with_google(**kwargs)
         return "\n\n".join(
-            [f"[[citation:{i+1}]] {c['snippet']}" for i, c in enumerate(contexts)]
+            [f"[url:[{c['link']}]] {c['snippet']}" for i, c in enumerate(contexts)]
         )
 
     
