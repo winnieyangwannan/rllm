@@ -7,6 +7,7 @@ from rllm.rewards.code_reward import RewardCodeFn
 def _process_case__taco(i, data):
     model_response = f"""```python\n{data["solutions"]}\n```"""
     tests = data["tests"]
+    problem = data["problem"]
     reward = RewardCodeFn(RewardConfig)
     input = RewardInput(
         problem="", 
@@ -21,6 +22,7 @@ def _process_case__taco(i, data):
         failed = {
             "model_response": model_response,
             "tests": tests,
+            "problem": problem,
         }
     return i, output, failed
 
