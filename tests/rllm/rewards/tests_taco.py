@@ -1,49 +1,55 @@
 import json 
-from concurrent.futures import ThreadPoolExecutor, as_completed
-
+from concurrent.futures import ProcessPoolExecutor, as_completed
+import os
 from rllm.rewards import RewardConfig, RewardInput, RewardType
 from rllm.rewards.code_reward import RewardCodeFn
 
-def test_reward_taco(data):
-    model_response = f"```python\n{data["solutions"]}\n```"
-    metadata = data["tests"]
-    id = data["id"]
-    problem = data["problem"]
+def _process_case__taco(i, data):
+    model_response = f"""```python\n{data["solutions"]}\n```"""
+    tests = data["tests"]
     reward = RewardCodeFn(RewardConfig)
-    input = RewardInput(problem="", problem_type=RewardType.CODE, model_response=model_response, metadata=metadata, data_source="taco")
+    input = RewardInput(
+        problem="", 
+        problem_type=RewardType.CODE, 
+        model_response=model_response, 
+        metadata=tests, 
+        data_source="taco"
+    )
     output = reward(input)
+    failed = None 
     if not output.is_correct :
-        print(f"test_reward_taco Failed test case: {id} and model_response:\n{model_response}\ntests:{metadata}")
-    return output.is_correct, id
+        failed = {
+            "model_response": model_response,
+            "tests": tests,
+        }
+    return i, output, failed
 
 
-def process_data_with_threads(data, num_threads=256):
-    results = []
-    false_result = []
-    false_id = [] 
-    with ThreadPoolExecutor(max_workers=num_threads) as executor:
-        futures = [executor.submit(test_reward_taco, item) for item in data]
+def test_reward_taco(data):
+    results = {}
+    failed_cases = []
+    failure_log_path = os.path.expanduser("~/rllm/rllm/data/train/code/failed_taco_tests.json")
+    with ProcessPoolExecutor() as executor:
+        futures = {executor.submit(_process_case__taco, i, data[i]): i for i in range(len(data))}
         for future in as_completed(futures):
             try:
-                result= future.result()
-                output = result[0]
-                id = result[1]
-                if output == False:
-                    false_result.append(result)
-                    false_id.append(id)
-                results.append(result)
+                id, output, failed= future.result()
+                results[id] = output
+                if failed is not None:
+                    failed_cases.append(failed)
             except Exception as e:
                 print(f"Error processing item: {e}")
-    print(f"Total test cases: {len(data)} and False test cases: {len(false_result)}")
-    #save the false_id 
-    with open("../../../rllm/data/train/code/false_id_taco.json", "w") as f:
-        json.dump(false_id, f)
-    return results
+
+    #save the  failed case to a JSON file if any 
+    if failed_cases:
+        with open(failure_log_path, "w") as f:
+            json.dump(failed_cases, f)
+
+    # Return the output corresponding to the last processed index
+    return results[len(data) - 1]
 
 if __name__ == "__main__":
-    path = "../../../rllm/data/train/code/taco.json"
+    path =  os.path.expanduser("~/rllm/rllm/data/train/code/taco.json")
     with open(path, "r") as f:
         data = json.load(f)
-    data = data
-    results = process_data_with_threads(data)
-    print(f"Total test cases: {len(data)}")
+    test_reward_taco(data)
