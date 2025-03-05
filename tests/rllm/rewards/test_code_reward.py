@@ -294,7 +294,8 @@ class Solution:
         {
             "input": "[5, 3, 10, 8, 2]\n5",
             "output": "3",
-            "testtype": "functional"
+            "testtype": "functional",
+            "metadata": {'fn_name': 'numberOfEmployeesWhoMetTarget'}
         }
     ]
     metadata = public_test_case

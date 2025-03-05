@@ -9,6 +9,13 @@ from rllm.data.dataset_types import TrainDataset
 
 
 def _process_case_leetcode(i, entry):
+    """Process a single test case from the Leetcode dataset.
+    
+    Args:
+        i: Index of the test case
+        entry: Test case data containing solutions and tests
+    """
+    # There is only one solution per problem in the Leetcode dataset
     model_response = f"""
 ```python
 {entry["solutions"]}
@@ -26,12 +33,7 @@ def _process_case_leetcode(i, entry):
     output = reward(input_obj)
     failed = None
     if not output.is_correct:
-        failed = {
-            "index": i,
-            "problem": entry["problem"],
-            "model_response": model_response,
-            "tests": tests,
-        }
+        failed = entry
     return i, output, failed
 
 
@@ -46,25 +48,21 @@ def _process_case_taco(i, data):
     Returns:
         tuple: (index, reward output, failed case data if applicable)
     """
-    model_response = f"""```python\n{data["solutions"]}\n```"""
-    tests = data["tests"]
-    reward = RewardCodeFn(RewardConfig)
-    input_obj = RewardInput(
-        problem="", 
-        problem_type=RewardType.CODE, 
-        model_response=model_response, 
-        metadata=tests, 
-        data_source="taco"
-    )
-    output = reward(input_obj)
-    failed = None 
-    if not output.is_correct:
-        failed = {
-            "problem": data["problem"],
-            "model_response": model_response,
-            "tests": tests,
-        }
-    return i, output, failed
+    for solution in data["solutions"]:
+        model_response = f"""```python\n{solution}\n```"""
+        tests = data["tests"]
+        reward = RewardCodeFn(RewardConfig)
+        input_obj = RewardInput(
+            problem="", 
+            problem_type=RewardType.CODE, 
+            model_response=model_response, 
+            metadata=tests, 
+            data_source="taco"
+        )
+        output = reward(input_obj)
+        if output.is_correct:
+            return i, output, None
+    return i, output, data
 
 
 def test_batched_reward(dataset: str):
@@ -90,7 +88,7 @@ def test_batched_reward(dataset: str):
     failure_log_path = os.path.join(os.path.dirname(__file__), f"./{dataset}_test_err.json")
     counter = 0
     debug = True
-    with ThreadPoolExecutor(max_workers=256) as executor:
+    with ThreadPoolExecutor(max_workers=128) as executor:
         futures = [executor.submit(test_fn, i, data[i]) for i in range(len(data))]
         for future in as_completed(futures):
             try:
@@ -114,6 +112,9 @@ def test_batched_reward(dataset: str):
     return results[len(data) - 1]
 
 
-if __name__ == "__main__":
+if __name__ == "__main__": 
+    # with open("taco_test_err.json", "r") as f:
+    #     failed_cases = json.load(f)
+    # print(len(failed_cases))
     test_batched_reward(dataset="taco")
-    test_batched_reward(dataset="leetcode")
+    # test_batched_reward(dataset="leetcode")
