@@ -31,12 +31,17 @@ def preprocess_messages(messages, tokenizer, use_tools=True):
     """    
     all_tokens = []
     all_masks = []
-    
+
+    skip_assistant_token = False
     for idx, msg in enumerate(messages):
         if idx == 0:
             add_generation_prompt = True
         else:
             add_generation_prompt = False
+
+        if msg['role'] == "assistant":
+            msg['skip_assistant_token'] = skip_assistant_token
+            skip_assistant_token = True
 
         msg_text = tokenizer.apply_chat_template(
             [msg], tools=[PythonInterpreter.info] if use_tools else [], tokenize=False, add_generation_prompt=add_generation_prompt
@@ -126,23 +131,31 @@ def main(args):
     
     # Initialize tokenizer and model
     tokenizer = AutoTokenizer.from_pretrained(args.model_path)
-    model = AutoModelForCausalLM.from_pretrained(args.model_path)
+    model = AutoModelForCausalLM.from_pretrained(
+        args.model_path,
+        torch_dtype=torch.bfloat16,
+        attn_implementation="flash_attention_2"
+    )
     
     # Define training arguments
     training_args = TrainingArguments(
         output_dir=args.output_dir,
-        num_train_epochs=10,
+        num_train_epochs=5,
         per_device_train_batch_size=1,
-        gradient_accumulation_steps=12,
-        learning_rate=2e-5,
+        gradient_accumulation_steps=16,
+        learning_rate=1e-5,
         warmup_ratio=0.1,
         logging_steps=5,
         save_strategy="epoch",
         evaluation_strategy="no",
-        fp16=True,
         remove_unused_columns=False,
         gradient_checkpointing=True,
-        save_steps=500,
+        save_steps=10,
+        bf16=True,
+        save_only_model=True,
+        deepspeed=args.deepspeed,
+        save_total_limit=2
+        # fp16=True,
     )
 
     with open(args.chat_template, "r") as f:
@@ -170,7 +183,7 @@ if __name__ == "__main__":
     import argparse
     parser = argparse.ArgumentParser(description='Train a model with tool call data')
     parser.add_argument('--data_path', type=str, 
-                      default='./data/still-toolcall.jsonl',
+                      default='./data/filtered_toolcall_claude_verified.jsonl',
                       help='Path to the JSONL data file')
     parser.add_argument('--model_path', type=str,
                       default='agentica-org/DeepScaleR-1.5B-Preview',
@@ -179,11 +192,14 @@ if __name__ == "__main__":
                       default='./results',
                       help='Directory for training outputs and checkpoints')
     parser.add_argument('--model_output_dir', type=str,
-                      default='./deepscaler-toolcall-still',
+                      default='./deepscaler-toolcall-claude-python',
                       help='Directory to save the final model')
     parser.add_argument('--chat_template', type=str,
-                      default='../../rllm/templates/r1-toolcall-json.jinja',
+                      default='../../rllm/templates/r1-toolcall-python.jinja',
                       help='Path to the chat template file')
+    parser.add_argument('--deepspeed', type=str,
+                      default='../config/ds_stage2.json',
+                      help='Path to the deepspeed config file')
     args = parser.parse_args()
    
     main(args)
