@@ -7,6 +7,8 @@ FILE_IDS = {
     "test_taco.json": "1npifFETbwclxAL9Mpwp9V485Ox3UjfPz",
     "train_taco.json": "1XpZYH9MP7N-YR9mCLCxs9181zedxivOU",
     "olympiad.json": "1TxTUkXR5WIXS1586XbkrkfpKLEyHiNJS",
+    "test_livecodebench.json": "1bHInKOvpfo5ObR8KIBe0s_p6OiguQJxG",
+    "train_livecodebench.json": "1ikA3HznFuAaZUNTvoKiZfBh9wFaGKiLU",
 }
 
 # Define the destination paths
@@ -14,6 +16,8 @@ DEST_PATHS = {
     "test_taco.json": os.path.expanduser("~/rllm/rllm/data/test/code/taco.json"),
     "train_taco.json": os.path.expanduser("~/rllm/rllm/data/train/code/taco.json"),
     "olympiad.json": os.path.expanduser("~/rllm/rllm/data/train/math/olympiad.json"),
+    "test_livecodebench.json": os.path.expanduser("~/rllm/rllm/data/test/code/livecodebench.json"),
+    "train_livecodebench.json": os.path.expanduser("~/rllm/rllm/data/train/code/livecodebench.json"),
 }
 
 # Create the necessary directories
