@@ -85,7 +85,7 @@ def calc_elo_rating(contest_id: int, problem_status: Dict[str, List[bool]], sort
             prob = f"{problem['contestId']}{problem['index']}"
             if prob in problem_status:
                 for ith, status in enumerate(problem_status[prob]):
-                    if status is True:
+                    if status == 1.0:
                         if "points" in problem:
                             score += max(0, problem["points"] - 50 * ith)
                         else:
