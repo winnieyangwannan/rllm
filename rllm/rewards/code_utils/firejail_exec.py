@@ -3,7 +3,7 @@ import os
 import subprocess
 
 from tempfile import NamedTemporaryFile, TemporaryDirectory
-from .utils import BASE_IMPORTS
+from .utils import BASE_IMPORTS, BASE_LEETCODE_IMPORTS
 
 
 # sudo add-apt-repository ppa:deki/firejail
@@ -54,7 +54,7 @@ def code_exec_firejail(code, stdin: str = None, timeout=_DEFAULT_TIMEOUT_SECONDS
                 check=False,
             )
     else:
-        code = BASE_IMPORTS + "\n" + code
+        code = BASE_IMPORTS + "\n" + BASE_LEETCODE_IMPORTS + "\n" + code
         if len(code) < CLI_ARG_SIZE_LIMIT:
             command.extend(["python3", "-c", code])
             result = subprocess.run(command,

@@ -31,7 +31,11 @@ from itertools import accumulate, permutations, combinations, product, groupby, 
 from functools import lru_cache, reduce, partial
 from operator import iand
 import sys
+"""
 
+
+
+BASE_LEETCODE_IMPORTS = """
 # Leetcode specials
 class ListNode:
     def __init__(self, val=0, next=None):

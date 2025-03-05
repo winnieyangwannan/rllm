@@ -10,10 +10,10 @@ from multiprocessing import Manager
 from typing import List, Dict, Union
 import random
 
-from rllm.rewards.code_utils.code_contests import run_test as code_contests_run_test
+#from rllm.rewards.code_utils.code_contests import run_test as code_contests_run_test
 from rllm.rewards.code_utils.livecodebench import run_test as lcb_run_test
 from rllm.rewards.code_utils.codeforces import run_test as codeforces_run_test
-from rllm.rewards.code_utils.swebench import swebench_check_correctness
+#from rllm.rewards.code_utils.swebench import swebench_check_correctness
 from rllm.rewards.code_utils.taco import run_test as taco_run_test
 from rllm.rewards.code_utils.firejail_exec import code_exec_firejail as code_exec
 from rllm.rewards.reward_types import RewardConfig, RewardFn, RewardInput, RewardOutput, RewardType
@@ -171,12 +171,9 @@ class RewardCodeFn(RewardFn):
 
         # Tests: List[Dictionary] - Codeforces, LiveCodeBench
         # Tests: Dictionary[Lists] - CodeContests, Taco/Apps
-        # Tests: str - TACO/Apps -> Diciotnary[Lists]
         is_correct = False
-        if dataset_name in ["taco", "apps"]:
+        if dataset_name in ["taco", "apps", "code_contests"]:
             test_fn = taco_run_test
-        elif dataset_name == "code_contests":
-            test_fn = code_contests_run_test
         elif dataset_name == "codeforces":
             test_fn = codeforces_run_test
         
