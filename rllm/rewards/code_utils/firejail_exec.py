@@ -78,7 +78,6 @@ def code_exec_firejail(code, stdin: str = None, timeout=_DEFAULT_TIMEOUT_SECONDS
 
     stderr = result.stderr.decode().strip()
     stdout = result.stdout.decode()
-
     if result.returncode == 0:
         return True, stdout
     return False, _ERROR_MSG_PREFIX + f"STDOUT:\n{stdout}\n\nSTDERR:\n{stderr}"

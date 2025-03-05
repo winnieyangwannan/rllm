@@ -11,7 +11,7 @@ from rllm.data.dataset_types import TrainDataset
 def _process_case_leetcode(i, entry):
     model_response = f"""
 ```python
-{entry["completion"]}
+{entry["solutions"]}
 ```
 """
     tests = entry["tests"]
@@ -80,7 +80,7 @@ def test_batched_reward(dataset: str):
         data = load_dataset(TrainDataset.Code.TACO)
         test_fn = _process_case_taco
     elif dataset == "leetcode":
-        data = load_dataset(TrainDataset.Code.LIVECODEBENCH)
+        data = load_dataset(TrainDataset.Code.LEETCODE)
         test_fn = _process_case_leetcode
     else:
         raise ValueError(f"Invalid dataset: {dataset}")
@@ -89,7 +89,7 @@ def test_batched_reward(dataset: str):
     failed_cases = []
     failure_log_path = os.path.join(os.path.dirname(__file__), f"./{dataset}_test_err.json")
     counter = 0
-    debug = False
+    debug = True
     with ThreadPoolExecutor(max_workers=256) as executor:
         futures = [executor.submit(test_fn, i, data[i]) for i in range(len(data))]
         for future in as_completed(futures):
@@ -106,6 +106,7 @@ def test_batched_reward(dataset: str):
 
     # Save the failed cases to a JSON file if any 
     if failed_cases:
+        print('Failed cases: ', len(failed_cases))
         with open(failure_log_path, "w") as f:
             json.dump(failed_cases, f, indent=4)
 
@@ -115,3 +116,4 @@ def test_batched_reward(dataset: str):
 
 if __name__ == "__main__":
     test_batched_reward(dataset="taco")
+    test_batched_reward(dataset="leetcode")
