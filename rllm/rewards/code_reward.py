@@ -1,3 +1,4 @@
+
 """
 This module contains the RewardCode class, which evaluates code datasets answers
 and assigns rewards based on their correctness on unit tests.
@@ -9,6 +10,7 @@ import time
 from multiprocessing import Manager
 from typing import List, Dict, Union
 import random
+import ast 
 
 #from rllm.rewards.code_utils.code_contests import run_test as code_contests_run_test
 from rllm.rewards.code_utils.livecodebench import run_test as lcb_run_test
@@ -120,6 +122,23 @@ def postprocess_lcb_sample(sample):
     }
     return sample
 
+#https://huggingface.co/datasets/PrimeIntellect/verifiable-coding-problems
+def verify_check_correctess(tests, code):
+    if isinstance(tests, str):
+        try:
+            tests =  ast.literal_eval(tests)
+            assert isinstance(tests, dict)
+        except (ValueError, SyntaxError) as e:
+            print(f"run_tests app/taco, Error parsing string: {e}")
+            return False
+    tests = tests[0]
+    input =tests['input']
+    output = tests['output']
+    succ, exec_output = code_exec(code, input)
+    if exec_output.strip() == output.strip() and succ:
+        return True
+    return False
+    
 
 def lcb_check_correctness_v2(sample, generation, timeout=6, debug=False):
     """Check correctness of code generation with a global timeout.
@@ -224,9 +243,11 @@ class RewardCodeFn(RewardFn):
             is_correct = leetcode_check_correctness(tests, model_code)
         elif dataset_name == "livecodebench":
             is_correct = lcb_check_correctness_v2(tests, model_code, debug=False)
+        elif dataset_name == "verify":
+            is_correct = verify_check_correctess(tests, model_code)
         else:
             is_correct = check_correctness(tests, model_code, test_fn)
-        
+
         total_time = time.time() - total_start_time
         # print(f"Total reward function execution time: {total_time:.2f} seconds")
 
