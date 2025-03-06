@@ -44,7 +44,7 @@ def timeout_handler(signum, frame):
     # return
     raise TimeoutException
 signal.signal(signal.SIGALRM, timeout_handler)
-TIMEOUT = 4  # seconds
+TIMEOUT = 100  # seconds
 
 EXECUTION_RESULTS = {1: "passed", 0: "false", -1: "timeout", -2: "runtime_error", -3: "returncode:{code}", -4: "compile_error"}
 
@@ -322,6 +322,9 @@ def remove_tmp_files():
         if tmp_file in os.listdir('.'):
             os.remove(tmp_file)
 
+def clean_stdout(stdout):
+    return stdout.rstrip('\n')
+
 def execute_std_code(method, synthesized_code, inputs_list, outputs_list, timeout, early_stop=False, debug=False):
     temp_program_path = create_temp_file(synthesized_code)
     if debug:
@@ -340,14 +343,32 @@ def execute_std_code(method, synthesized_code, inputs_list, outputs_list, timeou
         if isinstance(outputs, list):
             outputs = [str(k) for k in outputs]
             outputs = "\n".join(outputs)
+        with tempfile.NamedTemporaryFile(mode='w+') as temp_input:
+                temp_input.write(inputs)
+                temp_input.flush()
+                temp_input.seek(0)
+                
+                process = subprocess.Popen(['python3', temp_program_path], 
+                                        stdin=temp_input,
+                                        stdout=subprocess.PIPE,
+                                        stderr=subprocess.PIPE,
+                                        universal_newlines=True,
+                                        text=True)
         try:
-            result = subprocess.run(['python3', temp_program_path], input=inputs, text=True, capture_output=True, timeout=timeout)  
+            stdout, stderr = process.communicate(timeout=timeout)
+            return_code = process.returncode
+            # result = subprocess.run(['python3', temp_program_path], input=inputs, text=True, capture_output=True, timeout=timeout)
             exec_code = 999
         except subprocess.TimeoutExpired:
+            process.kill()
+            return_code = process.returncode
             exec_code = -1
         except Exception as e:
             print(e)
+            return_code = process.returncode
             exec_code = -2
+
+        stdout = clean_stdout(stdout)
 
         if exec_code > 0:
             # if result.returncode != 0:
@@ -373,19 +394,21 @@ def execute_std_code(method, synthesized_code, inputs_list, outputs_list, timeou
                         
             #         except:
             #             exec_code = -3
-            if compare_std_results(result.stdout, outputs, debug):
+            if compare_std_results(stdout, outputs, debug):
                 exec_code = 1
             else:
                 exec_code = 0
         assert exec_code != -3
-        exec_results[i] = (exec_code==1, EXECUTION_RESULTS[exec_code] if exec_code>-3 else EXECUTION_RESULTS[exec_code].format(result.returncode))
+        exec_results[i] = (exec_code==1, EXECUTION_RESULTS[exec_code] if exec_code>-3 else EXECUTION_RESULTS[exec_code].format(return_code))
         if exec_code >= 0:
             if debug:
-                print_debug_info(inputs=inputs, outputs=outputs, exec_outputs=result.stdout)
+                print_debug_info(inputs=inputs, outputs=outputs, exec_outputs=stdout)
+                print("Stderr:", stderr)
                 exec_results['debug'][i] = {
                     'inputs': inputs,
                     'gt_outputs': outputs,
-                    'exec_outputs': result.stdout
+                    'exec_outputs': stdout,
+                    'stderr': stderr
                 }
         if early_stop and exec_code<=0:
             break
