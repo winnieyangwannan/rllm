@@ -1,13 +1,13 @@
 from abc import ABC, abstractmethod
 from typing import List
-from typing import Any, List, Tuple
+from typing import Any, List, Tuple, Dict
 
 class BatchedEnv(ABC):
 
     @property
     @abstractmethod
     def env_id(self) -> List[str]:
-        """List of environment IDs the instance represents."""
+        """List of environment IDs the instance represents. An environment ID should be unique to that specific type of environment"""
         pass
 
     @property
@@ -15,7 +15,6 @@ class BatchedEnv(ABC):
     def batch_size(self) -> int:
         """Batch size for the instance. Should equal to len(env_id)"""
         pass
-
 
     @abstractmethod
     def reset(self, seed: int = 0) -> Tuple[List, List]:
@@ -59,4 +58,10 @@ class BatchedEnv(ABC):
         """
         Close all environments and terminate processes.
         """
+        pass
+
+    @staticmethod
+    @abstractmethod
+    def from_extra_infos(extra_infos: List[Dict]) -> "BatchedEnv":
+        """Abstract static method that constructs an instance from a list of dictionaries. Used for veRL training"""
         pass

@@ -3,7 +3,7 @@ from multiprocessing import Process, Pipe
 from typing import Dict, List, Any, Tuple
 import numpy as np
 from typing import Dict, Any, List, Optional, Union
-from .batch_env import BatchedEnv
+from ..batch_env import BatchedEnv
 
 def browser_gym_worker(connection, env_id: str, env_kwargs: Dict[str, Any]):
     """
@@ -161,3 +161,11 @@ class BatchBrowserGym(BatchedEnv):
         # Close all connections
         for conn in self.connections:
             conn.close()
+
+    @staticmethod
+    def from_extra_infos(extra_infos: List[Dict]) -> "BatchBrowserGym":
+        env_ids = [
+            i["environment_id"] for i in extra_infos
+        ]
+
+        return BatchBrowserGym(batch_size=len(env_ids), env_id=env_ids)

@@ -375,7 +375,7 @@ class BatchAgent:
                         raise (e)
 
                     colorful_print(
-                        f"Step {steps} in environment interation done. {len(actions)} actions generated. responses: {responses} \n",
+                        f"Step {steps} in environment interation done. {len(actions)} actions generated. responses: {responses}, actions: {actions}\n",
                         "green",
                     )
 
