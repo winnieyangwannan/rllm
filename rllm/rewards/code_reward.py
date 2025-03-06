@@ -10,11 +10,12 @@ from multiprocessing import Manager
 from typing import List, Dict, Union
 import random
 
-from rllm.rewards.code_utils.code_contests import run_test as code_contests_run_test
+#from rllm.rewards.code_utils.code_contests import run_test as code_contests_run_test
 from rllm.rewards.code_utils.livecodebench import run_test as lcb_run_test
 from rllm.rewards.code_utils.codeforces import run_test as codeforces_run_test
-from rllm.rewards.code_utils.swebench import swebench_check_correctness
+#from rllm.rewards.code_utils.swebench import swebench_check_correctness
 from rllm.rewards.code_utils.taco import run_test as taco_run_test
+from rllm.rewards.code_utils.firejail_exec import code_exec_firejail as code_exec
 from rllm.rewards.reward_types import RewardConfig, RewardFn, RewardInput, RewardOutput, RewardType
 
 
@@ -33,7 +34,7 @@ def extract_code_from_model(model_response: str):
         return None
     return code_blocks[-1].strip()
 
-def check_correctness(tests: Union[List[Dict[str, str]], Dict[str, List[str]]], code: str, test_fn, timeout_per_test: int = 5, max_tests: int = 15) -> bool:
+def check_correctness(tests: Union[List[Dict[str, str]], Dict[str, List[str]]], code: str, test_fn, timeout_per_test: int = 5, max_tests: int = 1e9) -> bool:
     """
     Check if generated code passes all test cases within a timeout period.
 
@@ -97,25 +98,86 @@ def check_correctness(tests: Union[List[Dict[str, str]], Dict[str, List[str]]], 
     test_results = [r==True for r in test_results]
     return all(test_results)
 
-def lcb_check_correctness(tests: List[Dict[str, str]], code: str, timeout: int = 6, 
-                         runtime_debug: bool = False, is_extracted: bool = False) -> bool:
-    """
-    Check if generated code passes all LiveCodeBench test cases.
 
-    Args:
-        tests: List of test cases, each containing input/output pairs
-        code: Generated code to test
-        timeout: Maximum execution time in seconds before killing process
-        runtime_debug: Whether to print debug info during test execution
-        is_extracted: Whether the code needs to be extracted from a larger response
+def postprocess_lcb_sample(sample):
+    sample_inputs = [sample['input'] for sample in sample]
+    sample_outputs = [sample['output'] for sample in sample]
+    
+    sample_dict = {
+        'inputs': sample_inputs,
+        'outputs': sample_outputs,
+    }
+    
+    if sample[0].get("testtype") == "functional":
+        metadata = sample[0].get("metadata", {})
+        fn_name = metadata.get("func_name", None)
+        assert fn_name is not None, f"Function name is not found, check if your LCB data is preprocessed correctly: {metadata}"
+        # Fill in the blank
+        sample_dict['fn_name'] = fn_name
+    
+    sample = {
+        'input_output': json.dumps(sample_dict),
+    }
+    return sample
 
-    Returns:
-        bool: True if all tests pass and result list exists, False otherwise
-    """
-    result_list = lcb_run_test(tests, code, timeout, runtime_debug, is_extracted)
-    details = [r[0] for r in result_list]
-    all_passed = all(details)
-    return result_list is not None and all_passed
+
+def lcb_check_correctness_v2(sample, generation, timeout=6, debug=False):
+    """Check correctness of code generation with a global timeout.
+    The global timeout is to catch some extreme/rare cases not handled by the timeouts
+    inside `run_test`"""
+    assert len(sample) >= 1, "Sample must contain at least one test case"
+    sample = postprocess_lcb_sample(sample)
+
+    manager = multiprocessing.Manager()
+    result = manager.list()
+    metadata_list = manager.list()
+
+
+    def _temp_run(sample, generation, debug, result, metadata_list, timeout):
+        res, metadata = lcb_run_test(sample, test=generation, debug=debug, timeout=timeout)
+        result.append(res)
+        metadata_list.append(metadata)
+
+    p = multiprocessing.Process(
+        target=_temp_run,
+        args=(sample, generation, debug, result, metadata_list, timeout),
+    )
+    p.start()
+    p.join(
+        timeout=(timeout + 1) * len(json.loads(sample["input_output"])["inputs"]) + 5
+    )
+    if p.is_alive():
+        p.kill()
+    if not result:
+        in_outs = json.loads(sample["input_output"])
+        # consider that all tests failed
+        result = [[-1 for i in range(len(in_outs["inputs"]))]]
+        if debug:
+            print(f"global timeout")
+    if not result:
+        return False
+    print(result[0], metadata_list)
+    # Check if all elements in result[0] are True
+    return all(x == True for x in result[0])
+
+
+def leetcode_check_correctness(tests: List[Dict[str, str]], code: str) -> bool:
+     """
+     Check if generated code passes all LeetCode test cases.
+    
+     Args:
+          tests: List of test cases, each containing input/output pairs
+          code: Generated code to test
+          timeout: Maximum execution time in seconds before killing process
+          runtime_debug: Whether to print debug info during test execution
+    
+     Returns:
+          bool: True if all tests pass and result list exists, False otherwise
+     """
+     succ, output = code_exec(code + '\n' + tests["functional"])
+     if not succ:
+         print(f"Error in code execution: {output}")
+     return succ
 
 class RewardCodeFn(RewardFn):
     """
@@ -152,20 +214,18 @@ class RewardCodeFn(RewardFn):
 
         # Tests: List[Dictionary] - Codeforces, LiveCodeBench
         # Tests: Dictionary[Lists] - CodeContests, Taco/Apps
-        # Tests: str - TACO/Apps -> Diciotnary[Lists]
         is_correct = False
-        if dataset_name in ["taco", "apps"]:
+        if dataset_name in ["taco", "apps", "code_contests"]:
             test_fn = taco_run_test
-        elif dataset_name == "code_contests":
-            test_fn = code_contests_run_test
         elif dataset_name == "codeforces":
             test_fn = codeforces_run_test
         
-        if dataset_name != "livecodebench":
-            is_correct = check_correctness(tests, model_code, test_fn)
+        if dataset_name == "leetcode":
+            is_correct = leetcode_check_correctness(tests, model_code)
+        elif dataset_name == "livecodebench":
+            is_correct = lcb_check_correctness_v2(tests, model_code, debug=False)
         else:
-            is_extracted = not metadata[0].get("testtype") == "stdin"
-            is_correct = lcb_check_correctness(tests, model_code, is_extracted=is_extracted)
+            is_correct = check_correctness(tests, model_code, test_fn)
         
         total_time = time.time() - total_start_time
         # print(f"Total reward function execution time: {total_time:.2f} seconds")

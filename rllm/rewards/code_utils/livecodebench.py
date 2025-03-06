@@ -1,486 +1,486 @@
-import base64
-import builtins
-import contextlib
-import copy
-import faulthandler
-import io
+# Taken from https://github.com/LiveCodeBench/LiveCodeBench/blob/998c52d394b836f15fff3b9a29866191108ff81b/lcb_runner/evaluation/testing_util.py
+import ast
 import json
-import multiprocessing
-import os
-import pickle
-import re
-import shutil
+import sys
+import faulthandler
+import platform
+
+# used for debugging to time steps
+from datetime import datetime
+
+# to run the solution files we're using a timing based approach
 import signal
-import subprocess
-import sys
-import tempfile
-import time
-import zlib
-from io import StringIO
-from typing import Optional
 
-BASE_IMPORTS = """from itertools import accumulate, chain, combinations, count, permutations, product, groupby, islice, repeat
-from copy import deepcopy
-from string import ascii_lowercase
-from math import floor, log2, log10, sqrt, comb, gcd, ceil, inf, isqrt
-from collections import defaultdict, deque, Counter
-from bisect import bisect, bisect_left, bisect_right, insort
-from heapq import heappush, heappop, heapify, merge
-from functools import reduce, cache, lru_cache
-from random import randrange, shuffle
-from operator import itemgetter, sub
-from re import search as re_search  # Assuming 're' refers to a regex search
-from os.path import commonprefix
-from typing import List, Tuple, Dict, Set, Optional, Union, Any, Callable, Iterable, Iterator, Generator
-import copy
-import string
-import math
-import collections
-import bisect
-import heapq
-import functools
-import random
-import itertools
-import operator
-import re
 import numpy as np
-import pandas as pd
-from math import log, prod  # 'log' and 'prod' are functions in the math module
-from collections import deque, defaultdict, Counter, OrderedDict
-from itertools import accumulate, permutations, combinations, product, groupby, islice, chain, repeat, zip_longest, cycle
-from functools import lru_cache, reduce, partial
-from operator import iand
-import sys
-"""
 
-def post_process_code(code):
-    code = code.split("</code>")[0]
-    code = code.replace("```python", "")
-    code = code.split("```")[0]
-    code = code.replace("<code>", "")
-    # print(f"postprocessed code: {code}")
-    return code
+from io import StringIO
+
+# used for testing the code that reads from input
+from unittest.mock import patch, mock_open
+
+# from pyext import RuntimeModule
+from types import ModuleType
+
+from enum import Enum
+from decimal import Decimal
+import time
+
+from .utils import BASE_IMPORTS
+
+import_string = BASE_IMPORTS
+ 
+#"from string import *\nfrom re import *\nfrom datetime import *\nfrom collections import *\nfrom heapq import *\nfrom bisect import *\nfrom copy import *\nfrom math import *\nfrom random import *\nfrom statistics import *\nfrom itertools import *\nfrom functools import *\nfrom operator import *\nfrom io import *\nfrom sys import *\nfrom json import *\nfrom builtins import *\nfrom typing import *\nimport string\nimport re\nimport datetime\nimport collections\nimport heapq\nimport bisect\nimport copy\nimport math\nimport random\nimport statistics\nimport itertools\nimport functools\nimport operator\nimport io\nimport sys\nimport json\nsys.setrecursionlimit(50000)\n"
 
 
-def post_process_tests_inputs(raw_text, is_stdin):
-    # raw_text = raw_text.strip().strip("```json").strip("```").strip() # raw_text.strip()
-    # print(raw_text)
-    if is_stdin:
-        blocks = raw_text.split("Input:")
-
-        formatted_tests = []
-
-        for block in blocks:
-            if not block.strip():
-                continue
-
-            input_output = block.split("Output:")
-
-            if len(input_output) == 2:
-                input_value = input_output[0].strip()
-                output_value = input_output[1].strip()
-
-                formatted_tests.append(
-                    {
-                        "input": input_value + "\n",
-                        "output": output_value + "\n",
-                        "testtype": "stdin",
-                    }
-                )
-        return formatted_tests
+def truncatefn(s, length=300):
+    if isinstance(s, str):
+        pass
     else:
-        # Step 1: Clean the input string by removing surrounding markdown syntax and extra spaces
-        # TODO: .strip() with multiple characters is misleading, this will look for the individual characters in any order.
-        # we should switch to .replace and test
-        # TODO: Do not ignore B005
-        cleaned_string = (
-            raw_text.strip().strip("```json").strip("```").strip()  # noqa: B005
-        )
+        s = str(s)
+    if len(s) <= length:
+        return s
 
-        # Step 2: Check if it's a JSON array
-        if cleaned_string.startswith("[") and cleaned_string.endswith("]"):
-            test_cases = json.loads(cleaned_string)
-            for test_case in test_cases:
-                test_case["testtype"] = "functional"
-            return test_cases
-
-        # Step 3: Handle cases where multiple JSON objects are concatenated without commas
-        else:
-            # Use regex to separate JSON objects by detecting patterns starting with {"input": and ending with the last }
-            json_pattern = re.compile(r'(\{"input":.*?"output":.*?\})', re.DOTALL)
-            matches = json_pattern.findall(cleaned_string)
-
-            if matches:
-                # Combine matches into a valid JSON array by inserting commas between objects
-                json_array_string = "[" + ",".join(matches) + "]"
-                try:
-                    test_cases = json.loads(json_array_string)
-                    for test_case in test_cases:
-                        test_case["testtype"] = (
-                            "functional"  # Add 'testtype' for each test case
-                        )
-                    return test_cases
-                except json.JSONDecodeError as e:
-                    print(f"Error parsing concatenated JSON: {e}")
-
-            # If no matches are found, fall back to line-by-line parsing
-            cleaned_lines = cleaned_string.split("\n")
-            if test_cases is None:
-                test_cases = []
-            for line in cleaned_lines:
-                try:
-                    test_case = json.loads(line)
-                    test_case["testtype"] = "functional"
-                    test_cases.append(test_case)
-                except json.JSONDecodeError as e:
-                    print(f"Error parsing JSON line: {e}")
-                    with open("DEBUG NOT JSON RETURN TEST.txt", "a") as log_file:
-                        log_file.write(f"{line}\n")
-                    continue
-
-            return test_cases
+    return s[: length // 2] + "...(truncated) ..." + s[-length // 2 :]
 
 
-def prepare_test_input_output_functional(test_case, is_extracted):
-    if not is_extracted:
-        # Extract input and expected output from JSON directly
-        test_input = test_case["input"]
-        test_output = test_case["output"]
-        return test_input, test_output
-    else:
-        # TODO THIS IS VERY HACKY, CAN TAKE OFF A LOT OF THINGS THAT ARE NOT NEEDED
-        # Extract input and expected output
-        input_str = test_case["input"]
-        expected_output = test_case["output"].strip()
-
-        # Prepare the input
-        inputs = []
-        if "=" in input_str:
-            if "," in input_str:
-                # Multiple key-value pairs case
-                input_parts = [part.strip() for part in input_str.split(",")]
-                for part in input_parts:
-                    key, value = part.split("=")
-                    key = key.strip()
-                    value = value.strip()
-                    try:
-                        value = int(value)
-                    except ValueError:
-                        try:
-                            value = float(value)
-                        except ValueError:
-                            value = value.strip('"')
-                    inputs.append(value)
-            else:
-                # Single key-value pair case
-                key, value = input_str.split("=")
-                key = key.strip()
-                value = value.strip()
-                try:
-                    value = int(value)
-                except ValueError:
-                    try:
-                        value = float(value)
-                    except ValueError:
-                        value = value.strip('"')
-                inputs.append(value)
-        else:
-            # Handle standard input formats with newlines
-            input_parts = input_str.split("\n")
-            for part in input_parts:
-                part = part.strip()
-                if part:
-                    if part.startswith('"') and part.endswith('"'):
-                        # If the part is wrapped in quotes, treat it as a string
-                        inputs.append(part.strip('"'))
-                    elif part.startswith("[") and part.endswith("]"):
-                        # If part looks like a list, parse it using json.loads
-                        inputs.append(json.loads(part))
-                    else:
-                        # Otherwise, attempt to convert it to a number (int or float)
-                        try:
-                            inputs.append(int(part))
-                        except ValueError:
-                            try:
-                                inputs.append(float(part))
-                            except ValueError:
-                                # If it's neither a number nor a list, treat it as a string
-                                inputs.append(part)
-
-        # Try to parse the expected output into a proper data type
-        try:
-            expected_output = json.loads(expected_output)
-        except json.JSONDecodeError:
-            # If it's not JSON, keep it as a string
-            expected_output = expected_output.strip()
-        return inputs, expected_output
+class CODE_TYPE(Enum):
+    call_based = 0
+    standard_input = 1
 
 
-def prepare_test_input_output_std(test_case):
-    test_input = test_case["input"]
-    test_output = test_case["output"].strip()
-    if test_output.endswith("-"):
-        test_output = test_output[
-            : test_output.rfind("-")
-        ].rstrip()  # Remove '-' if present and trailing
-    return test_input, test_output
-
-
-def run_test_func(completion, is_extracted, test_input, test_output):
-    # print(f"inside: {completion}")
-    if not is_extracted:
-        # Define the namespace in which to execute the completion code
-        namespace = {}
-
-        # Execute the generated code in the namespace
-
-        exec(completion, namespace)
-
-        # Retrieve the function name from the completion (assuming the function name is consistent)
-        func_name = completion.split("(")[0].split()[-1]
-
-        if 'class Solution' in completion:
-            # leetcode style code
-            instance = namespace['Solution']()
-            actual_func = getattr(instance, func_name)
-        else:
-            actual_func = namespace[func_name]
-
-        # Ensure inputs and expected_output are correctly parsed from JSON
-        if isinstance(test_input, dict):
-            # If the input is a dictionary, pass it as keyword arguments
-            args = []
-            kwargs = test_input  # The dictionary is passed as keyword arguments
-        else:
-            # If the input is not a dictionary, pass it as a single argument
-            args = [test_input]  # Wrap inputs in a list, keeping it as one argument
-            kwargs = {}
-
-        # Redirect stdout to capture any printed output
-        output = io.StringIO()
-        sys.stdout = output
-
-        # Call the function and get the result
-        try:
-            # Execute the function with the prepared inputs
-            result_output = actual_func(*args, **kwargs)
-
-            # Compare the result with expected output
-            if result_output != test_output:
-                return False, result_output
-
-        except Exception as e:
-            # Capture and return the exception if one occurs
-            return False, f"Error: {str(e)}"
-
-        finally:
-            sys.stdout = sys.__stdout__
-
-        return True, result_output
-    else:
-        namespace = {}
-
-        # Execute the generated code in the namespace
-
-        exec(completion, namespace)
-
-        # Retrieve the function name from the completion (assuming the function name is consistent)
-        func_name = completion.split("(")[0].split()[-1]
-
-        if 'class Solution' in completion:
-            # leetcode style code
-            instance = namespace['Solution']()
-            actual_func = getattr(instance, func_name)
-        else:
-            actual_func = namespace[func_name]
-
-        # Redirect stdout
-        output = io.StringIO()
-        sys.stdout = output
-
-        # Call the function and get the result
-        try:
-            # Execute the function with the prepared inputs
-            result_output = actual_func(*test_input)
-
-            if result_output != test_output:
-                return False, result_output
-        except Exception as e:
-            return False, str(e)
-
-        finally:
-            sys.stdout = sys.__stdout__
-
-        return True, result_output
-
-
-def run_test_std(completion, test_input, test_output):
-    sys.stdin = StringIO(test_input)
-
-    output = StringIO()
-    sys.stdout = output
-
-    if '__name__ == "__main__"' in completion:
-        # Simulate that the code is being run as the main script
-        completion = f'__name__ = "__main__"\n' + completion
-    
-    namespace = {}
-    exec(completion, namespace)
-
-    output_value = output.getvalue().strip()
-    return output_value == test_output, output_value
-
-
-def run_test(test_cases, completion, timeout, runtime_debug, is_extracted):
-    manager = multiprocessing.Manager()
-    result = manager.list()
-    result_lock = manager.Lock()
-    completion = f"{BASE_IMPORTS}\n{completion}"
-    p = multiprocessing.Process(
-        target=run_tests_for_one_example,
-        args=(test_cases, completion, result, runtime_debug, is_extracted,result_lock),
-    )
-    p.start()
-    p.join(
-        timeout=(timeout + 1) * len(test_cases) + 5
-    )  # TODO Alex: Check whether number of task cases is correct
-    if p.is_alive():
-        p.kill()
-
-    # if len(result) < len(test_cases): ## This is supposed to be the case where not all test passed in the given timeout
-    for _i in range(len(test_cases) - len(result)):
-        result.append((False, "Time out!.", "Error: Time out!", float("inf")))
-    print([r[1] for r in result if not r[0]])
-    return result
-
-
-def run_tests_for_one_example(
-    test_cases, completion, result_list, runtime_debug, is_extracted, result_lock,
-):
-    time_elapsed = float("inf")
-    test_type = test_cases[0]["testtype"]
-    reliability_guard()
-    for _i, test_case in enumerate(test_cases):
-        output_error = ""
-        output_value = ""
-        try:
-            time_start = time.time()
-            if test_type == "functional":
-                test_input, test_output = prepare_test_input_output_functional(
-                    test_case, is_extracted
-                )
-                passed, output_value = run_test_func(
-                    completion,
-                    is_extracted,
-                    copy.deepcopy(test_input),
-                    copy.deepcopy(test_output),
-                )
-            else:
-                test_input, test_output = prepare_test_input_output_std(test_case)
-                passed, output_value = run_test_std(
-                    completion, copy.deepcopy(test_input), copy.deepcopy(test_output)
-                )
-            # print(test_input, test_output, output_value)
-            if not passed:
-                output_error = f"For test input: {test_input}. Expected output is: {test_output}, but got: {output_value}."
-            time_elapsed = time.time() - time_start
-
-        except Exception as e:
-            print(f"is_extracted: {is_extracted}")
-            print(f"Caught a generic exception: {e}")
-            passed = False
-            output_error = f"For test input: {test_input}. Expected output is: {test_output}, but got error: {e}."
-            output_value = f"Error: {e}."
-        if output_error == "":
-            output_error = f"For test input: {test_input}. Expected output is: {test_output}, your solution correctly passes this test with output {output_value}."  # noqa: E501
-        with result_lock:
-            result_list.append((passed, output_error, output_value, time_elapsed))
-        if not passed:
-            return
-
-
-@contextlib.contextmanager
-def time_limit(seconds: float):
-    def signal_handler(signum, frame):
-        raise TimeoutException("Timed out!")
-
-    signal.setitimer(signal.ITIMER_REAL, seconds)
-    signal.signal(signal.SIGALRM, signal_handler)
-    try:
-        yield
-    finally:
-        signal.setitimer(signal.ITIMER_REAL, 0)
-
-
-@contextlib.contextmanager
-def swallow_io(redirect_input=True):
-    """
-    A context manager that redirects stdout and stderr to a write-only stream,
-    and optionally redirects stdin based on the redirect_input flag.
-    """
-    stream = WriteOnlyStringIO()  # Create a stream to capture stdout and stderr
-
-    with contextlib.redirect_stdout(stream), contextlib.redirect_stderr(stream):
-        if redirect_input:
-            with contextlib.redirect_stdin(StringIO()):  # Redirect stdin if enabled
-                yield stream
-        else:
-            yield stream  # Do not redirect stdin
-
-
-@contextlib.contextmanager
-def create_tempdir():
-    with tempfile.TemporaryDirectory() as dirname:
-        with chdir(dirname):
-            yield dirname
-
-
+# stuff for setting up signal timer
 class TimeoutException(Exception):
     pass
 
 
-class WriteOnlyStringIO(io.StringIO):
-    """StringIO that throws an exception when it's read from"""
-
-    def read(self, *args, **kwargs):
-        raise IOError
-
-    def readline(self, *args, **kwargs):
-        raise IOError
-
-    def readlines(self, *args, **kwargs):
-        raise IOError
-
-    def readable(self, *args, **kwargs):
-        """Returns True if the IO object can be read."""
-        return False
+def timeout_handler(signum, frame):
+    print("timeout occured: alarm went off")
+    raise TimeoutException
 
 
-class redirect_stdin(contextlib._RedirectStream):  # type: ignore
-    _stream = "stdin"
+# used to capture stdout as a list
+# from https://stackoverflow.com/a/16571630/6416660
+# alternative use redirect_stdout() from contextlib
+class Capturing(list):
+    def __enter__(self):
+        self._stdout = sys.stdout
+        sys.stdout = self._stringio = StringIO()
+        # Make closing the StringIO a no-op
+        self._stringio.close = lambda x: 1
+        return self
+
+    def __exit__(self, *args):
+        self.append(self._stringio.getvalue())
+        del self._stringio  # free up some memory
+        sys.stdout = self._stdout
 
 
-@contextlib.contextmanager
-def chdir(root):
-    if root == ".":
-        yield
-        return
-    cwd = os.getcwd()
-    os.chdir(root)
+def clean_if_name(code: str) -> str:
     try:
-        yield
-    except BaseException as exc:
-        raise exc
+        astree = ast.parse(code)
+        last_block = astree.body[-1]
+        if isinstance(last_block, ast.If):
+            condition = last_block.test
+            if ast.unparse(condition).strip() == "__name__ == '__main__'":
+                code = (
+                    ast.unparse(astree.body[:-1]) + "\n" + ast.unparse(last_block.body)  # type: ignore
+                )
+    except:
+        pass
+
+    return code
+
+
+def make_function(code: str) -> str:
+    try:
+        import_stmts = []
+        all_other_stmts = []
+        astree = ast.parse(code)
+        for stmt in astree.body:
+            if isinstance(stmt, (ast.Import, ast.ImportFrom)):
+                import_stmts.append(stmt)
+            else:
+                all_other_stmts.append(stmt)
+
+        function_ast = ast.FunctionDef(
+            name="wrapped_function",
+            args=ast.arguments(
+                posonlyargs=[], args=[], kwonlyargs=[], kw_defaults=[], defaults=[]
+            ),
+            body=all_other_stmts,
+            decorator_list=[],
+            lineno=-1,
+        )
+        main_code = (
+            import_string
+            + "\n"
+            + ast.unparse(import_stmts)  # type: ignore
+            + "\n"
+            + ast.unparse(function_ast)  # type: ignore
+        )
+        return main_code
+    except Exception as e:
+        return code
+
+
+def call_method(method, inputs):
+
+    if isinstance(inputs, list):
+        inputs = "\n".join(inputs)
+
+    inputs_line_iterator = iter(inputs.split("\n"))
+
+    # sys.setrecursionlimit(10000)
+
+    # @patch('builtins.input', side_effect=inputs.split("\n"))
+    @patch("builtins.open", mock_open(read_data=inputs))
+    @patch("sys.stdin", StringIO(inputs))
+    @patch("sys.stdin.readline", lambda *args: next(inputs_line_iterator))
+    @patch("sys.stdin.readlines", lambda *args: inputs.split("\n"))
+    @patch("sys.stdin.read", lambda *args: inputs)
+    # @patch('sys.stdout.write', print)
+    def _inner_call_method(_method):
+        try:
+            return _method()
+        except SystemExit as e:
+            pass
+        finally:
+            pass
+
+    return _inner_call_method(method)
+
+
+def get_function(compiled_sol, fn_name: str):  # type: ignore
+    try:
+        assert hasattr(compiled_sol, fn_name)
+        return getattr(compiled_sol, fn_name)
+    except Exception as e:
+        return
+
+
+def compile_code(code: str, timeout: int):
+    signal.alarm(timeout)
+    try:
+        tmp_sol = ModuleType("tmp_sol", "")
+        exec(code, tmp_sol.__dict__)
+        if "class Solution" in code:
+            # leetcode wraps solutions in `Solution`
+            # this is a hack to check if it is leetcode solution or not
+            # currently livecodebench only supports LeetCode but
+            # else condition allows future extensibility to other platforms
+            compiled_sol = tmp_sol.Solution()
+        else:
+            # do nothing in the other case since function is accesible
+            compiled_sol = tmp_sol
+
+        assert compiled_sol is not None
     finally:
-        os.chdir(cwd)
+        signal.alarm(0)
+
+    return compiled_sol
 
 
-def reliability_guard(maximum_memory_bytes: Optional[int] = None):
+def convert_line_to_decimals(line: str) -> tuple[bool, list[Decimal]]:
+    try:
+        decimal_line = [Decimal(elem) for elem in line.split()]
+    except:
+        return False, []
+    return True, decimal_line
+
+
+def get_stripped_lines(val: str):
+    ## you don't want empty lines to add empty list after splitlines!
+    val = val.strip()
+
+    return [val_line.strip() for val_line in val.split("\n")]
+
+
+def grade_call_based(
+    code: str, all_inputs: list, all_outputs: list, fn_name: str, timeout: int
+):
+    # call-based clean up logic
+    # need to wrap in try-catch logic after to catch the correct errors, but for now this is fine.
+    code = import_string + "\n\n" + code
+    compiled_sol = compile_code(code, timeout)
+
+    if compiled_sol is None:
+        return
+
+    method = get_function(compiled_sol, fn_name)
+
+    if method is None:
+        return
+
+    all_inputs = [
+        [json.loads(line) for line in inputs.split("\n")] for inputs in all_inputs
+    ]
+
+    all_outputs = [json.loads(output) for output in all_outputs]
+
+    total_execution = 0
+    all_results = []
+    for idx, (gt_inp, gt_out) in enumerate(zip(all_inputs, all_outputs)):
+        signal.alarm(timeout)
+        faulthandler.enable()
+        try:
+            # can lock here so time is useful
+            start = time.time()
+            prediction = method(*gt_inp)
+            total_execution += time.time() - start
+            signal.alarm(0)
+
+            # don't penalize model if it produces tuples instead of lists
+            # ground truth sequences are not tuples
+            if isinstance(prediction, tuple):
+                prediction = list(prediction)
+
+            tmp_result = prediction == gt_out
+
+            # handle floating point comparisons
+
+            all_results.append(tmp_result)
+
+            if not tmp_result:
+                return all_results, {
+                    "output": truncatefn(prediction),
+                    "inputs": truncatefn(gt_inp),
+                    "expected": truncatefn(gt_out),
+                    "error_code": -2,
+                    "error_message": "Wrong Answer",
+                }
+        except Exception as e:
+            signal.alarm(0)
+            if "timeoutexception" in repr(e).lower():
+                all_results.append(-3)
+                return all_results, {
+                    "error": repr(e),
+                    "error_code": -3,
+                    "error_message": "Time Limit Exceeded",
+                    "inputs": truncatefn(gt_inp),
+                    "expected": truncatefn(gt_out),
+                }
+            else:
+                all_results.append(-4)
+                return all_results, {
+                    "error": repr(e),
+                    "error_code": -4,
+                    "error_message": "Runtime Error",
+                    "inputs": truncatefn(gt_inp),
+                    "expected": truncatefn(gt_out),
+                }
+
+        finally:
+            signal.alarm(0)
+            faulthandler.disable()
+
+    return all_results, {"execution time": total_execution}
+
+
+def grade_stdio(
+    code: str,
+    all_inputs: list,
+    all_outputs: list,
+    timeout: int,
+):
+    ## runtime doesn't interact well with __name__ == '__main__'
+    code = clean_if_name(code)
+
+    ## we wrap the given code inside another function
+    code = make_function(code)
+
+    compiled_sol = compile_code(code, timeout)
+    if compiled_sol is None:
+        return
+
+    method = get_function(compiled_sol, "wrapped_function")
+
+    if method is None:
+        return
+
+    all_results = []
+    total_execution_time = 0
+    for idx, (gt_inp, gt_out) in enumerate(zip(all_inputs, all_outputs)):
+        signal.alarm(timeout)
+        faulthandler.enable()
+
+        signal.alarm(timeout)
+        with Capturing() as captured_output:
+            try:
+                start = time.time()
+                call_method(method, gt_inp)
+                total_execution_time += time.time() - start
+                # reset the alarm
+                signal.alarm(0)
+            except Exception as e:
+                signal.alarm(0)
+                if "timeoutexception" in repr(e).lower():
+                    all_results.append(-3)
+                    return all_results, {
+                        "error": repr(e),
+                        "error_code": -3,
+                        "error_message": "Time Limit Exceeded",
+                        "inputs": truncatefn(gt_inp),
+                        "expected": truncatefn(gt_out),
+                    }
+                else:
+                    all_results.append(-4)
+                    return all_results, {
+                        "error": repr(e),
+                        "error_code": -4,
+                        "error_message": "Runtime Error",
+                        "inputs": truncatefn(gt_inp),
+                        "expected": truncatefn(gt_out),
+                    }
+
+            finally:
+                signal.alarm(0)
+                faulthandler.disable()
+
+        prediction = captured_output[0]
+
+        stripped_prediction_lines = get_stripped_lines(prediction)
+        stripped_gt_out_lines = get_stripped_lines(gt_out)
+
+        ## WA happens in multiple circumstances
+        ## so cache the return to make it clean!
+        WA_send_args = {
+            "output": truncatefn(prediction),
+            "inputs": truncatefn(gt_inp),
+            "expected": truncatefn(gt_out),
+            "error_code": -2,
+        }
+
+        if len(stripped_prediction_lines) != len(stripped_gt_out_lines):
+            all_results.append(-2)
+            WA_send_args["error_message"] = "Wrong answer: mismatched output length"
+            return all_results, WA_send_args
+
+        for output_line_idx, (
+            stripped_prediction_line,
+            stripped_gt_out_line,
+        ) in enumerate(zip(stripped_prediction_lines, stripped_gt_out_lines)):
+            WA_send_args["error_message"] = (
+                f"Wrong answer at {output_line_idx=}: {truncatefn(stripped_prediction_line)} != {truncatefn(stripped_gt_out_line)}"
+            )
+
+            ## CASE 1: exact match
+            if stripped_prediction_line == stripped_gt_out_line:
+                continue
+
+            ## CASE 2: element-wise comparision
+            ## if there are floating elements
+            ## use `decimal` library for good floating point comparision
+            ## otherwise gotcha: np.isclose(50000000000000000, 50000000000000001) = True
+            ## note that we should always be able to convert to decimals
+
+            success, decimal_prediction_line = convert_line_to_decimals(
+                stripped_prediction_line
+            )
+            if not success:
+                all_results.append(-2)
+                return all_results, WA_send_args
+            success, decimal_gtout_line = convert_line_to_decimals(stripped_gt_out_line)
+            if not success:
+                all_results.append(-2)
+                return all_results, WA_send_args
+
+            if decimal_prediction_line == decimal_gtout_line:
+                continue
+
+            all_results.append(-2)
+            return all_results, WA_send_args
+        all_results.append(True)
+
+    return all_results, {"execution time": total_execution_time}
+
+
+def run_test(sample, test=None, debug=False, timeout=6):
+    """
+    if test(generated_code) is not None it'll try to run the code.
+    otherwise it'll just return an input and output pair.
+    """
+    signal.signal(signal.SIGALRM, timeout_handler)
+
+    # Disable functionalities that can make destructive changes to the test.
+    # max memory is set to 4GB
+    reliability_guard()
+
+    if debug:
+        print(f"start = {datetime.now().time()}")
+
+    try:
+        in_outs = json.loads(sample["input_output"])
+    except ValueError as e:
+        raise e
+        in_outs = None
+
+    if in_outs:
+        if in_outs.get("fn_name") is None:
+            which_type = CODE_TYPE.standard_input  # Standard input
+            method_name = None
+        else:
+            which_type = CODE_TYPE.call_based  # Call-based
+            method_name = in_outs["fn_name"]
+
+    if debug:
+        print(f"loaded input_output = {datetime.now().time()}")
+
+    if test is None:
+        assert False, "should not happen: test code is none"
+        return in_outs, {"error": "no test code provided"}
+    elif test is not None:
+        results = []
+        sol = import_string
+        if debug:
+            print(f"loading test code = {datetime.now().time()}")
+
+        if which_type == CODE_TYPE.call_based:
+            signal.alarm(timeout)
+            try:
+                results, metadata = grade_call_based(
+                    code=test,
+                    all_inputs=in_outs["inputs"],
+                    all_outputs=in_outs["outputs"],
+                    fn_name=method_name,
+                    timeout=timeout,
+                )
+                return results, metadata
+            except Exception as e:
+                return [-4], {
+                    "error_code": -4,
+                    "error_message": f"Error during testing: {e}",
+                    "code": test,
+                }
+            finally:
+                signal.alarm(0)
+        elif which_type == CODE_TYPE.standard_input:
+            # sol
+            # if code has if __name__ == "__main__": then remove it
+
+            signal.alarm(timeout)
+            try:
+                results, metadata = grade_stdio(
+                    code=test,
+                    all_inputs=in_outs["inputs"],
+                    all_outputs=in_outs["outputs"],
+                    timeout=timeout,
+                )
+                return results, metadata
+            except Exception as e:
+                return [-4], {
+                    "error_code": -4,
+                    "error_message": f"Error during testing: {e}",
+                    "code": test,
+                }
+            finally:
+                signal.alarm(0)
+
+
+def reliability_guard(maximum_memory_bytes=None):
     """
     This disables various destructive functions and prevents the generated code
     from interfering with the test (e.g. fork bomb, killing other processes,
     removing filesystem files, etc.)
-
     WARNING
     This function is NOT a security sandbox. Untrusted code, including, model-
     generated code, should not be blindly executed outside of one. See the
@@ -488,11 +488,25 @@ def reliability_guard(maximum_memory_bytes: Optional[int] = None):
     with caution.
     """
 
+    if maximum_memory_bytes is not None:
+        import resource
+
+        resource.setrlimit(
+            resource.RLIMIT_AS, (maximum_memory_bytes, maximum_memory_bytes)
+        )
+        resource.setrlimit(
+            resource.RLIMIT_DATA, (maximum_memory_bytes, maximum_memory_bytes)
+        )
+        if not platform.uname().system == "Darwin":
+            resource.setrlimit(
+                resource.RLIMIT_STACK, (maximum_memory_bytes, maximum_memory_bytes)
+            )
+
     faulthandler.disable()
 
     import builtins
 
-    builtins.exit = None
+    # builtins.exit = None
     builtins.quit = None
 
     import os
@@ -537,7 +551,7 @@ def reliability_guard(maximum_memory_bytes: Optional[int] = None):
 
     subprocess.Popen = None  # type: ignore
 
-    # __builtins__["help"] = None   # this line is commented out as it results into error
+    __builtins__["help"] = None
 
     import sys
 
@@ -546,125 +560,3 @@ def reliability_guard(maximum_memory_bytes: Optional[int] = None):
     sys.modules["resource"] = None
     sys.modules["psutil"] = None
     sys.modules["tkinter"] = None
-
-
-def save_original_references():
-    global originals
-    originals = {
-        "builtins": {
-            "exit": builtins.exit,
-            "quit": builtins.quit,
-        },
-        "os": {
-            "kill": os.kill,
-            "system": os.system,
-            "putenv": os.putenv,
-            "remove": os.remove,
-            "removedirs": os.removedirs,
-            "rmdir": os.rmdir,
-            "fchdir": os.fchdir,
-            "setuid": os.setuid,
-            "fork": os.fork,
-            "forkpty": os.forkpty,
-            "killpg": os.killpg,
-            "rename": os.rename,
-            "renames": os.renames,
-            "truncate": os.truncate,
-            "replace": os.replace,
-            "unlink": os.unlink,
-            "fchmod": os.fchmod,
-            "fchown": os.fchown,
-            "chmod": os.chmod,
-            "chown": os.chown,
-            "chroot": os.chroot,
-            "getcwd": os.getcwd,
-            "chdir": os.chdir,
-        },
-        "shutil": {
-            "rmtree": shutil.rmtree,
-            "move": shutil.move,
-            "chown": shutil.chown,
-        },
-        "subprocess": {"Popen": subprocess.Popen},
-        "sys_modules": {
-            "ipdb": sys.modules.get("ipdb"),
-            "joblib": sys.modules.get("joblib"),
-            "resource": sys.modules.get("resource"),
-            "psutil": sys.modules.get("psutil"),
-            "tkinter": sys.modules.get("tkinter"),
-        },
-    }
-
-
-def restore_original_references():
-    global originals
-    # Restore 'builtins' functions
-    builtins.exit = originals["builtins"]["exit"]
-    builtins.quit = originals["builtins"]["quit"]
-
-    # Restore 'os' functions
-    for func_name, original_func in originals["os"].items():
-        setattr(os, func_name, original_func)
-
-    # Restore 'shutil' functions
-    for func_name, original_func in originals["shutil"].items():
-        setattr(shutil, func_name, original_func)
-
-    # Restore 'subprocess' functions
-    subprocess.Popen = originals["subprocess"]["Popen"]
-
-    # Restore sys modules
-    for module_name, original_module in originals["sys_modules"].items():
-        if original_module is not None:
-            sys.modules[module_name] = original_module
-
-
-def has_test_type(tests, type):  ## helper to select specific type of problems
-    """
-    Check if any test in the test list has 'testtype' set to 'type'.
-    """
-    test_list = json.loads(tests)
-    for test in test_list:
-        if test.get("testtype") == type:
-            return True
-    return False
-
-
-def translate_private_test_cases(encoded_data):
-    decoded_data = base64.b64decode(encoded_data)
-    decompressed_data = zlib.decompress(decoded_data)
-    original_data = pickle.loads(decompressed_data)
-    return json.loads(original_data)
-
-
-"""
-def update_dataset_in_place(
-    dataset,
-):  ## helper functions to translate the private test cases
-    for entry in dataset:
-        try:
-            # Translate the private test cases
-            decoded_private_test_cases = translate_private_test_cases(
-                entry["private_test_cases"]
-            )
-            # Update the entry in place
-            entry["private_test_cases"] = decoded_private_test_cases
-            # print(decoded_private_test_cases)
-        except Exception as e:
-            print(e)
-        # break
-"""
-
-
-def map_to_example(row):
-    return {
-        "prompt": row["question_content"],
-        "test": row["private_test_cases"],
-        "entry_point": row["starter_code"],
-        "canonical_solution": "",  # seems like live code bench lite does not have this field
-        "task_id": row["question_id"],
-        "is_stdin": has_test_type(row["public_test_cases"], "stdin"),
-        "public_test_cases": row["public_test_cases"],
-        "difficulty": row["difficulty"],
-        "_index": row["_index"],
-    }

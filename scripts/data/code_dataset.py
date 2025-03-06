@@ -49,6 +49,15 @@ def make_map_fn(split: str):
     def process_fn(example: Dict[str, Any], idx: int, dataset_name=None) -> Optional[Dict[str, Any]]:
         question = example.pop('problem')
         tests = example.pop('tests')
+        
+        if example.get('metadata', {}):
+            if isinstance(tests, dict):
+                tests['metadata'] = example['metadata']
+            else:
+                for test in tests:
+                    assert isinstance(test, dict), "Test is not a dict"
+                    test['metadata'] = example['metadata']
+        
         tests = json.dumps(tests)
 
         if dataset_name == "livecodebench":
@@ -69,8 +78,9 @@ def make_map_fn(split: str):
             },
             "extra_info": {
                 'split': split,
-                'index': idx
-            },
+                'index': idx,
+                'reference': example.get('completion', None), # For leetcode
+            }
         }
         return data
     return process_fn
@@ -94,7 +104,7 @@ if __name__ == '__main__':
 
 
     #Initialize datasets
-    train_datasets = [TrainDataset.Code.TACO, TrainDataset.Code.LIVECODEBENCH,] 
+    train_datasets = [TrainDataset.Code.TACO, TrainDataset.Code.LIVECODEBENCH, TrainDataset.Code.LEETCODE]
     test_datasets = [TestDataset.Code.LIVECODEBENCH]
     
     test_datasets_data = [load_dataset(d) for d in test_datasets]
@@ -142,3 +152,4 @@ if __name__ == '__main__':
                 all_test_data.append(processed_example)
         test_df = pd.DataFrame(test_data)
         test_df.to_parquet(os.path.join(local_dir, f'test_{dataset_name}.parquet'))
+        test_df.to_json(os.path.join(local_dir, f'test_{dataset_name}.json'), orient='records')
