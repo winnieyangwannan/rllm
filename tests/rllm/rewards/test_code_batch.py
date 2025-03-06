@@ -49,7 +49,10 @@ def _process_case_taco(i, data):
         tuple: (index, reward output, failed case data if applicable)
     """
     for solution in data["solutions"]:
-        model_response = f"""```python\n{solution}\n```"""
+        if not solution.startswith("```python") and not solution.endswith("```"):
+            model_response = f"""```python\n{solution}\n```"""
+        else:
+            model_response = solution
         tests = data["tests"]
         reward = RewardCodeFn(RewardConfig)
         input_obj = RewardInput(
