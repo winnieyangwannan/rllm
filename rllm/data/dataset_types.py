@@ -25,7 +25,7 @@ class TrainDataset:
         CODE_CONTESTS = "CODE_CONTESTS"
         LIVECODEBENCH = "LIVECODEBENCH"
         LEETCODE = "LEETCODE"
-        VERIFY = "VERIFY"
+        PRIMEINTELLECT = "PRIMEINTELLECT"
 
 class TestDataset:
 
