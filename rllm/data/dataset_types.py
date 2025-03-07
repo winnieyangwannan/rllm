@@ -25,6 +25,7 @@ class TrainDataset:
         CODE_CONTESTS = "CODE_CONTESTS"
         LIVECODEBENCH = "LIVECODEBENCH"
         LEETCODE = "LEETCODE"
+        KODCODE = "KODCODE"
 
 class TestDataset:
 

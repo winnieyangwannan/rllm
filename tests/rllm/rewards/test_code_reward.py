@@ -295,7 +295,7 @@ class Solution:
             "input": "[5, 3, 10, 8, 2]\n5",
             "output": "3",
             "testtype": "functional",
-            "metadata": {'fn_name': 'numberOfEmployeesWhoMetTarget'}
+            "metadata": {'func_name': 'numberOfEmployeesWhoMetTarget'}
         }
     ]
     metadata = public_test_case
@@ -360,10 +360,68 @@ class Solution:\n    def minOperations(self, nums: List[int], k: int) -> int:\n 
     output = reward(input)
     assert output.is_correct == False
 
+def test_reward_kodcode():
+    model_response = """
+```python
+def longest_subsequence(nums):
+    '''
+    Returns the length of the longest subsequence such that the
+    difference between adjacent elements is either 1 or -1.
+
+    Args:
+    nums: A list of integers
+
+    Returns:
+    An integer representing the length of the longest subsequence
+    '''
+    if not nums:
+        return 0
+
+    max_length = 1
+    curr_length = 1
+
+    for i in range(1, len(nums)):
+        if abs(nums[i] - nums[i - 1]) == 1:
+            curr_length += 1
+            max_length = max(max_length, curr_length)
+        else:
+            curr_length = 1
+
+    return max_length
+```
+"""
+    tests = """
+from solution import longest_subsequence
+
+def test_longest_subsequence_all_one_diff():
+    assert longest_subsequence([1, 2, 3, 4, 5]) == 5
+
+def test_longest_subsequence_alternating_diff():
+    assert longest_subsequence([1, 2, 1, 2, 1]) == 5
+
+def test_longest_subsequence_with_breaks():
+    assert longest_subsequence([10, 11, 7, 8, 9, 10]) == 4
+
+def test_longest_subsequence_single_element():
+    assert longest_subsequence([1]) == 1
+
+def test_longest_subsequence_no_valid_subsequence():
+    assert longest_subsequence([15, 30, 45, 60]) == 1
+
+def test_longest_subsequence_empty_list():
+    assert longest_subsequence([]) == 0
+"""
+    reward = RewardCodeFn(RewardConfig)
+    input = RewardInput(problem="", problem_type=RewardType.CODE, model_response=model_response, metadata=tests, data_source="kodcode")
+    output = reward(input)
+    assert output.is_correct == True
+
+
 if __name__ == "__main__":
     test_reward_code_contests()
-    test_reward_leetcode()
+    # test_reward_leetcode()
     test_reward_taco()
     test_reward_codeforces()
     test_reward_livecodebench()
+    test_reward_kodcode()
     print("All tests passed")

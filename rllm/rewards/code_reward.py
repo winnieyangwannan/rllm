@@ -15,7 +15,8 @@ from rllm.rewards.code_utils.livecodebench import run_test as lcb_run_test
 from rllm.rewards.code_utils.codeforces import run_test as codeforces_run_test
 #from rllm.rewards.code_utils.swebench import swebench_check_correctness
 from rllm.rewards.code_utils.taco import run_test as taco_run_test
-from rllm.rewards.code_utils.firejail_exec import code_exec_firejail as code_exec
+from rllm.rewards.code_utils.firejail_exec import code_exec_firejail as lc_code_exec
+from rllm.rewards.code_utils.kodcode import code_exec as kod_code_exec
 from rllm.rewards.reward_types import RewardConfig, RewardFn, RewardInput, RewardOutput, RewardType
 
 
@@ -174,10 +175,28 @@ def leetcode_check_correctness(tests: List[Dict[str, str]], code: str) -> bool:
      Returns:
           bool: True if all tests pass and result list exists, False otherwise
      """
-     succ, output = code_exec(code + '\n' + tests["functional"])
+     succ, output = lc_code_exec(code + '\n' + tests["functional"])
      if not succ:
          print(f"Error in code execution: {output}")
      return succ
+
+def kodcode_check_correctness(test: str, code: str) -> bool:
+    """
+    Check if generated code passes all Kodcode test cases.
+    
+    Args:
+        test: String of the test file content
+        code: Generated code to test
+        timeout: Maximum execution time in seconds before killing process
+        runtime_debug: Whether to print debug info during test execution
+    
+    Returns:
+        bool: True if all tests pass and result list exists, False otherwise
+    """
+    succ, output = kod_code_exec(code, test)
+    if not succ:
+        print(f"Error in code execution: {output}")
+    return succ
 
 class RewardCodeFn(RewardFn):
     """
@@ -193,13 +212,7 @@ class RewardCodeFn(RewardFn):
             "Invalid problem type: expected 'CODE', but got '{}'".format(input.problem_type)
 
         model_response= input.model_response
-        metadata= input.metadata
-        if isinstance(metadata, str):
-            try:
-                metadata = json.loads(metadata)
-            except json.JSONDecodeError as e:
-                print(f"Unable to parse metadata: {e}")
-                return RewardOutput(reward=self.config.format_error_reward, is_correct=False)
+        metadata = input.metadata
         
         dataset_name = input.data_source
         tests = metadata
@@ -224,6 +237,8 @@ class RewardCodeFn(RewardFn):
             is_correct = leetcode_check_correctness(tests, model_code)
         elif dataset_name == "livecodebench":
             is_correct = lcb_check_correctness_v2(tests, model_code, debug=False)
+        elif dataset_name == "kodcode":
+            is_correct = kodcode_check_correctness(tests, model_code)
         else:
             is_correct = check_correctness(tests, model_code, test_fn)
         

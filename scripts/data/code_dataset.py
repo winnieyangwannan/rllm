@@ -104,7 +104,7 @@ if __name__ == '__main__':
 
 
     #Initialize datasets
-    train_datasets = [TrainDataset.Code.TACO, TrainDataset.Code.LIVECODEBENCH, TrainDataset.Code.LEETCODE]
+    train_datasets = [TrainDataset.Code.TACO, TrainDataset.Code.LIVECODEBENCH, TrainDataset.Code.LEETCODE, TrainDataset.Code.KODCODE]
     test_datasets = [TestDataset.Code.LIVECODEBENCH]
     
     test_datasets_data = [load_dataset(d) for d in test_datasets]
