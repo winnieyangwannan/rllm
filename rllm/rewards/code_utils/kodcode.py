@@ -4,7 +4,6 @@ import subprocess
 import resource
 import faulthandler
 from tempfile import TemporaryDirectory
-from .utils import check_code_safety
 
 CLI_ARG_SIZE_LIMIT = 1024 * 3
 
