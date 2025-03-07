@@ -7,9 +7,9 @@ python3 -m verl.trainer.main_ppo_agent \
     algorithm.adv_estimator=grpo \
     data.train_files=$HOME/data/rllm-frozenlake/train.parquet \
     data.val_files=$HOME/data/rllm-frozenlake/test.parquet \
-    data.train_batch_size=32 \
+    data.train_batch_size=64 \
     data.max_prompt_length=23000 \
-    data.max_response_length=32 \
+    data.max_response_length=128 \
     actor_rollout_ref.model.path=Qwen/Qwen2.5-3B-Instruct \
     actor_rollout_ref.model.use_remove_padding=True \
     actor_rollout_ref.model.enable_gradient_checkpointing=True \
@@ -25,6 +25,7 @@ python3 -m verl.trainer.main_ppo_agent \
     actor_rollout_ref.rollout.async_engine=False \
     actor_rollout_ref.rollout.n=4 \
     actor_rollout_ref.rollout.n_val=1 \
+    actor_rollout_ref.rollout.entropy_coeff=0.0015 \
     actor_rollout_ref.ref.fsdp_config.param_offload=True \
     actor_rollout_ref.ref.log_prob_micro_batch_size_per_gpu=1 \
     actor_rollout_ref.rollout.log_prob_micro_batch_size_per_gpu=1 \

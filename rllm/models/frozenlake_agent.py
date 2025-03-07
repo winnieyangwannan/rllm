@@ -39,7 +39,36 @@ Fall into hole: 0
 Reach goal: +1.0
 
 You will be provided the current observation, please decide on the next Action.
-You should only output the NEXT ACTION at each interation.
+You should show your thought process and then input the final action in ``` ```.
+You should only output the NEXT ACTION at each interation in the ``` ```.
+
+Below are examples for an interaction:
+Example1:
+User: Current Observation:
+P   _   _   _   _
+O   _   _   O   _
+O   _   O   _   _
+O   _   _   G   _
+_   _   _   _   _
+
+Assistant: P is now at the top right corner. It should reach G at the bottom right corner. I should move it closer to it. I can move right or down but there is a hole in down position and I can not move diagonally. There is no hole in my next movement right so I can move to right. Action: ```Right```
+
+Example2:
+User: Current Observation:
+_   _   _   _
+_   _   _   O
+_   O   _   P
+O   _   _   G
+
+Assistant: P is now at the near G. It should reach G to its bottom. I should move to be on it. There is no hole in my next movement so I can move to down. Action: ```Down```
+
+Example3:
+User: Current Observation:
+O   _   _
+P   O   _
+O   _   _
+
+Assistant: P is now surrounded by holes. There is nothing I can do in this case. I should kill myself to save time by going into any of the holes. Action: ```Right```
 """
 
     def __init__(self):
@@ -52,11 +81,15 @@ You should only output the NEXT ACTION at each interation.
             {"role": "system", "content": self.SYSTEM_PROMPT},
             {"role": "user", "content": "Current Observation: \n" + obs},
         ]
-
+        last_obs = obs
         for step_idx, obs in enumerate(obs_act_seq[1:]):
             # 0 is assistant, 1 is user
             if step_idx % 2 == 1:
-                messages.append({"role": "user", "content": "Current Observation: \n" + obs})
+                user_msg = "Current Observation: \n" + obs
+                if last_obs == obs:
+                    user_msg += "Your last response was ineffective. Your position didn't change at all. You may need to recheck your thinking process, action outputted, or the format of response."
+                last_obs = obs
+                messages.append({"role": "user", "content": user_msg})
             else:
                 assert obs != ""
                 messages.append({"role": "assistant", "content": obs})
@@ -74,27 +107,44 @@ You should only output the NEXT ACTION at each interation.
         - 3: Right
         - 4: Up
         """
-        DIRECTION_MAP = {"Left": 1, "Down": 2, "Right": 3, "Up": 4}
 
-        # Remove <|im_end|> if it exists
-        response = response.replace("<|im_end|>", "").strip()
-        response = response.lower()
-        # TODO: originally, we parse either number (key of direction_map) or direction (value of direction_map).
-        # here we remove numbers and preserve directions only, but regex has not been removed. please remove them later.
-        pattern = r'^\s*(([1-4])\s*\((up|down|left|right)\)|(up|down|left|right)|([1-4]))\s*$'
-        match = re.fullmatch(pattern, response.strip(), flags=re.IGNORECASE | re.X)
+        DIRECTION_MAP = {"left": 1, "down": 2, "right": 3, "up": 4}
+    
+        # Extract the last content enclosed in triple backticks
+        matches = re.findall(r'```(.*?)```', response, re.DOTALL)
+        if not matches:
+            return str(FrozenLakeEnv.INVALID_ACTION)  # No valid action found
         
-        if not match or not response:
-            return str(FrozenLakeEnv.INVALID_ACTION)
+        extracted_text = matches[-1].strip().lower()  # Take the last match and normalize case
+
+        # Try to match it to a valid action
+        if extracted_text in DIRECTION_MAP:
+            return str(DIRECTION_MAP[extracted_text])  # Return mapped number
+        elif extracted_text.isdigit() and int(extracted_text) in DIRECTION_MAP.values():
+            return str(int(extracted_text))  # If it's a valid number, return as is
+
+        return str(FrozenLakeEnv.INVALID_ACTION)  # If nothing matches, return invalid action
+
+        # DIRECTION_MAP = {"Left": 1, "Down": 2, "Right": 3, "Up": 4}
+        # # Remove <|im_end|> if it exists
+        # response = response.replace("<|im_end|>", "").strip()
+        # response = response.lower()
+        # # TODO: originally, we parse either number (key of direction_map) or direction (value of direction_map).
+        # # here we remove numbers and preserve directions only, but regex has not been removed. please remove them later.
+        # pattern = r'^\s*(([1-4])\s*\((up|down|left|right)\)|(up|down|left|right)|([1-4]))\s*$'
+        # match = re.fullmatch(pattern, response.strip(), flags=re.IGNORECASE | re.X)
         
-        if match.group(2):   
-            return str(int(match.group(2)))
-        elif match.group(4): 
-            return str(DIRECTION_MAP[match.group(4).capitalize()])
-        elif match.group(5): 
-            return str(int(match.group(5)))
+        # if not match or not response:
+        #     return str(FrozenLakeEnv.INVALID_ACTION)
         
-        return str(FrozenLakeEnv.INVALID_ACTION)
+        # if match.group(2):   
+        #     return str(int(match.group(2)))
+        # elif match.group(4): 
+        #     return str(DIRECTION_MAP[match.group(4).capitalize()])
+        # elif match.group(5): 
+        #     return str(int(match.group(5)))
+        
+        # return str(FrozenLakeEnv.INVALID_ACTION)
     
 
     def update(self, action, observation, next_observation, reward, terminated, truncated, info):

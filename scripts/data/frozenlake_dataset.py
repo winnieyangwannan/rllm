@@ -25,8 +25,8 @@ def main():
     test_seeds = np.random.randint(0, 100000, size=args.test_size)
     train_sizes = np.random.randint(3, 16, size=args.train_size)
     test_sizes = np.random.randint(3, 16, size=args.test_size)
-    train_ps = np.random.uniform(0, 1, size=args.train_size)
-    test_ps = np.random.uniform(0, 1, size=args.test_size)
+    train_ps = np.random.uniform(0, 0.01, size=args.train_size)
+    test_ps = np.random.uniform(0, 0.01, size=args.test_size)
 
     def make_map_fn(split):
         def process_fn(seed, size, p, idx):
