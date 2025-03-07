@@ -122,7 +122,7 @@ def postprocess_lcb_sample(sample):
     }
     return sample
 
-#https://huggingface.co/datasets/PrimeIntellect/verifiable-coding-problems
+# https://huggingface.co/datasets/PrimeIntellect/verifiable-coding-problems
 def primeintellect_check_correctess(tests, code):
     if isinstance(tests, str):
         try:
@@ -131,14 +131,18 @@ def primeintellect_check_correctess(tests, code):
         except (ValueError, SyntaxError) as e:
             print(f"run_tests app/taco, Error parsing string: {e}")
             return False
-    tests = tests[0]
-    input = tests['input']
-    output = tests['output']
-    succ, exec_output = code_exec(code, input)
-    if exec_output.strip() == output.strip() and succ:
-        return True
-    return False
 
+    assert len(tests) >= 1, "PrimeIntellect needs at least one test case"
+    inputs = [t['input'] for t in tests]
+    outputs = [t['output'] for t in tests]
+    fn_name = tests[0].get('fn_name', None)
+    tests = {
+        'inputs': inputs,
+        'outputs': outputs,
+    }
+    if fn_name:
+        tests['fn_name'] = fn_name
+    return check_correctness(tests, code, taco_run_test)
 
 def lcb_check_correctness_v2(sample, generation, timeout=6, debug=False):
     """Check correctness of code generation with a global timeout.
