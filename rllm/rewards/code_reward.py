@@ -131,13 +131,62 @@ def verify_check_correctess(tests, code):
         except (ValueError, SyntaxError) as e:
             print(f"run_tests app/taco, Error parsing string: {e}")
             return False
-    tests = tests[0]
-    input =tests['input']
-    output = tests['output']
-    succ, exec_output = code_exec(code, input)
-    if exec_output.strip() == output.strip() and succ:
-        return True
-    return False
+    
+    def synthesize_std_code(raw_code):
+        normal_import_lines = "import sys\nimport time\nimport itertools\nfrom itertools import accumulate, product, permutations, combinations\nimport collections\nfrom collections import Counter, OrderedDict, deque, defaultdict, ChainMap\nfrom functools import lru_cache\nimport math\nfrom math import sqrt, sin, cos, tan, ceil, fabs, floor, gcd, exp, log, log2\nimport fractions\nfrom typing import List, Tuple\nimport numpy as np\nimport random\nimport heapq\nfrom heapq import *\n"
+        filtered_lines = [line for line in raw_code.splitlines() if "threading.stack_size" not in line]
+        filtered_lines = [line for line in filtered_lines if "#! /usr/bin/env python" not in line]
+        raw_code = '\n'.join(filtered_lines)
+        sol = "" 
+        tmp_test = raw_code.split("\n")
+        # define the code line type, 1 for import lines, 2 for import * lines with indent, 0 for normal codes
+        code_types = [] 
+
+        for x in tmp_test:
+            if 'import *' in x:
+                code_types.append(2)
+            elif x.startswith("from ") or x.startswith("import "):
+                code_types.append(1) 
+            else:
+                code_types.append(0)
+        
+        started = False
+        special_import_lines = [i.lstrip('\t') for idx, i in enumerate(tmp_test) if code_types[idx]==2]
+        special_import_lines = '\n'.join(special_import_lines)
+
+        for idx, i in enumerate(tmp_test):
+            code_type = code_types[idx]
+            if code_type == 0 and not started:
+                sol += normal_import_lines
+                sol += special_import_lines
+                sol += "\nstdin = sys.stdin\nstdout = sys.stdout\n"
+                sol += "def code():\n"
+                sol += f"\t{i}\n"
+                started = True
+            else:
+                if code_type < 2:
+                    if started:
+                        sol += '\t'
+                    sol += f"{i}\n"
+
+        sol += "code()\n"
+        return sol
+
+    def remove_trailing_spaces(output):
+        lines = output.split('\n')
+        cleaned_lines = [line.rstrip() for line in lines]
+        cleaned_output = '\n'.join(cleaned_lines)
+        return cleaned_output
+    code = synthesize_std_code(code)
+    for test in tests:
+        input = test['input']
+        output = test['output']
+        succ, exec_output = code_exec(code, input)
+        clean_output = remove_trailing_spaces(output)
+        clean_exec_output = remove_trailing_spaces(exec_output)
+        if not ( succ and  ( exec_output.strip() == output.strip() or clean_exec_output.strip() == clean_output.strip() )):
+            return False 
+    return True
     
 
 def lcb_check_correctness_v2(sample, generation, timeout=6, debug=False):
