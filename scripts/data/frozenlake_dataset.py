@@ -23,8 +23,8 @@ def main():
     np.random.seed(42)
     train_seeds = np.random.randint(0, 100000, size=args.train_size)
     test_seeds = np.random.randint(0, 100000, size=args.test_size)
-    train_sizes = np.random.randint(3, 16, size=args.train_size)
-    test_sizes = np.random.randint(3, 16, size=args.test_size)
+    train_sizes = np.random.randint(2, 10, size=args.train_size)
+    test_sizes = np.random.randint(2, 10, size=args.test_size)
     train_ps = np.random.uniform(0, 0.01, size=args.train_size)
     test_ps = np.random.uniform(0, 0.01, size=args.test_size)
 

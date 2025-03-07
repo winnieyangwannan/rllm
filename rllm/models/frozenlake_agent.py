@@ -64,11 +64,32 @@ Assistant: P is now at the near G. It should reach G to its bottom. I should mov
 
 Example3:
 User: Current Observation:
+_   _   _   O   _
+O   _   P   O   _
+O   _   O   _   _
+O   _   _   G   _
+_   _   _   _   _
+
+Assistant: G is at the bottom right relative to P. I want to move closer so I should move right or down. But there is a hole at each position and I do not want to fall into holes. Up and left are both valid but left brings me closer. Action: ```Left```
+
+Example4:
+User: Current Observation:
+_   _   _   _
+_   _   _   O
+_   O   _   O
+O   G   P   _
+
+Assistant: P is now at G so the game has finished, so there is nothing to do. But you are still asking, game has not finished and I should never output non-valid action. I need to recheck my understanding. So P is not actually on G yet, it needs reach G to its left. Action: ```Left```
+
+Example5:
+User: Current Observation:
 O   _   _
 P   O   _
 O   _   _
 
-Assistant: P is now surrounded by holes. There is nothing I can do in this case. I should kill myself to save time by going into any of the holes. Action: ```Right```
+Assistant: P is now surrounded by holes. There is nothing I can do in this case. I want to put nothing or none as action since I should stay and wait. But that is not valid and I should never output invalid action. I have to put something. I will choose to move Right to try. Action: ```Right```
+
+Now it is your turn, please show your thinking process and put the final action in ``` ```.
 """
 
     def __init__(self):
@@ -162,17 +183,22 @@ Assistant: P is now surrounded by holes. There is nothing I can do in this case.
         if not trajectory:
             return 0
 
+        if trajectory[0]["trajectory_reward"] == 1:
+            return 1
+
         for traj_step in trajectory:
             if not self.validate_step(traj_step):
                 return -1
             
-        return trajectory[0]["trajectory_reward"]
+        return 0
 
     def validate_step(self, trajectory_step):
         """
         Validates if the trajectory_step(dict) is valid or malformated.
         """
         response = trajectory_step["response"]
+        if self._post_get_action(response) == str(FrozenLakeEnv.INVALID_ACTION):
+            return False
         return True
 
 

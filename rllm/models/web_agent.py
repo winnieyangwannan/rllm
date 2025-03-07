@@ -296,12 +296,15 @@ Action: ```send_msg_to_user("The price for a 15\\" laptop is 1499 USD.")```
         """
         if not trajectory:
             return 0
+        
+        if trajectory[0]["trajectory_reward"] == 1:
+            return 1
 
         for traj_step in trajectory:
             if not self.validate_step(traj_step):
                 return -1
             
-        return trajectory[0]["trajectory_reward"]
+        return 0
 
     def validate_step(self, trajectory_step):
         """
