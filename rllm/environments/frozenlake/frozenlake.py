@@ -237,9 +237,11 @@ class FrozenLakeEnv(GymFrozenLakeEnv):
         - Map custom action to gymnasium FrozenLakeEnv action and take the step
         - Check if the action is effective (whether player moves in the env).
         """
+        if self.success():
+            return self.render(), 0, True, {"action_is_effective": False}
+        
         if not action:
             action = self.INVALID_ACTION
-        assert action.isdigit(), f"Cannot convert {action} to int"
         action = int(action)
         assert isinstance(action, int), "Action must be an integer"
         assert not self.success(), "Agent has already reached the goal or hole"

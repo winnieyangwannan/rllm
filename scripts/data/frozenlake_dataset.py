@@ -9,8 +9,8 @@ def main():
     parser = argparse.ArgumentParser(description="Generate trajectories using specified environment and policy.")
     parser.add_argument('--local_dir', default='~/data/rllm-frozenlake')
     parser.add_argument('--hdfs_dir', default=None)
-    parser.add_argument("--train_size", type=int, default=300, help="Number of trajectories to generate (default: 3000).")
-    parser.add_argument("--test_size", type=int, default=10, help="Number of trajectories to generate (default: 100).")
+    parser.add_argument("--train_size", type=int, default=3000, help="Number of trajectories to generate (default: 3000).")
+    parser.add_argument("--test_size", type=int, default=100, help="Number of trajectories to generate (default: 100).")
 
     args = parser.parse_args()
     
@@ -23,8 +23,8 @@ def main():
     np.random.seed(42)
     train_seeds = np.random.randint(0, 100000, size=args.train_size)
     test_seeds = np.random.randint(0, 100000, size=args.test_size)
-    train_sizes = np.random.randint(5, 25, size=args.train_size)
-    test_sizes = np.random.randint(5, 25, size=args.test_size)
+    train_sizes = np.random.randint(3, 16, size=args.train_size)
+    test_sizes = np.random.randint(3, 16, size=args.test_size)
     train_ps = np.random.uniform(0, 1, size=args.train_size)
     test_ps = np.random.uniform(0, 1, size=args.test_size)
 

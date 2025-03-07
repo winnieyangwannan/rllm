@@ -31,14 +31,15 @@ Rules:
 1. Avoid falling into holes (O).
 2. Frozen tiles are slippery, you may move perpendicular to your intended direction.
 
-Valid Action:
+Valid Action (separated by | ):
 Up | Down | Left | Right
 
 Rewards:
 Fall into hole: 0
 Reach goal: +1.0
 
-You will be provided the current observation, please decide on the next Action. The next Action MUST be wrapped in ``` ```.
+You will be provided the current observation, please decide on the next Action.
+You should only output the NEXT ACTION at each interation.
 """
 
     def __init__(self):
@@ -74,6 +75,10 @@ You will be provided the current observation, please decide on the next Action. 
         - 4: Up
         """
         DIRECTION_MAP = {"Left": 1, "Down": 2, "Right": 3, "Up": 4}
+
+        # Remove <|im_end|> if it exists
+        response = response.replace("<|im_end|>", "").strip()
+        response = response.lower()
         # TODO: originally, we parse either number (key of direction_map) or direction (value of direction_map).
         # here we remove numbers and preserve directions only, but regex has not been removed. please remove them later.
         pattern = r'^\s*(([1-4])\s*\((up|down|left|right)\)|(up|down|left|right)|([1-4]))\s*$'
