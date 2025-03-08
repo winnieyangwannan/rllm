@@ -5,6 +5,8 @@ import resource
 import faulthandler
 from tempfile import TemporaryDirectory
 
+from rllm.rewards.code_utils.utils import BASE_IMPORTS
+
 CLI_ARG_SIZE_LIMIT = 1024 * 3
 
 _ERROR_MSG_PREFIX = "Failed to execute program: "
@@ -22,6 +24,7 @@ def code_exec(code, test: str = None, timeout=_DEFAULT_TIMEOUT_SECONDS):
     if 'pytest' not in code:
 
         code_to_run = f"""
+{BASE_IMPORTS}
 import pytest
 
 {code}
@@ -44,22 +47,27 @@ if __name__ == "__main__":
             f.write(code_to_run)
             
         command = ["python3", solution_path]
-        result = subprocess.run(
-            command,
-            cwd=tmpdir,
-            stdout=subprocess.PIPE,
-            stderr=subprocess.PIPE,
-            env=env,
-            check=False,
-            preexec_fn=preexec_fn,
-            timeout=timeout
-        )
-
-    stderr = result.stderr.decode().strip()
-    stdout = result.stdout.decode()
-    if result.returncode == 0:
-        return True, stdout
-    return False, _ERROR_MSG_PREFIX + f"STDOUT:\n{stdout}\n\nSTDERR:\n{stderr}"
+        
+        try:
+            result = subprocess.run(
+                command,
+                cwd=tmpdir,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
+                env=env,
+                check=False,
+                preexec_fn=preexec_fn,
+                timeout=timeout
+            )
+            
+            stderr = result.stderr.decode().strip()
+            stdout = result.stdout.decode()
+            if result.returncode == 0:
+                return True, stdout
+            return False, _ERROR_MSG_PREFIX + f"STDOUT:\n{stdout}\n\nSTDERR:\n{stderr}"
+            
+        except subprocess.TimeoutExpired:
+            return False, _ERROR_MSG_PREFIX + f"Execution timed out after {timeout} seconds."
 
 
 def reliability_guard(maximum_memory_bytes=None):
