@@ -105,7 +105,7 @@ class PythonInterpreter:
             if len(execution.logs.stdout) > 0:
                 return execution.logs.stdout[0]
             else:
-                print("Emtpy results:", str(execution))
+                print("Empty results:", str(execution))
                 return "Empty Results"
         return execution.results[0].text
 
