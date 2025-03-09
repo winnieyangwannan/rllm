@@ -360,11 +360,13 @@ def execute_std_code(method, synthesized_code, inputs_list, outputs_list, timeou
             # result = subprocess.run(['python3', temp_program_path], input=inputs, text=True, capture_output=True, timeout=timeout)
             exec_code = 999
         except subprocess.TimeoutExpired:
+            stdout, stderr = "", "TIMEOUT"
             process.kill()
             return_code = process.returncode
             exec_code = -1
         except Exception as e:
             print(e)
+            stdout, stderr = "", f"{e}"
             return_code = process.returncode
             exec_code = -2
 
