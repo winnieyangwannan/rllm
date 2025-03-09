@@ -353,7 +353,7 @@ def execute_std_code(method, synthesized_code, inputs_list, outputs_list, timeou
                                         stdin=temp_input,
                                         stdout=subprocess.PIPE,
                                         stderr=subprocess.PIPE,
-                                        preexec_fn=reliability_guard,
+                                        preexec_fn=os.setsid,
                                         universal_newlines=True,
                                         text=True)
         stdout, stderr = "", ""
@@ -364,6 +364,7 @@ def execute_std_code(method, synthesized_code, inputs_list, outputs_list, timeou
             exec_code = 999
         except subprocess.TimeoutExpired:
             process.kill()
+            os.killpg(os.getpgid(process.pid), signal.SIGKILL)
             stderr = "TIMEOUT"
             return_code = process.returncode
             exec_code = -1
@@ -371,6 +372,7 @@ def execute_std_code(method, synthesized_code, inputs_list, outputs_list, timeou
             print(e)
             stderr = f"{e}"
             process.kill()
+            os.killpg(os.getpgid(process.pid), signal.SIGKILL)
             return_code = process.returncode
             exec_code = -2
 
