@@ -365,14 +365,18 @@ def execute_std_code(method, synthesized_code, inputs_list, outputs_list, timeou
         except subprocess.TimeoutExpired:
             process.kill()
             os.killpg(os.getpgid(process.pid), signal.SIGKILL)
+            # Now wait again to ensure the process is reaped
+            stdout, stderr = process.communicate()
             stderr = "TIMEOUT"
             return_code = process.returncode
             exec_code = -1
         except Exception as e:
             print(e)
-            stderr = f"{e}"
             process.kill()
             os.killpg(os.getpgid(process.pid), signal.SIGKILL)
+            # Now wait again to ensure the process is reaped
+            stdout, stderr = process.communicate()
+            stderr = f"{e}"
             return_code = process.returncode
             exec_code = -2
 
