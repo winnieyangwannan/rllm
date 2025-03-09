@@ -17,6 +17,7 @@ from enum import Enum
 from unittest.mock import patch, mock_open
 from io import StringIO
 import ast 
+import platform
 
 class CODE_TYPE(Enum):
     call_based = 0
@@ -566,7 +567,7 @@ def stripped_string_compare(s1, s2):
     s2 = s2.lstrip().rstrip()
     return s1 == s2
 
-def reliability_guard(maximum_memory_bytes=None):
+def reliability_guard(maximum_memory_bytes=4 * 1024 * 1024 * 1024):
     """
     This disables various destructive functions and prevents the generated code
     from interfering with the test (e.g. fork bomb, killing other processes,
