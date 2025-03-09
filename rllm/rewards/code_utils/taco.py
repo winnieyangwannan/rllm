@@ -9,7 +9,7 @@ from datetime import datetime
 
 import os, sys, json
 import faulthandler
-
+import psutil
 import subprocess
 import tempfile
 import inspect
@@ -34,6 +34,31 @@ class Capturing(list):
         self.extend(self._stringio.getvalue().splitlines())
         del self._stringio    # free up some memory
         sys.stdout = self._stdout
+
+def kill_process(process):
+    try:
+        os.killpg(os.getpgid(process.pid), signal.SIGKILL)
+    except OSError:
+        # Process group might already be gone
+        pass
+    
+    
+    parent = psutil.Process(process.pid)
+    for child in parent.children(recursive=True):  # or parent.children() for recursive=False
+        child.kill()
+    parent.kill()
+    
+    # Then use process.kill() as backup
+    for _ in range(3):
+        process.terminate()
+        process.kill()
+    
+    # Finally collect remaining output with a short timeout
+    try:
+        process.communicate(timeout=1)
+    except (subprocess.TimeoutExpired, Exception):
+        # If communicate still hangs, give up on the output
+        pass
 
 # to run the solution files we're using a timing based approach
 import signal
@@ -363,19 +388,13 @@ def execute_std_code(method, synthesized_code, inputs_list, outputs_list, timeou
             # result = subprocess.run(['python3', temp_program_path], input=inputs, text=True, capture_output=True, timeout=timeout)
             exec_code = 999
         except subprocess.TimeoutExpired:
-            process.kill()
-            os.killpg(os.getpgid(process.pid), signal.SIGKILL)
-            # Now wait again to ensure the process is reaped
-            stdout, stderr = process.communicate()
+            kill_process(process)
             stderr = "TIMEOUT"
             return_code = process.returncode
             exec_code = -1
         except Exception as e:
             print(e)
-            process.kill()
-            os.killpg(os.getpgid(process.pid), signal.SIGKILL)
-            # Now wait again to ensure the process is reaped
-            stdout, stderr = process.communicate()
+            kill_process(process)
             stderr = f"{e}"
             return_code = process.returncode
             exec_code = -2
