@@ -349,7 +349,7 @@ def execute_std_code(method, synthesized_code, inputs_list, outputs_list, timeou
                 temp_input.flush()
                 temp_input.seek(0)
                 
-                process = subprocess.Popen(['python3', temp_program_path], 
+                process = subprocess.Popen(['bash', '-c', 'ulimit -v 4194304; python3 ' + temp_program_path], 
                                         stdin=temp_input,
                                         stdout=subprocess.PIPE,
                                         stderr=subprocess.PIPE,
