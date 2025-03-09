@@ -354,6 +354,7 @@ def execute_std_code(method, synthesized_code, inputs_list, outputs_list, timeou
                                         stderr=subprocess.PIPE,
                                         universal_newlines=True,
                                         text=True)
+        stdout, stderr = "", ""
         try:
             stdout, stderr = process.communicate(timeout=timeout)
             return_code = process.returncode
@@ -361,10 +362,13 @@ def execute_std_code(method, synthesized_code, inputs_list, outputs_list, timeou
             exec_code = 999
         except subprocess.TimeoutExpired:
             process.kill()
+            stderr = "TIMEOUT"
             return_code = process.returncode
             exec_code = -1
         except Exception as e:
             print(e)
+            stderr = f"{e}"
+            process.kill()
             return_code = process.returncode
             exec_code = -2
 
