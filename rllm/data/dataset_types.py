@@ -17,6 +17,7 @@ class TrainDataset:
         GSM8k = 'GSM8K'
         STILL = "STILL"
         DEEPSCALER = "DEEPSCALER"
+        DEEPSCALER_7B = "DEEPSCALER_7B"
     
     class Code(enum.Enum):
         TACO = "TACO"
