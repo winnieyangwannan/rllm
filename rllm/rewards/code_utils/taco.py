@@ -353,6 +353,7 @@ def execute_std_code(method, synthesized_code, inputs_list, outputs_list, timeou
                                         stdin=temp_input,
                                         stdout=subprocess.PIPE,
                                         stderr=subprocess.PIPE,
+                                        preexec_fn=reliability_guard,
                                         universal_newlines=True,
                                         text=True)
         stdout, stderr = "", ""
