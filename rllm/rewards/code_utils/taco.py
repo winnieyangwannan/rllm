@@ -37,40 +37,69 @@ class Capturing(list):
         sys.stdout = self._stdout
 
 def kill_process(process):
+    """
+    Aggressively kill a process and all its children to prevent zombies.
+    """
+    # Get the process ID before we attempt to kill it
+    pid = process.pid
+    
+    # First attempt - kill the process group
     try:
-        os.killpg(os.getpgid(process.pid), signal.SIGKILL)
+        pgid = os.getpgid(pid)
+        os.killpg(pgid, signal.SIGKILL)
     except OSError:
         # Process group might already be gone
         pass
     
+    # Second attempt - use psutil to kill all children recursively
     try:
-        parent = psutil.Process(process.pid)
-        for child in parent.children(recursive=True):  # or parent.children() for recursive=False
-            child.kill()
-        parent.kill()
-    except:
+        parent = psutil.Process(pid)
+        children = parent.children(recursive=True)
+        for child in children:
+            try:
+                child.kill()
+            except psutil.NoSuchProcess:
+                pass
+        try:
+            parent.kill()
+        except psutil.NoSuchProcess:
+            pass
+    except (psutil.NoSuchProcess, psutil.AccessDenied, Exception):
         pass
     
-    # Then use process.kill() as backup
+    # Third attempt - direct signals to process
     try:
-        for _ in range(3):
+        os.kill(pid, signal.SIGKILL)
+    except OSError:
+        pass
+    
+    # Fourth attempt - process methods
+    try:
+        if process.poll() is None:
             process.terminate()
+        if process.poll() is None:
             process.kill()
     except:
         pass
     
-    # Finally collect remaining output with a short timeout
+    # Clean up zombie by waiting for the process to be fully dead
     try:
-        process.communicate(timeout=1)
+        process.wait(timeout=1)
     except (subprocess.TimeoutExpired, Exception):
-        # If communicate still hangs, give up on the output
+        pass
+        
+    # Verify if process is truly dead, and if not, try one more time
+    try:
+        if psutil.pid_exists(pid):
+            os.kill(pid, signal.SIGKILL)
+            time.sleep(0.1)
+    except:
         pass
 
+    # Final verification - log if we still can't kill it
     try:
-        while process.poll() is None:
-            os.kill(process.pid, signal.SIGKILL)
-            time.sleep(1)
-            print("Process is still running?")
+        if psutil.pid_exists(pid) and psutil.Process(pid).status() != psutil.STATUS_ZOMBIE:
+            print(f"Warning: Process {pid} could not be terminated and may be a zombie")
     except:
         pass
 
