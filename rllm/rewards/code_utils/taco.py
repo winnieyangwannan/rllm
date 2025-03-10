@@ -387,12 +387,14 @@ def execute_std_code(method, synthesized_code, inputs_list, outputs_list, timeou
                 temp_input.write(inputs)
                 temp_input.flush()
                 temp_input.seek(0)
+                temp_file_name = temp_input.name
                 
                 process = subprocess.Popen(['bash', '-c', 'ulimit -v 4194304; python3 ' + temp_program_path], 
                                         stdin=temp_input,
                                         stdout=subprocess.PIPE,
                                         stderr=subprocess.PIPE,
                                         preexec_fn=os.setsid,
+                                        timeout=timeout,
                                         universal_newlines=True,
                                         text=True)
         stdout, stderr = "", ""
@@ -402,13 +404,13 @@ def execute_std_code(method, synthesized_code, inputs_list, outputs_list, timeou
             # result = subprocess.run(['python3', temp_program_path], input=inputs, text=True, capture_output=True, timeout=timeout)
             exec_code = 999
         except subprocess.TimeoutExpired as e:
-            print(e, temp_input.name)
+            print(e, temp_file_name)
             kill_process(process)
             stderr = "TIMEOUT"
             return_code = process.returncode
             exec_code = -1
         except Exception as e:
-            print(e, temp_input.name)
+            print(e, temp_file_name)
             kill_process(process)
             stderr = f"{e}"
             return_code = process.returncode
