@@ -180,7 +180,7 @@ def leetcode_check_correctness(tests: List[Dict[str, str]], code: str) -> bool:
          print(f"Error in code execution: {output}")
      return succ
 
-def kodcode_check_correctness(test: str, code: str) -> bool:
+def kodcode_check_correctness(test: str, code: str, timeout_per_test: int = 5) -> bool:
     """
     Check if generated code passes all Kodcode test cases.
     
@@ -193,7 +193,10 @@ def kodcode_check_correctness(test: str, code: str) -> bool:
     Returns:
         bool: True if all tests pass and result list exists, False otherwise
     """
-    succ, output = kod_code_exec(code, test)
+    # Count the number of test functions in the test file
+    num_tests = test.count('def test')
+    
+    succ, output = kod_code_exec(code, test, timeout_per_test * num_tests)
     if not succ:
         print(f"Error in code execution: {output}")
     return succ

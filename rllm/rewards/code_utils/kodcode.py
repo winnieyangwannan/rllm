@@ -4,6 +4,7 @@ import subprocess
 import resource
 import faulthandler
 from tempfile import TemporaryDirectory
+import platform
 
 from rllm.rewards.code_utils.utils import BASE_IMPORTS
 
@@ -15,7 +16,6 @@ _DEFAULT_TIMEOUT_SECONDS = 30
 
 def code_exec(code, test: str = None, timeout=_DEFAULT_TIMEOUT_SECONDS):
     env = os.environ.copy()
-    env["OPENBLAS_NUM_THREADS"] = "4"
     
     # Create a preexec_fn function to set resource limits
     def preexec_fn():
@@ -32,7 +32,7 @@ import pytest
 {test}
 
 if __name__ == "__main__":
-    pytest.main()
+    pytest.main([__file__])
 """
     else:
         code_to_run = code
@@ -68,6 +68,8 @@ if __name__ == "__main__":
             
         except subprocess.TimeoutExpired:
             return False, _ERROR_MSG_PREFIX + f"Execution timed out after {timeout} seconds."
+        except Exception as e:
+            return False, _ERROR_MSG_PREFIX + f"An Exception occurred in the code: {str(e)}"
 
 
 def reliability_guard(maximum_memory_bytes=None):
