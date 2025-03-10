@@ -22,7 +22,7 @@ class FrozenLakeAgent(BaseAgent):
     SYSTEM_PROMPT = """You are walking on a frozen lake.
 
 FrozenLake Quick Guide
-Goal: Reach the goal (G).
+Goal: Reach the goal (G). Player (P) and Goal (G) must overlap.
 
 Symbols:
 _ Frozen | O Hole | G Goal | P Player
@@ -41,6 +41,7 @@ Reach goal: +1.0
 You will be provided the current observation, please decide on the next Action.
 You should show your thought process and then input the final action in ``` ```.
 You should only output the NEXT ACTION at each interation in the ``` ```.
+You should plan ahead and try to achieve it in minimum number of steps.
 
 Below are examples for an interaction:
 Example1:
@@ -50,6 +51,7 @@ O   _   _   O   _
 O   _   O   _   _
 O   _   _   G   _
 _   _   _   _   _
+You have not achieved the goal, P has not reached G yet. Please give the next action.
 
 Assistant: P is now at the top right corner. It should reach G at the bottom right corner. I should move it closer to it. I can move right or down but there is a hole in down position and I can not move diagonally. There is no hole in my next movement right so I can move to right. Action: ```Right```
 
@@ -59,6 +61,7 @@ _   _   _   _
 _   _   _   O
 _   O   _   P
 O   _   _   G
+You have not achieved the goal, P has not reached G yet. Please give the next action.
 
 Assistant: P is now at the near G. It should reach G to its bottom. I should move to be on it. There is no hole in my next movement so I can move to down. Action: ```Down```
 
@@ -69,6 +72,7 @@ O   _   P   O   _
 O   _   O   _   _
 O   _   _   G   _
 _   _   _   _   _
+You have not achieved the goal, P has not reached G yet. Please give the next action.
 
 Assistant: G is at the bottom right relative to P. I want to move closer so I should move right or down. But there is a hole at each position and I do not want to fall into holes. Up and left are both valid but left brings me closer. Action: ```Left```
 
@@ -78,18 +82,22 @@ _   _   _   _
 _   _   _   O
 _   O   _   O
 O   G   P   _
+You have not achieved the goal, P has not reached G yet. Please give the next action.
 
-Assistant: P is now at G so the game has finished, so there is nothing to do. But you are still asking, game has not finished and I should never output non-valid action. I need to recheck my understanding. So P is not actually on G yet, it needs reach G to its left. Action: ```Left```
+Assistant: P is now near G. But game has not finished. P is not at G and I should never output invalid action. I need to recheck my understanding. P is not actually on G yet because they are not overlapping, it needs reach G to its left. Action: ```Left```
 
 Example5:
 User: Current Observation:
-O   _   _
-P   O   _
-O   _   _
+_   _   _   O   _
+O   _   P   _   _
+O   _   O   O   O
+O   _   O   G   _
+O   _   _   _   _
+You have not achieved the goal, P has not reached G yet. Please give the next action.
 
-Assistant: P is now surrounded by holes. There is nothing I can do in this case. I want to put nothing or none as action since I should stay and wait. But that is not valid and I should never output invalid action. I have to put something. I will choose to move Right to try. Action: ```Right```
+Assistant: G is at the bottom right corner of P. I can move left, right, or up. Move right will initially bring me closer but I can't reach G that way. Move up and left means I can still reach G. Move up will result in 9 steps in total while left is 7 steps. I need to move left. Action: ```Left```
 
-Now it is your turn, please show your thinking process and put the final action in ``` ```.
+Now it is your turn, please show your thinking process and put the final action in ``` ```. In every turn, the final action MUST be one of Up, Down, Left, Right.
 """
 
     def __init__(self):
@@ -100,15 +108,15 @@ Now it is your turn, please show your thinking process and put the final action 
 
         messages = [
             {"role": "system", "content": self.SYSTEM_PROMPT},
-            {"role": "user", "content": "Current Observation: \n" + obs},
+            {"role": "user", "content": "Current Observation: \n" + obs + "\n" + "You have not achieved the goal, P has not reached G yet. Please give the next action."},
         ]
         last_obs = obs
         for step_idx, obs in enumerate(obs_act_seq[1:]):
             # 0 is assistant, 1 is user
             if step_idx % 2 == 1:
-                user_msg = "Current Observation: \n" + obs
+                user_msg = "Current Observation: \n" + obs + "\n " + "You have not achieved the goal, P has not reached G yet. Please give the next action."
                 if last_obs == obs:
-                    user_msg += "Your last response was ineffective. Your position didn't change at all. You may need to recheck your thinking process, action outputted, or the format of response."
+                    user_msg += "Your last response is invalid. Your position didn't change at all. You may need to recheck your thinking process, action outputted, and the format of response."
                 last_obs = obs
                 messages.append({"role": "user", "content": user_msg})
             else:
@@ -208,7 +216,7 @@ Now it is your turn, please show your thinking process and put the final action 
         if with_system_prompt:
             messages += self.SYSTEM_PROMPT
 
-        messages += "Current Observation: \n" + obs
+        messages += "Current Observation: \n" + obs + "\n You have not achieved the goal, P has not reached G yet. Please give the next action."
 
         return messages
 

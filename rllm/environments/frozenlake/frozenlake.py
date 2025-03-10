@@ -22,10 +22,13 @@ def is_valid(board: List[List[str]], max_size: int) -> bool:
     frontier, discovered = [], set()
     # find the start point
     start_r, start_c = np.where(np.array(board) == "S")
-    frontier.append((start_r[0], start_c[0]))
+    frontier.append((start_r[0], start_c[0], 0)) # row, col steps
     # dfs to check if there is a path from start to goal
     while frontier:
-        r, c = frontier.pop()
+        r, c, steps = frontier.pop()
+        if steps > 20:
+            continue
+
         if not (r, c) in discovered:
             discovered.add((r, c))
             directions = [(1, 0), (0, 1), (-1, 0), (0, -1)]
@@ -37,7 +40,7 @@ def is_valid(board: List[List[str]], max_size: int) -> bool:
                 if board[r_new][c_new] == "G":
                     return True
                 if board[r_new][c_new] != "H":
-                    frontier.append((r_new, c_new))
+                    frontier.append((r_new, c_new, steps + 1))
     return False
 
 
@@ -158,7 +161,7 @@ class FrozenLakeEnv(GymFrozenLakeEnv):
     def __init__(self, **kwargs):
 
         desc = kwargs.pop('desc', None)
-        is_slippery = kwargs.pop('is_slippery', True)
+        is_slippery = kwargs.pop('is_slippery', False)
         size = kwargs.pop('size', 8)
         p = kwargs.pop('p', 0.8)
         seed = kwargs.pop('seed', None)

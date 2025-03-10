@@ -260,7 +260,7 @@ class BatchAgent:
 
         return actions, responses
 
-    def interact_environment(self, reset_seed=0, timing_raw={}, return_tokens=False, **kwargs):
+    def interact_environment(self, reset_seed=0, timing_raw={}, mode="Text", **kwargs):
         """
         Execute batched interactions with the environment and collect trajectories.
 
@@ -272,7 +272,7 @@ class BatchAgent:
         Args:
             reset_seed (int, optional): The random seed for resetting the environment. Defaults to 0.
             timing_raw (dict, optional): Dictionary for tracking execution times of different stages. Defaults to {}.
-            return_tokens (bool, optional): If True, returns tokenized responses instead of raw text. Defaults to False.
+            mode (str, optional): Decides the return value. If `Text`,returns structured text. If 'Token', returns tokenized responses. If 'Conversation', returns the conversation format. Defaults to Text.
             **kwargs: Additional arguments that may be passed to environment interactions.
 
         Returns:
@@ -290,7 +290,7 @@ class BatchAgent:
 
             or
 
-            List[Dict]: A list of dictionary where each represents the token version of the trajectory if `return_tokens=True`
+            List[Dict]: A list of dictionary where each represents the token version of the trajectory if `mode=Tokens`
             Each dict of the list has the following keys:
 
             - "prompt_tokens" (torch.tensor, dtype=torch.long): the prompt token obtained with initial observation
@@ -302,7 +302,7 @@ class BatchAgent:
 
         Notes:
             - The function ensures that trajectories remain in order, matching the environments they originated from.
-            - The `return_tokens` flag controls whether the responses are returned as strings or tokenized sequences.
+            - The `mode` flag controls the return format.
             - Timing information, if provided via `timing_raw`, can be used for profiling execution times of different stages.
 
         """
@@ -312,6 +312,7 @@ class BatchAgent:
         assert (
             env_batch_size == self.n_parallel_agents
         ), "Number of parallel environments should match number of parallel agents."
+        assert mode in ["Text", "Token", "Conversation"], f"Return mode {mode} not supported"
 
         trajectories = [[] for _ in range(env_batch_size)]
 
@@ -332,6 +333,9 @@ class BatchAgent:
                 all_response_tokens = [[] for _ in range(env_batch_size)]
                 all_response_masks = [[] for _ in range(env_batch_size)]
 
+                # For returning conversations
+                all_conversations = [[] for _ in range(env_batch_size)]
+
                 # put initial observation into the sequence
                 for i, obs in enumerate(observations):
                     obs_action_sequences[i].append(obs)
@@ -345,6 +349,9 @@ class BatchAgent:
 
                     max_prompt_token_len = max(max_prompt_token_len, len(prompt_tokens))
                     all_prompt_tokens[i] = prompt_tokens
+
+                    # Update conversation version
+                    all_conversations[i].append(initial_msg)
 
 
                 # get model actions and responses
@@ -431,6 +438,10 @@ class BatchAgent:
                         all_response_tokens[i].extend(assistant_msg_tokens + env_msg_tokens)
                         all_response_masks[i].extend(assistant_msg_masks + env_msg_masks)
 
+                        # Update conversation version
+                        all_conversations[i].append(assistant_msg)
+                        all_conversations[i].append(env_msg)
+
                         # Update the trajectory
                         trajectories[i].append(
                             {
@@ -462,25 +473,29 @@ class BatchAgent:
             training_reward = self.agents[i].compute_training_reward(augmented_trajectory)
             trajectory_result.append(add_training_reward(augmented_trajectory, training_reward))
 
-        if not return_tokens:
+        if mode == "Text":
             return trajectory_result
         
-        # Collect into dictionary form
-        token_result = []
-        for i, (prompt_tokens, response_tokens, response_masks) in enumerate(zip(all_prompt_tokens, all_response_tokens, all_response_masks)):
-            trajectory = trajectory_result[i]
-            training_reward = compute_training_score(trajectory)
-            env_reward = compute_environment_score(trajectory)
+        if mode == "Token":
+            # Collect into dictionary form
+            token_result = []
+            for i, (prompt_tokens, response_tokens, response_masks) in enumerate(zip(all_prompt_tokens, all_response_tokens, all_response_masks)):
+                trajectory = trajectory_result[i]
+                training_reward = compute_training_score(trajectory)
+                env_reward = compute_environment_score(trajectory)
 
-            token_result.append({
-                "prompt_tokens": torch.tensor(prompt_tokens, dtype=torch.long),
-                "response_tokens": torch.tensor(response_tokens, dtype=torch.long),
-                "response_masks": torch.tensor(response_masks, dtype=torch.long),
-                "training_reward": training_reward,
-                "environment_reward": env_reward,
-            })
-        return token_result
+                token_result.append({
+                    "prompt_tokens": torch.tensor(prompt_tokens, dtype=torch.long),
+                    "response_tokens": torch.tensor(response_tokens, dtype=torch.long),
+                    "response_masks": torch.tensor(response_masks, dtype=torch.long),
+                    "training_reward": training_reward,
+                    "environment_reward": env_reward,
+                })
+            return token_result
 
+        if mode == "Conversation":
+            return all_conversations
+        
 
     def reset(self):
         """
