@@ -195,6 +195,25 @@ def kodcode_check_correctness(test: str, code: str, timeout_per_test: int = 5) -
     """
     # Count the number of test functions in the test file
     num_tests = test.count('def test')
+
+    # Remove 'if __name__ == "__main__":' block if present
+    code_lines = code.split('\n')
+    filtered_lines = []
+    skip_block = False
+
+    for line in code_lines:
+        if line.strip().startswith('if __name__ == "__main__"') or line.strip().startswith("if __name__ == '__main__'"):
+            skip_block = True
+            continue
+        if skip_block:
+            # Check if we're out of the block (less indentation)
+            if line.strip() and not line.startswith(' ') and not line.startswith('\t'):
+                skip_block = False
+            else:
+                continue
+        filtered_lines.append(line)
+
+    code = '\n'.join(filtered_lines)
     
     succ, output = kod_code_exec(code, test, timeout_per_test * num_tests)
     if not succ:
