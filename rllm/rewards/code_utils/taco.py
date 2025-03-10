@@ -400,19 +400,21 @@ def execute_std_code(method, synthesized_code, inputs_list, outputs_list, timeou
             stdout, stderr = process.communicate(timeout=timeout)
             return_code = process.returncode
             # result = subprocess.run(['python3', temp_program_path], input=inputs, text=True, capture_output=True, timeout=timeout)
-            kill_process(process)
             exec_code = 999
-        except subprocess.TimeoutExpired:
+        except subprocess.TimeoutExpired as e:
+            print(e, temp_input.name)
             kill_process(process)
             stderr = "TIMEOUT"
             return_code = process.returncode
             exec_code = -1
         except Exception as e:
-            print(e)
+            print(e, temp_input.name)
             kill_process(process)
             stderr = f"{e}"
             return_code = process.returncode
             exec_code = -2
+        finally:
+            kill_process(process)
 
         stdout = clean_stdout(stdout)
 
