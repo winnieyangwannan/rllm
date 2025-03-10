@@ -3,6 +3,7 @@
 from rllm.rewards.code_utils.pyext2 import RuntimeModule
 import signal
 import numpy as np
+import time
 
 # used for debugging to time steps
 from datetime import datetime
@@ -42,22 +43,35 @@ def kill_process(process):
         # Process group might already be gone
         pass
     
-    
-    parent = psutil.Process(process.pid)
-    for child in parent.children(recursive=True):  # or parent.children() for recursive=False
-        child.kill()
-    parent.kill()
+    try:
+        parent = psutil.Process(process.pid)
+        for child in parent.children(recursive=True):  # or parent.children() for recursive=False
+            child.kill()
+        parent.kill()
+    except:
+        pass
     
     # Then use process.kill() as backup
-    for _ in range(3):
-        process.terminate()
-        process.kill()
+    try:
+        for _ in range(3):
+            process.terminate()
+            process.kill()
+    except:
+        pass
     
     # Finally collect remaining output with a short timeout
     try:
         process.communicate(timeout=1)
     except (subprocess.TimeoutExpired, Exception):
         # If communicate still hangs, give up on the output
+        pass
+
+    try:
+        while process.poll() is None:
+            os.kill(process.pid, signal.SIGKILL)
+            time.sleep(1)
+            print("Process is still running?")
+    except:
         pass
 
 # to run the solution files we're using a timing based approach
