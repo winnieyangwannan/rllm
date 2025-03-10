@@ -386,6 +386,7 @@ def execute_std_code(method, synthesized_code, inputs_list, outputs_list, timeou
             stdout, stderr = process.communicate(timeout=timeout)
             return_code = process.returncode
             # result = subprocess.run(['python3', temp_program_path], input=inputs, text=True, capture_output=True, timeout=timeout)
+            kill_process(process)
             exec_code = 999
         except subprocess.TimeoutExpired:
             kill_process(process)
