@@ -394,7 +394,6 @@ def execute_std_code(method, synthesized_code, inputs_list, outputs_list, timeou
                                         stdout=subprocess.PIPE,
                                         stderr=subprocess.PIPE,
                                         preexec_fn=os.setsid,
-                                        timeout=timeout,
                                         universal_newlines=True,
                                         text=True)
         stdout, stderr = "", ""
