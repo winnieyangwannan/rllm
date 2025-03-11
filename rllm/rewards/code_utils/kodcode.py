@@ -46,7 +46,7 @@ if __name__ == "__main__":
         with open(solution_path, "w") as f:
             f.write(code_to_run)
             
-        command = ["python3", solution_path]
+        command = ["pytest", "--maxfail=1", solution_path]
         
         try:
             result = subprocess.run(
