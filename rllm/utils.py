@@ -175,7 +175,8 @@ class RAG:
         for score, idx in zip(top_results.values, top_results.indices):
             results.append({
                 'score': score,
-                'text': self.docs[int(idx)]
+                'text': self.docs[int(idx)],
+                'index': int(idx)
             })
         return results
 
