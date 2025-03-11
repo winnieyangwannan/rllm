@@ -2,13 +2,15 @@ from abc import ABC, abstractmethod
 
 class BaseAgent(ABC):
     @abstractmethod
-    def _pre_get_action(self, obs_act_seq):
+    def _pre_get_action(self, trajectory):
         """
-        Prepares the input for model query by formatting the observation-action 
-        trajectory into the ChatML format.
+        Prepares the input for model query by formatting the existing trajectory into the ChatML format.
 
         Args:
-            obs_act_seq (List[Any]): The current trajectory containing observations and actions. The newest observation is at the end.
+            trajectory (List[Dict]): The current trajectory containing observations and actions. The newest observation is at the end.
+                Each step is structures as a dictionary with key 'observation' 'next_observation' 'reward' 'action' 'response'
+                The first element is sentinel and only have 'next_observation'.
+                Newest observation is 'next_observation' of the last step.
 
         Returns:
             List[Dict[str, str]]: A list of dictionaries formatted in ChatML, where each dictionary

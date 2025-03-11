@@ -47,8 +47,8 @@ class WebAgent(BaseAgent):
 
         self.action_history = [] # all are in string
 
-    def _pre_get_action(self, obs_act_seq):
-        obs = self._preproc_obs(obs_act_seq[0]) # initial state
+    def _pre_get_action(self, trajectory):
+        obs = trajectory[0]["next_observation"] # initial state
 
         system_msgs = self.get_system_msg(obs)
 
@@ -56,16 +56,18 @@ class WebAgent(BaseAgent):
             {"role": "system", "content": self._format_msgs_as_str(system_msgs)},
             {"role": "user", "content": self._format_msgs_as_str(self.get_user_msg(obs))},
         ]
-        for step_idx, obs in enumerate(obs_act_seq[1:]):
-            # 0 is assistant, 1 is user
-            if step_idx % 2 == 1:
-                obs = self._preproc_obs(obs)
-                usr_msg = self.get_user_msg(obs, append_action=False)
-                messages.append({"role": "user", "content": self._format_msgs_as_str(usr_msg)})
-            else:
-                assert obs != ""
-                messages.append({"role": "assistant", "content": obs})
+        for i, step in enumerate(trajectory[1:]):
+            response = step["response"]
+            next_observation = step["next_observation"]
 
+            # response
+            messages.append({"role": "assistant", "content": response})
+
+            # next observation
+            obs = self._preproc_obs(next_observation)
+            usr_msg = self.get_user_msg(obs, append_action=False)
+            messages.append({"role": "user", "content": self._format_msgs_as_str(usr_msg)})
+           
         return messages
     
     def get_system_msg(self, obs):

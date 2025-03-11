@@ -103,26 +103,28 @@ Now it is your turn, please show your thinking process and put the final action 
     def __init__(self):
         self.action_history = []
 
-    def _pre_get_action(self, obs_act_seq):
-        obs = obs_act_seq[0]
+    def _pre_get_action(self, trajectory):
+        obs = trajectory[0]["next_observation"]
 
         messages = [
             {"role": "system", "content": self.SYSTEM_PROMPT},
             {"role": "user", "content": "Current Observation: \n" + obs + "\n" + "You have not achieved the goal, P has not reached G yet. Please give the next action."},
         ]
         last_obs = obs
-        for step_idx, obs in enumerate(obs_act_seq[1:]):
-            # 0 is assistant, 1 is user
-            if step_idx % 2 == 1:
-                user_msg = "Current Observation: \n" + obs + "\n " + "You have not achieved the goal, P has not reached G yet. Please give the next action."
-                if last_obs == obs:
-                    user_msg += "Your last response is invalid. Your position didn't change at all. You may need to recheck your thinking process, action outputted, and the format of response."
-                last_obs = obs
-                messages.append({"role": "user", "content": user_msg})
-            else:
-                assert obs != ""
-                messages.append({"role": "assistant", "content": obs})
+        for i, step in enumerate(trajectory[1:]):
+            response = step["response"]
+            next_observation = step["next_observation"]
 
+            # response
+            messages.append({"role": "assistant", "content": response})
+        
+            # next observation
+            user_msg = "Current Observation: \n" + next_observation + "\n " + "You have not achieved the goal, P has not reached G yet. Please give the next action."
+            if last_obs == next_observation:
+                user_msg += "Your last response is invalid. Your position didn't change at all. You may need to recheck your thinking process, action outputted, and the format of response."
+            last_obs = next_observation
+            messages.append({"role": "user", "content": user_msg})
+            
         return messages
     
 

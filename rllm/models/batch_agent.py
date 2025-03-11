@@ -55,33 +55,33 @@ class BatchAgent:
         self.agent_args = agent_args
         self.max_trajectory_length = max_trajectory_length
 
-    def get_actions(self, obs_action_sequences, seq_idxs=[], **kwargs):
+    def get_actions(self, trajectories, seq_idxs=[], **kwargs):
         """
-        Return a list of actions with same size as the obs_action_sequences list
-        seq_idxs: The list of indexes that the obs_action_sequences are from. Used to index into self.agents
+        Return a list of actions with same size as the trajectories list
+        seq_idxs: The list of indexes that the trajectories are from. Used to index into self.agents
 
         return: Tuple (List of actions, List of responses)
         """
         if seq_idxs:
-            assert len(obs_action_sequences) == len(
+            assert len(trajectories) == len(
                 seq_idxs
-            ), f"Number of sequences {len(obs_action_sequences)} should equal to the number of agents they are for ({len(seq_idxs)})"
+            ), f"Number of sequences {len(trajectories)} should equal to the number of agents they are for ({len(seq_idxs)})"
 
         if self.engine_name == "verl":
-            return self._get_actions_verl(obs_action_sequences, seq_idxs, **kwargs)
+            return self._get_actions_verl(trajectories, seq_idxs, **kwargs)
         elif self.engine_name == "vllm":
-            return self._get_actions_vllm(obs_action_sequences, seq_idxs, **kwargs)
+            return self._get_actions_vllm(trajectories, seq_idxs, **kwargs)
         elif self.engine_name == "openai":
-            return self._get_actions_openai(obs_action_sequences, seq_idxs, **kwargs)
+            return self._get_actions_openai(trajectories, seq_idxs, **kwargs)
         else:
             raise NotImplementedError
 
-    def _get_actions_verl(self, obs_action_sequences, seq_idxs, **kwargs):
+    def _get_actions_verl(self, trajectories, seq_idxs, **kwargs):
         from verl.protocol import pad_dataproto_to_divisor, unpad_dataproto
 
         prompts = [
-            self.agents[seq_idxs[i]]._pre_get_action(obs_act_seq)
-            for i, obs_act_seq in enumerate(obs_action_sequences)
+            self.agents[seq_idxs[i]]._pre_get_action(traj)
+            for i, traj in enumerate(trajectories)
         ]
 
         batch = self._convert_prompt_verl(prompts, **kwargs)
@@ -103,12 +103,12 @@ class BatchAgent:
             responses.append(rsp)
 
         assert len(responses) == len(
-            obs_action_sequences
-        ), f"Number of responses {len(responses)} should equal to the number of obs_action_sequences ({len(obs_action_sequences)})"
+            trajectories
+        ), f"Number of responses {len(responses)} should equal to the number of trajectories ({len(trajectories)})"
 
         actions = [
             self.agents[seq_idxs[i]]._post_get_action(responses[i])
-            for i in range(len(obs_action_sequences))
+            for i in range(len(trajectories))
         ]
         return actions, responses
 
@@ -152,11 +152,11 @@ class BatchAgent:
 
         return data
 
-    def _get_actions_vllm(self, obs_action_sequences, seq_idxs, **kwargs):
+    def _get_actions_vllm(self, trajectories, seq_idxs, **kwargs):
         # Format each observation into a prompt
         prompts = [
-            self.agents[seq_idxs[i]]._pre_get_action(obs_act_seq)
-            for i, obs_act_seq in enumerate(obs_action_sequences)
+            self.agents[seq_idxs[i]]._pre_get_action(traj)
+            for i, traj in enumerate(trajectories)
         ]
 
         prompts_token = self.tokenizer.apply_chat_template(
@@ -176,20 +176,20 @@ class BatchAgent:
             responses.append(rsp)
 
         assert len(responses) == len(
-            obs_action_sequences
-        ), f"Number of responses {len(responses)} should equal to the number of obs_action_sequences ({len(obs_action_sequences)})"
+            trajectories
+        ), f"Number of responses {len(responses)} should equal to the number of trajectories ({len(trajectories)})"
 
         actions = [
             self.agents[seq_idxs[i]]._post_get_action(responses[i])
-            for i in range(len(obs_action_sequences))
+            for i in range(len(trajectories))
         ]
         return actions, responses
 
 
-    def _get_actions_openai(self, obs_action_sequences, seq_idxs, **kwargs):
+    def _get_actions_openai(self, trajectories, seq_idxs, **kwargs):
         prompts = [
-            self.agents[seq_idxs[i]]._pre_get_action(obs_act_seq)
-            for i, obs_act_seq in enumerate(obs_action_sequences)
+            self.agents[seq_idxs[i]]._pre_get_action(traj)
+            for i, traj in enumerate(trajectories)
         ]
 
         openai.api_key = self.api_key
@@ -201,12 +201,12 @@ class BatchAgent:
                 responses.append(response)
 
         assert len(responses) == len(
-            obs_action_sequences
-        ), f"Number of responses {len(responses)} should equal to the number of obs_action_sequences ({len(obs_action_sequences)})"
+            trajectories
+        ), f"Number of responses {len(responses)} should equal to the number of trajectories ({len(trajectories)})"
 
         actions = [
             self.agents[seq_idxs[i]]._post_get_action(responses[i])
-            for i in range(len(obs_action_sequences))
+            for i in range(len(trajectories))
         ]
         return actions, responses
 
@@ -231,20 +231,20 @@ class BatchAgent:
                 return f"Error processing content: {e}"
 
     # deals with the case when the trajectory is done
-    def _safe_get_actions(self, obs_action_sequences, batch_done, **kwargs):
-        new_obs_action_sequences = []
+    def _safe_get_actions(self, trajectories, batch_done, **kwargs):
+        new_trajectory_sequences = []
         seq_idxs = []
-        responses = [""] * len(obs_action_sequences)
-        actions = [""]*len(obs_action_sequences)
+        responses = [""] * len(trajectories)
+        actions = [""]*len(trajectories)
 
         for i, done in enumerate(batch_done):
-            if not done and obs_action_sequences[i][-1] is not None:
-                new_obs_action_sequences.append(obs_action_sequences[i])
+            if not done and trajectories[i][-1]['next_observation'] is not None:
+                new_trajectory_sequences.append(trajectories[i])
                 seq_idxs.append(i)
 
-        if len(new_obs_action_sequences) > 0:
+        if len(new_trajectory_sequences) > 0:
             gen_actions, gen_responses = self.get_actions(
-                new_obs_action_sequences,
+                new_trajectory_sequences,
                 seq_idxs,
                 **kwargs,
             )
@@ -253,8 +253,8 @@ class BatchAgent:
                 actions[idx] = gen_actions[i].replace("<|im_end|>", "")
                 responses[idx] = gen_responses[i].replace("<|im_end|>", "")
                 
-        for action, obs_act_seq in zip(actions, obs_action_sequences):
-            new_obs = obs_act_seq[-1]
+        for action, traj in zip(actions, new_trajectory_sequences):
+            new_obs = traj[-1]['next_observation']
             if new_obs is None:
                 assert action == "", "Action should be empty, First assert"
 
@@ -320,7 +320,6 @@ class BatchAgent:
             try:
                 done = False
                 trajectories = [[] for _ in range(env_batch_size)]
-                obs_action_sequences = [[] for _ in range(env_batch_size)]
 
                 steps = 0
                 observations, infos = self.env.reset(seed=reset_seed)
@@ -338,7 +337,11 @@ class BatchAgent:
 
                 # put initial observation into the sequence
                 for i, obs in enumerate(observations):
-                    obs_action_sequences[i].append(obs)
+                    trajectories[i].append(
+                            {
+                                "next_observation": obs,
+                            }
+                        )
 
                     # compute initial prompt tokens
                     initial_msg = {
@@ -359,7 +362,7 @@ class BatchAgent:
                     steps += 1
                     with _timer("get_actions", timing_raw):
                         actions, responses = self._safe_get_actions(
-                            obs_action_sequences, batch_done, **kwargs
+                            trajectories, batch_done, **kwargs
                         )
 
                     for action, done in zip(actions, batch_done):
@@ -379,7 +382,6 @@ class BatchAgent:
                     except Exception as e:
                         print(e)
                         self.reset()
-                        raise (e)
 
                     colorful_print(
                         f"Step {steps} in environment interation done. {len(actions)} actions generated. responses: {responses}, actions: {actions}\n",
@@ -401,9 +403,6 @@ class BatchAgent:
                             infos[i],
                         )
 
-                        # Add response and next observation for next round of generation
-                        obs_action_sequences[i].append(responses[i])
-                        obs_action_sequences[i].append(next_observations[i])
 
                         # Compute the response tokens and response masks for the trajectory
                         assistant_msg = {"role": "assistant", "content": responses[i]}
@@ -420,6 +419,7 @@ class BatchAgent:
                         # Reached maximum number of tokens for the trajectory
                         if all_response_token_lens[i] + max_prompt_token_len >= self.max_trajectory_length:
                             batch_done[i] = True
+                            trajectories[i] = trajectories[i][1:] # remove sentinel node
                             colorful_print(
                                 f"Trajectory {i} completed due to maximum trajectory length reached. Reward is {rewards[i]}. \n",
                                 "yellow",
@@ -429,6 +429,7 @@ class BatchAgent:
                         # If an environment is done, handle the completed trajectory
                         if terminateds[i] or truncateds[i]:
                             batch_done[i] = True
+                            trajectories[i] = trajectories[i][1:] # remove sentinel node
                             colorful_print(
                         f"Trajectory {i} completed due to {'terminaion' if terminateds[i] else 'truncation'}. Reward is {rewards[i]}. \n",
                                 "green",
