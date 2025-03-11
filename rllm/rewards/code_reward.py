@@ -17,7 +17,8 @@ from rllm.rewards.code_utils.livecodebench import run_test as lcb_run_test
 from rllm.rewards.code_utils.codeforces import run_test as codeforces_run_test
 #from rllm.rewards.code_utils.swebench import swebench_check_correctness
 from rllm.rewards.code_utils.taco import run_test as taco_run_test
-from rllm.rewards.code_utils.firejail_exec import code_exec_firejail as code_exec
+from rllm.rewards.code_utils.firejail_exec import code_exec_firejail as lc_code_exec
+from rllm.rewards.code_utils.kodcode import code_exec as kod_code_exec
 from rllm.rewards.reward_types import RewardConfig, RewardFn, RewardInput, RewardOutput, RewardType
 
 
@@ -36,7 +37,7 @@ def extract_code_from_model(model_response: str):
         return None
     return code_blocks[-1].strip()
 
-def check_correctness(tests: Union[List[Dict[str, str]], Dict[str, List[str]]], code: str, test_fn, timeout_per_test: int = 5, max_tests: int = 1e9) -> bool:
+def check_correctness(tests: Union[List[Dict[str, str]], Dict[str, List[str]]], code: str, test_fn, timeout_per_test: int = 6, max_tests: int = 15) -> bool:
     """
     Check if generated code passes all test cases within a timeout period.
 
@@ -197,10 +198,50 @@ def leetcode_check_correctness(tests: List[Dict[str, str]], code: str) -> bool:
      Returns:
           bool: True if all tests pass and result list exists, False otherwise
      """
-     succ, output = code_exec(code + '\n' + tests["functional"])
+     succ, output = lc_code_exec(code + '\n' + tests["functional"])
      if not succ:
          print(f"Error in code execution: {output}")
      return succ
+
+def kodcode_check_correctness(test: str, code: str, timeout_per_test: int = 5) -> bool:
+    """
+    Check if generated code passes all Kodcode test cases.
+    
+    Args:
+        test: String of the test file content
+        code: Generated code to test
+        timeout: Maximum execution time in seconds before killing process
+        runtime_debug: Whether to print debug info during test execution
+    
+    Returns:
+        bool: True if all tests pass and result list exists, False otherwise
+    """
+    # Count the number of test functions in the test file
+    num_tests = test.count('def test')
+
+    # Remove 'if __name__ == "__main__":' block if present
+    code_lines = code.split('\n')
+    filtered_lines = []
+    skip_block = False
+
+    for line in code_lines:
+        if line.strip().startswith('if __name__ == "__main__"') or line.strip().startswith("if __name__ == '__main__'"):
+            skip_block = True
+            continue
+        if skip_block:
+            # Check if we're out of the block (less indentation)
+            if line.strip() and not line.startswith(' ') and not line.startswith('\t'):
+                skip_block = False
+            else:
+                continue
+        filtered_lines.append(line)
+
+    code = '\n'.join(filtered_lines)
+    
+    succ, output = kod_code_exec(code, test, timeout_per_test * num_tests)
+    if not succ:
+        print(f"Error in code execution: {output}")
+    return succ
 
 class RewardCodeFn(RewardFn):
     """
@@ -216,13 +257,7 @@ class RewardCodeFn(RewardFn):
             "Invalid problem type: expected 'CODE', but got '{}'".format(input.problem_type)
 
         model_response= input.model_response
-        metadata= input.metadata
-        if isinstance(metadata, str):
-            try:
-                metadata = json.loads(metadata)
-            except json.JSONDecodeError as e:
-                print(f"Unable to parse metadata: {e}")
-                return RewardOutput(reward=self.config.format_error_reward, is_correct=False)
+        metadata = input.metadata
         
         dataset_name = input.data_source
         tests = metadata
@@ -248,6 +283,8 @@ class RewardCodeFn(RewardFn):
             is_correct = lcb_check_correctness_v2(tests, model_code, debug=False)
         elif dataset_name == "primeintellect":
             is_correct = primeintellect_check_correctess(tests, model_code)
+        elif dataset_name == "kodcode":
+            is_correct = kodcode_check_correctness(tests, model_code)
         else:
             is_correct = check_correctness(tests, model_code, test_fn)
 

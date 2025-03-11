@@ -4,12 +4,14 @@ from rllm.rewards.code_utils.pyext2 import RuntimeModule
 import signal
 import numpy as np
 import platform
+import time
+
 # used for debugging to time steps
 from datetime import datetime
 
 import os, sys, json
 import faulthandler
-
+import psutil
 import subprocess
 import tempfile
 import inspect
@@ -17,6 +19,7 @@ from enum import Enum
 from unittest.mock import patch, mock_open
 from io import StringIO
 import ast 
+import platform
 
 from .utils import BASE_IMPORTS
 
@@ -48,6 +51,73 @@ class Capturing(list):
         self.extend(self._stringio.getvalue().splitlines())
         del self._stringio    # free up some memory
         sys.stdout = self._stdout
+
+def kill_process(process):
+    """
+    Aggressively kill a process and all its children to prevent zombies.
+    """
+    # Get the process ID before we attempt to kill it
+    pid = process.pid
+    
+    # First attempt - kill the process group
+    try:
+        pgid = os.getpgid(pid)
+        os.killpg(pgid, signal.SIGKILL)
+    except OSError:
+        # Process group might already be gone
+        pass
+    
+    # Second attempt - use psutil to kill all children recursively
+    try:
+        parent = psutil.Process(pid)
+        children = parent.children(recursive=True)
+        for child in children:
+            try:
+                child.kill()
+            except psutil.NoSuchProcess:
+                pass
+        try:
+            parent.kill()
+        except psutil.NoSuchProcess:
+            pass
+    except (psutil.NoSuchProcess, psutil.AccessDenied, Exception):
+        pass
+    
+    # Third attempt - direct signals to process
+    try:
+        os.kill(pid, signal.SIGKILL)
+    except OSError:
+        pass
+    
+    # Fourth attempt - process methods
+    try:
+        if process.poll() is None:
+            process.terminate()
+        if process.poll() is None:
+            process.kill()
+    except:
+        pass
+    
+    # Clean up zombie by waiting for the process to be fully dead
+    try:
+        process.wait(timeout=1)
+    except (subprocess.TimeoutExpired, Exception):
+        pass
+        
+    # Verify if process is truly dead, and if not, try one more time
+    try:
+        if psutil.pid_exists(pid):
+            os.kill(pid, signal.SIGKILL)
+            time.sleep(0.1)
+    except:
+        pass
+
+    # Final verification - log if we still can't kill it
+    try:
+        if psutil.pid_exists(pid) and psutil.Process(pid).status() != psutil.STATUS_ZOMBIE:
+            print(f"Warning: Process {pid} could not be terminated and may be a zombie")
+    except:
+        pass
 
 # to run the solution files we're using a timing based approach
 import signal
@@ -364,24 +434,31 @@ def execute_std_code(method, synthesized_code, inputs_list, outputs_list, timeou
                 temp_input.write(inputs)
                 temp_input.flush()
                 temp_input.seek(0)
+                temp_file_name = temp_input.name
                 
-                process = subprocess.Popen(['python3', temp_program_path], 
+                process = subprocess.Popen(['bash', '-c', 'ulimit -v 4194304; python3 ' + temp_program_path], 
                                         stdin=temp_input,
                                         stdout=subprocess.PIPE,
                                         stderr=subprocess.PIPE,
+                                        preexec_fn=os.setsid,
                                         universal_newlines=True,
                                         text=True)
+        stdout, stderr = "", ""
         try:
             stdout, stderr = process.communicate(timeout=timeout)
             return_code = process.returncode
             # result = subprocess.run(['python3', temp_program_path], input=inputs, text=True, capture_output=True, timeout=timeout)
             exec_code = 999
-        except subprocess.TimeoutExpired:
-            process.kill()
+        except subprocess.TimeoutExpired as e:
+            print(e, temp_file_name)
+            kill_process(process)
+            stderr = "TIMEOUT"
             return_code = process.returncode
             exec_code = -1
         except Exception as e:
-            print(e)
+            print(e, temp_file_name)
+            kill_process(process)
+            stderr = f"{e}"
             return_code = process.returncode
             exec_code = -2
 
@@ -624,7 +701,7 @@ def stripped_string_compare(s1, s2):
                     pass
     return True
 
-def reliability_guard(maximum_memory_bytes=None):
+def reliability_guard(maximum_memory_bytes=4 * 1024 * 1024 * 1024):
     """
     This disables various destructive functions and prevents the generated code
     from interfering with the test (e.g. fork bomb, killing other processes,

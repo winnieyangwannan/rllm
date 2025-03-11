@@ -50,10 +50,11 @@ for DATA_TYPE in "${DATATYPES[@]}"; do
         data.output_path=${OUTPUT_DIR}/${DATA_TYPE}.parquet \
         model.path=${MODEL_PATH} \
         rollout.temperature=0.6 \
+        rollout.prompt_length=2048 \
         rollout.response_length=32768 \
         rollout.top_k=-1 \
         rollout.top_p=0.95 \
         rollout.n_val=1 \
-        rollout.gpu_memory_utilization=0.9 \
+        rollout.gpu_memory_utilization=0.8 \
         rollout.tensor_model_parallel_size=1
 done
