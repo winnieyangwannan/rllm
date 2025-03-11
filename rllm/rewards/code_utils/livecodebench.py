@@ -474,7 +474,7 @@ def run_test(sample, test=None, debug=False, timeout=6):
                 signal.alarm(0)
 
 
-def reliability_guard(maximum_memory_bytes=4 * 1024 * 1024 * 1024):
+def reliability_guard(maximum_memory_bytes=None):
     """
     This disables various destructive functions and prevents the generated code
     from interfering with the test (e.g. fork bomb, killing other processes,
