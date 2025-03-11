@@ -3,7 +3,7 @@
 from rllm.rewards.code_utils.pyext2 import RuntimeModule
 import signal
 import numpy as np
-
+import platform
 # used for debugging to time steps
 from datetime import datetime
 
@@ -17,6 +17,21 @@ from enum import Enum
 from unittest.mock import patch, mock_open
 from io import StringIO
 import ast 
+
+from .utils import BASE_IMPORTS
+
+import pdb
+class ForkedPDB(pdb.Pdb):
+    """A Pdb subclass that may be used from a forked multiprocessing child."""
+
+    def interaction(self, *args, **kwargs):
+        _stdin = sys.stdin
+        try:
+            sys.stdin = open('/dev/stdin')
+            pdb.Pdb.interaction(self, *args, **kwargs)
+        finally:
+            sys.stdin = _stdin
+
 
 class CODE_TYPE(Enum):
     call_based = 0
@@ -53,6 +68,7 @@ def run_test(in_outs, test=None, debug=False):
     if test(generated_code) is not None it'll try to run the code.
     otherwise it'll just return an input and output pair.
     """
+    test = f"{BASE_IMPORTS}\n{test}"
     if isinstance(in_outs, str):
         try:
             in_outs =  ast.literal_eval(in_outs)
@@ -101,6 +117,7 @@ def run_test(in_outs, test=None, debug=False):
                 debug_infos = detail_results.get('debug', None)
                 detail_results = {k:v for k, v in detail_results.items() if k!='debug'}
                 if set(detail_results.values()) == {(False, 'returncode:1')}:
+                    synthesized_code, exec_code = synthesize_std_code(test, debug)
                     detail_results = execute_std_code(method_func, synthesized_code+'\ncode()\n', inputs_list, outputs_list, timeout=TIMEOUT, early_stop=True, debug=debug)
         if isinstance(detail_results, list):
             if len(detail_results) == 1:
@@ -371,33 +388,35 @@ def execute_std_code(method, synthesized_code, inputs_list, outputs_list, timeou
         stdout = clean_stdout(stdout)
 
         if exec_code > 0:
-            # if result.returncode != 0:
-            #     try:
-            #         inputs_tmp_file = open(create_temp_file(inputs), 'r')
-            #         result = subprocess.run(['python', temp_program_path], stdin=inputs_tmp_file, text=True, capture_output=True, timeout=timeout)
-            #         assert result.returncode == 0
-            #         if compare_std_results(result.stdout, outputs, debug):
-            #             exec_code = 1
-            #         else:
-            #             exec_code = 0
-            #     except:
-            #         try:
-            #             inputs_tmp_file = 'input.txt'
-            #             with open(inputs_tmp_file, 'w') as ftemp:
-            #                 ftemp.write(inputs)
-            #             result = subprocess.run(['python', temp_program_path], text=True, timeout=timeout)
-            #             assert result.returncode == 0
-            #             if compare_std_results(open('output.txt').read(), outputs, debug):
-            #                 exec_code = 1
-            #             else:
-            #                 exec_code = 0
-                        
-            #         except:
-            #             exec_code = -3
             if compare_std_results(stdout, outputs, debug):
                 exec_code = 1
             else:
                 exec_code = 0
+                # if return_code != 0:
+                #     try:
+                #         inputs_tmp_file = open(create_temp_file(inputs), 'r')
+                #         result = subprocess.run(['python', temp_program_path], stdin=inputs_tmp_file, text=True, capture_output=True, timeout=timeout)
+                #         assert result.returncode == 0
+                #         stdout = result.stdout
+                #         if compare_std_results(stdout, outputs, debug):
+                #             exec_code = 1
+                #         else:
+                #             exec_code = 0
+                #     except:
+                #         try:
+                #             inputs_tmp_file = 'input.txt'
+                #             with open(inputs_tmp_file, 'w') as ftemp:
+                #                 ftemp.write(inputs)
+                #             result = subprocess.run(['python', temp_program_path], text=True, timeout=timeout)
+                #             assert result.returncode == 0
+                #             stdout = open('output.txt').read()
+                #             if compare_std_results(stdout, outputs, debug):
+                #                 exec_code = 1
+                #             else:
+                #                 exec_code = 0
+                            
+                #         except:
+                #             exec_code = -3
         assert exec_code != -3
         exec_results[i] = (exec_code==1, EXECUTION_RESULTS[exec_code] if exec_code>-3 else EXECUTION_RESULTS[exec_code].format(return_code))
         if exec_code >= 0:
@@ -560,7 +579,50 @@ def compare_std_results(exec_outputs, outputs, debug=False):
 def stripped_string_compare(s1, s2):
     s1 = s1.lstrip().rstrip()
     s2 = s2.lstrip().rstrip()
-    return s1 == s2
+    is_equal = s1 == s2
+    if is_equal:
+        return True
+
+    # Edge case: Check if s1 and s2 are floats.
+    try:
+        s1_float = float(s1)
+        s2_float = float(s2)
+        is_equal = np.isclose(s1_float, s2_float)
+        return is_equal
+    except Exception as e:
+        pass
+
+    # Edge case: Check if s1 and s2 rows are equal.
+    s1_list = s1.split("\n") 
+    s2_list = s2.split("\n")
+    s1_list = [s.lstrip().rstrip() for s in s1_list]
+    s2_list = [s.lstrip().rstrip() for s in s2_list]
+    
+    s1_list = [s for s in s1_list if s]
+    s2_list = [s for s in s2_list if s]
+    if len(s1_list) != len(s2_list):
+        return False
+    
+    for s1, s2 in zip(s1_list, s2_list):
+        sub_s1_list = s1.split()
+        sub_s2_list = s2.split()
+        sub_s1_list = [s.lstrip().rstrip() for s in sub_s1_list]
+        sub_s2_list = [s.lstrip().rstrip() for s in sub_s2_list]
+        sub_s1_list = [s for s in sub_s1_list if s]
+        sub_s2_list = [s for s in sub_s2_list if s]
+        if len(sub_s1_list) != len(sub_s2_list):
+            return False
+        for sub_s1, sub_s2 in zip(sub_s1_list, sub_s2_list):
+            if sub_s1 != sub_s2:
+                # If they are floats...
+                try:
+                    sub_s1_float = float(sub_s1)
+                    sub_s2_float = float(sub_s2)
+                    if not np.isclose(sub_s1_float, sub_s2_float):
+                        return False
+                except Exception as e:
+                    pass
+    return True
 
 def reliability_guard(maximum_memory_bytes=None):
     """

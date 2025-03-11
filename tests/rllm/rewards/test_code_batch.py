@@ -124,7 +124,7 @@ def test_batched_reward(dataset: str):
     failure_log_path = os.path.join(os.path.dirname(__file__), f"./{dataset}_test_err.json")
     counter = 0
     debug = True
-    with ThreadPoolExecutor(max_workers=128) as executor:
+    with ThreadPoolExecutor(max_workers=64) as executor:
         futures = [executor.submit(test_fn, i, data[i]) for i in range(len(data))]
         for future in as_completed(futures):
             try:
