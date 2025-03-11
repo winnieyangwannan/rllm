@@ -287,6 +287,7 @@ class BatchAgent:
             - "action" (Any): The action taken at this step.
             - "response" (str): The assistant's response.
             - "training_reward" (float): The computed reward signal for training purposes.
+            - "truncated" (bool): If this end step resulted in max_episode_length exceed
 
             or
 
@@ -299,11 +300,15 @@ class BatchAgent:
             - "training_reward" (float): The computed reward signal for training purposes
             - "environment_reward" (float): The raw reward signal from the environment
             
+            or
+
+            List[List[Dict]]: A nested list where each inner list represents a trajectory conversation message in ChatML format 
 
         Notes:
             - The function ensures that trajectories remain in order, matching the environments they originated from.
             - The `mode` flag controls the return format.
             - Timing information, if provided via `timing_raw`, can be used for profiling execution times of different stages.
+            - Trajectories content in the Token version has truncation due to max_trajectory_length reflected, but not in Text or Conversation.
 
         """
         assert self.env, f"Env cannot be empty, but got {self.env}"
@@ -352,7 +357,10 @@ class BatchAgent:
                     # Update conversation version
                     all_conversations[i].append(initial_msg)
 
-
+                if max_prompt_token_len >= self.max_trajectory_length:
+                    self.reset()
+                    raise Exception("Initial prompt length already exceeded max_trajectory_length, retrying")
+                    
                 # get model actions and responses
                 while not all(batch_done) and steps < self.episode_len:
                     steps += 1
@@ -410,13 +418,35 @@ class BatchAgent:
                         assistant_msg_tokens, assistant_msg_masks = self._convert_message_to_tokens_and_masks(assistant_msg)
                         env_msg_tokens, env_msg_masks = self._convert_message_to_tokens_and_masks(env_msg)
 
-                        all_response_token_lens[i] += len(assistant_msg_tokens) + len(env_msg_tokens)
-
                         # Reached maximum number of tokens for the trajectory
-                        if all_response_token_lens[i] + max_prompt_token_len >= self.max_trajectory_length:
+                        if all_response_token_lens[i] + len(assistant_msg_tokens) + len(env_msg_tokens) + max_prompt_token_len >= self.max_trajectory_length:
+                            # Truncation length
+                            truncation_length = self.max_trajectory_length - max_prompt_token_len - all_response_token_lens[i]
+                            # Truncate the response and masks
+                            truncated_response_tokens = (assistant_msg_tokens + env_msg_tokens)[:truncation_length]
+                            truncated_response_masks = (assistant_msg_masks + env_msg_masks)[:truncation_length]
+                            # Update the token version of trajectory (Though it is truncated)
+                            all_response_tokens[i].extend(truncated_response_tokens)
+                            all_response_masks[i].extend(truncated_response_masks)
+                            # Update conversation (Though it is truncated)
+                            all_conversations[i].append(assistant_msg)
+                            all_conversations[i].append(env_msg)
+                            # Update trajectory (Though it is truncated)
+                            trajectories[i].append(
+                                {
+                                    "observation": observations[i],
+                                    "next_observation": next_observations[i],
+                                    "reward": 0, # TODO: May need to update this to be minimum environment score in the future
+                                    "done": terminateds[i] or truncateds[i],
+                                    "action": actions[i],
+                                    "info": infos[i],
+                                    "response": responses[i],
+                                    "truncated": True,
+                                }
+                            )
                             batch_done[i] = True
                             colorful_print(
-                                f"Trajectory {i} completed due to maximum trajectory length reached. Reward is {rewards[i]}. \n",
+                                f"Trajectory {i} completed due to maximum trajectory length reached. But entire Text or Conversation will be returned. Reward is {rewards[i]}. \n",
                                 "yellow",
                             )
                             continue
@@ -428,6 +458,9 @@ class BatchAgent:
                         f"Trajectory {i} completed due to {'terminaion' if terminateds[i] else 'truncation'}. Reward is {rewards[i]}. \n",
                                 "green",
                             )
+
+                        # Update repsonse token length
+                        all_response_token_lens[i] += len(assistant_msg_tokens) + len(env_msg_tokens)
 
                         # Update the token version of trajectory
                         all_response_tokens[i].extend(assistant_msg_tokens + env_msg_tokens)
@@ -447,6 +480,7 @@ class BatchAgent:
                                 "action": actions[i],
                                 "info": infos[i],
                                 "response": responses[i],
+                                "truncated": False,
                             }
                         )
                         observations[i] = next_observations[i]
@@ -461,7 +495,8 @@ class BatchAgent:
                 print(e)
                 continue
         
-        trajectories = [traj[1:] if traj else traj for traj in trajectories] # remove sentinel
+        # remove sentinel
+        trajectories = [traj[1:] if traj else traj for traj in trajectories]
         trajectory_result = []
 
         for i, trajectory in enumerate(trajectories):
