@@ -337,11 +337,7 @@ class BatchAgent:
 
                 # put initial observation into the sequence
                 for i, obs in enumerate(observations):
-                    trajectories[i].append(
-                            {
-                                "next_observation": obs,
-                            }
-                        )
+                    trajectories[i].append({"next_observation": obs,})
 
                     # compute initial prompt tokens
                     initial_msg = {
@@ -419,7 +415,6 @@ class BatchAgent:
                         # Reached maximum number of tokens for the trajectory
                         if all_response_token_lens[i] + max_prompt_token_len >= self.max_trajectory_length:
                             batch_done[i] = True
-                            trajectories[i] = trajectories[i][1:] # remove sentinel node
                             colorful_print(
                                 f"Trajectory {i} completed due to maximum trajectory length reached. Reward is {rewards[i]}. \n",
                                 "yellow",
@@ -429,7 +424,6 @@ class BatchAgent:
                         # If an environment is done, handle the completed trajectory
                         if terminateds[i] or truncateds[i]:
                             batch_done[i] = True
-                            trajectories[i] = trajectories[i][1:] # remove sentinel node
                             colorful_print(
                         f"Trajectory {i} completed due to {'terminaion' if terminateds[i] else 'truncation'}. Reward is {rewards[i]}. \n",
                                 "green",
@@ -466,7 +460,8 @@ class BatchAgent:
                 print(traceback.format_exc())
                 print(e)
                 continue
-
+        
+        trajectories = [traj[1:] if traj else traj for traj in trajectories] # remove sentinel
         trajectory_result = []
 
         for i, trajectory in enumerate(trajectories):
