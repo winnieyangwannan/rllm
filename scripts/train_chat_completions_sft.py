@@ -35,23 +35,31 @@ def preprocess_messages(messages, tokenizer):
             add_generation_prompt = True
         else:
             add_generation_prompt = False
-        # This code is needed to avoid duplicate assistant tokens in the chat template.
-        # When there are multiple assistant messages in a row, we only want to add the
-        # assistant token prefix once, so we skip it for subsequent messages.
-        if msg['role'] == "assistant":
-            msg['skip_assistant_token'] = skip_assistant_token
-            skip_assistant_token = True
-
+            
         msg_text = tokenizer.apply_chat_template(
             [msg], tokenize=False, add_generation_prompt=add_generation_prompt
         )
         
         msg_tokens = tokenizer.encode(msg_text, add_special_tokens=False)
+
         mask_value = 1 if msg["role"] == "assistant" else 0
         msg_mask = [mask_value] * len(msg_tokens)
 
         all_tokens.extend(msg_tokens)
         all_masks.extend(msg_mask)
+        
+    # Add end of sentence token
+    eos_token = tokenizer.encode("<｜end▁of▁sentence｜>", add_special_tokens=False)
+    all_tokens.extend(eos_token)
+    all_masks.extend([1] * len(eos_token))
+        
+    # Print the decoded tokens that are masked (assistant responses)
+    # masked_tokens = [token for token, mask in zip(all_tokens, all_masks) if mask == 1]
+    # decoded_masked = tokenizer.decode(masked_tokens)
+    # print("Masked tokens (assistant responses):")
+    # print(decoded_masked)
+    # print("-" * 80)
+    # import pdb; pdb.set_trace()
 
     return all_tokens, all_masks
 
@@ -133,10 +141,10 @@ def main(args):
     # Define training arguments
     training_args = TrainingArguments(
         output_dir=args.output_dir,
-        num_train_epochs=5,
-        per_device_train_batch_size=1,
-        gradient_accumulation_steps=16,
-        learning_rate=1e-5,
+        num_train_epochs=10,
+        per_device_train_batch_size=2,
+        gradient_accumulation_steps=8,
+        learning_rate=4e-5,
         warmup_ratio=0.1,
         logging_steps=5,
         save_strategy="epoch",
@@ -146,14 +154,21 @@ def main(args):
         save_steps=10,
         bf16=True,
         save_only_model=True,
+        weight_decay=0,
+        adam_beta1=0.9,
+        adam_beta2=0.999,
+        adam_epsilon=1e-8,
+        max_grad_norm=1.0,
         deepspeed=args.deepspeed,
+        lr_scheduler_type="cosine_with_min_lr",
+        lr_scheduler_kwargs={"min_lr_rate": 0.1, "lr_scheduler_warmup_ratio": 0.03},
         save_total_limit=2
-        # fp16=True,
     )
-
+    
     with open(args.chat_template, "r") as f:
         template = f.read()
         tokenizer.chat_template = template
+    tokenizer.model_max_length = 32768
         
     # Initialize data collator
     data_collator = ChatDataCollator(tokenizer)
@@ -176,7 +191,7 @@ if __name__ == "__main__":
     import argparse
     parser = argparse.ArgumentParser(description='Train a model with tool call data')
     parser.add_argument('--data_path', type=str, 
-                      default='./data/filtered_toolcall_claude_verified.jsonl',
+                      default='./codeforces_messages.jsonl',
                       help='Path to the JSONL data file')
     parser.add_argument('--model_path', type=str,
                       default='agentica-org/DeepScaleR-1.5B-Preview',
@@ -185,14 +200,14 @@ if __name__ == "__main__":
                       default='./results',
                       help='Directory for training outputs and checkpoints')
     parser.add_argument('--model_output_dir', type=str,
-                      default='./deepscaler-toolcall-claude-python',
+                      default='./deepcoder-sft',
                       help='Directory to save the final model')
-    parser.add_argument('--chat_template', type=str,
-                      default='../../rllm/templates/r1-toolcall-python.jinja',
-                      help='Path to the chat template file')
     parser.add_argument('--deepspeed', type=str,
-                      default='../config/ds_stage2.json',
+                      default='./config/ds_stage2.json',
                       help='Path to the deepspeed config file')
+    parser.add_argument('--chat_template', type=str,
+                      default='../rllm/templates/r1-toolcall-python.jinja',
+                      help='Path to the chat template file')
     args = parser.parse_args()
    
     main(args)
