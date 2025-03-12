@@ -1,3 +1,4 @@
+
 """
 This module contains the RewardCode class, which evaluates code datasets answers
 and assigns rewards based on their correctness on unit tests.
@@ -9,6 +10,7 @@ import time
 from multiprocessing import Manager
 from typing import List, Dict, Union
 import random
+import ast 
 
 #from rllm.rewards.code_utils.code_contests import run_test as code_contests_run_test
 from rllm.rewards.code_utils.livecodebench import run_test as lcb_run_test
@@ -121,6 +123,28 @@ def postprocess_lcb_sample(sample):
     }
     return sample
 
+# https://huggingface.co/datasets/PrimeIntellect/verifiable-coding-problems
+def primeintellect_check_correctness(tests, code):
+    if isinstance(tests, str):
+        try:
+            tests =  ast.literal_eval(tests)
+            assert isinstance(tests, dict)
+        except (ValueError, SyntaxError) as e:
+            print(f"Error parsing string: {e}")
+            return False
+
+    assert len(tests) >= 1, "PrimeIntellect needs at least one test case"
+    # Convert the tests to the format expected by the taco_run_test function
+    inputs = [t['input'] for t in tests]
+    outputs = [t['output'] for t in tests]
+    fn_name = tests[0].get('fn_name', None)
+    tests = {
+        'inputs': inputs,
+        'outputs': outputs,
+    }
+    if fn_name:
+        tests['fn_name'] = fn_name
+    return check_correctness(tests, code, taco_run_test)
 
 def lcb_check_correctness_v2(sample, generation, timeout=6, debug=False):
     """Check correctness of code generation with a global timeout.
@@ -254,16 +278,17 @@ class RewardCodeFn(RewardFn):
             test_fn = taco_run_test
         elif dataset_name == "codeforces":
             test_fn = codeforces_run_test
-        
-        if dataset_name == "leetcode":
+        elif dataset_name == "leetcode":
             is_correct = leetcode_check_correctness(tests, model_code)
         elif dataset_name == "livecodebench":
             is_correct = lcb_check_correctness_v2(tests, model_code, debug=False)
+        elif dataset_name == "primeintellect":
+            is_correct = primeintellect_check_correctness(tests, model_code)
         elif dataset_name == "kodcode":
             is_correct = kodcode_check_correctness(tests, model_code)
         else:
             is_correct = check_correctness(tests, model_code, test_fn)
-        
+
         total_time = time.time() - total_start_time
         # print(f"Total reward function execution time: {total_time:.2f} seconds")
 

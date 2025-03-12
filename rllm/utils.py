@@ -176,7 +176,7 @@ class RAG:
             results.append({
                 'score': score,
                 'text': self.docs[int(idx)],
-                'index': int(idx)
+                'idx': int(idx),
             })
         return results
 
