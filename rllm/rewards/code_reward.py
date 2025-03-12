@@ -124,16 +124,17 @@ def postprocess_lcb_sample(sample):
     return sample
 
 # https://huggingface.co/datasets/PrimeIntellect/verifiable-coding-problems
-def primeintellect_check_correctess(tests, code):
+def primeintellect_check_correctness(tests, code):
     if isinstance(tests, str):
         try:
             tests =  ast.literal_eval(tests)
             assert isinstance(tests, dict)
         except (ValueError, SyntaxError) as e:
-            print(f"run_tests app/taco, Error parsing string: {e}")
+            print(f"Error parsing string: {e}")
             return False
 
     assert len(tests) >= 1, "PrimeIntellect needs at least one test case"
+    # Convert the tests to the format expected by the taco_run_test function
     inputs = [t['input'] for t in tests]
     outputs = [t['output'] for t in tests]
     fn_name = tests[0].get('fn_name', None)
@@ -282,7 +283,7 @@ class RewardCodeFn(RewardFn):
         elif dataset_name == "livecodebench":
             is_correct = lcb_check_correctness_v2(tests, model_code, debug=False)
         elif dataset_name == "primeintellect":
-            is_correct = primeintellect_check_correctess(tests, model_code)
+            is_correct = primeintellect_check_correctness(tests, model_code)
         elif dataset_name == "kodcode":
             is_correct = kodcode_check_correctness(tests, model_code)
         else:
