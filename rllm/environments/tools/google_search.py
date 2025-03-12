@@ -51,9 +51,8 @@ class GoogleSearch:
     async def init_client(self):
         GoogleSearch.client = httpx.AsyncClient()
 
-    async def kill_client(self):
-        await GoogleSearch.client.aclose()
-        GoogleSearch.client = None
+    def __del__(self):
+        asyncio.run(GoogleSearch.client.aclose())
 
     async def search_with_google(self, query: str):
         """
