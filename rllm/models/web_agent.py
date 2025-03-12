@@ -49,7 +49,7 @@ class WebAgent(BaseAgent):
 
     def _pre_get_action(self, trajectory):
         obs = trajectory[0]["next_observation"] # initial state
-
+        obs = self._preproc_obs(obs)
         system_msgs = self.get_system_msg(obs)
 
         messages = [
