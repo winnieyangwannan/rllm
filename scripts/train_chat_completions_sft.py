@@ -3,6 +3,16 @@ import json
 from transformers import AutoTokenizer, AutoModelForCausalLM
 from typing import Dict, List, Any
 import torch
+from accelerate import Accelerator
+from torch.distributed.fsdp import (
+    FullyShardedDataParallel as FSDP,
+    MixedPrecision,
+    BackwardPrefetch,
+    ShardingStrategy,
+    StateDictType,
+    CPUOffload,
+)
+from torch.distributed.fsdp.wrap import transformer_auto_wrap_policy
 
 from transformers import Trainer, TrainingArguments
 
@@ -49,7 +59,7 @@ def preprocess_messages(messages, tokenizer):
         all_masks.extend(msg_mask)
         
     # Add end of sentence token
-    eos_token = tokenizer.encode("<｜end▁of▁sentence｜>", add_special_tokens=False)
+    eos_token = tokenizer.encode("", add_special_tokens=False)
     all_tokens.extend(eos_token)
     all_masks.extend([1] * len(eos_token))
         
@@ -90,6 +100,10 @@ class ChatDataCollator:
         max_length = 0
         for messages in batch_messages:
             tokens, loss_mask = preprocess_messages(messages, self.tokenizer)
+            tokens = tokens[:32768]
+            loss_mask = loss_mask[:32768]
+            if not tokens:
+                print("Warning: Generated an empty token list for message:", messages)
             batch_tokens.append(tokens)
             attention_mask = [1] * len(tokens)
             batch_attention_masks.append(attention_mask)
@@ -130,20 +144,23 @@ def main(args):
     raw_data = load_jsonl(args.data_path)
     dataset = prepare_training_dataset(raw_data)
     
+    accelerator = Accelerator(mixed_precision="bf16")
+    
     # Initialize tokenizer and model
     tokenizer = AutoTokenizer.from_pretrained(args.model_path)
     model = AutoModelForCausalLM.from_pretrained(
         args.model_path,
         torch_dtype=torch.bfloat16,
-        attn_implementation="flash_attention_2"
+        attn_implementation="flash_attention_2",
     )
+    
     
     # Define training arguments
     training_args = TrainingArguments(
         output_dir=args.output_dir,
         num_train_epochs=10,
-        per_device_train_batch_size=2,
-        gradient_accumulation_steps=8,
+        per_device_train_batch_size=1,
+        gradient_accumulation_steps=16,
         learning_rate=4e-5,
         warmup_ratio=0.1,
         logging_steps=5,
@@ -151,7 +168,6 @@ def main(args):
         evaluation_strategy="no",
         remove_unused_columns=False,
         gradient_checkpointing=True,
-        save_steps=10,
         bf16=True,
         save_only_model=True,
         weight_decay=0,
@@ -161,8 +177,8 @@ def main(args):
         max_grad_norm=1.0,
         deepspeed=args.deepspeed,
         lr_scheduler_type="cosine_with_min_lr",
-        lr_scheduler_kwargs={"min_lr_rate": 0.1, "lr_scheduler_warmup_ratio": 0.03},
-        save_total_limit=2
+        lr_scheduler_kwargs={"min_lr_rate": 0.1,},
+        save_total_limit=None,
     )
     
     with open(args.chat_template, "r") as f:
@@ -180,6 +196,8 @@ def main(args):
         train_dataset=dataset,
         data_collator=data_collator,
     )
+    
+    trainer = accelerator.prepare(trainer)
     
     # Start training
     trainer.train()
@@ -203,7 +221,7 @@ if __name__ == "__main__":
                       default='./deepcoder-sft',
                       help='Directory to save the final model')
     parser.add_argument('--deepspeed', type=str,
-                      default='./config/ds_stage2.json',
+                      default='./config/ds_stage3.json',
                       help='Path to the deepspeed config file')
     parser.add_argument('--chat_template', type=str,
                       default='../rllm/templates/r1-toolcall-python.jinja',
