@@ -449,7 +449,6 @@ def run_test(sample, test=None, debug=False, timeout=6):
                 return [-4], {
                     "error_code": -4,
                     "error_message": f"Error during testing: {e}",
-                    "code": test,
                 }
             finally:
                 signal.alarm(0)
@@ -470,7 +469,6 @@ def run_test(sample, test=None, debug=False, timeout=6):
                 return [-4], {
                     "error_code": -4,
                     "error_message": f"Error during testing: {e}",
-                    "code": test,
                 }
             finally:
                 signal.alarm(0)

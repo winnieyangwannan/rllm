@@ -51,6 +51,7 @@ def make_map_fn(split: str):
         tests = example.pop('tests')
         
         if example.get('metadata', {}):
+            assert 'func_name' in example['metadata'], f"Function name is not found, check if your LCB data is preprocessed correctly: {example['metadata']}"
             if isinstance(tests, dict):
                 tests['metadata'] = example['metadata']
             else:
@@ -104,7 +105,7 @@ if __name__ == '__main__':
 
 
     #Initialize datasets
-    train_datasets = [TrainDataset.Code.TACO, TrainDataset.Code.LIVECODEBENCH, TrainDataset.Code.LEETCODE, TrainDataset.Code.KODCODE]
+    train_datasets = [TrainDataset.Code.TACO, TrainDataset.Code.LIVECODEBENCH, TestDataset.Code.LIVECODEBENCH]
     test_datasets = [TestDataset.Code.LIVECODEBENCH]
     
     test_datasets_data = [load_dataset(d) for d in test_datasets]

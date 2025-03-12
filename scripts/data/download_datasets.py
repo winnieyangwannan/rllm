@@ -9,6 +9,8 @@ FILE_IDS = {
     "olympiad.json": "1TxTUkXR5WIXS1586XbkrkfpKLEyHiNJS",
     "test_livecodebench.json": "1bHInKOvpfo5ObR8KIBe0s_p6OiguQJxG",
     "train_livecodebench.json": "1ikA3HznFuAaZUNTvoKiZfBh9wFaGKiLU",
+    "kodcode.json": "1STMAebzGjJtgl5OcOhG-4hjdAiLAWiY6",
+    "primeintellect.json": "1Av2d_1DlVDB5mTL3AWOP0Eb-1Ft8e3fO",
 }
 
 # Define the destination paths
@@ -18,6 +20,8 @@ DEST_PATHS = {
     "olympiad.json": os.path.expanduser("~/rllm/rllm/data/train/math/olympiad.json"),
     "test_livecodebench.json": os.path.expanduser("~/rllm/rllm/data/test/code/livecodebench.json"),
     "train_livecodebench.json": os.path.expanduser("~/rllm/rllm/data/train/code/livecodebench.json"),
+    "kodcode.json": os.path.expanduser("~/rllm/rllm/data/train/code/kodcode.json"),
+    "primeintellect.json": os.path.expanduser("~/rllm/rllm/data/train/code/primeintellect.json"),
 }
 
 # Create the necessary directories

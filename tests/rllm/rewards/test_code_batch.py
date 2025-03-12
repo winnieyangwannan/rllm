@@ -67,6 +67,31 @@ def _process_case_taco(i, data):
             return i, output, None
     return i, output, data
 
+def _process_case_primeintellect(i, data):
+    """
+    Process a single test case from the VERIFY dataset.
+    """
+    model_response = data['solutions']
+    for solution in data["solutions"]:
+        if not solution.startswith("```python") and not solution.endswith("```"):
+            model_response = f"""```python\n{solution}\n```"""
+        else:
+            model_response = solution
+        tests = data["tests"]
+        reward = RewardCodeFn(RewardConfig)
+        input_obj = RewardInput(
+            problem="", 
+            problem_type=RewardType.CODE, 
+            model_response=model_response, 
+            metadata=tests, 
+            data_source="primeintellect"
+        )
+        output = reward(input_obj)
+        if output.is_correct:
+            return i, output, None
+    return i, output, data
+
+
 def _process_case_kodcode(i, data):
     """
     Process a single test case from the KODCODE dataset.
@@ -113,6 +138,9 @@ def test_batched_reward(dataset: str):
     elif dataset == "leetcode":
         data = load_dataset(TrainDataset.Code.LEETCODE)
         test_fn = _process_case_leetcode
+    elif dataset == "primeintellect":
+        data = load_dataset(TrainDataset.Code.PRIMEINTELLECT)
+        test_fn = _process_case_primeintellect
     elif dataset == "kodcode":
         data = load_dataset(TrainDataset.Code.KODCODE)
         test_fn = _process_case_kodcode
@@ -124,7 +152,7 @@ def test_batched_reward(dataset: str):
     failure_log_path = os.path.join(os.path.dirname(__file__), f"./{dataset}_test_err.json")
     counter = 0
     debug = True
-    with ThreadPoolExecutor(max_workers=256) as executor:
+    with ThreadPoolExecutor(max_workers=64) as executor:
         futures = [executor.submit(test_fn, i, data[i]) for i in range(len(data))]
         for future in as_completed(futures):
             try:
@@ -153,5 +181,7 @@ if __name__ == "__main__":
     #     failed_cases = json.load(f)
     # print(len(failed_cases))
     # test_batched_reward(dataset="taco")
-    test_batched_reward(dataset="kodcode")
+    test_batched_reward(dataset="primeintellect")
+    # test_batched_reward(dataset="leetcode")
+    # test_batched_reward(dataset="kodcode")
     # test_batched_reward(dataset="leetcode")

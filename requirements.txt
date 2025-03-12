@@ -14,3 +14,4 @@ swebench
 tabulate
 torchmetrics
 flash-attn
+e2b_code_interpreter
