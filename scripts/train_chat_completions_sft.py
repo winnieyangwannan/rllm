@@ -87,6 +87,8 @@ def find_token_sequence(full_tokens, seq_tokens):
 class ChatDataCollator:
     def __init__(self, tokenizer):
         self.tokenizer = tokenizer
+        self.max_length = 32768  # Set fixed max length to 32k tokens
+        self.enable_padding = True
         
     def __call__(self, features: List[Dict[str, Any]]) -> Dict[str, torch.Tensor]:
         # Extract messages from each example
@@ -97,11 +99,10 @@ class ChatDataCollator:
         batch_attention_masks = []
         batch_labels = []
         
-        max_length = 0
         for messages in batch_messages:
             tokens, loss_mask = preprocess_messages(messages, self.tokenizer)
-            tokens = tokens[:32768]
-            loss_mask = loss_mask[:32768]
+            tokens = tokens[:self.max_length]  # Truncate to max length
+            loss_mask = loss_mask[:self.max_length]
             if not tokens:
                 print("Warning: Generated an empty token list for message:", messages)
             batch_tokens.append(tokens)
@@ -109,19 +110,21 @@ class ChatDataCollator:
             batch_attention_masks.append(attention_mask)
             labels = [-100 if mask == 0 else token for token, mask in zip(tokens, loss_mask)]
             batch_labels.append(labels)
-            max_length = max(max_length, len(tokens))
             
-        # Pad all sequences to max_length
-        for i in range(len(batch_tokens)):
-            padding_length = max_length - len(batch_tokens[i])
-            if padding_length > 0:
-                batch_tokens[i].extend([self.tokenizer.pad_token_id] * padding_length)
-                batch_attention_masks[i].extend([0] * padding_length)
-                batch_labels[i].extend([-100] * padding_length)
+        # Pad all sequences to fixed max_length (32k)
+        if self.enable_padding:
+            for i in range(len(batch_tokens)):
+                padding_length = self.max_length - len(batch_tokens[i])
+                if padding_length > 0:
+                    batch_tokens[i].extend([self.tokenizer.pad_token_id] * padding_length)
+                    batch_attention_masks[i].extend([0] * padding_length)
+                    batch_labels[i].extend([-100] * padding_length)
         
+        attention_mask_tensor = torch.tensor(batch_attention_masks)
+        print(attention_mask_tensor.shape)
         return {
             "input_ids": torch.tensor(batch_tokens),
-            "attention_mask": torch.tensor(batch_attention_masks),
+            "attention_mask": attention_mask_tensor,
             "labels": torch.tensor(batch_labels)
         }
     
@@ -160,7 +163,7 @@ def main(args):
         output_dir=args.output_dir,
         num_train_epochs=10,
         per_device_train_batch_size=1,
-        gradient_accumulation_steps=16,
+        gradient_accumulation_steps=8,
         learning_rate=4e-5,
         warmup_ratio=0.1,
         logging_steps=5,
@@ -197,8 +200,6 @@ def main(args):
         data_collator=data_collator,
     )
     
-    trainer = accelerator.prepare(trainer)
-    
     # Start training
     trainer.train()
     
@@ -212,7 +213,7 @@ if __name__ == "__main__":
                       default='./codeforces_messages.jsonl',
                       help='Path to the JSONL data file')
     parser.add_argument('--model_path', type=str,
-                      default='agentica-org/DeepScaleR-1.5B-Preview',
+                      default='deepseek-ai/DeepSeek-R1-Distill-Qwen-1.5B',
                       help='Path or name of the pretrained model to fine-tune')
     parser.add_argument('--output_dir', type=str,
                       default='./results',
