@@ -3,6 +3,16 @@ import json
 from transformers import AutoTokenizer, AutoModelForCausalLM
 from typing import Dict, List, Any
 import torch
+from accelerate import Accelerator
+from torch.distributed.fsdp import (
+    FullyShardedDataParallel as FSDP,
+    MixedPrecision,
+    BackwardPrefetch,
+    ShardingStrategy,
+    StateDictType,
+    CPUOffload,
+)
+from torch.distributed.fsdp.wrap import transformer_auto_wrap_policy
 
 from transformers import Trainer, TrainingArguments
 
@@ -35,23 +45,31 @@ def preprocess_messages(messages, tokenizer):
             add_generation_prompt = True
         else:
             add_generation_prompt = False
-        # This code is needed to avoid duplicate assistant tokens in the chat template.
-        # When there are multiple assistant messages in a row, we only want to add the
-        # assistant token prefix once, so we skip it for subsequent messages.
-        if msg['role'] == "assistant":
-            msg['skip_assistant_token'] = skip_assistant_token
-            skip_assistant_token = True
-
+            
         msg_text = tokenizer.apply_chat_template(
             [msg], tokenize=False, add_generation_prompt=add_generation_prompt
         )
         
         msg_tokens = tokenizer.encode(msg_text, add_special_tokens=False)
+
         mask_value = 1 if msg["role"] == "assistant" else 0
         msg_mask = [mask_value] * len(msg_tokens)
 
         all_tokens.extend(msg_tokens)
         all_masks.extend(msg_mask)
+        
+    # Add end of sentence token
+    eos_token = tokenizer.encode("", add_special_tokens=False)
+    all_tokens.extend(eos_token)
+    all_masks.extend([1] * len(eos_token))
+        
+    # Print the decoded tokens that are masked (assistant responses)
+    # masked_tokens = [token for token, mask in zip(all_tokens, all_masks) if mask == 1]
+    # decoded_masked = tokenizer.decode(masked_tokens)
+    # print("Masked tokens (assistant responses):")
+    # print(decoded_masked)
+    # print("-" * 80)
+    # import pdb; pdb.set_trace()
 
     return all_tokens, all_masks
 
@@ -69,6 +87,8 @@ def find_token_sequence(full_tokens, seq_tokens):
 class ChatDataCollator:
     def __init__(self, tokenizer):
         self.tokenizer = tokenizer
+        self.max_length = 32768  # Set fixed max length to 32k tokens
+        self.enable_padding = True
         
     def __call__(self, features: List[Dict[str, Any]]) -> Dict[str, torch.Tensor]:
         # Extract messages from each example
@@ -79,27 +99,32 @@ class ChatDataCollator:
         batch_attention_masks = []
         batch_labels = []
         
-        max_length = 0
         for messages in batch_messages:
             tokens, loss_mask = preprocess_messages(messages, self.tokenizer)
+            tokens = tokens[:self.max_length]  # Truncate to max length
+            loss_mask = loss_mask[:self.max_length]
+            if not tokens:
+                print("Warning: Generated an empty token list for message:", messages)
             batch_tokens.append(tokens)
             attention_mask = [1] * len(tokens)
             batch_attention_masks.append(attention_mask)
             labels = [-100 if mask == 0 else token for token, mask in zip(tokens, loss_mask)]
             batch_labels.append(labels)
-            max_length = max(max_length, len(tokens))
             
-        # Pad all sequences to max_length
-        for i in range(len(batch_tokens)):
-            padding_length = max_length - len(batch_tokens[i])
-            if padding_length > 0:
-                batch_tokens[i].extend([self.tokenizer.pad_token_id] * padding_length)
-                batch_attention_masks[i].extend([0] * padding_length)
-                batch_labels[i].extend([-100] * padding_length)
+        # Pad all sequences to fixed max_length (32k)
+        if self.enable_padding:
+            for i in range(len(batch_tokens)):
+                padding_length = self.max_length - len(batch_tokens[i])
+                if padding_length > 0:
+                    batch_tokens[i].extend([self.tokenizer.pad_token_id] * padding_length)
+                    batch_attention_masks[i].extend([0] * padding_length)
+                    batch_labels[i].extend([-100] * padding_length)
         
+        attention_mask_tensor = torch.tensor(batch_attention_masks)
+        print(attention_mask_tensor.shape)
         return {
             "input_ids": torch.tensor(batch_tokens),
-            "attention_mask": torch.tensor(batch_attention_masks),
+            "attention_mask": attention_mask_tensor,
             "labels": torch.tensor(batch_labels)
         }
     
@@ -122,38 +147,47 @@ def main(args):
     raw_data = load_jsonl(args.data_path)
     dataset = prepare_training_dataset(raw_data)
     
+    accelerator = Accelerator(mixed_precision="bf16")
+    
     # Initialize tokenizer and model
     tokenizer = AutoTokenizer.from_pretrained(args.model_path)
     model = AutoModelForCausalLM.from_pretrained(
         args.model_path,
         torch_dtype=torch.bfloat16,
-        attn_implementation="flash_attention_2"
+        attn_implementation="flash_attention_2",
     )
+    
     
     # Define training arguments
     training_args = TrainingArguments(
         output_dir=args.output_dir,
-        num_train_epochs=5,
+        num_train_epochs=10,
         per_device_train_batch_size=1,
-        gradient_accumulation_steps=16,
-        learning_rate=1e-5,
+        gradient_accumulation_steps=8,
+        learning_rate=4e-5,
         warmup_ratio=0.1,
         logging_steps=5,
         save_strategy="epoch",
         evaluation_strategy="no",
         remove_unused_columns=False,
         gradient_checkpointing=True,
-        save_steps=10,
         bf16=True,
         save_only_model=True,
+        weight_decay=0,
+        adam_beta1=0.9,
+        adam_beta2=0.999,
+        adam_epsilon=1e-8,
+        max_grad_norm=1.0,
         deepspeed=args.deepspeed,
-        save_total_limit=2
-        # fp16=True,
+        lr_scheduler_type="cosine_with_min_lr",
+        lr_scheduler_kwargs={"min_lr_rate": 0.1,},
+        save_total_limit=None,
     )
-
+    
     with open(args.chat_template, "r") as f:
         template = f.read()
         tokenizer.chat_template = template
+    tokenizer.model_max_length = 32768
         
     # Initialize data collator
     data_collator = ChatDataCollator(tokenizer)
@@ -176,23 +210,23 @@ if __name__ == "__main__":
     import argparse
     parser = argparse.ArgumentParser(description='Train a model with tool call data')
     parser.add_argument('--data_path', type=str, 
-                      default='./data/filtered_toolcall_claude_verified.jsonl',
+                      default='./codeforces_messages.jsonl',
                       help='Path to the JSONL data file')
     parser.add_argument('--model_path', type=str,
-                      default='agentica-org/DeepScaleR-1.5B-Preview',
+                      default='deepseek-ai/DeepSeek-R1-Distill-Qwen-1.5B',
                       help='Path or name of the pretrained model to fine-tune')
     parser.add_argument('--output_dir', type=str,
                       default='./results',
                       help='Directory for training outputs and checkpoints')
     parser.add_argument('--model_output_dir', type=str,
-                      default='./deepscaler-toolcall-claude-python',
+                      default='./deepcoder-sft',
                       help='Directory to save the final model')
-    parser.add_argument('--chat_template', type=str,
-                      default='../../rllm/templates/r1-toolcall-python.jinja',
-                      help='Path to the chat template file')
     parser.add_argument('--deepspeed', type=str,
-                      default='../config/ds_stage2.json',
+                      default='./config/ds_stage3.json',
                       help='Path to the deepspeed config file')
+    parser.add_argument('--chat_template', type=str,
+                      default='../rllm/templates/r1-toolcall-python.jinja',
+                      help='Path to the chat template file')
     args = parser.parse_args()
    
     main(args)
