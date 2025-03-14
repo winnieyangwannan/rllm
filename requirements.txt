@@ -7,8 +7,6 @@ pybind11
 pylatexenc
 pytest
 sentence_transformers
-sglang[all]
-sglang-router
 sortedcontainers
 swebench
 tabulate
