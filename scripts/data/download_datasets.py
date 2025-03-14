@@ -11,6 +11,7 @@ FILE_IDS = {
     "train_livecodebench.json": "1ikA3HznFuAaZUNTvoKiZfBh9wFaGKiLU",
     "kodcode.json": "1STMAebzGjJtgl5OcOhG-4hjdAiLAWiY6",
     "primeintellect.json": "1Av2d_1DlVDB5mTL3AWOP0Eb-1Ft8e3fO",
+    "primeintellect_dedupe.json": "1o-4P5fUBZd75PM9qfSXInPYXzfW5dfYm",
 }
 
 # Define the destination paths
@@ -22,6 +23,7 @@ DEST_PATHS = {
     "train_livecodebench.json": os.path.expanduser("~/rllm/rllm/data/train/code/livecodebench.json"),
     "kodcode.json": os.path.expanduser("~/rllm/rllm/data/train/code/kodcode.json"),
     "primeintellect.json": os.path.expanduser("~/rllm/rllm/data/train/code/primeintellect.json"),
+    "primeintellect_dedupe.json": os.path.expanduser("~/rllm/rllm/data/train/code/primeintellect_dedupe.json"),
 }
 
 # Create the necessary directories
