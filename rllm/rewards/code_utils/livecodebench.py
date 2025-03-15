@@ -394,6 +394,112 @@ def grade_stdio(
     return all_results, {"execution time": total_execution_time}
 
 
+def call_method_no_input(method):
+
+    # sys.setrecursionlimit(10000)
+
+    # @patch('builtins.input', side_effect=inputs.split("\n"))
+    # @patch('sys.stdout.write', print)
+    def _inner_call_method(_method):
+        try:
+            return _method()
+        except SystemExit as e:
+            pass
+        finally:
+            pass
+
+    return _inner_call_method(method)
+
+def execute_stdio(
+    code: str,
+    timeout: int,
+):
+    ## runtime doesn't interact well with __name__ == '__main__'
+    code = clean_if_name(code)
+
+    ## we wrap the given code inside another function
+    code = make_function(code)
+
+    compiled_sol = compile_code(code, timeout)
+    if compiled_sol is None:
+        return
+
+    method = get_function(compiled_sol, "wrapped_function")
+
+    if method is None:
+        return
+
+    signal.alarm(timeout)
+    faulthandler.enable()
+
+    signal.alarm(timeout)
+    with Capturing() as captured_output:
+        try:
+            start = time.time()
+            call_method_no_input(method)
+            # reset the alarm
+            signal.alarm(0)
+        except Exception as e:
+            signal.alarm(0)
+            if "timeoutexception" in repr(e).lower():
+                return "Time Limit Exceeded",
+            else:
+                return repr(e)
+        finally:
+            signal.alarm(0)
+            faulthandler.disable()
+
+    prediction = captured_output[0]
+    return prediction
+
+def execute_code(code, timeout=6):
+    """
+    if test(generated_code) is not None it'll try to run the code.
+    otherwise it'll just return an input and output pair.
+    """
+    signal.signal(signal.SIGALRM, timeout_handler)
+
+    # Disable functionalities that can make destructive changes to the test.
+    # max memory is set to 4GB
+    reliability_guard()
+
+    signal.alarm(timeout)
+    try:
+        output = execute_stdio(
+            code=code,
+            timeout=timeout,
+        )
+        return output
+    except Exception as e:
+        return f"Error during testing: {e}"
+    finally:
+        signal.alarm(0)
+
+def run_code(code, timeout=6):
+    import multiprocessing
+    manager = multiprocessing.Manager()
+    result = manager.list()
+
+    def _temp_run(sample, timeout):
+        res = execute_code(sample, timeout=timeout)
+        result.append(res)
+
+    p = multiprocessing.Process(
+        target=_temp_run,
+        args=(code, timeout),
+    )
+    p.start()
+    p.join(
+        timeout=(timeout + 1) + 5
+    )
+    if p.is_alive():
+        p.kill()
+
+    if not result:
+        return "Timeout"
+
+    return result[0]
+
 def run_test(sample, test=None, debug=False, timeout=6):
     """
     if test(generated_code) is not None it'll try to run the code.
