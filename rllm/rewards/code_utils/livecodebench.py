@@ -477,12 +477,13 @@ def execute_code(code, timeout=6):
 
 def run_code(code, timeout=6):
     import multiprocessing
+    import queue
     manager = multiprocessing.Manager()
-    result = manager.list()
+    result = manager.Queue()
 
     def _temp_run(sample, timeout):
         res = execute_code(sample, timeout=timeout)
-        result.append(res)
+        result.put(res)
 
     p = multiprocessing.Process(
         target=_temp_run,
@@ -492,15 +493,19 @@ def run_code(code, timeout=6):
     p.join(
         timeout=(timeout + 1) + 5
     )
-    if p.is_alive():
-        p.kill()
-
-    if not result:
+    try: 
+        res = result.get()
+        return res
+    except queue.Empty:
         return "Timeout"
+    finally:
+        if p.is_alive():
+            p.terminate()
+            p.join(timeout=1)
+            if p.is_alive():
+                p.kill()
 
-    return result[0]
-
-def run_test(sample, test=None, debug=False, timeout=6):
+def run_test(sample, test=None, debug=False, timeout=4):
     """
     if test(generated_code) is not None it'll try to run the code.
     otherwise it'll just return an input and output pair.
