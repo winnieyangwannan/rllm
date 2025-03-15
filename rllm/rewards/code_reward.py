@@ -181,7 +181,7 @@ def lcb_check_correctness_v2(sample, generation, timeout=6, debug=False):
             print(f"global timeout")
     if not result:
         return False
-    print(result[0], metadata_list)
+    # print(result[0], metadata_list)
     # Check if all elements in result[0] are True
     return all(x == True for x in result[0])
 
@@ -268,7 +268,7 @@ class RewardCodeFn(RewardFn):
 
         model_code = extract_code_from_model(model_response)
         if model_code is None:
-            #print("No code found in model response")
+            # print("No code found in model response")
             return RewardOutput(reward=self.config.format_error_reward, is_correct=False)
 
         # Tests: List[Dictionary] - Codeforces, LiveCodeBench
@@ -276,8 +276,10 @@ class RewardCodeFn(RewardFn):
         is_correct = False
         if dataset_name in ["taco", "apps", "code_contests"]:
             test_fn = taco_run_test
+            is_correct = check_correctness(tests, model_code, test_fn)
         elif dataset_name == "codeforces":
             test_fn = codeforces_run_test
+            is_correct = check_correctness(tests, model_code, test_fn)
         elif dataset_name == "leetcode":
             is_correct = leetcode_check_correctness(tests, model_code)
         elif dataset_name == "livecodebench":
@@ -345,3 +347,4 @@ if __name__ == "__main__":
             metadata=ground_truth
         ))
     return reward_response.is_correct
+  
