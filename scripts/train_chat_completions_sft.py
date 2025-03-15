@@ -164,7 +164,7 @@ def main(args):
         num_train_epochs=10,
         per_device_train_batch_size=1,
         gradient_accumulation_steps=8,
-        learning_rate=4e-5,
+        learning_rate=5e-6,
         warmup_ratio=0.1,
         logging_steps=5,
         save_strategy="epoch",
