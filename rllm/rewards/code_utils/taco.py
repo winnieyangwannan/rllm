@@ -452,12 +452,12 @@ def execute_std_code(method, synthesized_code, inputs_list, outputs_list, timeou
             except subprocess.TimeoutExpired as e:
                 print(e, temp_file_name)
                 stderr = "TIMEOUT"
-                return_code = result.returncode
+                return_code = -9
                 exec_code = -1
             except Exception as e:
                 print(e, temp_file_name)
+                return_code = -99
                 stderr = f"{e}"
-                return_code = result.returncode
                 exec_code = -2
 
         stdout = clean_stdout(stdout)
