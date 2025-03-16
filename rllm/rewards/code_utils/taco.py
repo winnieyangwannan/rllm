@@ -129,11 +129,11 @@ def timeout_handler(signum, frame):
     # return
     raise TimeoutException
 signal.signal(signal.SIGALRM, timeout_handler)
-TIMEOUT = 100  # seconds
+TIMEOUT = 10  # seconds
 
 EXECUTION_RESULTS = {1: "passed", 0: "false", -1: "timeout", -2: "runtime_error", -3: "returncode:{code}", -4: "compile_error"}
 
-def run_test(in_outs, test=None, debug=False):
+def run_test(in_outs, test=None, debug=False, timeout=TIMEOUT):
     """
     if test(generated_code) is not None it'll try to run the code.
     otherwise it'll just return an input and output pair.
@@ -148,7 +148,6 @@ def run_test(in_outs, test=None, debug=False):
             return []
     if in_outs:
         if in_outs.get("fn_name") is None:
-            fn_name = in_outs.get("fn_name")
             which_type = CODE_TYPE.standard_input  # Standard input
             method_name = None
         else:
@@ -172,23 +171,23 @@ def run_test(in_outs, test=None, debug=False):
             print(f"loading test code = {datetime.now().time()}")
         if which_type == CODE_TYPE.call_based:
             synthesized_code = synthesize_cb_code(test, debug)
-            method_func = compile_and_get_func(synthesized_code, which_type, method_name, timeout=TIMEOUT, debug=debug)
+            method_func = compile_and_get_func(synthesized_code, which_type, method_name, timeout=timeout, debug=debug)
         elif which_type == CODE_TYPE.standard_input:
             synthesized_code, exec_code = synthesize_std_code(test, debug)
-            method_func = compile_and_get_func(synthesized_code, which_type, method_name, timeout=TIMEOUT, debug=debug)
+            method_func = compile_and_get_func(synthesized_code, which_type, method_name, timeout=timeout, debug=debug)
         if not method_func:
             results.append(-2)
             return results
         else:
             if which_type == CODE_TYPE.call_based:  # Call-based
-                detail_results, debug_infos = execute_cb_code(method_func, inputs_list, outputs_list, timeout=TIMEOUT, early_stop=True, debug=debug)
+                detail_results, debug_infos = execute_cb_code(method_func, inputs_list, outputs_list, timeout=timeout, early_stop=True, debug=debug)
             elif which_type == CODE_TYPE.standard_input:
-                detail_results = execute_std_code(method_func, exec_code, inputs_list, outputs_list, timeout=TIMEOUT, early_stop=True, debug=debug)
+                detail_results = execute_std_code(method_func, exec_code, inputs_list, outputs_list, timeout=timeout, early_stop=True, debug=debug)
                 debug_infos = detail_results.get('debug', None)
                 detail_results = {k:v for k, v in detail_results.items() if k!='debug'}
                 if set(detail_results.values()) == {(False, 'returncode:1')}:
                     synthesized_code, exec_code = synthesize_std_code(test, debug)
-                    detail_results = execute_std_code(method_func, synthesized_code+'\ncode()\n', inputs_list, outputs_list, timeout=TIMEOUT, early_stop=True, debug=debug)
+                    detail_results = execute_std_code(method_func, synthesized_code+'\ncode()\n', inputs_list, outputs_list, timeout=timeout, early_stop=True, debug=debug)
         if isinstance(detail_results, list):
             if len(detail_results) == 1:
                 detail_results = detail_results * len(inputs_list)
@@ -431,36 +430,35 @@ def execute_std_code(method, synthesized_code, inputs_list, outputs_list, timeou
             outputs = [str(k) for k in outputs]
             outputs = "\n".join(outputs)
         with tempfile.NamedTemporaryFile(mode='w+') as temp_input:
-                temp_input.write(inputs)
-                temp_input.flush()
-                temp_input.seek(0)
-                temp_file_name = temp_input.name
-                
-                process = subprocess.Popen(['bash', '-c', 'ulimit -v 4194304; python3 ' + temp_program_path], 
+            temp_input.write(inputs)
+            temp_input.flush()
+            temp_input.seek(0)
+            temp_file_name = temp_input.name
+            stdout, stderr = "", ""
+            try:
+                result = subprocess.run(['bash', '-c', 'ulimit -v 4194304; python3 ' + temp_program_path], 
                                         stdin=temp_input,
                                         stdout=subprocess.PIPE,
                                         stderr=subprocess.PIPE,
                                         preexec_fn=os.setsid,
                                         universal_newlines=True,
+                                        timeout=timeout,
                                         text=True)
-        stdout, stderr = "", ""
-        try:
-            stdout, stderr = process.communicate(timeout=timeout)
-            return_code = process.returncode
-            # result = subprocess.run(['python3', temp_program_path], input=inputs, text=True, capture_output=True, timeout=timeout)
-            exec_code = 999
-        except subprocess.TimeoutExpired as e:
-            print(e, temp_file_name)
-            kill_process(process)
-            stderr = "TIMEOUT"
-            return_code = process.returncode
-            exec_code = -1
-        except Exception as e:
-            print(e, temp_file_name)
-            kill_process(process)
-            stderr = f"{e}"
-            return_code = process.returncode
-            exec_code = -2
+                
+                stdout, stderr = result.stdout, result.stderr
+                return_code = result.returncode
+                # result = subprocess.run(['python3', temp_program_path], input=inputs, text=True, capture_output=True, timeout=timeout)
+                exec_code = 999
+            except subprocess.TimeoutExpired as e:
+                print(e, temp_file_name)
+                stderr = "TIMEOUT"
+                return_code = result.returncode
+                exec_code = -1
+            except Exception as e:
+                print(e, temp_file_name)
+                stderr = f"{e}"
+                return_code = result.returncode
+                exec_code = -2
 
         stdout = clean_stdout(stdout)
 
@@ -506,6 +504,15 @@ def execute_std_code(method, synthesized_code, inputs_list, outputs_list, timeou
                     'exec_outputs': stdout,
                     'stderr': stderr
                 }
+        # if exec_code <= 0:
+
+        #     print(f"exec_code = {synthesized_code}, returncode = {return_code}")
+        #     print("ERROR: ", stderr)
+        #     print("EXPECTED OUTPUT: ", outputs)
+        #     print("ACTUAL OUTPUT: ", stdout, "\n\n\n\n")
+        #     # pdb = ForkedPDB()
+        #     # pdb.set_trace()
+
         if early_stop and exec_code<=0:
             break
     return exec_results
