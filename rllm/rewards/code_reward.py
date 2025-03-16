@@ -61,19 +61,18 @@ def check_correctness(tests: Union[List[Dict[str, str]], Dict[str, List[str]]], 
             test_results.append(test_fn(tests, test=generation, debug=debug))
         except Exception as e:
             print(f"Error in evaluate_code: {e}")
-
     if isinstance(tests, list):
         total_tests = len(tests)
         if total_tests > max_tests:
-            # Randomly select at most 15 test cases
-            selected_indices = random.sample(range(total_tests), max_tests)
+            # Sort indices by test input length and take the max_tests longest ones
+            selected_indices = sorted(range(total_tests), key=lambda i: len(tests[i]['input']), reverse=True)[:max_tests]
             tests = [tests[i] for i in selected_indices]
         num_tests = len(tests)
     else:
         total_tests = len(tests['inputs'])
         if total_tests > max_tests:
-            # Randomly select at most 15 test cases
-            selected_indices = random.sample(range(total_tests), max_tests)
+            # Select the tests with the longest input length.
+            selected_indices = sorted(range(total_tests), key=lambda i: len(tests['inputs'][i]), reverse=True)[:max_tests]
             # Create a new dict with only the selected test cases
             selected_tests = {
                 'inputs': [tests['inputs'][i] for i in selected_indices],
