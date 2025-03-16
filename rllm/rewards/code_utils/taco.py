@@ -88,36 +88,7 @@ def kill_process(process):
         os.kill(pid, signal.SIGKILL)
     except OSError:
         pass
-    
-    # Fourth attempt - process methods
-    try:
-        if process.poll() is None:
-            process.terminate()
-        if process.poll() is None:
-            process.kill()
-    except:
-        pass
-    
-    # Clean up zombie by waiting for the process to be fully dead
-    try:
-        process.wait(timeout=1)
-    except (subprocess.TimeoutExpired, Exception):
-        pass
-        
-    # Verify if process is truly dead, and if not, try one more time
-    try:
-        if psutil.pid_exists(pid):
-            os.kill(pid, signal.SIGKILL)
-            time.sleep(0.1)
-    except:
-        pass
 
-    # Final verification - log if we still can't kill it
-    try:
-        if psutil.pid_exists(pid) and psutil.Process(pid).status() != psutil.STATUS_ZOMBIE:
-            print(f"Warning: Process {pid} could not be terminated and may be a zombie")
-    except:
-        pass
 
 # to run the solution files we're using a timing based approach
 import signal
@@ -129,7 +100,7 @@ def timeout_handler(signum, frame):
     # return
     raise TimeoutException
 signal.signal(signal.SIGALRM, timeout_handler)
-TIMEOUT = 10  # seconds
+TIMEOUT = 90  # seconds
 
 EXECUTION_RESULTS = {1: "passed", 0: "false", -1: "timeout", -2: "runtime_error", -3: "returncode:{code}", -4: "compile_error"}
 
@@ -504,15 +475,6 @@ def execute_std_code(method, synthesized_code, inputs_list, outputs_list, timeou
                     'exec_outputs': stdout,
                     'stderr': stderr
                 }
-        # if exec_code <= 0:
-
-        #     print(f"exec_code = {synthesized_code}, returncode = {return_code}")
-        #     print("ERROR: ", stderr)
-        #     print("EXPECTED OUTPUT: ", outputs)
-        #     print("ACTUAL OUTPUT: ", stdout, "\n\n\n\n")
-        #     # pdb = ForkedPDB()
-        #     # pdb.set_trace()
-
         if early_stop and exec_code<=0:
             break
     return exec_results
