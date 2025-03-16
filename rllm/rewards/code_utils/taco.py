@@ -52,44 +52,6 @@ class Capturing(list):
         del self._stringio    # free up some memory
         sys.stdout = self._stdout
 
-def kill_process(process):
-    """
-    Aggressively kill a process and all its children to prevent zombies.
-    """
-    # Get the process ID before we attempt to kill it
-    pid = process.pid
-    
-    # First attempt - kill the process group
-    try:
-        pgid = os.getpgid(pid)
-        os.killpg(pgid, signal.SIGKILL)
-    except OSError:
-        # Process group might already be gone
-        pass
-    
-    # Second attempt - use psutil to kill all children recursively
-    try:
-        parent = psutil.Process(pid)
-        children = parent.children(recursive=True)
-        for child in children:
-            try:
-                child.kill()
-            except psutil.NoSuchProcess:
-                pass
-        try:
-            parent.kill()
-        except psutil.NoSuchProcess:
-            pass
-    except (psutil.NoSuchProcess, psutil.AccessDenied, Exception):
-        pass
-    
-    # Third attempt - direct signals to process
-    try:
-        os.kill(pid, signal.SIGKILL)
-    except OSError:
-        pass
-
-
 # to run the solution files we're using a timing based approach
 import signal
 # stuff for setting up signal timer
@@ -407,7 +369,7 @@ def execute_std_code(method, synthesized_code, inputs_list, outputs_list, timeou
             temp_file_name = temp_input.name
             stdout, stderr = "", ""
             try:
-                result = subprocess.run(['bash', '-c', 'ulimit -v 4194304; python3 ' + temp_program_path], 
+                result = subprocess.run(['bash', '-c', 'ulimit -v 10485760; python3 ' + temp_program_path], 
                                         stdin=temp_input,
                                         stdout=subprocess.PIPE,
                                         stderr=subprocess.PIPE,
