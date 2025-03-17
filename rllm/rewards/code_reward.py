@@ -61,19 +61,18 @@ def check_correctness(tests: Union[List[Dict[str, str]], Dict[str, List[str]]], 
             test_results.append(test_fn(tests, test=generation, debug=debug))
         except Exception as e:
             print(f"Error in evaluate_code: {e}")
-
     if isinstance(tests, list):
         total_tests = len(tests)
         if total_tests > max_tests:
-            # Randomly select at most 15 test cases
-            selected_indices = random.sample(range(total_tests), max_tests)
+            # Sort indices by test input length and take the max_tests longest ones
+            selected_indices = sorted(range(total_tests), key=lambda i: len(tests[i]['input']), reverse=True)[:max_tests]
             tests = [tests[i] for i in selected_indices]
         num_tests = len(tests)
     else:
         total_tests = len(tests['inputs'])
         if total_tests > max_tests:
-            # Randomly select at most 15 test cases
-            selected_indices = random.sample(range(total_tests), max_tests)
+            # Select the tests with the longest input length.
+            selected_indices = sorted(range(total_tests), key=lambda i: len(tests['inputs'][i]), reverse=True)[:max_tests]
             # Create a new dict with only the selected test cases
             selected_tests = {
                 'inputs': [tests['inputs'][i] for i in selected_indices],
@@ -181,7 +180,7 @@ def lcb_check_correctness_v2(sample, generation, timeout=6, debug=False):
             print(f"global timeout")
     if not result:
         return False
-    print(result[0], metadata_list)
+    # print(result[0], metadata_list)
     # Check if all elements in result[0] are True
     return all(x == True for x in result[0])
 
@@ -268,7 +267,7 @@ class RewardCodeFn(RewardFn):
 
         model_code = extract_code_from_model(model_response)
         if model_code is None:
-            #print("No code found in model response")
+            # print("No code found in model response")
             return RewardOutput(reward=self.config.format_error_reward, is_correct=False)
 
         # Tests: List[Dictionary] - Codeforces, LiveCodeBench
@@ -276,8 +275,10 @@ class RewardCodeFn(RewardFn):
         is_correct = False
         if dataset_name in ["taco", "apps", "code_contests"]:
             test_fn = taco_run_test
+            is_correct = check_correctness(tests, model_code, test_fn)
         elif dataset_name == "codeforces":
             test_fn = codeforces_run_test
+            is_correct = check_correctness(tests, model_code, test_fn)
         elif dataset_name == "leetcode":
             is_correct = leetcode_check_correctness(tests, model_code)
         elif dataset_name == "livecodebench":
@@ -345,3 +346,4 @@ if __name__ == "__main__":
             metadata=ground_truth
         ))
     return reward_response.is_correct
+  

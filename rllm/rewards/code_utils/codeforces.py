@@ -15,6 +15,7 @@ import inspect
 from enum import Enum
 from unittest.mock import patch, mock_open
 from io import StringIO
+import platform
 
 class CODE_TYPE(Enum):
     call_based = 0
@@ -46,7 +47,7 @@ TIMEOUT = 4  # seconds
 
 EXECUTION_RESULTS = {1: "passed", 0: "false", -1: "timeout", -2: "runtime_error", -3: "returncode:{code}", -4: "compile_error"}
 
-def run_test(in_outs, test=None, debug=False):
+def run_test(in_outs, test=None, debug=False, timeout=TIMEOUT):
     """
     if test(generated_code) is not None it'll try to run the code.
     otherwise it'll just return an input and output pair.
@@ -82,22 +83,22 @@ def run_test(in_outs, test=None, debug=False):
             print(f"loading test code = {datetime.now().time()}")
         if which_type == CODE_TYPE.call_based:
             synthesized_code = synthesize_cb_code(test, debug)
-            method_func = compile_and_get_func(synthesized_code, which_type, method_name, timeout=TIMEOUT, debug=debug)
+            method_func = compile_and_get_func(synthesized_code, which_type, method_name, timeout=timeout, debug=debug)
         elif which_type == CODE_TYPE.standard_input:
             synthesized_code, exec_code = synthesize_std_code(test, debug)
-            method_func = compile_and_get_func(synthesized_code, which_type, method_name, timeout=TIMEOUT, debug=debug)
+            method_func = compile_and_get_func(synthesized_code, which_type, method_name, timeout=timeout, debug=debug)
         if not method_func:
             results.append(-2)
             return results
         else:
             if which_type == CODE_TYPE.call_based:  # Call-based
-                detail_results, debug_infos = execute_cb_code(method_func, inputs_list, outputs_list, timeout=TIMEOUT, early_stop=True, debug=debug)
+                detail_results, debug_infos = execute_cb_code(method_func, inputs_list, outputs_list, timeout=timeout, early_stop=True, debug=debug)
             elif which_type == CODE_TYPE.standard_input:
-                detail_results = execute_std_code(method_func, exec_code, inputs_list, outputs_list, timeout=TIMEOUT, early_stop=True, debug=debug)
+                detail_results = execute_std_code(method_func, exec_code, inputs_list, outputs_list, timeout=timeout, early_stop=True, debug=debug)
                 debug_infos = detail_results.get('debug', None)
                 detail_results = {k:v for k, v in detail_results.items() if k!='debug'}
                 if set(detail_results.values()) == {(False, 'returncode:1')}:
-                    detail_results = execute_std_code(method_func, synthesized_code+'\ncode()\n', inputs_list, outputs_list, timeout=TIMEOUT, early_stop=True, debug=debug)
+                    detail_results = execute_std_code(method_func, synthesized_code+'\ncode()\n', inputs_list, outputs_list, timeout=timeout, early_stop=True, debug=debug)
         if isinstance(detail_results, list):
             if len(detail_results) == 1:
                 detail_results = detail_results * len(inputs_list)
