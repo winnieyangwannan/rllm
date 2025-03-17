@@ -4,6 +4,8 @@ import json
 import sys
 import faulthandler
 import platform
+import multiprocessing
+import queue
 
 # used for debugging to time steps
 from datetime import datetime
@@ -452,32 +454,33 @@ def execute_stdio(
     prediction = captured_output[0]
     return prediction
 
-def execute_code(code, timeout=6):
-    """
-    if test(generated_code) is not None it'll try to run the code.
-    otherwise it'll just return an input and output pair.
-    """
-    signal.signal(signal.SIGALRM, timeout_handler)
-
-    # Disable functionalities that can make destructive changes to the test.
-    # max memory is set to 4GB
-    reliability_guard()
-
-    signal.alarm(timeout)
-    try:
-        output = execute_stdio(
-            code=code,
-            timeout=timeout,
-        )
-        return output
-    except Exception as e:
-        return f"Error during testing: {e}"
-    finally:
-        signal.alarm(0)
 
 def run_code(code, timeout=6):
-    import multiprocessing
-    import queue
+
+    def execute_code(code, timeout=6):
+        """
+        if test(generated_code) is not None it'll try to run the code.
+        otherwise it'll just return an input and output pair.
+        """
+        signal.signal(signal.SIGALRM, timeout_handler)
+
+        # Disable functionalities that can make destructive changes to the test.
+        # max memory is set to 4GB
+        reliability_guard()
+
+        signal.alarm(timeout)
+        try:
+            output = execute_stdio(
+                code=code,
+                timeout=timeout,
+            )
+            return output
+        except Exception as e:
+            return f"Error: {e}"
+        finally:
+            signal.alarm(0)
+
+
     manager = multiprocessing.Manager()
     result = manager.Queue()
 
@@ -505,7 +508,7 @@ def run_code(code, timeout=6):
             if p.is_alive():
                 p.kill()
 
-def run_test(sample, test=None, debug=False, timeout=4):
+def run_test(sample, test=None, debug=False, timeout=6):
     """
     if test(generated_code) is not None it'll try to run the code.
     otherwise it'll just return an input and output pair.
