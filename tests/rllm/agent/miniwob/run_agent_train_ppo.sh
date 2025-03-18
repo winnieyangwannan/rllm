@@ -4,7 +4,7 @@ export VLLM_ATTENTION_BACKEND=FLASH_ATTN
 export PYTORCH_CUDA_ALLOC_CONF="expandable_segments:True"
 
 python3 -m verl.trainer.main_ppo_agent \
-    algorithm.adv_estimator=grpo \
+    algorithm.adv_estimator=gae \
     data.train_files=$HOME/data/rllm-miniwob/train.parquet \
     data.val_files=$HOME/data/rllm-miniwob/test.parquet \
     data.train_batch_size=64 \
@@ -33,7 +33,7 @@ python3 -m verl.trainer.main_ppo_agent \
     trainer.critic_warmup=0 \
     trainer.logger=['console','wandb'] \
     trainer.project_name='rllm-agent' \
-    trainer.experiment_name='7b-ppo-miniwob_agent' \
+    trainer.experiment_name='7b-ppo-miniwob_agent-ppo' \
     +trainer.val_before_train=True \
     trainer.default_hdfs_dir=null \
     trainer.n_gpus_per_node=8 \
@@ -41,9 +41,15 @@ python3 -m verl.trainer.main_ppo_agent \
     trainer.save_freq=60 \
     trainer.test_freq=5 \
     trainer.total_epochs=1000 \
+    critic.optim.lr=1e-5 \
+    critic.model.path=Qwen/Qwen2.5-7B-Instruct \
+    critic.model.use_remove_padding=True \
+    critic.model.fsdp_config.param_offload=True \
+    critic.model.fsdp_config.optimizer_offload=True \
+    critic.ppo_micro_batch_size_per_gpu=2 \
     env.name=browsergym \
     env.subtask=miniwob \
     env.miniwob_url="$MINIWOB_URL" \
     agent.name=webagent \
     agent.max_trajectory_length=8000 \
-    agent.trajectory_episode_len=20 > output.log 2>&1
+    agent.trajectory_episode_len=20 > output_ppo.log 2>&1

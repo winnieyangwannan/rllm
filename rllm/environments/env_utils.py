@@ -4,6 +4,8 @@ def add_trajectory_reward(trajectory):
     """
     add trajectory reward to the dict of each interaction
     """
+    if not trajectory:
+        return trajectory
     trajectory_reward = np.sum([d["reward"] for d in trajectory])
     for d in trajectory:
         d.update({"trajectory_reward": trajectory_reward})
@@ -13,6 +15,8 @@ def add_mc_return(trajectory, gamma = 0.95):
     """
     add trajectory reward to the dict of each interaction using Monte Carlo returns for each step
     """
+    if not trajectory:
+        return trajectory
     trajectory_rewards = np.array([d["reward"] for d in trajectory]).reshape(1, -1)
     gamma_row = np.cumprod(np.ones((1, trajectory_rewards.shape[1]))*gamma)
     gamma_matrix = np.triu(gamma_row.reshape(1, -1 )/ gamma_row.reshape(-1, 1))
@@ -25,6 +29,8 @@ def add_training_reward(trajectory, training_reward):
     """
     add training reward to the dict of each interaction
     """
+    if not trajectory:
+        return trajectory
     for d in trajectory:
         d.update({"training_reward": training_reward})
     return trajectory

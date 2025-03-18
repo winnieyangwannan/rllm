@@ -342,7 +342,7 @@ class BatchAgent:
 
                 # put initial observation into the sequence
                 for i, obs in enumerate(observations):
-                    trajectories[i].append({"next_observation": obs,})
+                    trajectories[i].append({"next_observation": obs})
 
                     # compute initial prompt tokens
                     initial_msg = {
@@ -496,7 +496,7 @@ class BatchAgent:
                 continue
         
         # remove sentinel
-        trajectories = [traj[1:] if traj else traj for traj in trajectories]
+        trajectories = [traj[1:] if traj else [] for traj in trajectories]
         trajectory_result = []
 
         for i, trajectory in enumerate(trajectories):
