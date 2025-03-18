@@ -22,7 +22,7 @@ class E2BPythonInterpreter:
 
         self.n_sandboxes = n_sandboxes
 
-        if len(PythonInterpreter.sandboxes) == 0:
+        if len(E2BPythonInterpreter.sandboxes) == 0:
             loop = asyncio.get_event_loop()
             loop.run_until_complete(self._init_sandbox())
 
@@ -63,7 +63,7 @@ class E2BPythonInterpreter:
         if not self.sandboxes:
             print(f"Creating {self.n_sandboxes} sandboxes")
             for _ in range(self.n_sandboxes):
-                sandbox = await AsyncSandbox.create(api_key="", timeout=1200)
+                sandbox = await AsyncSandbox.create(api_key="", timeout=3600)
                 self.sandboxes.append(sandbox)
 
     async def _kill_sandbox(self):
@@ -122,7 +122,7 @@ class E2BPythonInterpreter:
         return await self._execute_python(**kwargs)
 
 
-class PythonInterpreter:
+class LocalPythonInterpreter:
     """A tool for executing Python code in a sandboxed environment."""
 
     def __init__(self, n_sandboxes=1):
@@ -187,10 +187,10 @@ class PythonInterpreter:
                 raise RuntimeError(f"Failed to install required packages: {str(e)}")
 
     @staticmethod
-    def _execute_in_subprocess(code: str) -> str:
+    def _execute_in_subprocess(code: str, timeout: int = 10) -> str:
         """Execute code in a separate process with resource limits."""
         # First check and install requirements
-        PythonInterpreter._check_requirements()
+        LocalPythonInterpreter._check_requirements()
         
         with tempfile.NamedTemporaryFile(mode='w', suffix='.py', delete=False) as f:
             # Wrap code to capture stdout and stderr, and last expression value
@@ -233,24 +233,25 @@ print(output.getvalue())
                     [sys.executable, f.name],
                     capture_output=True,
                     text=True,
-                    timeout=10,  # 10 second timeout
+                    timeout=timeout,  # Use provided timeout
                 )
                 output = result.stdout.strip() or result.stderr.strip() or "Empty Results"
                 return output
             except subprocess.TimeoutExpired:
-                return "Error: Execution timed out"
+                return f"Error: Execution timed out after {timeout} seconds"
             except Exception as e:
                 return f"Error: {type(e).__name__} - {str(e)}"
             finally:
                 os.unlink(f.name)
 
-    async def _execute_python(self, code: str = "", **kwargs) -> str:
+    async def _execute_python(self, code: str = "", timeout: int = 10, **kwargs) -> str:
         """
         Execute Python code in a sandboxed environment using the process pool.
 
         Args:
             code: Python code to execute
-
+            timeout: Maximum execution time in seconds before timing out
+            
         Returns:
             Execution result as string
         """
@@ -258,7 +259,8 @@ print(output.getvalue())
             result = await asyncio.get_event_loop().run_in_executor(
                 self.pool, 
                 self._execute_in_subprocess,
-                code
+                code,
+                timeout
             )
             return result
         except Exception as e:
@@ -267,3 +269,47 @@ print(output.getvalue())
     async def execute(self, **kwargs):
         """Execute Python code in sandbox with given arguments."""
         return await self._execute_python(**kwargs)
+
+
+class PythonInterpreter:
+    def __new__(cls, type: str = "local", n_sandboxes: int = 1):
+        """
+        Create a Python interpreter of the specified type.
+        
+        Args:
+            interpreter_type: Type of interpreter ('local' or 'e2b')
+            n_sandboxes: Number of sandboxes/workers to create
+            
+        Returns:
+            An instance of either LocalPythonInterpreter or E2BPythonInterpreter
+        """
+        interpreter_type = type.lower()
+        if interpreter_type == "local":
+            return LocalPythonInterpreter(n_sandboxes=n_sandboxes)
+        elif interpreter_type == "e2b":
+            return E2BPythonInterpreter(n_sandboxes=n_sandboxes)
+        else:
+            raise ValueError(f"Unknown interpreter type: {interpreter_type}. Choose 'local' or 'e2b'.") 
+        
+
+
+if __name__ == "__main__":
+    # Create a local Python interpreter instance
+    interpreter = PythonInterpreter(type="local")
+
+    # Example code to execute
+    test_code = """
+print('Hello from Python interpreter!')
+x = 5
+y = 10
+print(f'Sum of {x} and {y} is: {x + y}')
+"""
+
+    # Run the code using asyncio
+    async def test_interpreter():
+        result = await interpreter.execute(code=test_code)
+        print("Execution result:")
+        print(result)
+
+    # Run the async test
+    asyncio.run(test_interpreter())
