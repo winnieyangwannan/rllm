@@ -66,8 +66,8 @@ python3 -m verl.trainer.main_ppo \
     +trainer.val_before_train=False \
     trainer.n_gpus_per_node=8 \
     trainer.nnodes=1 \
-    trainer.save_freq=20 \
-    trainer.test_freq=10 \
+    trainer.save_freq=1 \
+    trainer.test_freq=1 \
     trainer.default_hdfs_dir=null \
     trainer.remove_previous_ckpt_in_save=True \
     trainer.total_epochs=30 "${@:1}"
