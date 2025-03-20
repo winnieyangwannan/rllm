@@ -124,12 +124,11 @@ def chat_completion_with_tool(
                 temperature=0.6,
                 max_tokens=8192,
                 top_p=0.95,
-                stop=['```\n\n']
             )
             messages.append(
                 {
                     "role": "assistant",
-                    "content": completion.choices[0].message.content + '```\n\n',
+                    "content": completion.choices[0].message.content,
                 }
             )
             # print("round: 0", completion.choices[0].message.content)
@@ -159,12 +158,11 @@ def chat_completion_with_tool(
                         temperature=0.6,
                         max_tokens=8192,
                         top_p=0.95,
-                        stop=['```\n\n']
                     )
                     messages.append(
                         {
                             "role": "assistant",
-                            "content": completion.choices[0].message.content + '```\n\n',
+                            "content": completion.choices[0].message.content,
                         }
                     )
                 else:
@@ -172,6 +170,7 @@ def chat_completion_with_tool(
 
                 curr_round += 1
                 print(f"round {curr_round}:", completion.choices[0].message.content)
+            print(messages)
         except Exception as e:
             print("Exception:", str(e))
             pass
