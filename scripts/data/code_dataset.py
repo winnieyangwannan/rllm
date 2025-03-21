@@ -16,26 +16,8 @@ import json
 from verl.utils.hdfs_io import makedirs
 
 from rllm.data.dataset_types import TestDataset, TrainDataset
-from rllm.data.utils import load_dataset
-from rllm.system_prompts import (LCB_FORMATTING_MESSAGE_WITH_STARTER_CODE,
-                               LCB_FORMATTING_WITHOUT_STARTER_CODE,
-                               LCB_SYSTEM_MESSAGE_GENERIC)
+from rllm.data.utils import load_dataset, fetch_live_code_bench_system_prompt
 from datasets import concatenate_datasets
-
-
-def fetch_live_code_bench_system_prompt(prompt: str, starter_code: str = None):
-    # https://github.com/LiveCodeBench/LiveCodeBench/blob/main/lcb_runner/prompts/code_generation.py
-    prompt= LCB_SYSTEM_MESSAGE_GENERIC + "\n\n" + prompt
-    if starter_code:
-        prompt += (
-                f"### Format: {LCB_FORMATTING_MESSAGE_WITH_STARTER_CODE}\n"
-        )
-        prompt += f"```python\n{starter_code}\n```\n\n"
-    else:
-        prompt += f"### Format: {LCB_FORMATTING_WITHOUT_STARTER_CODE}\n"
-        prompt += "```python\n# YOUR CODE HERE\n```\n\n"
-    prompt += f"### Answer: (use the provided format with backticks)\n\n"
-    return prompt
 
 def make_map_fn(split: str):
     """Create a mapping function to process dataset examples.

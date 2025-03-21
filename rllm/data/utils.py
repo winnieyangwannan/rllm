@@ -6,6 +6,10 @@ from typing import Any, Dict, List, Union
 
 from rllm.data.dataset_types import TrainDataset, TestDataset
 
+from rllm.system_prompts import (LCB_FORMATTING_MESSAGE_WITH_STARTER_CODE,
+                               LCB_FORMATTING_WITHOUT_STARTER_CODE,
+                               LCB_SYSTEM_MESSAGE_GENERIC)
+
 
 def load_dataset(dataset_enum: Union[TrainDataset.Math, TrainDataset.Code, 
                                    TestDataset.Math, TestDataset.Code]) -> List[Dict[str, Any]]:
@@ -63,6 +67,19 @@ def load_dataset(dataset_enum: Union[TrainDataset.Math, TrainDataset.Code,
     except Exception as e:
         raise ValueError(f"Error loading dataset: {str(e)}")
 
+def fetch_live_code_bench_system_prompt(prompt: str, starter_code: str = None):
+    # https://github.com/LiveCodeBench/LiveCodeBench/blob/main/lcb_runner/prompts/code_generation.py
+    prompt= LCB_SYSTEM_MESSAGE_GENERIC + "\n\n" + prompt
+    if starter_code:
+        prompt += (
+                f"### Format: {LCB_FORMATTING_MESSAGE_WITH_STARTER_CODE}\n"
+        )
+        prompt += f"```python\n{starter_code}\n```\n\n"
+    else:
+        prompt += f"### Format: {LCB_FORMATTING_WITHOUT_STARTER_CODE}\n"
+        prompt += "```python\n# YOUR CODE HERE\n```\n\n"
+    prompt += f"### Answer: (use the provided format with backticks)\n\n"
+    return prompt
 
 if __name__ == '__main__':
     # Example usage

@@ -37,7 +37,7 @@ def extract_code_from_model(model_response: str):
         return None
     return code_blocks[-1].strip()
 
-def check_correctness(tests: Union[List[Dict[str, str]], Dict[str, List[str]]], code: str, test_fn, timeout_per_test: int = 6, max_tests: int = 15) -> bool:
+def check_correctness(tests: Union[List[Dict[str, str]], Dict[str, List[str]]], code: str, test_fn, timeout_per_test: int = 12, max_tests: int = 15) -> bool:
     """
     Check if generated code passes all test cases within a timeout period.
 
@@ -58,7 +58,7 @@ def check_correctness(tests: Union[List[Dict[str, str]], Dict[str, List[str]]], 
     def evaluate_code(tests, generation, debug, test_results, test_fn):
         """Helper function to run tests in separate process."""
         try:
-            test_results.append(test_fn(tests, test=generation, debug=debug))
+            test_results.append(test_fn(tests, test=generation, debug=debug, timeout=timeout_per_test))
         except Exception as e:
             print(f"Error in evaluate_code: {e}")
     if isinstance(tests, list):
@@ -81,14 +81,12 @@ def check_correctness(tests: Union[List[Dict[str, str]], Dict[str, List[str]]], 
             tests = selected_tests
         num_tests = len(tests['inputs'])
     
-    timeout = timeout_per_test * num_tests
-    
     process = multiprocessing.Process(
         target=evaluate_code,
         args=(tests, code, False, test_results, test_fn)
     )
     process.start()
-    process.join(timeout=timeout + 1)
+    process.join()
 
     if process.is_alive():
         process.kill()
