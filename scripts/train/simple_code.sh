@@ -51,7 +51,7 @@ python3 -m verl.trainer.main_ppo_pipeline \
     actor_rollout_ref.rollout.async_engine=True \
     actor_rollout_ref.rollout.vllm_log_prob=True \
     actor_rollout_ref.rollout.temperature=0.6 \
-    actor_rollout_ref.rollout.val_temperature=0.6 \
+    actor_rollout_ref.rollout.val_kwargs.temperature=0.6 \
     actor_rollout_ref.rollout.gpu_memory_utilization=0.85 \
     actor_rollout_ref.rollout.n=4 \
     actor_rollout_ref.rollout.val_kwargs.n=1 \
