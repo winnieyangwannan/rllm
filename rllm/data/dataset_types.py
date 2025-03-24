@@ -17,12 +17,17 @@ class TrainDataset:
         GSM8k = 'GSM8K'
         STILL = "STILL"
         DEEPSCALER = "DEEPSCALER"
+        DEEPSCALER_7B = "DEEPSCALER_7B"
     
     class Code(enum.Enum):
         TACO = "TACO"
         APPS = "APPS"
         CODEFORCES = "CODEFORCES"
         CODE_CONTESTS = "CODE_CONTESTS"
+        LIVECODEBENCH = "LIVECODEBENCH"
+        LEETCODE = "LEETCODE"
+        PRIMEINTELLECT = "PRIMEINTELLECT"
+        KODCODE = "KODCODE"
 
 class TestDataset:
 
@@ -39,6 +44,7 @@ class TestDataset:
         CODEFORCES = "CODEFORCES"
         CODE_CONTESTS = "CODE_CONTESTS"
         LIVECODEBENCH = "LIVECODEBENCH"
+        LEETCODE = "LEETCODE"
 
 
 Dataset = Union[TrainDataset, TestDataset]

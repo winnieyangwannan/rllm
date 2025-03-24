@@ -8,9 +8,9 @@ pybind11
 pylatexenc
 pytest
 sentence_transformers
-sglang[all]
-sglang-router
+sortedcontainers
 swebench
+tabulate
 torchmetrics
 flash-attn
 gym
@@ -21,5 +21,5 @@ browsergym
 gradio
 fire
 vertexai
-sentence_transformers
-swebench
+e2b_code_interpreter
+firecrawl

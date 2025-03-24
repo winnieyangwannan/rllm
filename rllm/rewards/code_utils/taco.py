@@ -3,13 +3,15 @@
 from rllm.rewards.code_utils.pyext2 import RuntimeModule
 import signal
 import numpy as np
+import platform
+import time
 
 # used for debugging to time steps
 from datetime import datetime
 
 import os, sys, json
 import faulthandler
-
+import psutil
 import subprocess
 import tempfile
 import inspect
@@ -17,6 +19,22 @@ from enum import Enum
 from unittest.mock import patch, mock_open
 from io import StringIO
 import ast 
+import platform
+
+from .utils import BASE_IMPORTS
+
+import pdb
+class ForkedPDB(pdb.Pdb):
+    """A Pdb subclass that may be used from a forked multiprocessing child."""
+
+    def interaction(self, *args, **kwargs):
+        _stdin = sys.stdin
+        try:
+            sys.stdin = open('/dev/stdin')
+            pdb.Pdb.interaction(self, *args, **kwargs)
+        finally:
+            sys.stdin = _stdin
+
 
 class CODE_TYPE(Enum):
     call_based = 0
@@ -44,15 +62,16 @@ def timeout_handler(signum, frame):
     # return
     raise TimeoutException
 signal.signal(signal.SIGALRM, timeout_handler)
-TIMEOUT = 4  # seconds
+TIMEOUT = 90  # seconds
 
 EXECUTION_RESULTS = {1: "passed", 0: "false", -1: "timeout", -2: "runtime_error", -3: "returncode:{code}", -4: "compile_error"}
 
-def run_test(in_outs, test=None, debug=False):
+def run_test(in_outs, test=None, debug=False, timeout=TIMEOUT):
     """
     if test(generated_code) is not None it'll try to run the code.
     otherwise it'll just return an input and output pair.
     """
+    test = f"{BASE_IMPORTS}\n{test}"
     if isinstance(in_outs, str):
         try:
             in_outs =  ast.literal_eval(in_outs)
@@ -60,10 +79,8 @@ def run_test(in_outs, test=None, debug=False):
         except (ValueError, SyntaxError) as e:
             print(f"run_tests app/taco, Error parsing string: {e}")
             return []
-
     if in_outs:
         if in_outs.get("fn_name") is None:
-            fn_name = in_outs.get("fn_name")
             which_type = CODE_TYPE.standard_input  # Standard input
             method_name = None
         else:
@@ -87,22 +104,23 @@ def run_test(in_outs, test=None, debug=False):
             print(f"loading test code = {datetime.now().time()}")
         if which_type == CODE_TYPE.call_based:
             synthesized_code = synthesize_cb_code(test, debug)
-            method_func = compile_and_get_func(synthesized_code, which_type, method_name, timeout=TIMEOUT, debug=debug)
+            method_func = compile_and_get_func(synthesized_code, which_type, method_name, timeout=timeout, debug=debug)
         elif which_type == CODE_TYPE.standard_input:
             synthesized_code, exec_code = synthesize_std_code(test, debug)
-            method_func = compile_and_get_func(synthesized_code, which_type, method_name, timeout=TIMEOUT, debug=debug)
+            method_func = compile_and_get_func(synthesized_code, which_type, method_name, timeout=timeout, debug=debug)
         if not method_func:
             results.append(-2)
             return results
         else:
             if which_type == CODE_TYPE.call_based:  # Call-based
-                detail_results, debug_infos = execute_cb_code(method_func, inputs_list, outputs_list, timeout=TIMEOUT, early_stop=True, debug=debug)
+                detail_results, debug_infos = execute_cb_code(method_func, inputs_list, outputs_list, timeout=timeout, early_stop=True, debug=debug)
             elif which_type == CODE_TYPE.standard_input:
-                detail_results = execute_std_code(method_func, exec_code, inputs_list, outputs_list, timeout=TIMEOUT, early_stop=True, debug=debug)
+                detail_results = execute_std_code(method_func, exec_code, inputs_list, outputs_list, timeout=timeout, early_stop=True, debug=debug)
                 debug_infos = detail_results.get('debug', None)
                 detail_results = {k:v for k, v in detail_results.items() if k!='debug'}
                 if set(detail_results.values()) == {(False, 'returncode:1')}:
-                    detail_results = execute_std_code(method_func, synthesized_code+'\ncode()\n', inputs_list, outputs_list, timeout=TIMEOUT, early_stop=True, debug=debug)
+                    synthesized_code, exec_code = synthesize_std_code(test, debug)
+                    detail_results = execute_std_code(method_func, synthesized_code+'\ncode()\n', inputs_list, outputs_list, timeout=timeout, early_stop=True, debug=debug)
         if isinstance(detail_results, list):
             if len(detail_results) == 1:
                 detail_results = detail_results * len(inputs_list)
@@ -323,6 +341,9 @@ def remove_tmp_files():
         if tmp_file in os.listdir('.'):
             os.remove(tmp_file)
 
+def clean_stdout(stdout):
+    return stdout.rstrip('\n')
+
 def execute_std_code(method, synthesized_code, inputs_list, outputs_list, timeout, early_stop=False, debug=False):
     temp_program_path = create_temp_file(synthesized_code)
     if debug:
@@ -336,56 +357,85 @@ def execute_std_code(method, synthesized_code, inputs_list, outputs_list, timeou
         remove_tmp_files()
         outputs = outputs_list[i]
         if isinstance(inputs, list):
+            inputs = [str(k) for k in inputs]
             inputs = "\n".join(inputs)
         if isinstance(outputs, list):
+            outputs = [str(k) for k in outputs]
             outputs = "\n".join(outputs)
-        
-        try:
-            result = subprocess.run(['python3', temp_program_path], input=inputs, text=True, capture_output=True, timeout=timeout)  
-            exec_code = 999
-        except subprocess.TimeoutExpired:
-            exec_code = -1
-        except Exception as e:
-            print(e)
-            exec_code = -2
+        with tempfile.NamedTemporaryFile(mode='w+') as temp_input:
+            temp_input.write(inputs)
+            temp_input.flush()
+            temp_input.seek(0)
+            temp_file_name = temp_input.name
+            stdout, stderr = "", ""
+            try:
+                result = subprocess.run(['bash', '-c', 'ulimit -v 10485760; python3 ' + temp_program_path], 
+                                        stdin=temp_input,
+                                        stdout=subprocess.PIPE,
+                                        stderr=subprocess.PIPE,
+                                        preexec_fn=os.setsid,
+                                        universal_newlines=True,
+                                        timeout=timeout,
+                                        text=True)
+                
+                stdout, stderr = result.stdout, result.stderr
+                return_code = result.returncode
+                # result = subprocess.run(['python3', temp_program_path], input=inputs, text=True, capture_output=True, timeout=timeout)
+                exec_code = 999
+            except subprocess.TimeoutExpired as e:
+                print(e, temp_file_name)
+                stderr = "TIMEOUT"
+                return_code = -9
+                exec_code = -1
+            except Exception as e:
+                print(e, temp_file_name)
+                return_code = -99
+                stderr = f"{e}"
+                exec_code = -2
+
+        stdout = clean_stdout(stdout)
 
         if exec_code > 0:
-            # if result.returncode != 0:
-            #     try:
-            #         inputs_tmp_file = open(create_temp_file(inputs), 'r')
-            #         result = subprocess.run(['python', temp_program_path], stdin=inputs_tmp_file, text=True, capture_output=True, timeout=timeout)
-            #         assert result.returncode == 0
-            #         if compare_std_results(result.stdout, outputs, debug):
-            #             exec_code = 1
-            #         else:
-            #             exec_code = 0
-            #     except:
-            #         try:
-            #             inputs_tmp_file = 'input.txt'
-            #             with open(inputs_tmp_file, 'w') as ftemp:
-            #                 ftemp.write(inputs)
-            #             result = subprocess.run(['python', temp_program_path], text=True, timeout=timeout)
-            #             assert result.returncode == 0
-            #             if compare_std_results(open('output.txt').read(), outputs, debug):
-            #                 exec_code = 1
-            #             else:
-            #                 exec_code = 0
-                        
-            #         except:
-            #             exec_code = -3
-            if compare_std_results(result.stdout, outputs, debug):
+            if compare_std_results(stdout, outputs, debug):
                 exec_code = 1
             else:
                 exec_code = 0
+                # if return_code != 0:
+                #     try:
+                #         inputs_tmp_file = open(create_temp_file(inputs), 'r')
+                #         result = subprocess.run(['python', temp_program_path], stdin=inputs_tmp_file, text=True, capture_output=True, timeout=timeout)
+                #         assert result.returncode == 0
+                #         stdout = result.stdout
+                #         if compare_std_results(stdout, outputs, debug):
+                #             exec_code = 1
+                #         else:
+                #             exec_code = 0
+                #     except:
+                #         try:
+                #             inputs_tmp_file = 'input.txt'
+                #             with open(inputs_tmp_file, 'w') as ftemp:
+                #                 ftemp.write(inputs)
+                #             result = subprocess.run(['python', temp_program_path], text=True, timeout=timeout)
+                #             assert result.returncode == 0
+                #             stdout = open('output.txt').read()
+                #             if compare_std_results(stdout, outputs, debug):
+                #                 exec_code = 1
+                #             else:
+                #                 exec_code = 0
+                            
+                #         except:
+                #             exec_code = -3
         assert exec_code != -3
-        exec_results[i] = (exec_code==1, EXECUTION_RESULTS[exec_code] if exec_code>-3 else EXECUTION_RESULTS[exec_code].format(result.returncode))
+        exec_results[i] = (exec_code==1, EXECUTION_RESULTS[exec_code] if exec_code>-3 else EXECUTION_RESULTS[exec_code].format(return_code))
         if exec_code >= 0:
             if debug:
-                print_debug_info(inputs=inputs, outputs=outputs, exec_outputs=result.stdout)
+                print_debug_info(inputs=inputs, outputs=outputs, exec_outputs=stdout)
+                print("Stderr:", stderr)
                 exec_results['debug'][i] = {
                     'inputs': inputs,
                     'gt_outputs': outputs,
-                    'exec_outputs': result.stdout
+                    'exec_outputs': stdout,
+                    'stderr': stderr
                 }
         if early_stop and exec_code<=0:
             break
@@ -537,9 +587,52 @@ def compare_std_results(exec_outputs, outputs, debug=False):
 def stripped_string_compare(s1, s2):
     s1 = s1.lstrip().rstrip()
     s2 = s2.lstrip().rstrip()
-    return s1 == s2
+    is_equal = s1 == s2
+    if is_equal:
+        return True
 
-def reliability_guard(maximum_memory_bytes=None):
+    # Edge case: Check if s1 and s2 are floats.
+    try:
+        s1_float = float(s1)
+        s2_float = float(s2)
+        is_equal = np.isclose(s1_float, s2_float)
+        return is_equal
+    except Exception as e:
+        pass
+
+    # Edge case: Check if s1 and s2 rows are equal.
+    s1_list = s1.split("\n") 
+    s2_list = s2.split("\n")
+    s1_list = [s.lstrip().rstrip() for s in s1_list]
+    s2_list = [s.lstrip().rstrip() for s in s2_list]
+    
+    s1_list = [s for s in s1_list if s]
+    s2_list = [s for s in s2_list if s]
+    if len(s1_list) != len(s2_list):
+        return False
+    
+    for s1, s2 in zip(s1_list, s2_list):
+        sub_s1_list = s1.split()
+        sub_s2_list = s2.split()
+        sub_s1_list = [s.lstrip().rstrip() for s in sub_s1_list]
+        sub_s2_list = [s.lstrip().rstrip() for s in sub_s2_list]
+        sub_s1_list = [s for s in sub_s1_list if s]
+        sub_s2_list = [s for s in sub_s2_list if s]
+        if len(sub_s1_list) != len(sub_s2_list):
+            return False
+        for sub_s1, sub_s2 in zip(sub_s1_list, sub_s2_list):
+            if sub_s1 != sub_s2:
+                # If they are floats...
+                try:
+                    sub_s1_float = float(sub_s1)
+                    sub_s2_float = float(sub_s2)
+                    if not np.isclose(sub_s1_float, sub_s2_float):
+                        return False
+                except Exception as e:
+                    pass
+    return True
+
+def reliability_guard(maximum_memory_bytes=4 * 1024 * 1024 * 1024):
     """
     This disables various destructive functions and prevents the generated code
     from interfering with the test (e.g. fork bomb, killing other processes,

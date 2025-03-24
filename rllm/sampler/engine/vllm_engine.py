@@ -118,7 +118,7 @@ class RayVLLMWorker:
         self.server_process = None
         self.oai_client = AsyncOpenAI(api_key='EMPTY', base_url=f"http://0.0.0.0:{self.port}/v1", timeout=int(1e9))
         os.environ["TOKENIZERS_PARALLELISM"] = "true"
-        self.tokenizer = AutoTokenizer.from_pretrained(self.model)
+        self.tokenizer = AutoTokenizer.from_pretrained(self.server_args.tokenizer)
 
     def start_server(self) -> str:
         """Spawn a child process that runs the vLLM server.
