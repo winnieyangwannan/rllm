@@ -104,5 +104,4 @@ if __name__ == '__main__':
                 all_test_data.append(processed_example)
         test_df = pd.DataFrame(test_data)
         test_df.to_parquet(os.path.join(local_dir, f'test_{dataset_name}.parquet'))
-        print(f"path: {os.path.join(local_dir, f'test_{dataset_name}.parquet')}")
         test_df.to_json(os.path.join(local_dir, f'test_{dataset_name}.json'), orient='records')
