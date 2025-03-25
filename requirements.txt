@@ -1,3 +1,4 @@
+torch==2.4.0
 deepspeed
 dm-tree
 gdown
@@ -12,5 +13,13 @@ swebench
 tabulate
 torchmetrics
 flash-attn
+gym
+selenium
+PyMuPDF
+nltk
+browsergym
+gradio
+fire
+vertexai
 e2b_code_interpreter
 firecrawl
