@@ -37,6 +37,7 @@ class RewardType(Enum):
     """
     MATH = 'MATH'
     CODE = 'CODE'
+    GAIA = 'GAIA'
     UNK = 'UNK'
 
 @dataclass(slots=True, kw_only=True)

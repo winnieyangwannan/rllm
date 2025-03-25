@@ -45,6 +45,9 @@ class TestDataset:
         CODE_CONTESTS = "CODE_CONTESTS"
         LIVECODEBENCH = "LIVECODEBENCH"
         LEETCODE = "LEETCODE"
+    
+    class Gaia(enum.Enum):
+        GAIA = "GAIA"
 
 
 Dataset = Union[TrainDataset, TestDataset]
