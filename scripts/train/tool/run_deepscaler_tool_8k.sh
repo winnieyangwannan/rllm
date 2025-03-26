@@ -48,11 +48,14 @@ python3 -m verl.trainer.main_ppo \
     actor_rollout_ref.rollout.tensor_model_parallel_size=1 \
     actor_rollout_ref.rollout.name=vllm \
     actor_rollout_ref.rollout.temperature=0.6 \
-    actor_rollout_ref.rollout.val_temperature=0.6 \
+    actor_rollout_ref.rollout.val_kwargs.temperature=0.6 \
     actor_rollout_ref.rollout.gpu_memory_utilization=0.85 \
     actor_rollout_ref.rollout.n=8 \
     actor_rollout_ref.rollout.val_kwargs.n=16 \
+    actor_rollout_ref.rollout.async_engine=True \
+    actor_rollout_ref.rollout.vllm_log_prob=False \
     actor_rollout_ref.rollout.enable_tools=True \
+    actor_rollout_ref.rollout.max_tool_calls=20 \
     actor_rollout_ref.ref.fsdp_config.param_offload=True \
     algorithm.kl_ctrl.kl_coef=0.001 \
     trainer.critic_warmup=0 \
@@ -61,7 +64,7 @@ python3 -m verl.trainer.main_ppo \
     trainer.experiment_name='deepscaler-tool-1.5b-8k' \
     +trainer.val_before_train=True \
     trainer.n_gpus_per_node=8 \
-    trainer.nnodes=1 \
+    trainer.nnodes=4 \
     trainer.save_freq=10 \
     trainer.test_freq=10 \
     trainer.default_hdfs_dir=null \

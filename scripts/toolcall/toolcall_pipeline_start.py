@@ -4,13 +4,16 @@ to inject hints into the prompt to guide the model to use tools.
 """
 import asyncio
 import json
+import re
 from copy import deepcopy
 
 from openai import AsyncOpenAI
 
 from rllm.environments.tools import PythonInterpreter, ToolCaller
-
 from rllm.data.utils import fetch_live_code_bench_system_prompt
+from rllm.rewards.code_reward import extract_code_from_model
+
+import anthropic
 
 
 CODING_HINT_TEMPLATE = """
@@ -57,6 +60,29 @@ print(function_name(test_input1))
 print(function_name(test_input2))  # Check the output
 """
 
+CODING_INPUT_TEMPLATE = f"""
+test_input1 = ...
+dummy_input = io.StringIO()
+dummy_input.write(test_input1)
+dummy_input.seek(0)
+sys.stdin = dummy_input
+
+# Your code here
+"""
+
+CLAUDE_CODE_REWRITE_PROMPT = """
+Human: Given the following code debug template and the code snippet, rewrite the code snippet to match the debug template.
+
+Template:
+{template}
+
+Code Snippet:
+{code_snippet}
+"""
+
+# Configs
+ANTHROPIC_MODEL_NAME = "claude-3-7-sonnet-20250219"
+
 # given a prompt, parse out the examples
 def _prime_parse_examples(prompt):
     example_start = False
@@ -101,11 +127,66 @@ async def _apply_tool(completion, messages, tool_caller, id=None):
 
     return False
 
+def select_hint(example, parse_examples):
+    if "starter_code" in example and len(example["starter_code"]) > 0:
+        hint_message_content = CODING_HINT_TEMPLATE.format(
+            debug_template=CODING_DEBUG_TEMPLATE_STARTER_CODE.format(
+                starter_code=example["starter_code"]
+            ),
+            example_tests=parse_examples(example["problem"]))
+    else:
+        hint_message_content = CODING_HINT_TEMPLATE.format(
+            debug_template=CODING_INPUT_TEMPLATE,
+            example_tests=parse_examples(example["problem"]))
+    return hint_message_content
+
+def claude_replace_code(client, model_output, example):
+
+    claude_prompt = f""" \
+Problem:
+{example["problem"]}
+
+{select_hint(example, _lcb_parse_examples)}
+
+Create me a code snippet that solves the problem and matches the debug template, filling \
+in the missing parts. Make sure it is executable without the need of stdin, and tests are \
+written correctly.\
+"""
+
+    response = client.messages.create(
+        model=ANTHROPIC_MODEL_NAME,
+        messages=[
+            {"role": "user", "content": claude_prompt}
+        ],
+        max_tokens=8192,
+        temperature=0,
+    )
+
+    extracted_code = extract_code_from_model(response.content[0].text)
+
+    # Find the last occurrence of a code block using regex
+    code_blocks = re.findall(r'```python\n(.*?)\n```', model_output, re.DOTALL)
+    
+    if code_blocks:
+        # Get the last code block's position
+        last_block_start = model_output.rindex("```python")
+        last_block_end = model_output.find("```", last_block_start + 10) + 3
+        
+        # Replace the last code block with the extracted code
+        model_output = model_output[:last_block_start] + \
+                      "```python\n" + extracted_code + "\n```" + \
+                      model_output[last_block_end:]
+
+    import pdb; pdb.set_trace()
+
+    return model_output
+
 
 def chat_completion_with_tool(
     client: AsyncOpenAI,
     tool_caller: ToolCaller,
     messages_list,
+    claude_client,
     model="gpt-4",
     max_round=20,
     batch_size=32,  # Added batch_size parameter
@@ -113,7 +194,6 @@ def chat_completion_with_tool(
 ):
     async def tool_call_flow(example, request_id):
         try:
-            tool_call_hint_injected = False
             messages = example["prompt"]
             tool_infos = tool_caller.get_tool_infos()
 
@@ -125,25 +205,39 @@ def chat_completion_with_tool(
                 max_tokens=8192,
                 top_p=0.95,
             )
+            from pprint import pprint
+            pprint(completion)
+
+            hint_message_content = select_hint(example, parse_examples)
+
+            # add reasoning output
             messages.append(
                 {
                     "role": "assistant",
-                    "content": completion.choices[0].message.content,
+                    "content": completion.choices[0].message.reasoning_content
                 }
             )
-            # print("round: 0", completion.choices[0].message.content)
 
-            # inject tool call hint after first round
-            hint_message = {
-                "role": "system",
-                "content": CODING_HINT_TEMPLATE.format(
-                    debug_template=CODING_DEBUG_TEMPLATE_STARTER_CODE.format(
-                        starter_code=example["starter_code"]
-                    ),
-                    example_tests=parse_examples(example["problem"])
-                )
-            }
-            messages.append(hint_message)
+            # add hint message
+            messages.append(
+                {
+                    "role": "user",
+                    "content": hint_message_content
+                }
+            )
+
+            current_content = completion.choices[0].message.content
+
+            # rewrite using claude
+            current_content = claude_replace_code(claude_client, current_content, example)
+
+            # add rest of completion message
+            messages.append(
+                {
+                    "role": "assistant",
+                    "content": current_content,
+                }
+            )
 
             curr_round = 0
             while curr_round < max_round:
@@ -155,7 +249,7 @@ def chat_completion_with_tool(
                         model=model,
                         messages=messages,
                         tools=tool_infos,
-                        temperature=0.6,
+                        temperature=0.3,
                         max_tokens=8192,
                         top_p=0.95,
                     )
@@ -249,12 +343,12 @@ def load_data(n=1):
 def lcb_process_fn(example):
     question = example.pop("problem")
     starter_code = example.get("starter_code", None)
-    question = fetch_live_code_bench_system_prompt(question, starter_code)
+    formatted_question = fetch_live_code_bench_system_prompt(question, starter_code)
     tests = example.pop("tests")
 
     data = {
         "prompt": [
-            {"role": "user", "content": question},
+            {"role": "user", "content": formatted_question},
         ],
         "tests": tests,
         "problem": question,
@@ -306,11 +400,13 @@ if __name__ == "__main__":
         api_key="EMPTY",
     )
 
-    interpreter = PythonInterpreter(n_sandboxes=1, type="e2b")
+    claude_client = anthropic.Anthropic()
+
+    interpreter = PythonInterpreter(n_sandboxes=1, type="local", data_type="code")
     tool_caller = ToolCaller(tools=[interpreter], parser_type="python")
 
     results = chat_completion_with_tool(
-        client, tool_caller, data, model="deepscaler-toolcall", batch_size=1
+        client, tool_caller, data, claude_client=claude_client, model="deepscaler-toolcall", batch_size=1, max_round=6
     )
 
     evaluate_results(results)
