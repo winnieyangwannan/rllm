@@ -6,11 +6,11 @@ try:
 except ImportError:
     Sandbox = None
 
-from rllm.environments.tools.tool_base import Tool
+from rllm.environments.tools.code_tools.code_tool import CodeTool
 
 E2B_API_KEY = os.environ.get("E2B_API_KEY", None)
 
-class E2BPythonInterpreter(Tool):
+class E2BPythonInterpreter(CodeTool):
     """A tool for executing Python code in a sandboxed environment."""
 
     def __init__(self, n_sandboxes=1, api_key=E2B_API_KEY):
@@ -18,8 +18,6 @@ class E2BPythonInterpreter(Tool):
             raise ImportError("e2b_code_interpreter is not installed. Please install it with `pip install e2b-code-interpreter`.")
         assert n_sandboxes > 0, "Number of sandboxes must be greater than 0"
         self.n_sandboxes = n_sandboxes
-        self.sandboxes = []
-        self.cur_sandbox_idx = 0
         self.api_key = api_key
         self._init_sandbox()
         super().__init__(
@@ -29,10 +27,11 @@ class E2BPythonInterpreter(Tool):
 
     def _init_sandbox(self):
         """Initialize multiple sandbox environments."""
-        if not self.sandboxes:
-            for _ in range(self.n_sandboxes):
-                sandbox = Sandbox(api_key=self.api_key, timeout=3600)
-                self.sandboxes.append(sandbox)
+        self.sandboxes = []
+        self.cur_sandbox_idx = 0
+        for _ in range(self.n_sandboxes):
+            sandbox = Sandbox(api_key=self.api_key, timeout=3600)
+            self.sandboxes.append(sandbox)
 
     def _kill_sandbox(self):
         """Clean up all sandbox resources."""
@@ -112,10 +111,6 @@ class E2BPythonInterpreter(Tool):
                 },
             },
         }
-
-    def __del__(self):
-        """Cleanup when the interpreter is destroyed."""
-        self._kill_sandbox()
 
 if __name__ == "__main__":
     from pprint import pprint
