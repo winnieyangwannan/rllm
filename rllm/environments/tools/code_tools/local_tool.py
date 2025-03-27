@@ -216,6 +216,13 @@ x+y-10
     
     #Run the code using asyncio
     async def test_async_interpreter():
+        test_code = """
+import math
+print('Hello from Python interpreter!')
+for i in range(3):
+    print(f"Number: {i}")
+math.lol
+"""
         result = await interpreter(code=test_code, use_async=True)
         print("\nAsynchronous result:")
         print(result)

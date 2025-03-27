@@ -6,7 +6,7 @@ try:
 except ImportError:
     Sandbox = None
 
-from rllm.environments.tools.code_tools.code_tool import CodeTool
+from rllm.environments.tools.code_tools.code_tool import CodeTool, CodeToolOutput
 
 E2B_API_KEY = os.environ.get("E2B_API_KEY", None)
 
@@ -50,15 +50,18 @@ class E2BPythonInterpreter(CodeTool):
         self.sandboxes[id] = sandbox
         return sandbox
 
-    def forward(self, code: str, id: Optional[int] = None, max_retries: int = 3, timeout: int = 20) -> str:
+    def forward(self, code: str, id: Optional[int] = None, max_retries: int = 3, timeout: int = 20) -> CodeToolOutput:
         """
         Execute Python code in one of the sandboxes using round-robin distribution.
 
         Args:
             code: Python code to execute
+            id: Optional specific sandbox ID to use
+            max_retries: Number of retries before restarting sandbox
+            timeout: Maximum execution time in seconds
 
         Returns:
-            Execution result as string
+            CodeToolOutput containing execution results, stdout, and stderr
         """
         if id:
             self.cur_sandbox_idx = id % self.n_sandboxes
@@ -77,20 +80,25 @@ class E2BPythonInterpreter(CodeTool):
                 max_retries -= 1
                 if max_retries == 0:
                     self._restart_sandbox(self.cur_sandbox_idx)
-                    return {"error": "Sandbox error, please try again."}
-        output_dict = {}
+                    return CodeToolOutput(stderr="Sandbox error, please try again.")
+        
+        # Create a CodeToolOutput object instead of a dictionary
+        result = None
+        stdout = None
+        stderr = None
         
         if execution.results:
             assert len(execution.results) == 1, "Only one result is supported"
-            output_dict["results"] = execution.results[0].text
+            result = execution.results[0].text
         
         if execution.logs:
             assert len(execution.logs.stdout) == 1, "Only one stdout is supported"
-            output_dict["stdout"] = execution.logs.stdout[0]
+            stdout = execution.logs.stdout[0]
+        
         if execution.error:
-            output_dict["stderr"] = f"{execution.error.name}\n{execution.error.traceback}\n{execution.error.value}"
-        return output_dict
-
+            stderr = f"{execution.error.traceback}"
+        
+        return CodeToolOutput(stdout=stdout, stderr=stderr, result=result)
 
     @property
     def json(self) -> Dict[str, Any]:
