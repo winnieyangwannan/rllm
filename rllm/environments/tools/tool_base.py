@@ -38,7 +38,6 @@ class Tool(ABC):
             assert self._json is not None, "Json representation of the tool is required."
     
     @property
-    @abstractmethod
     def json(self) -> Dict[str, Any]:
         """
         Return the tool's information in a standardized format for tool registration.
@@ -71,10 +70,13 @@ class Tool(ABC):
         Returns:
             Any: The result of the tool execution.
         """
-        raise NotImplementedError(
-            "Tool must implement either forward() or async_forward(). "
-            "This tool has not implemented the synchronous forward() method."
-        )
+        if self.function:
+            return self.function(*args, **kwargs)
+        else:
+            raise NotImplementedError(
+                "Tool must implement either forward() or async_forward(). "
+                "This tool has not implemented the synchronous forward() method."
+            )
 
     async def async_forward(self, *args, **kwargs) -> Any:
         """
@@ -104,7 +106,6 @@ class Tool(ABC):
         
         has_async = inspect.isfunction(self.__class__.async_forward) or self.__class__.async_forward is Tool.async_forward
         has_sync = not (inspect.isfunction(self.__class__.forward) and self.__class__.forward is Tool.forward)
-        
         # Explicit routing based on use_async flag
         if use_async is True:
             if has_async:
@@ -114,12 +115,7 @@ class Tool(ABC):
                     f"Tool {self.__class__.__name__} does not implement async_forward() but use_async=True was specified."
                 )
         elif use_async is False:
-            if has_sync:
-                return self.forward(*args, **kwargs)
-            else:
-                raise NotImplementedError(
-                    f"Tool {self.__class__.__name__} does not implement forward() but use_async=False was specified."
-                )
+            return self.forward(*args, **kwargs)
         
         # Auto-detect implementation if use_async is None
         if has_async:
@@ -138,3 +134,27 @@ class Tool(ABC):
         This is a fallback mechanism and explicit cleanup() calls are preferred.
         """
         pass
+
+
+if __name__ == "__main__":
+    
+    def add(a: int, b: int) -> int:
+        r"""Adds two numbers.
+
+        Args:
+            a (int): The first number to be added.
+            b (int): The second number to be added.
+
+        Returns:
+            integer: The sum of the two numbers.
+        """
+        return a + b
+
+    tool = Tool(function=add)
+    print(tool.json)
+    print(tool(1, 2))
+    
+    from camel.toolkits import SearchToolkit
+    google_fn = SearchToolkit().search_google
+    google_tool = Tool(function=google_fn)
+    print(google_tool(query="What is the capital of France?", num_result_pages=5))
