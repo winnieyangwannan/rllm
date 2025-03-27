@@ -6,7 +6,7 @@ import torch
 
 from transformers import Trainer, TrainingArguments
 
-from rllm.environments.tools import PythonInterpreter
+from rllm.tools import PythonInterpreter
 
 
 def load_jsonl(file_path):

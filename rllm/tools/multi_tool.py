@@ -1,8 +1,8 @@
 from typing import List
 
-from rllm.environments.tools.tool_base import Tool
-from rllm.environments.tools import TOOL_REGISTRY
-from rllm.environments.tools.toolcall_parser import ToolcallParser
+from rllm.tools.tool_base import Tool
+from rllm.tools import TOOL_REGISTRY
+from rllm.tools.toolcall_parser import ToolcallParser
 
 class MultiTool(Tool):
     def __init__(self, tools: List[str], parser_type="json"):

@@ -1,6 +1,6 @@
-from rllm.environments.tools.code_tools import E2BPythonInterpreter, PythonInterpreter, LCBPythonInterpreter
-from rllm.environments.tools.math_tools import CalculatorTool
-from rllm.environments.tools.web_tools import GoogleSearchTool, FirecrawlTool, TavilyTool
+from rllm.tools.code_tools import E2BPythonInterpreter, PythonInterpreter, LCBPythonInterpreter
+from rllm.tools.math_tools import CalculatorTool
+from rllm.tools.web_tools import GoogleSearchTool, FirecrawlTool, TavilyTool
 
 
 TOOL_REGISTRY = {

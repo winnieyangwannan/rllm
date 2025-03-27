@@ -6,7 +6,7 @@ import signal
 import traceback
 
 
-from rllm.environments.tools.code_tools.code_tool import CodeTool, CodeToolOutput
+from rllm.tools.code_tools.code_tool import CodeTool, CodeToolOutput
 from rllm.rewards.code_utils.livecodebench import (
     Capturing,
     clean_if_name,

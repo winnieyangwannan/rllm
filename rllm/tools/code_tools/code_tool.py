@@ -1,7 +1,7 @@
 from abc import abstractmethod
 from typing import Any, Dict, Optional
 
-from rllm.environments.tools.tool_base import Tool
+from rllm.tools.tool_base import Tool
 
 
 import dataclasses

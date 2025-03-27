@@ -8,7 +8,7 @@ except ImportError as e:
     print(e)
     FirecrawlApp = None
 
-from rllm.environments.tools.tool_base import Tool
+from rllm.tools.tool_base import Tool
 
 FIRECRAWL_API = "***REMOVED***"
 TIMEOUT = 10

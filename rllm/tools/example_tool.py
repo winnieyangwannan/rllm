@@ -9,7 +9,7 @@ from typing import Any, Dict
 import asyncio
 import time
 
-from rllm.environments.tools.tool_base import Tool
+from rllm.tools.tool_base import Tool
 
 
 class SleepTool(Tool):

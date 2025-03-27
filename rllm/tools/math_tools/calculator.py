@@ -1,4 +1,4 @@
-from rllm.environments.tools.tool_base import Tool
+from rllm.tools.tool_base import Tool
 
 
 SYMBOL_REPLACEMENTS = {

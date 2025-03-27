@@ -6,7 +6,7 @@ try:
 except ImportError:
     Sandbox = None
 
-from rllm.environments.tools.code_tools.code_tool import CodeTool, CodeToolOutput
+from rllm.tools.code_tools.code_tool import CodeTool, CodeToolOutput
 
 E2B_API_KEY = os.environ.get("E2B_API_KEY", None)
 

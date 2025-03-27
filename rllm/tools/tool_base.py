@@ -2,7 +2,7 @@ import inspect
 from abc import ABC, abstractmethod
 from typing import Any, Callable, Dict
 
-from rllm.environments.tools.utils import function_to_dict
+from rllm.tools.utils import function_to_dict
 
 class Tool(ABC):
     """

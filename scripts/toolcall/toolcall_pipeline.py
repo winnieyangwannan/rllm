@@ -5,10 +5,10 @@ from openai import AsyncOpenAI
 
 from rllm.data.dataset_types import TestDataset
 from rllm.data.utils import load_dataset
-from rllm.environments.tools import PythonInterpreter
-from rllm.environments.tools.utils import parse_tool_calls
+from rllm.tools import PythonInterpreter
+from rllm.tools.utils import parse_tool_calls
 from rllm.sampler import DistributedSampler
-from rllm.environments.tools import ToolCaller
+from rllm.tools import ToolCaller
 
 async def _apply_tool(completion, messages, tool_caller):
     tool_call = parse_tool_calls(completion.samples[0].response)

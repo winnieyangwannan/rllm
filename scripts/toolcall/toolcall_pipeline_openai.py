@@ -5,8 +5,8 @@ from copy import deepcopy
 
 from openai import AsyncOpenAI
 
-from rllm.environments.tools import PythonInterpreter, ToolCaller
-from rllm.environments.tools.utils import chat_completion_with_tool
+from rllm.tools import PythonInterpreter, ToolCaller
+from rllm.tools.utils import chat_completion_with_tool
 
 
 def load_data(n=8):

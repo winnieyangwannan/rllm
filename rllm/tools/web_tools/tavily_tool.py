@@ -1,7 +1,7 @@
 import httpx
 from typing import List, Dict
 
-from rllm.environments.tools.tool_base import Tool
+from rllm.tools.tool_base import Tool
 
 TAVILY_EXTRACT_ENDPOINT = "https://api.tavily.com/extract"
 # https://docs.tavily.com/api-reference/endpoint/extract#body-extract-depth

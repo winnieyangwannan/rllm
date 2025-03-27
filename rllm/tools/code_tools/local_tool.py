@@ -8,7 +8,7 @@ from typing import Any, Dict
 import json
 import traceback
 
-from rllm.environments.tools.code_tools.code_tool import CodeTool, CodeToolOutput
+from rllm.tools.code_tools.code_tool import CodeTool, CodeToolOutput
 
 
 class PythonInterpreter(CodeTool):

@@ -2,7 +2,7 @@
 import httpx
 from typing import Dict
 
-from rllm.environments.tools.tool_base import Tool
+from rllm.tools.tool_base import Tool
 
 REFERENCE_COUNT = 8
 DEFAULT_SEARCH_ENGINE_TIMEOUT = 5
