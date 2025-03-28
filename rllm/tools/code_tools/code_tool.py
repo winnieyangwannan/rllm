@@ -1,17 +1,17 @@
 from abc import abstractmethod
 from typing import Any, Dict, Optional
 
-from rllm.tools.tool_base import Tool
+from rllm.tools.tool_base import Tool, ToolOutput
 
 
 import dataclasses
 
 
 @dataclasses.dataclass
-class CodeToolOutput:
+class CodeToolOutput(ToolOutput):
     stdout: str = None # Standard output
     stderr: str = None # Standard error
-    result: Any = None # Result of the code execution (i.e. last line of code)
+    output: str = None # Result of the code execution (i.e. last line of code)
 
 class CodeTool(Tool):
     """Base class for Python code execution tools.
@@ -58,7 +58,7 @@ class CodeTool(Tool):
         }
 
     @abstractmethod
-    def forward(self, code: str, timeout: int = 12, **kwargs) -> Dict[str, Any]:
+    def forward(self, code: str, timeout: int = 12, **kwargs) -> CodeToolOutput:
         """
         Execute Python code in the sandbox environment.
         

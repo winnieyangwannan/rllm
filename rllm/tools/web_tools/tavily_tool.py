@@ -1,7 +1,7 @@
 import httpx
 from typing import List, Dict
 
-from rllm.tools.tool_base import Tool
+from rllm.tools.tool_base import Tool, ToolOutput
 
 TAVILY_EXTRACT_ENDPOINT = "https://api.tavily.com/extract"
 # https://docs.tavily.com/api-reference/endpoint/extract#body-extract-depth
@@ -48,33 +48,43 @@ class TavilyTool(Tool):
             self.client.close()
         self.client = None
 
-    def forward(self, urls: List[str])  -> Dict[str, str]:
+    def forward(self, urls: List[str]) -> ToolOutput:
         """
         Extract content from provided URLs using Tavily API.
-        """
-        params = {
-            "urls": urls,
-            "include_images": False,
-            "extract_depth": "basic"
-        }
-        headers = {
-            "Authorization": f"Bearer {API_KEY}",
-            "Content-Type": "application/json"
-        }
         
-        response = self.client.post(
-            url=TAVILY_EXTRACT_ENDPOINT, 
-            json=params, 
-            headers=headers
-        )
-        
-        if not response.is_success:
-            return {'error': f"Error: {response.status_code} - {response.text}"}
+        Args:
+            urls (List[str]): List of URLs to extract content from.
             
-        results = response.json()['results']
-        return {
-            res['url']: res['raw_content'] for res in results
-        }
+        Returns:
+            ToolOutput: An object containing either the extracted content or an error message.
+        """
+        try:
+            params = {
+                "urls": urls,
+                "include_images": False,
+                "extract_depth": "basic"
+            }
+            headers = {
+                "Authorization": f"Bearer {API_KEY}",
+                "Content-Type": "application/json"
+            }
+            
+            response = self.client.post(
+                url=TAVILY_EXTRACT_ENDPOINT, 
+                json=params, 
+                headers=headers
+            )
+            
+            if not response.is_success:
+                return ToolOutput(name=self.name, error=f"Error: {response.status_code} - {response.text}")
+            
+            results = response.json()['results']
+            output = {
+                res['url']: res['raw_content'] for res in results
+            }
+            return ToolOutput(name=self.name, output=output)
+        except Exception as e:
+            return ToolOutput(name=self.name, error=f"{type(e).__name__} - {str(e)}")
 
     def __del__(self):
         """Clean up resources when the tool is garbage collected."""

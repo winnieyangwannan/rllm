@@ -2,16 +2,14 @@ from typing import List
 
 from rllm.tools.tool_base import Tool
 from rllm.tools import TOOL_REGISTRY
-from rllm.tools.toolcall_parser import ToolcallParser
 
 class MultiTool(Tool):
-    def __init__(self, tools: List[str], parser_type="json"):
+    def __init__(self, tools: List[str]):
         # Check if all tools are in the registry
         assert all(tool in TOOL_REGISTRY for tool in tools), "All tools must be in the registry TOOL_REGISTRY"
 
         # Initialize the tool map
         self.tool_map = {tool: TOOL_REGISTRY[tool]() for tool in tools}
-        self.parser = ToolcallParser(parser_type=parser_type)
 
     @property
     def json(self):
@@ -25,9 +23,6 @@ class MultiTool(Tool):
             "name": tool_name,
             "content": tool(*args,**kwargs)
         }
-    
-    def parse_tool_calls(self, text):
-        return self.parser.parse(text)
 
 if __name__ == "__main__":
     multi_tool = MultiTool(["calculator", "firecrawl"])

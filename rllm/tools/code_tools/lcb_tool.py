@@ -198,13 +198,15 @@ class LCBPythonInterpreter(CodeTool):
         try:
             stdout, stderr, result = lcb_sandbox(code, timeout=timeout)
             return CodeToolOutput(
+                name=self.name,
                 stdout=stdout,
                 stderr=stderr,
-                result=result
+                output=result
             )
         except Exception as e:
             return CodeToolOutput(
-                stderr=f"Sandbox Error: {type(e).__name__} - {str(e)}",
+                name=self.name,
+                error=f"Sandbox Error: {type(e).__name__} - {str(e)}",
             )
 
 

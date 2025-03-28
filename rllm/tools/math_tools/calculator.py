@@ -1,4 +1,4 @@
-from rllm.tools.tool_base import Tool
+from rllm.tools.tool_base import Tool, ToolOutput
 
 
 SYMBOL_REPLACEMENTS = {
@@ -40,7 +40,7 @@ class CalculatorTool(Tool):
             },
         }
 
-    def forward(self, expression: str) -> str:
+    def forward(self, expression: str) -> ToolOutput:
         """
         Safely evaluate a mathematical expression.
         
@@ -57,14 +57,14 @@ class CalculatorTool(Tool):
             
             # Validate characters
             if not all(c in ALLOWED_CHARS for c in expression):
-                return "Error: Invalid characters in expression"
+                return ToolOutput(name=self.name, error="Error: Invalid characters in expression")
             
             # Evaluate with empty namespace for safety
             result = eval(expression, {"__builtins__": {}}, {})
-            return str(result)
+            return ToolOutput(name=self.name, output=str(result))
             
         except Exception as e:
-            return f"Error evaluating expression: {str(e)}"
+            return ToolOutput(name=self.name, error=f"Error evaluating expression: {str(e)}")
 
 if __name__ == "__main__":
     # Test the calculator tool

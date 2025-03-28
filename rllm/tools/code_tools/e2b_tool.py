@@ -80,7 +80,7 @@ class E2BPythonInterpreter(CodeTool):
                 max_retries -= 1
                 if max_retries == 0:
                     self._restart_sandbox(self.cur_sandbox_idx)
-                    return CodeToolOutput(stderr="Sandbox error, please try again.")
+                    return CodeToolOutput(name=self.name, error="Sandbox error, please try again.")
         
         # Create a CodeToolOutput object instead of a dictionary
         result = None
@@ -98,7 +98,7 @@ class E2BPythonInterpreter(CodeTool):
         if execution.error:
             stderr = f"{execution.error.traceback}"
         
-        return CodeToolOutput(stdout=stdout, stderr=stderr, result=result)
+        return CodeToolOutput(name=self.name, stdout=stdout, stderr=stderr, output=result)
 
     @property
     def json(self) -> Dict[str, Any]:

@@ -8,7 +8,7 @@ except ImportError as e:
     print(e)
     FirecrawlApp = None
 
-from rllm.tools.tool_base import Tool
+from rllm.tools.tool_base import Tool, ToolOutput
 
 FIRECRAWL_API = "***REMOVED***"
 TIMEOUT = 10
@@ -84,7 +84,7 @@ class FirecrawlTool(Tool):
             }
         }
 
-    def forward(self, url: str) -> Dict[str, str]:
+    def forward(self, url: str) -> ToolOutput:
         """
         Run firecrawl job asynchronously.
         
@@ -92,16 +92,15 @@ class FirecrawlTool(Tool):
             url (str): The URL to scrape.
             
         Returns:
-            Dict[str, str]: Dictionary mapping URLs to their scraped content,
-                           or an error message if the scraping failed.
+            ToolOutput: An object containing either the scraped content or an error message.
         """
         try:
             job = self._start_firecrawl_job(url)
         except Exception as e:
-            return {"error": f"Firecrawl job could not start: {e}"}
+            return ToolOutput(name=self.name, error=f"Firecrawl job could not start: {e}")
         
         if not job['success']:
-            return {"error": "Firecrawl job failed to start"}
+            return ToolOutput(name=self.name, error="Firecrawl job failed to start")
         
         job_id = job['id']
         start_time = time.monotonic()
@@ -111,15 +110,28 @@ class FirecrawlTool(Tool):
                 break
             time.sleep(1)
             if time.monotonic() - start_time > self.timeout:
-                return {"error": "Firecrawl request timed out"}
+                return ToolOutput(name=self.name, error="Firecrawl request timed out")
 
         if status['success']:
-            return {
+            results = {
                 page['metadata']['url']: page['markdown'] for page in status['data']
             }
-        return {
-            "error": f"Firecrawl request errored: {status['error']}"
-        }
+            return ToolOutput(name=self.name, output=results)
+        return ToolOutput(name=self.name, error=f"Firecrawl request errored: {status['error']}")
+
+    async def async_forward(self, url: str) -> ToolOutput:
+        """
+        Asynchronous version of the forward method.
+        
+        Args:
+            url (str): The URL to scrape.
+            
+        Returns:
+            ToolOutput: An object containing either the scraped content or an error message.
+        """
+        # For now, just call the synchronous version
+        # This could be optimized later to use async I/O properly
+        return self.forward(url=url)
 
 if __name__ == '__main__':
     search = FirecrawlTool()

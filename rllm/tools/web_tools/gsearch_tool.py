@@ -1,8 +1,7 @@
-
 import httpx
 from typing import Dict
 
-from rllm.tools.tool_base import Tool
+from rllm.tools.tool_base import Tool, ToolOutput
 
 REFERENCE_COUNT = 8
 DEFAULT_SEARCH_ENGINE_TIMEOUT = 5
@@ -82,17 +81,30 @@ class GoogleSearchTool(Tool):
             return []
         return contexts
 
-    def forward(self, query: str) -> Dict[str, str]:
-        assert self.client is not None, "Google Search Client not initialized"
-        contexts = self._search_with_google(query)
-        return {
-            c['link']: c['snippet'] for c in contexts
-        }
+    def forward(self, query: str) -> ToolOutput:
+        """
+        Execute a Google search with the given query.
         
+        Args:
+            query (str): Query to be submitted to Google search engine.
+            
+        Returns:
+            ToolOutput: An object containing either the search results or an error message.
+        """
+        try:
+            assert self.client is not None, "Google Search Client not initialized"
+            contexts = self._search_with_google(query)
+            results = {
+                c['link']: c['snippet'] for c in contexts
+            }
+            return ToolOutput(name=self.name, output=results)
+        except Exception as e:
+            return ToolOutput(name=self.name, error=f"{type(e).__name__} - {str(e)}")
+
     def __del__(self):
         self.client.close()
 
 
 if __name__ == '__main__':
-    search = GoogleSearch()
+    search = GoogleSearchTool()
     print(search(query='Give me current time right now in PST'))

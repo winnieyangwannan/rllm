@@ -67,9 +67,8 @@ class PythonInterpreter(CodeTool):
             return future.result(timeout=timeout)
         except Exception as e:
             return CodeToolOutput(
-                stdout="",
-                stderr=f"Sandbox Error: {type(e).__name__} - {str(e)}",
-                result=None
+                name=self.name,
+                error=f"Sandbox Error: {type(e).__name__} - {str(e)}",
             )
 
     @staticmethod
@@ -105,8 +104,7 @@ class PythonInterpreter(CodeTool):
             except Exception as e:
                 raise RuntimeError(f"Failed to install required packages: {str(e)}")
 
-    @staticmethod
-    def _execute_in_subprocess(code: str, timeout: int = 10) -> CodeToolOutput:
+    def _execute_in_subprocess(self, code: str, timeout: int = 10) -> CodeToolOutput:
         """Execute code in a separate process with resource limits."""
         # First check and install requirements
         PythonInterpreter._check_requirements()
@@ -166,16 +164,17 @@ print(json.dumps(output))
                 try:
                     result_dict = json.loads(result.stdout.strip())
                     return CodeToolOutput(
+                        name=self.name,
                         stdout=result_dict['stdout'],
                         stderr=result_dict['stderr'],
-                        result=result_dict['result']
+                        output=result_dict['result']
                     )
                 except json.JSONDecodeError:
-                    return CodeToolOutput(stderr=f'Error parsing output: {result.stdout}\n{result.stderr}',)
+                    return CodeToolOutput(name=self.name, stderr=f'Error parsing output: {result.stdout}\n{result.stderr}',)
             except subprocess.TimeoutExpired:
-                return CodeToolOutput(stderr=f'Execution timed out after {timeout} seconds',)
+                return CodeToolOutput(name=self.name, stderr=f'Execution timed out after {timeout} seconds',)
             except Exception as e:
-                return CodeToolOutput(stderr=f"{type(e).__name__} - {str(e)}\n{traceback.format_exc()}",)
+                return CodeToolOutput(name=self.name, error=f"{type(e).__name__} - {str(e)}\n{traceback.format_exc()}",)
             finally:
                 os.unlink(f.name)
 

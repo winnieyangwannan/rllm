@@ -1,8 +1,28 @@
 import inspect
 from abc import ABC, abstractmethod
-from typing import Any, Callable, Dict
+from typing import Any, Callable, Dict, List, Optional, Union
+from dataclasses import dataclass
 
 from rllm.tools.utils import function_to_dict
+
+@dataclass
+class ToolCall:
+    name: str
+    parameters: Dict[str, Any]
+
+@dataclass
+class ToolInputs:
+    inputs: List[ToolCall]
+    
+@dataclass
+class ToolOutput:
+    name: str
+    output: Union[str, list, dict] = None
+    error: Optional[str] = None
+
+@dataclass
+class ToolOutputs:
+    outputs: List[ToolOutput]
 
 class Tool(ABC):
     """
@@ -62,7 +82,7 @@ class Tool(ABC):
         """
         return self._json
     
-    def forward(self, *args, **kwargs) -> Any:
+    def forward(self, *args, **kwargs) -> ToolOutput:
         """
         Synchronous implementation of the tool functionality.
         Override this method for synchronous tools.
@@ -71,14 +91,18 @@ class Tool(ABC):
             Any: The result of the tool execution.
         """
         if self.function:
-            return self.function(*args, **kwargs)
+            try:
+                output = self.function(*args, **kwargs)
+                return ToolOutput(name=self.name, output=output)
+            except Exception as e:
+                return ToolOutput(name=self.name, error=f"{type(e).__name__} - {str(e)}")
         else:
             raise NotImplementedError(
                 "Tool must implement either forward() or async_forward(). "
                 "This tool has not implemented the synchronous forward() method."
             )
 
-    async def async_forward(self, *args, **kwargs) -> Any:
+    async def async_forward(self, *args, **kwargs) -> ToolOutput:
         """
         Asynchronous implementation of the tool functionality.
         Override this method for asynchronous tools.
@@ -88,7 +112,7 @@ class Tool(ABC):
         """
         return self.forward(*args, **kwargs)
 
-    def __call__(self, *args, use_async=False, **kwargs):
+    def __call__(self, *args, use_async=False, **kwargs) -> ToolOutput:
         """
         Make the tool instance callable.
         - If use_async is True, delegates to async_forward
