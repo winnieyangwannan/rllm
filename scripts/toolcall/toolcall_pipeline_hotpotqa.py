@@ -5,8 +5,8 @@ import string
 from collections import Counter
 from openai import AsyncOpenAI
 
-from rllm.environments.tools import PythonInterpreter, GoogleSearch, Firecrawl
-from rllm.environments.tools.tool_caller import ToolCaller
+from rllm.tools import PythonInterpreter, GoogleSearch, Firecrawl
+from rllm.tools.multi_tool import ToolCaller
 
 def normalize_answer(s):
 

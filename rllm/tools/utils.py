@@ -3,19 +3,16 @@ import json
 import inspect
 import typing
 
-
-from openai import AsyncOpenAI
-
-from rllm.environments.tools import ToolCaller
-
 def chat_completion_with_tool(
-    client: AsyncOpenAI,
-    tool_caller: ToolCaller,
+    client: "AsyncOpenAI",
+    tool_caller: "ToolCaller",
     messages_list,
     model="gpt-4",
     max_round=20,
     batch_size=32,  # Added batch_size parameter
 ):
+    from openai import AsyncOpenAI
+
     async def apply_tool(completion, messages, tool_caller, id=None):
         tool_calls = tool_caller.parse_tool_calls(completion.choices[0].message.content)
 
