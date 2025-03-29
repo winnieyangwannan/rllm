@@ -32,7 +32,7 @@ class FirecrawlTool(Tool):
         self.api_url = api_url
         self._init_app()
         super().__init__(
-            name="firecrawl_tool",
+            name="firecrawl",
             description="FireCrawl is a tool that scrapes a url link and returns content as a markdown document along with any links."
         )
 

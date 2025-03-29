@@ -18,7 +18,7 @@ class PythonInterpreter(CodeTool):
         self.n_workers = n_sandboxes
         self.pool = ProcessPoolExecutor(max_workers=n_sandboxes)
         super().__init__(
-            name="local_python_sandbox_tool",
+            name="local_python",
             description="Execute python code in a local sandbox environment. Returns results and standard output/error.",
             n_sandboxes=n_sandboxes
         )

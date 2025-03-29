@@ -179,7 +179,7 @@ class LCBPythonInterpreter(CodeTool):
     def __init__(self):
         """Initialize the Python interpreter tool with appropriate settings."""
         super().__init__(
-            name="livecodebench_python_interpreter",
+            name="python",
             description="Execute python code in the same environment as the LiveCodeBench benchmark.",
             n_sandboxes=-1,
         )

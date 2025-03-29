@@ -2,7 +2,7 @@ import json
 from typing import List, Dict, Union
 
 from rllm.tools.tool_base import ToolCall, ToolInputs, ToolOutputs, ToolOutput
-from rllm.tools.parser.tool_parser_base import ToolParser
+from rllm.parser.tool_parser_base import ToolParser
 
 class QwenToolParser(ToolParser):
     

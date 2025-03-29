@@ -21,7 +21,7 @@ class E2BPythonInterpreter(CodeTool):
         self.api_key = api_key
         self._init_sandbox()
         super().__init__(
-            name="e2b_python_sandbox_tool",
+            name="e2b_python",
             description="A tool that executes python code in a sandbox and returns standard output/error."
         )
 

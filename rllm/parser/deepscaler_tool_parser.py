@@ -3,7 +3,7 @@ from typing import List, Dict, Union
 
 from rllm.tools.tool_base import ToolCall, ToolInputs, ToolOutputs, ToolOutput
 from rllm.tools.code_tools.code_tool import CodeToolOutput
-from rllm.tools.parser.tool_parser_base import ToolParser
+from rllm.parser.tool_parser_base import ToolParser
 
 class DeepScalerToolParser(ToolParser):
     """Parser for DeepScaler tool call formats, focused on Python code blocks."""
@@ -45,6 +45,11 @@ class DeepScalerToolParser(ToolParser):
             
         Returns:
             str: Formatted tool outputs
+        
+        Example:
+        ```output
+        STDOUT: The circumference of a circle with radius 5 is 31.41592653589793
+        ```
         """
         if isinstance(tool_outputs, ToolOutput):
             tool_outputs = ToolOutputs(outputs=[tool_outputs])
@@ -76,7 +81,7 @@ class DeepScalerToolParser(ToolParser):
         ```
         
         Returns:
-            list[dict]: List of parsed tool calls, each containing 'name' and 'parameters'
+            List[Dict]: List of parsed tool calls, each containing 'name' and 'parameters'
         """
         tool_calls = []
         

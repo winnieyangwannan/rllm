@@ -13,7 +13,7 @@ ENGINE_ID = "04fd2a07df5174d1a"
 
 class GoogleSearchTool(Tool):
     """A tool for searching google."""
-    NAME = "google_search_tool"
+    NAME = "google_search"
     DESCRIPTION = f"Search a query using the Google search engine, returning the top {REFERENCE_COUNT} results along with a short snippet about their contents"
 
     def __init__(self, name: str=NAME, description: str=DESCRIPTION, timeout: float=DEFAULT_SEARCH_ENGINE_TIMEOUT, reference_count: int=REFERENCE_COUNT):

@@ -13,7 +13,7 @@ class TavilyTool(Tool):
     def __init__(self):
         self._init_client()
         super().__init__(
-            name="tavily_tool",
+            name="tavily",
             description="Extract web page content from one or more specified URLs"
         )
         

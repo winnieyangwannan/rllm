@@ -6,8 +6,8 @@ from rllm.tools.web_tools import GoogleSearchTool, FirecrawlTool, TavilyTool
 TOOL_REGISTRY = {
     'calculator': CalculatorTool,
     'e2b_python': E2BPythonInterpreter,
-    'python': PythonInterpreter,
-    'lcb_python': LCBPythonInterpreter,
+    'local_python': PythonInterpreter,
+    'python': LCBPythonInterpreter, # Make LCBPythonInterpreter the default python tool for CodeExec.
     'google_search': GoogleSearchTool,
     'firecrawl': FirecrawlTool,
     'tavily': TavilyTool,
