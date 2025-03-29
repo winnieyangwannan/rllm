@@ -71,7 +71,6 @@ def lcb_sandbox(code, timeout):
     
     # Preprocess the code to ensure the last expression is returned
     code = ensure_return_value(code)
-    print(code)
     
     def execute_code(code, timeout):
         """

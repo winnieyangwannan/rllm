@@ -10,6 +10,15 @@ PARSER_REGISTRY = {
     "qwen": QwenToolParser,
 }
 
+def get_tool_parser(parser_name: str) -> ToolParser:
+    assert parser_name in PARSER_REGISTRY, f"Tool parser {parser_name} not found in {PARSER_REGISTRY}"
+    return PARSER_REGISTRY[parser_name]
 
-
-__all__ = ["R1ToolParser", "QwenToolParser", "DeepScalerToolParser", "ToolParser"]
+__all__ = [
+    "R1ToolParser",
+    "QwenToolParser",
+    "DeepScalerToolParser",
+    "ToolParser",
+    "get_tool_parser",
+    "PARSER_REGISTRY",
+]

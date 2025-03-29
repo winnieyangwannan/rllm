@@ -143,10 +143,7 @@ print(f"Sum of numbers: {sum(numbers)}")
     
     # Access the parsed tool calls
     print(f"Found {len(tool_inputs.inputs)} tool calls:")
-    for i, tool_call in enumerate(tool_inputs.inputs, 1):
-        print(f"\nTool call {i}:")
-        print(f"Name: {tool_call.name}")
-        print(f"Parameters: {tool_call.parameters}")
+    print(tool_inputs)
     
     from rllm.tools import LCBPythonInterpreter
     lcb_tool = LCBPythonInterpreter()
