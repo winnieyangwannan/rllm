@@ -214,7 +214,7 @@ def main():
     print("\nFormatted tool outputs:")
     print(formatted_output)
 
-    lol = [
+    example_chat = [
     {'role': 'system', 'content': 'You are R1. You are a helpful assistant.\n\nCurrent Date: 2024-09-30'},
     {'role': 'user', 'content': "What's the temperature in San Francisco now? How about tomorrow?"},
     {'role': 'assistant', 'content': 'Thinking deeper...', 'tool_calls': [
@@ -228,15 +228,15 @@ def main():
     tokenizer = parser.tokenizer
     
     # Serialize the arguments dictionary to a JSON string before applying the chat template
-    for message in lol:
+    for message in example_chat:
         if message['role'] == 'assistant' and 'tool_calls' in message:
             for tool_call in message['tool_calls']:
                 if 'function' in tool_call and 'arguments' in tool_call['function']:
                     if isinstance(tool_call['function']['arguments'], dict):
                         tool_call['function']['arguments'] = json.dumps(tool_call['function']['arguments'])
     
-    tokenized_lol = tokenizer.apply_chat_template(lol, tokenize=False, special_tokens=False)
-    print(tokenized_lol)
+    tokenized_example_chat = tokenizer.apply_chat_template(example_chat, tokenize=False, special_tokens=False)
+    print(tokenized_example_chat)
 
 if __name__ == "__main__":
     main()
