@@ -81,7 +81,7 @@ if __name__ == '__main__':
 
 
     #Initialize datasets
-    test_datasets = [TestDataset.Gaia.GAIA]
+    test_datasets = [TestDataset.Web.GAIA]
     
     test_datasets_data = [load_dataset(d) for d in test_datasets]
     # Print dataset sizes

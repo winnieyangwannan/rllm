@@ -46,7 +46,7 @@ class TestDataset:
         LIVECODEBENCH = "LIVECODEBENCH"
         LEETCODE = "LEETCODE"
     
-    class Gaia(enum.Enum):
+    class Web(enum.Enum):
         GAIA = "GAIA"
 
 
