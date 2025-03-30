@@ -9,7 +9,7 @@ from copy import deepcopy
 
 from openai import AsyncOpenAI
 
-from rllm.environments.tools import PythonInterpreter, ToolCaller
+from rllm.tools import PythonInterpreter, ToolCaller
 from rllm.data.utils import fetch_live_code_bench_system_prompt
 from rllm.rewards.code_reward import extract_code_from_model
 
