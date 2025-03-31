@@ -34,7 +34,7 @@ class SWEAgent(BaseAgent):
 
             # next observation
             obs = self._preproc_obs(next_observation)
-            usr_msg = self.get_user_msg(obs, append_action=False)
+            usr_msg = self.get_user_msg(obs, first_obs=False)
             messages.append({"role": "user", "content": self._format_msgs_as_str(usr_msg)})
            
         return messages
@@ -45,101 +45,51 @@ class SWEAgent(BaseAgent):
             "type": "text",
             "text": self._get_system_prompt()
         })
-
         return system_msgs
 
-    def get_user_msg(self, user_obs, append_action=True):
+    def get_user_msg(self, user_obs, first_obs=True):
+        if not first_obs:
+            return [{"type": "text", "text": user_obs}]
         user_msgs = []
-        # Add open tabs information
-        user_msgs.extend(self._format_open_tabs(
-            user_obs["open_pages_urls"],
-            user_obs["open_pages_titles"],
-            user_obs["active_page_index"]
-        ))
+        user_msgs.append({
+            "type": "text",
+            "text": """
+Consider the following github issue:
+  <github_issue>
+  {problem_statement}
+  </github_issue>
 
-        # Add page information based on settings
-        if self.use_axtree:
-            user_msgs.append({
-                "type": "text",
-                "text": f"# Current page Accessibility Tree\n\n{user_obs['axtree_txt']}\n\n"
-            })
+  Can you help me implement the necessary changes to the repository to fix the <github_issue>?
+  I've already taken care of all changes to any of the test files described in the <github_issue>. This means you DON'T have to modify the testing logic or any of the tests in any way!
+  Your task is to make the minimal changes to non-tests files in the /testbed directory to ensure the <github_issue> is satisfied.
 
-        if self.use_html:
-            user_msgs.append({
-                "type": "text",
-                "text": f"# Current page DOM\n\n{user_obs['pruned_html']}\n\n"
-            })
+  IMPORTANT TIP:
+  Follow these steps to resolve the issue:
+  1. As a first step, it might be a good idea to explore the repo to familiarize yourself with its structure.
+  2. Create a script ('reproduce_issue.py') to reproduce the error and execute it to confirm the error
+    2.1 reproduce_issue.py script finishes quickly after checking the error, fix etc. There no long running background servers for django for instance etc. It should be a quick script which checks the error and fix to provide a visible response.
+    2.2 SUPER IMPORTANT: to ensure this reproduce_script.py must have a timeout logic of 20 seconds. If the script runs for more than 30 seconds, it should output a timeout message and you can interpret accordingly.
+  3. Edit the sourcecode of the repo to resolve the issue
+  4. Rerun your reproduce script and confirm that the error is fixed!
+  5. Think about edgecases and make sure your fix handles them as well
 
-        if self.use_screenshot:
-            user_msgs.extend(self._format_screenshot(user_obs["screenshot"]))
+  VERY IMPORTANT: each response must include both reasoning and function call to solve the task.
+  You are being told a million times, each response must include a function call. Must inlcude a function call at all costs.
 
-        if user_obs["last_action_error"]:
-            user_msgs.append(
-                {
-                    "type": "text",
-                    "text": f"""\
-# Error message from last action
-
-{user_obs["last_action_error"]}
-
-""",
-                }
-            )
-
-        if append_action:
-            # Add action space description
-            user_msgs.append({
-                "type": "text",
-                "text": self._get_action_space_description()
-            })
-
-            # TODO: check whether this should be part of all observation or not
-            # Add next action prompt
-            user_msgs.append({
-                "type": "text",
-                "text": "# Next action\nYou will now think step by step and produce your next best action. Reflect on your past actions, any resulting error message, and the current state of the page before deciding on your next action. MAKE SURE TO WRAP YOU FINAL ACTION in ```action``` YOU MUST PUT IN THIS EXACT STYLE FOR THE ACTION TO BE VALID. The content must be in the same format as shown before in the Action Space. Only 1 action is needed."
-            })
-
-        return user_msgs
+  You can take multiple turns to solve the task. So please only finish / submit when you are confident in your response. Dont rush. Be comprehensive.
+  You are being told a million times, please dont just submit without proper reasoning. Try to fully analyse the problem statement, explore the repository, reproduce the issue, fix it, check edge cases and then submit.
     
+  Your thinking should be thorough and so it's fine if it's very long.
+  VERY IMPORTANT: file_editor old_str and new_str must be w/o the line numbers. line numbers are only shown in the view for clarity.
+  
+  Also if a file_editor edit fails, its a good idea to view the file near the edit location before trying to edit again. Dont keep trying the same edit over and over again. It will keep leading to the same failure.
+  Again do not get stuck trying to do the same thing over and over again. Please be efficient.
+""".format(problem_statement=user_obs)
+        })
+        return user_msgs
 
     def _get_system_prompt(self):
         return SYSTEM_SWE_PROMPT
-
-
-    def _format_open_tabs(self, urls: list, titles: list, active_index: int) -> list:
-        messages = [{"type": "text", "text": "# Currently open tabs (This is the current active tabs)\n"}]
-
-        for idx, (url, title) in enumerate(zip(urls, titles)):
-            active_marker = " (active tab)" if idx == active_index else ""
-            messages.append({
-                "type": "text",
-                "text": f"Tab {idx}{active_marker}\n  Title: {title}\n  URL: {url}\n"
-            })
-        return messages
-
-
-    def _format_screenshot(self, screenshot: np.ndarray):
-        messages = []
-        messages.append(
-                {
-                    "type": "text",
-                    "text": """\
-# Current page Screenshot
-""",
-                }
-            )
-        messages.append(
-            {
-                "type": "image_url",
-                "image_url": {
-                    "url": image_to_jpg_base64_url(screenshot),
-                    "detail": "auto",
-                },  # Literal["low", "high", "auto"] = "auto"
-            }
-        )
-        return messages
-
 
     def _get_action_space_description(self):
         return f"""\
@@ -191,23 +141,7 @@ Action: ```send_msg_to_user("The price for a 15\\" laptop is 1499 USD.")```
     def _format_msgs_as_str(self, msgs):
         prompt_text_strings = []
         for message in msgs:
-            match message["type"]:
-                case "text":
-                    prompt_text_strings.append(message["text"])
-                case "image_url":
-                    image_url = message["image_url"]
-                    if isinstance(message["image_url"], dict):
-                        image_url = image_url["url"]
-                    if image_url.startswith("data:image"):
-                        prompt_text_strings.append(
-                            "image_url: " + image_url[:30] + "... (truncated)"
-                        )
-                    else:
-                        prompt_text_strings.append("image_url: " + image_url)
-                case _:
-                    raise ValueError(
-                        f"Unknown message type {repr(message['type'])} in the task goal."
-                    )
+            prompt_text_strings.append(message["text"])
         return " ".join(prompt_text_strings)
 
 
@@ -258,7 +192,6 @@ Action: ```send_msg_to_user("The price for a 15\\" laptop is 1499 USD.")```
 
     def convert_observation_to_string(self, obs, with_system_prompt=False):
         obs = self._preproc_obs(obs)
-
         messages = []
         if with_system_prompt:
             messages.extend(self.get_system_msg(obs))
