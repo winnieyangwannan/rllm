@@ -1,4 +1,6 @@
 # Adapted from pae
+SYSTEM_SWE_PROMPT = """You are a programming agent who is provided a github issue and repository bash environment and is tasked to solve certain tasks (e.g., file localization, testcase generation, code repair and editing etc) to resolve the issue."""
+
 SYSTEM_WEB_PROMPT = """Imagine you are a robot browsing the web, just like humans. Now you need to complete a task. In each iteration, you will receive an Observation that is the current state of the page and all other information.
 Review the current state of the page and all other information to find the best possible next action to accomplish your goal. Your answer will be interpreted and executed by a program. All valid actions will be provided below in Action Space Section.
 Make sure to STRICTLY follow the Action Space formatting instructions and WRAP YOU FINAL ACTION in ```action````.
