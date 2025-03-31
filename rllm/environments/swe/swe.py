@@ -16,29 +16,31 @@ from ..batch_env import BatchedEnv
 from r2e_edits.agenthub.environment.env import EnvArgs, RepoEnv
 from r2e_edits.agenthub.action import Action
 from r2e_edits.agenthub.runtime.docker import DockerRuntime
+import random
 
 class SWEEnv:
-    def __init__(self, **kwargs):
+    def __init__(self):
 
         # Get all available images
         from datasets import load_dataset
         self.available_dataset = load_dataset("r2e-edits/swebench-verified-v1", split="test")
-        with open("./command_files.yaml", "r") as file:
-            config = yaml.safe_load(file)
-        self.command_files = config["command_files"]
-        self.max_steps = max_steps
+        command_files = [
+                "../r2e-edits-internal/src/r2e_edits/agenthub/tools/file_editor.py",
+                "../r2e-edits-internal/src/r2e_edits/agenthub/tools/search.py",
+                "../r2e-edits-internal/src/r2e_edits/agenthub/tools/execute_bash.py",
+                "../r2e-edits-internal/src/r2e_edits/agenthub/tools/finish.py",
+        ]
+        self.command_files = command_files
+        self.max_steps = 30
+        self.env = None
     
     def reset(self):
         select_idx = random.choice(range(len(self.available_dataset)))
         env_args = EnvArgs(ds = self.available_dataset[select_idx])
-        self.env = RepoEnv(eng_args)
+        self.env = RepoEnv(env_args)
 
         # reset environment
         self.env.reset()
-        self.env.runtime.reset()
-        self.env.runtime.setup_env()
-        self.env.add_commands(self.command_files)
-        self.env.runtime.start_new_branch()
         self.total_steps = 0
 
         return self.env.runtime.get_task_instruction()
@@ -55,30 +57,25 @@ class SWEEnv:
         if action.function_name == "":
             return "", 0, False, False, {}
 
-        obs, reward, done info = self.env.step(action, timeout = 20)
+        obs, reward, done, info = self.env.step(action, timeout = 20)
 
         self.total_steps += 1
         return obs, reward, done, False, {}
 
     def close(self):
-        self.env.close()
+        if self.env is not None:
+            self.env.close()
      
 class BatchSWEEnv(BatchedEnv):
     def __init__(
         self,
         batch_size,
-        seeds, 
-        sizes,
-        ps,
     ):
         self.envs = []
         self._env_id = []
         for i in range(batch_size):
-            seed = seeds[i]
-            size = sizes[i]
-            p = ps[i]
-            self.envs.append(FrozenLakeEnv(size=size, seed=seed, p=p))
-            self._env_id.append(f"{seed}-{size}-{p}")
+            self.envs.append(SWEEnv())
+            self._env_id.append(f"{i}")
 
         self._batch_size = batch_size
 
@@ -91,9 +88,10 @@ class BatchSWEEnv(BatchedEnv):
         return self._batch_size
 
     def reset(self, seed=0) -> Tuple[List, List]:
+        self.close()
         observations = []
         for i, env in enumerate(self.envs):
-            obs = env.reset(reset_map=False)
+            obs = env.reset()
             observations.append(obs)
         return observations, [{}] * self.batch_size
 
@@ -121,3 +119,6 @@ class BatchSWEEnv(BatchedEnv):
         for i, env in enumerate(self.envs):
             env.close()
 
+    @staticmethod
+    def from_extra_infos(extra_infos: List[Dict]) -> "BatchSWEEnv":
+        return BatchSWEEnv(batch_size=len(extra_infos))

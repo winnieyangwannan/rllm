@@ -39,7 +39,7 @@ class SWEAgent(BaseAgent):
            
         return messages
     
-    def get_system_msg(self, obs):
+    def get_system_msg(self):
         system_msgs = []
         system_msgs.append({
             "type": "text",
@@ -91,18 +91,6 @@ Consider the following github issue:
     def _get_system_prompt(self):
         return SYSTEM_SWE_PROMPT
 
-    def _get_action_space_description(self):
-        return f"""\
-# Action Space (This is the list of valid actions you are allowed to output after your chain-of-thought reasoning, YOU MUST OUTPUT EXACTLY IN THIS FORMAT FOR ACTION TO BE VALID)
-{self.action_set.describe(with_long_description=False, with_examples=False)}
-Here are examples of actions with chain-of-thought reasoning:
-Thought: I now need to click on the Submit button to send the form. I will use the click action on the button, which has bid 12.
-Action: ```click("12")```
-Thought: I found the information requested by the user, I will send it to the chat.
-Action: ```send_msg_to_user("The price for a 15\\" laptop is 1499 USD.")```
-"""
-
-
     def _format_action_history(self, last_action_error):
         msgs = []
         msgs.append(
@@ -125,16 +113,6 @@ Action: ```send_msg_to_user("The price for a 15\\" laptop is 1499 USD.")```
             ]
         )
 
-        if last_action_error:
-            msgs.append(
-                {
-                    "type": "text",
-                    "text": f"""\
-# Error message from last action
-{last_action_error}
-""",
-                }
-            )
         return msgs
 
 
@@ -160,6 +138,7 @@ Action: ```send_msg_to_user("The price for a 15\\" laptop is 1499 USD.")```
             str: The extracted content from the last occurrence of triple backticks, 
                 or the full response if no match is found.
         """
+        # TODO: FIXME: Tianjun: we need to re-implement this function
         matches = re.findall(r'```(.*?)```', response, re.DOTALL)  # Find all occurrences
         if matches:
             return matches[-1] 
@@ -191,11 +170,10 @@ Action: ```send_msg_to_user("The price for a 15\\" laptop is 1499 USD.")```
         return 0
 
     def convert_observation_to_string(self, obs, with_system_prompt=False):
-        obs = self._preproc_obs(obs)
         messages = []
         if with_system_prompt:
-            messages.extend(self.get_system_msg(obs))
+            messages.extend(self.get_system_msg())
 
-        messages.extend(self.get_user_msg(obs, append_action=with_system_prompt))
+        messages.extend(self.get_user_msg(obs, first_obs=with_system_prompt))
 
         return self._format_msgs_as_str(messages)
