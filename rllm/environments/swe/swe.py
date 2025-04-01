@@ -49,18 +49,21 @@ class SWEEnv:
         reward, test_output = self.env.runtime._calculate_reward(get_test_output = True)
         return reward
         
-    def step(self, action: Action):
+    def step(self, action: str):
+        action = Action.from_string(action)
         # Check for max steps
         if self.total_steps > self.max_steps:
-            return "Max Time steps", 0, True, True, {}
+            return "Max Time steps", 0, True, {}
 
         if action.function_name == "":
-            return "", 0, False, False, {}
+            return "", 0, False, {}
 
         obs, reward, done, info = self.env.step(action, timeout = 20)
+        if done:
+            reward = self.evaluate_reward()
 
         self.total_steps += 1
-        return obs, reward, done, False, {}
+        return obs, reward, done, {}
 
     def close(self):
         if self.env is not None:

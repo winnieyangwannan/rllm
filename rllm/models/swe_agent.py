@@ -8,7 +8,36 @@ import numpy as np
 
 from rllm.models.system_prompts import *
 from rllm.models.agent import BaseAgent
+from r2e_edits.agenthub.action import Action
+from typing import Tuple
 
+def parse_response(response_text: str) -> Tuple[str, Action]:
+    """
+    Extracts:
+    - thought: everything before the first <function=...> block
+    - action: the entire first <function=...></function> block
+    Returns (thought, action).
+    """
+    # Regex to match (non-greedily) from `<function=` up to the first `</function>`
+    pattern = re.compile(r"(?s)(<function=.*?</function>)")
+    match = pattern.search(response_text)
+
+    if match:
+        action = match.group(1)  # The entire <function=...></function> block
+        thought = response_text[: match.start()]  # Everything before the block
+    else:
+        # If no match, treat entire text as "thought"
+        thought = response_text
+        action = ""
+
+    # Strip leading/trailing whitespace
+    thought = thought.strip()
+    action = action.strip()
+
+    # convert action to Action object
+    action = Action.from_string(action)
+
+    return thought, action
 
 logger = logging.getLogger(__name__)
 
@@ -19,7 +48,7 @@ class SWEAgent(BaseAgent):
     def _pre_get_action(self, trajectory):
         obs = trajectory[0]["next_observation"] # initial state
 
-        system_msgs = self.get_system_msg(obs)
+        system_msgs = self.get_system_msg()
 
         messages = [
             {"role": "system", "content": self._format_msgs_as_str(system_msgs)},
@@ -91,37 +120,11 @@ Consider the following github issue:
     def _get_system_prompt(self):
         return SYSTEM_SWE_PROMPT
 
-    def _format_action_history(self, last_action_error):
-        msgs = []
-        msgs.append(
-                {
-                    "type": "text",
-                    "text": """\
-# History of past actions
-""",
-                }
-            )
-        msgs.extend(
-            [
-                {
-                    "type": "text",
-                    "text": f"""\
-{action}
-""",
-                }
-                for action in self.action_history
-            ]
-        )
-
-        return msgs
-
-
     def _format_msgs_as_str(self, msgs):
         prompt_text_strings = []
         for message in msgs:
             prompt_text_strings.append(message["text"])
         return " ".join(prompt_text_strings)
-
 
     def _post_get_action(self, response):
         """
@@ -139,19 +142,14 @@ Consider the following github issue:
                 or the full response if no match is found.
         """
         # TODO: FIXME: Tianjun: we need to re-implement this function
-        matches = re.findall(r'```(.*?)```', response, re.DOTALL)  # Find all occurrences
-        if matches:
-            return matches[-1] 
-        return response 
-
+        thought, action = parse_response(response)
+        return action.to_xml_string()
 
     def update(self, action, observation, next_observation, reward, terminated, truncated, info):
         self.action_history.append(action)
 
-
     def reset(self):
         self.action_history = []
-
 
     def compute_training_reward(self, trajectory):
         """
