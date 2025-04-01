@@ -41,6 +41,7 @@ class SWEEnv:
 
         # reset environment
         self.env.reset()
+        self.env.add_commands(self.command_files)
         self.total_steps = 0
 
         return self.env.runtime.get_task_instruction()
@@ -63,7 +64,7 @@ class SWEEnv:
             reward = self.evaluate_reward()
 
         self.total_steps += 1
-        return obs, reward, done, {}
+        return str(obs), reward, done, {}
 
     def close(self):
         if self.env is not None:
