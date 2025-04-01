@@ -23,7 +23,9 @@ class RewardConfig:
     incorrect_reward: float = 0.0
     format_error_reward: float = 0.0
     unk_error_reward: float = 0.0
-    toolcall_bonus: float = 0.2
+    
+    # Bonus reward for calling tools.
+    toolcall_bonus: float = 0.5
 
 
 class RewardType(Enum):
