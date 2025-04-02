@@ -3,7 +3,7 @@ import re
 import json
 from pprint import pprint
 from tqdm import tqdm
-from rllm.environments.tools import PythonInterpreter
+from rllm.tools import PythonInterpreter
 from openai import AsyncOpenAI
 
 def parse_trajectory(example):

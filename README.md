@@ -55,3 +55,23 @@ Unit tests are in the `test/` folder and uses pytest. To run:
 ```bash
 PYTHONPATH=. pytest tests/rllm/rewards/tests.py
 ````
+
+### WebAgent 
+
+#### BrowserGym setup
+Setup playwright by running
+```bash
+pip install playwright
+playwright install chromium
+```
+
+Then follow instruction for each specific environment
+##### MiniWob
+```bash
+git clone git@github.com:Farama-Foundation/miniwob-plusplus.git
+git -C "./miniwob-plusplus" reset --hard 7fd85d71a4b60325c6585396ec4f48377d049838
+export MINIWOB_URL="file://<PATH_TO_MINIWOB_PLUSPLUS_CLONED_REPO>/miniwob/html/miniwob/"
+
+cd rllm
+python scripts/data/miniwob_dataset.py --local_dir ~/data/rllm-miniwob
+```

@@ -1,3 +1,4 @@
+torch==2.4.0
 deepspeed
 dm-tree
 gdown
@@ -7,9 +8,18 @@ pybind11
 pylatexenc
 pytest
 sentence_transformers
-sglang[all]
-sglang-router
+sortedcontainers
 swebench
 tabulate
 torchmetrics
 flash-attn
+gym
+selenium
+PyMuPDF
+nltk
+browsergym
+gradio
+fire
+vertexai
+e2b_code_interpreter
+firecrawl

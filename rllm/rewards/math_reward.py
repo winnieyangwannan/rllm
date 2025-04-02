@@ -71,7 +71,11 @@ class RewardMathFn(RewardFn):
         for ground_truth in processed_ground_truths:
             is_correct = grade_answer_mathd(model_answer, ground_truth) or grade_answer_sympy(model_answer, ground_truth)
             if is_correct:
-                return RewardOutput(reward=self.config.correct_reward, is_correct=True)
+                # Apply tool call bonus if applicable and answer is correct
+                reward = self.config.correct_reward
+                if input.metadata.get("has_toolcall", False):
+                    reward += self.config.toolcall_bonus
+                return RewardOutput(reward=reward, is_correct=True)
 
         # If latex heuristics fail and ORM is enabled, use LLM as ORM to evaluate correctness
         if self.config.use_math_orm:
@@ -104,7 +108,7 @@ class RewardMathFn(RewardFn):
 
 
 
-def rllm_reward_fn_math(data_source: str, llm_solution: str, ground_truth: Union[str, List[str]], **kwargs):
+def rllm_reward_fn_math(data_source: str, llm_solution: str, ground_truth: Union[str, List[str]], extra_info={}, **kwargs):
     """Evaluates mathematical solutions against ground truth answers.
 
     This function creates a reward function to evaluate mathematical solutions by comparing
@@ -129,13 +133,15 @@ def rllm_reward_fn_math(data_source: str, llm_solution: str, ground_truth: Union
     reward_response = reward_fn(RewardInput(problem=None,
                                             problem_type=RewardType.MATH,
                                             model_response=llm_solution,
-                                            metadata={"answer": ground_truth},
+                                            metadata={"answer": ground_truth, **extra_info},
                                             data_source=data_source))
-    return reward_response.is_correct
+    return reward_response.reward
+
 
 if __name__ == "__main__":
     reward = RewardMathFn(RewardConfig)
     test_input = RewardInput(
+        data_source="",
         problem=(
             "Let $P(x)=x^{4}+2 x^{3}-13 x^{2}-14 x+24$ be a polynomial with roots "
             "$r_{1}, r_{2}, r_{3}, r_{4}$. Let $Q$ be the quartic polynomial with roots "
@@ -146,9 +152,9 @@ if __name__ == "__main__":
         ),
         problem_type=RewardType.MATH,
         model_response=(
-            "The answer is \\boxed{the function is 24 + 14*x + (-13)*x^2 - 2*x^3 + x^4}."
+            "<think>...</think>\nThe answer is \\boxed{24 + 14*x + (-13)*x^2 - 2*x^3 + x^4}."
         ),
-        metadata={"answer": ["10", "$x^{4}-2 x^{3}-13 x^{2}+14 x+24$"]}
+        metadata={"answer": ["10", "$x^{4}-2 x^{3}-13 x^{2}+14 x+24$"], "has_toolcall": True}
     )
     output = reward(test_input)
     print(output)

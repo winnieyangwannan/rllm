@@ -38,9 +38,12 @@ def make_map_fn(split: str):
     Returns:
         Function that processes individual dataset examples
     """
-    def process_fn(example: Dict[str, Any], idx: int) -> Optional[Dict[str, Any]]:
+    def process_fn(example: Dict[str, Any], idx: int, instruction: str = None) -> Optional[Dict[str, Any]]:
         question = example.pop('problem')
-        instruction = "Let's think step by step and output the final answer within \\boxed{}."
+        
+        if instruction is None:
+            instruction = "Let's think step by step and output the final answer within \\boxed{}."
+        
         question = f"{question} {instruction}"
         answer = example.pop('answer')
 
@@ -79,7 +82,7 @@ if __name__ == '__main__':
     makedirs(local_dir, exist_ok=True)
 
     # Initialize datasets
-    train_datasets = [TrainDataset.Math.DEEPSCALER]
+    train_datasets = [TrainDataset.Math.DEEPSCALER_7B]
     train_dataset = load_dataset(train_datasets[0])
     test_datasets = [TestDataset.Math.AIME, TestDataset.Math.AMC, TestDataset.Math.MATH, TestDataset.Math.MINERVA, TestDataset.Math.OLYMPIAD_BENCH]
     
