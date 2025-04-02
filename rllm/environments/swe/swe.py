@@ -28,7 +28,7 @@ class SWEEnv:
                 "../r2e-edits-internal/src/r2e_edits/agenthub/tools/finish.py",
         ]
         self.command_files = command_files
-        self.max_steps = 20
+        self.max_steps = 40
         self.env = None
     
     def reset(self):
@@ -38,6 +38,8 @@ class SWEEnv:
 
         # reset environment
         self.env.reset()
+        self.env.runtime.reset()
+        self.env.runtime.setup_env()
         self.env.add_commands(self.command_files)
         self.total_steps = 0
 
@@ -56,7 +58,7 @@ class SWEEnv:
         if action.function_name == "":
             return "", 0, False, {}
 
-        obs, reward, done, info = self.env.step(action, timeout = 20)
+        obs, reward, done, info = self.env.step(action, timeout = 90)
         if done:
             reward = self.evaluate_reward()
 
