@@ -1,12 +1,3 @@
-"""
-run `pip install "gymnasium[toy-text]"` to install gymnasium
-"""
-
-"""
-Adapted from nice codes from gymnasium.envs.toy_text.frozen_lake.generate_random_map
-Modify it so that the start and end points are random
-"""
-
 import gymnasium as gym
 from typing import List, Optional, Tuple, Any, Dict
 import hashlib
@@ -17,13 +8,19 @@ from r2e_edits.agenthub.environment.env import EnvArgs, RepoEnv
 from r2e_edits.agenthub.action import Action
 from r2e_edits.agenthub.runtime.docker import DockerRuntime
 import random
+from datasets import load_dataset
+import os
+import concurrent.futures
 
 class SWEEnv:
-    def __init__(self):
+    def __init__(self, dataset):
 
         # Get all available images
-        from datasets import load_dataset
-        self.available_dataset = load_dataset("r2e-edits/swebench-verified-v1", split="test")
+        # self.available_dataset = load_dataset("r2e-edits/swebench-verified-v1", split="test")
+        self.available_dataset = dataset
+        # TODO: Limit the number to 100 now
+        self.available_dataset = self.available_dataset.select(range(100))
+
         command_files = [
                 "../r2e-edits-internal/src/r2e_edits/agenthub/tools/file_editor.py",
                 "../r2e-edits-internal/src/r2e_edits/agenthub/tools/search.py",
@@ -31,7 +28,7 @@ class SWEEnv:
                 "../r2e-edits-internal/src/r2e_edits/agenthub/tools/finish.py",
         ]
         self.command_files = command_files
-        self.max_steps = 30
+        self.max_steps = 20
         self.env = None
     
     def reset(self):
@@ -75,10 +72,11 @@ class BatchSWEEnv(BatchedEnv):
         self,
         batch_size,
     ):
+        swe_dataset = load_dataset("r2e-edits/r2e-dockers-v1", split="train")
         self.envs = []
         self._env_id = []
         for i in range(batch_size):
-            self.envs.append(SWEEnv())
+            self.envs.append(SWEEnv(swe_dataset))
             self._env_id.append(f"{i}")
 
         self._batch_size = batch_size
@@ -92,7 +90,6 @@ class BatchSWEEnv(BatchedEnv):
         return self._batch_size
 
     def reset(self, seed=0) -> Tuple[List, List]:
-        self.close()
         observations = []
         for i, env in enumerate(self.envs):
             obs = env.reset()
@@ -120,8 +117,23 @@ class BatchSWEEnv(BatchedEnv):
                 truncateds, infos)
 
     def close(self):
-        for i, env in enumerate(self.envs):
-            env.close()
+        def _close(idx):
+            self.envs[idx].close()
+            return True
+
+        successes = []
+        with concurrent.futures.ThreadPoolExecutor(max_workers=40) as executor:
+            future_to_close = {
+                executor.submit(_close, idx): idx for idx in range(len(self.envs))
+            }
+            for future in concurrent.futures.as_completed(future_to_close):
+                success = future.result()
+                
+        try:
+            os.system('docker stop $(docker ps -a -q)')
+            os.system('docker rm $(docker ps -a -q)')
+        except Exception as e:
+            pass
 
     @staticmethod
     def from_extra_infos(extra_infos: List[Dict]) -> "BatchSWEEnv":
