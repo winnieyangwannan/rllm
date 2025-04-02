@@ -96,7 +96,7 @@ python3 -m verl.trainer.main_ppo_pipeline \
     actor_rollout_ref.rollout.n=4 \
     actor_rollout_ref.rollout.val_kwargs.n=1 \
     actor_rollout_ref.rollout.enforce_eager=False \
-    actor_rollout_ref.rollout.vllm_log_prob=True \
+    actor_rollout_ref.rollout.enable_log_prob=True \
     actor_rollout_ref.ref.fsdp_config.param_offload=True \
     algorithm.kl_ctrl.kl_coef=0.001 \
     trainer.critic_warmup=0 \

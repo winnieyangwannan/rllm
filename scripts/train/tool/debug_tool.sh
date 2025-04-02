@@ -58,7 +58,7 @@ python3 -m verl.trainer.main_ppo \
     actor_rollout_ref.rollout.n=8 \
     actor_rollout_ref.rollout.val_kwargs.n=16 \
     actor_rollout_ref.rollout.async_engine=True \
-    actor_rollout_ref.rollout.vllm_log_prob=False \
+    actor_rollout_ref.rollout.enable_log_prob=False \
     actor_rollout_ref.rollout.enable_tools=True \
     actor_rollout_ref.rollout.max_tool_calls=20 \
     actor_rollout_ref.ref.fsdp_config.param_offload=True \
