@@ -1,11 +1,12 @@
 import asyncio
 import json
 import logging
+from typing import Dict, List
 
 from rllm.environments.tools.tool_env import ToolEnvironment
 from rllm.models.agent import BaseAgent
-from rllm.tools.multi_tool import MultiTool
 from rllm.parser import get_tool_parser
+from rllm.tools.multi_tool import MultiTool
 
 logger = logging.getLogger(__name__)
 
@@ -39,9 +40,8 @@ class ToolAgent(BaseAgent):
             {"role": "system", "content": self.system_prompt + self.tools_prompt}
         ]
         
-    def _pre_get_action(self, trajectories):
-        print("trajectories:", trajectories)
-        self.messages.extend(self.format_observation_as_messages(trajectories[-1]['next_observation']))
+    def _pre_get_action(self, trajectory: List[Dict]):
+        self.messages.extend(self.format_observation_as_messages(trajectory[-1]['next_observation']))
         return self.messages
     
     def _post_get_action(self, response):
@@ -142,18 +142,31 @@ if __name__ == "__main__":
         "temperature": 0.6,
         "max_tokens": 8192,
         "top_p": 0.95,
-        "stop": ["```\n\n"],
+        # "stop": ["```\n\n"],
         "tools": env.tools.json,
     }
     
     batch_agent = AgentExecutionEngine(
         agent_class=ToolAgent,
-        agent_args={"tools": ["google_search"]},
+        agent_args={"tools": ["google_search"], "model_name": "Qwen/Qwen2.5-1.5B-Instruct"},
         engine_name="openai", 
-        n_parallel_agents=1,  # Set to 1 to match environment's fixed batch size
+        n_parallel_agents=2,  # Set to 1 to match environment's fixed batch size
         env=env,
         tokenizer=tokenizer,  # Using transformers tokenizer
-        rollout_engine=None
+        rollout_engine=None,
+        sampling_params=sampling_params
     )
+
+    tasks = [
+        "Who won the 2024 Super Bowl and what was the final score?",
+        "What is the current population of Tokyo in 2024?",
+        "When is the next solar eclipse visible from North America?",
+        "Who is the current CEO of OpenAI and when did they take the position?",
+        "What was the highest grossing movie of 2023?",
+        "What is the latest breakthrough in fusion energy research?",
+    ]
+
+    tasks = [{"question": task} for task in tasks]
+
     # Run the environment interaction
-    asyncio.run(batch_agent.interact_environment_async())
+    asyncio.run(batch_agent.execute_tasks(tasks))

@@ -84,8 +84,6 @@ class AgentPPOTrainer(RayPPOTrainer):
         env = self.env_class.from_extra_infos(extra_infos=batch.non_tensor_batch["extra_info"].tolist())
         batch.non_tensor_batch["uid"] = np.array(env.env_id, dtype=object)
 
-        # env = self.env_class(dataset=batch.non_tensor_batch["dataset"])
-
         return env
 
 

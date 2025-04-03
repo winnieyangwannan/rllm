@@ -20,13 +20,17 @@ class ToolEnvironment:
 
         self.current_data = None
     
-    def reset(self, seed=None, idx=None):
+    def reset(self, seed=None, idx=None, task=None):
         """Reset the environment and return initial observations."""
         import random
         if seed is not None:
             random.seed(seed)
 
         self.step_count = 0
+        
+        # Use the provided task if available, otherwise use the default task
+        if task is not None:
+            self.task = task
         
         # Return a single observation in a list to maintain the batch structure
         return {"question": self.task["question"]}, {}
@@ -46,8 +50,8 @@ class ToolEnvironment:
         reward = 0
         
         # Check if we should terminate
-        terminated = False
-        truncated = self.step_count >= self.max_steps
+        terminated = self.step_count >= self.max_steps
+        truncated = False
 
         next_obs = {}
 
@@ -57,7 +61,7 @@ class ToolEnvironment:
             next_obs = {"tool_outputs": tool_outputs}
         else:
             terminated = True
-            
+
         # Return results as lists with single items to maintain batch structure
         return next_obs, reward, terminated, truncated, {"response": action}
     
