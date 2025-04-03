@@ -8,6 +8,7 @@ import torch
 import numpy as np
 import time
 
+
 class AgentExecutionEngine(BatchAgent):
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
@@ -17,54 +18,49 @@ class AgentExecutionEngine(BatchAgent):
     async def get_action_async(self, trajectory, agent, **kwargs):
         if self.engine_name == "openai":
             return await self._get_action_openai_async(trajectory, agent, **kwargs)
+        elif self.engine_name == "verl":
+            return await self._get_action_verl_async(trajectory, agent, **kwargs)
         else:
             raise NotImplementedError
-    
 
-    def get_actions_yield(self, observations, obs_idxs=[], **kwargs):
+    async def _get_action_verl_async(self, trajectory, agent, **kwargs):
         """
-        Yield actions with same size as the observations list, may be out of order. 
-        obs_idxs: The list of indexes that the observations are from. Used to index into self.agents
-
-        Yield: the tuple (action, obs_idx it corresponds to, response)
+        Asynchronous version for getting a single action from verl.
         """
-        if obs_idxs:
-            assert len(observations) == len(
-                obs_idxs
-            ), f"Number of observations {len(observations)} should equal to the number of agents they are for ({len(obs_idxs)})"
-        assert (
-            self.engine_name == "verl"
-        ), "Currently only veRL is supported for trajectory yielding"
-        yield from self._get_actions_verl_yield(observations, obs_idxs, **kwargs)
-    
+        from verl.protocol import pad_dataproto_to_divisor
+        import asyncio
 
-    def _get_actions_verl_yield(self, observations, obs_idxs=[], **kwargs):
-        from verl.protocol import pad_dataproto_to_divisor, unpad_dataproto
-
-        prompts = [
-            self.agents[obs_idxs[i]]._pre_get_action(obs)
-            for i, obs in enumerate(observations)
-        ]
-
-        batch = self._convert_prompt_verl(prompts, **kwargs)
-        # because of veRL's chunking. we need to pad number of prompts to be a multiple of worker group world size
+        prompt = agent._pre_get_action(trajectory)
+        batch = self._convert_prompt_verl([prompt], **kwargs)
+        
+        # Pad to match worker group world size
         batch_padded, pad_size = pad_dataproto_to_divisor(batch, self.rollout_engine.world_size)
-        # augment the data with non_tensor_batch "rollout_generator_id" to tell which agent/trajectory it belongs to. -1 mean padding
-        rollout_generator_id = np.array(obs_idxs + [-1] * pad_size, dtype=object)
+        
+        # Add rollout_generator_id (-1 for padding)
+        rollout_generator_id = np.array([0] + [-1] * pad_size, dtype=object)
         batch_padded.non_tensor_batch["rollout_generator_id"] = rollout_generator_id
-        gen_seq_generator = self.rollout_engine.generate_sequences_async(prompts=batch_padded)
-        for output in gen_seq_generator:
-            idx = output.non_tensor_batch["rollout_generator_id"][0]
-            if idx != -1:
-                output_text = self.tokenizer.batch_decode(
-                    output.batch["responses"], skip_special_tokens=False
-                )
-                assert len(output_text) == 1, "Only 1 action should be yielded at one time"
-                for i, text in enumerate(output_text):
+        
+        # Run the generator in a separate thread
+        result = None
+        
+        def collect_result():
+            nonlocal result
+            gen_seq_generator = self.rollout_engine.generate_sequences_async(prompts=batch)
+            for output in gen_seq_generator:
+                idx = output.non_tensor_batch["rollout_generator_id"][0]
+                if idx != -1:  # Skip padding
+                    output_text = self.tokenizer.batch_decode(
+                        output.batch["responses"], skip_special_tokens=False
+                    )[0]  # Only one response
                     pad_token = self.tokenizer.pad_token
-                    response = text.replace(pad_token, "")
-                    action = self.agents[idx]._post_get_action(response)
-                    yield action, idx, response
+                    response = output_text.replace(pad_token, "")
+                    result = agent._post_get_action(response)
+                    break  # We only need the first result
+        
+        # Run collection in a separate thread
+        await asyncio.to_thread(collect_result)
+        
+        return result
 
     async def _get_action_openai_async(self, trajectory, agent, **kwargs):
         import openai
@@ -96,157 +92,6 @@ class AgentExecutionEngine(BatchAgent):
         print("oai response:", response)
         return agent._post_get_action(response)
 
-
-    def interact_environment_generator(self, reset_seed=0, timing_raw={}, **kwargs):
-        """
-        Runs the trajectory collection loop and yields completed trajectories as they finish.
-        Uses a simple queue-based async mechanism to process available results.
-        """
-        assert self.env, f"Env cannot be empty, but got {self.env}"
-        assert hasattr(self.env, "batch_size"), "Env does not have batch_size attribute"
-
-        env_batch_size = self.env.batch_size
-        assert (
-            env_batch_size == self.n_parallel_agents
-        ), "Number of parallel environments should match number of parallel agents."
-
-        loop = asyncio.new_event_loop()
-        asyncio.set_event_loop(loop)
-
-        trajectories = [[] for _ in range(env_batch_size)]
-        steps = [0 for _ in range(env_batch_size)]
-        observations, infos = self.env.reset(seed=reset_seed)
-        batch_done = [False for _ in range(env_batch_size)]
-        responses_queue = asyncio.Queue()
-        results_queue = asyncio.Queue() 
-
-        pending_obs = []
-        pending_traj_idxs = []
-        last_submit_time = time.time()
-
-        batch_size = self.rollout_engine.world_size
-        timeout_seconds = 3
-
-        async def async_action_worker(obs_batch, traj_idxs):
-            """Runs `get_actions_yield()` asynchronously in a thread."""
-            for action, traj_idx, response in await asyncio.to_thread(self.get_actions_yield, obs_batch, traj_idxs, **kwargs):
-                await responses_queue.put((action, traj_idx, response))
-
-        async def flush_pending_actions():
-            """Flush accumulated actions when conditions are met."""
-            nonlocal pending_obs, pending_traj_idxs, last_submit_time
-            if pending_obs:
-                await async_action_worker(pending_obs, pending_traj_idxs)
-                pending_obs = []
-                pending_traj_idxs = []
-                last_submit_time = time.time()
-
-        async def async_loop():
-            """Main async loop handling actions and stepping through the environment."""
-            # Start processing initial batch
-            loop.create_task(async_action_worker(observations, list(range(env_batch_size))))
-
-            while not all(batch_done):
-                traj_idx_list = []
-                actions_list = []
-                responses_list = []
-
-                # Process available actions without blocking
-                while not responses_queue.empty():
-                    action, traj_idx, response = await responses_queue.get()
-                    traj_idx_list.append(traj_idx)
-                    actions_list.append(action)
-                    responses_list.append(response)
-
-                if not actions_list:
-                    if time.time() - last_submit_time > timeout_seconds:
-                        await flush_pending_actions()
-                    await asyncio.sleep(0.01)  # Yield control to prevent blocking
-                    continue
-
-                
-
-                try:
-                    next_observations, rewards, terminateds, truncateds, infos = (
-                        self.env.step(actions=actions_list, env_idxs=traj_idx_list)
-                    )
-                except Exception as e:
-                    print(e)
-                    self.reset()
-                    raise (e)
-
-                for i, traj_idx in enumerate(traj_idx_list):
-
-                    aug_reward= self.agents[traj_idx].augment_reward(responses_list[i], next_observations[i], rewards[i])
-
-                    trajectories[traj_idx].append({
-                        "observation": observations[traj_idx],
-                        "next_observation": next_observations[i],
-                        "reward": rewards[i],
-                        "done": terminateds[i] or truncateds[i],
-                        "action": actions_list[i],
-                        "info": infos[i],
-                        "augmented_reward": aug_reward,
-                        "response": responses_list[i],
-                    })
-
-                    self.agents[traj_idx].update(
-                        actions_list[i],
-                        observations[traj_idx],
-                        next_observations[i],
-                        rewards[i],
-                        terminateds[i],
-                        truncateds[i],
-                        infos[i],
-                    )
-
-                    observations[traj_idx] = next_observations[i]
-                    steps[traj_idx] += 1
-
-                    if steps[traj_idx] > self.episode_len or terminateds[i] or truncateds[i]:
-                        termination_reason = 'termination' if terminateds[i] else 'truncation'
-                        if steps[traj_idx] > self.episode_len:
-                            termination_reason = "episode_len"
-                        colorful_print(
-                            f"Trajectory {traj_idx} completed due to {termination_reason}. Reward is {rewards[i]}. \n",
-                            "green",
-                        )
-                        batch_done[traj_idx] = True
-                        result = add_mc_return(
-                            add_trajectory_reward(trajectory=trajectories[traj_idx]),
-                            gamma=self.gamma,
-                        ), traj_idx
-                        await results_queue.put(result) 
-                    else:
-                        pending_obs.append(next_observations[i])
-                        pending_traj_idxs.append(traj_idx)
-
-                        if len(pending_obs) >= batch_size:
-                            await flush_pending_actions()
-
-            await results_queue.put(None) 
-
-        loop.create_task(async_loop())  
-
-        try:
-            while True:
-                result = loop.run_until_complete(results_queue.get())
-                if result is None:
-                    break  
-                yield result
-
-        finally:
-            # Clean up
-            pending = asyncio.all_tasks(loop)
-            for task in pending:
-                print("One trajectory generation task is cancelled")
-                task.cancel()
-            
-            if not loop.is_closed():
-                # Run loop one final time to execute any remaining callbacks
-                loop.run_until_complete(loop.shutdown_asyncgens())
-                loop.close()
-    
 
     async def interact_environment_async(self):
         """

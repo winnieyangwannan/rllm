@@ -38,7 +38,7 @@ from rllm.models.tool_agent import ToolAgent
 ENV_CLASS_MAPPING = {
     # 'browsergym': BatchBrowserGym,
     # 'frozenlake': BatchFrozenLakeEnv,
-    'tool': ToolEnvironment,
+    'tool': BatchToolEnv,
 }
 
 AGENT_CLASS_MAPPING = {

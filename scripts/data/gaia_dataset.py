@@ -56,7 +56,7 @@ def make_map_fn(split: str):
             "extra_info": {
                 'split': split,
                 'index': idx,
-                'reference': example.get('completion', None), # For leetcode
+                'task': {"question": question}
             }
         }
         return data

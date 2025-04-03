@@ -84,6 +84,7 @@ class QwenToolParser(ToolParser):
                 
             # Extract and parse the JSON content
             json_content = text[start:end].strip()
+            print(f"json_content: {json_content}")
             try:
                 call_data = json.loads(json_content)
                 # Convert to common format matching parse_tool_calls output
@@ -92,12 +93,26 @@ class QwenToolParser(ToolParser):
                     "parameters": call_data["arguments"]
                 })
             except json.JSONDecodeError:
+                print(f"Error parsing tool call: {json_content}")
                 break
                 
             # Move to next potential tool call
             text = text[end + len(self.tool_call_end):]
         
         return tool_calls
+    
+    def get_tool_prompt(self, tools_schema):
+        return f"""
+You are provided with function signatures within <tools></tools> XML tags:
+<tools>
+{tools_schema}
+</tools>
+
+For each function call, return a json object with function name and arguments within <tool_call></tool_call> XML tags:
+<tool_call>
+{{"name": <function-name>, "arguments": <args-json-object>}}
+</tool_call><|im_end|>
+"""
 
 
 def main():

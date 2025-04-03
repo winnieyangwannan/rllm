@@ -65,21 +65,29 @@ class AgentPPOTrainer(RayPPOTrainer):
             engine_name="verl",
             tokenizer=self.tokenizer,
             agent_class=self.agent_class,
+            agent_args={
+                "model_name": self.config.actor_rollout_ref.model.path,
+                "parser_name": "qwen",
+                "tools": ["google_search"]
+            },
             model_path=self.config.actor_rollout_ref.model.path,
             episode_len=self.config.agent.trajectory_episode_len,
             max_trajectory_length=self.config.agent.max_trajectory_length,
             env=ToolEnvironment(tools=["google_search"])
         )
+    
 
-    # def init_env(self, batch):
-    #     """
-    #     Initialize environment depending on env_class with the necessary extra_info, also set uid of the batch.
-    #     """
-    #     # env = self.env_class.from_extra_infos(extra_infos=batch.non_tensor_batch["extra_info"].tolist())
-    #     # batch.non_tensor_batch["uid"] = np.array(env.env_id, dtype=object)
+    def init_env(self, batch):
+        """
+        Initialize environment depending on env_class with the necessary extra_info, also set uid of the batch.
+        """
+        env = self.env_class.from_extra_infos(extra_infos=batch.non_tensor_batch["extra_info"].tolist())
+        batch.non_tensor_batch["uid"] = np.array(env.env_id, dtype=object)
 
-    #     env = ToolEnvironment(tools=["google_search"])
-    #     return env
+        # env = self.env_class(dataset=batch.non_tensor_batch["dataset"])
+
+        return env
+
 
     def fit_agent(self):
         """
@@ -133,8 +141,10 @@ class AgentPPOTrainer(RayPPOTrainer):
                     "agent_rollout": True,  # no need to generate multiple ones since environment is repeated already
                 }
 
+                env = self.init_env(batch)
+
                 with _timer("step", timing_raw):
-                    final_gen_batch_output = self._generate_agent_trajectories(timing_raw=timing_raw, meta_info=batch.meta_info)
+                    final_gen_batch_output = self._generate_agent_trajectories(env, timing_raw=timing_raw, meta_info=batch.meta_info)
 
                     batch = batch.union(final_gen_batch_output)
                     ####################
@@ -243,7 +253,7 @@ class AgentPPOTrainer(RayPPOTrainer):
                             adv_estimator=self.config.algorithm.adv_estimator,
                             gamma=self.config.algorithm.gamma,
                             lam=self.config.algorithm.lam,
-                            num_repeat=1,
+                            # num_repeat=1,
                         )
 
                     # balance the number of valid tokens on each dp rank.
@@ -382,7 +392,7 @@ class AgentPPOTrainer(RayPPOTrainer):
         return metric_dict
 
 
-    def _generate_agent_trajectories(self, timing_raw={}, meta_info=None):
+    def _generate_agent_trajectories(self, env, timing_raw={}, meta_info=None):
         """
         Generates agent trajectories by interacting with the environment. Does not close or reset the environment afterwards
 
@@ -394,11 +404,21 @@ class AgentPPOTrainer(RayPPOTrainer):
         Returns:
             DataProto: Representation of the agent's trajectories.
         """
+
+        # Reset the agent.
+        self.agent_engine.update_env(env)
         with _timer("collect_trajectory", timing_raw):
-            # Interact_environment returns list of trajectories.
-            trajectories = self.agent_engine.interact_environment(
-                timing_raw=timing_raw, mode="Token", meta_info=meta_info
-            )
+            # import asyncio            
+            # # Get the coroutine from run
+            # run_coroutine = self.agent_engine.run(
+            #     timing_raw=timing_raw, mode="Token", meta_info=meta_info
+            # )
+            
+            # # Execute the coroutine and get the actual trajectories
+            # loop = asyncio.get_event_loop()
+            # trajectories = loop.run_until_complete(run_coroutine)
+
+            trajectories = self.agent_engine.interact_environment(timing_raw=timing_raw, mode="Token", meta_info=meta_info)
 
         with _timer("transform_trajectory", timing_raw):
             # Transform the raw trajectories into DataProto format.

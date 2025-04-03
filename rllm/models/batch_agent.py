@@ -29,7 +29,7 @@ class BatchAgent:
         api_retries=3,
         env=None,
         gamma=0.95,
-        retry_limit=5,
+        retry_limit=1,
         episode_len=5,
         max_trajectory_length=8000,
         agent_args={},
@@ -45,7 +45,7 @@ class BatchAgent:
         self.n_parallel_agents = n_parallel_agents
         self.model_path = model_path
 
-        self.agents = [agent_class(**agent_args)for _ in range(n_parallel_agents)]
+        self.agents = [agent_class(**agent_args) for _ in range(n_parallel_agents)]
 
         # For interaction
         self.env = env
@@ -83,6 +83,8 @@ class BatchAgent:
             self.agents[seq_idxs[i]]._pre_get_action(traj)
             for i, traj in enumerate(trajectories)
         ]
+
+        print("messages:", prompts)
 
         batch = self._convert_prompt_verl(prompts, **kwargs)
 
@@ -220,6 +222,7 @@ class BatchAgent:
                 response = openai.chat.completions.create(
                     model="o1-preview", messages=prompt
                 )
+                print("response", response)
                 return response.choices[0].message.content
             except openai.RateLimitError:
                 retries -= 1
@@ -249,8 +252,12 @@ class BatchAgent:
                 **kwargs,
             )
 
+            # ToDO (Sijun): What is the purpose of this?
             for i, idx in enumerate(seq_idxs):
-                actions[idx] = gen_actions[i].replace("<|im_end|>", "")
+                if isinstance(gen_actions[i], str):
+                    actions[idx] = gen_actions[i].replace("<|im_end|>", "")
+                else:
+                    actions[idx] = gen_actions[i]
                 responses[idx] = gen_responses[i].replace("<|im_end|>", "")
                 
         for action, traj in zip(actions, new_trajectory_sequences):
@@ -344,18 +351,15 @@ class BatchAgent:
                 for i, obs in enumerate(observations):
                     trajectories[i].append({"next_observation": obs})
 
-                    # compute initial prompt tokens
-                    initial_msg = {
-                        "role": "user",
-                        "content": self.agents[i].convert_observation_to_string(obs, with_system_prompt=True),
-                    }
-                    prompt_tokens, _ = self._convert_message_to_tokens_and_masks(initial_msg)
+                    initial_messages = self.agents[i].format_observation_as_messages(obs)
+
+                    prompt_tokens, _ = self._convert_messages_to_tokens_and_masks(initial_messages)
 
                     max_prompt_token_len = max(max_prompt_token_len, len(prompt_tokens))
                     all_prompt_tokens[i] = prompt_tokens
 
                     # Update conversation version
-                    all_conversations[i].append(initial_msg)
+                    all_conversations[i].extend(initial_messages)
 
                 if max_prompt_token_len >= self.max_trajectory_length:
                     self.reset()
@@ -406,17 +410,19 @@ class BatchAgent:
                             truncateds[i],
                             infos[i],
                         )
-
-
+                        
                         # Compute the response tokens and response masks for the trajectory
                         assistant_msg = {"role": "assistant", "content": responses[i]}
 
                         next_obs = next_observations[i]
-                        next_obs_txt = self.agents[i].convert_observation_to_string(next_obs, with_system_prompt=False)
-                        env_msg = {"role": "user", "content": next_obs_txt}
+                        # next_obs_txt = self.agents[i].convert_observation_to_string(next_obs, with_system_prompt=False)
+                        # env_msg = {"role": "user", "content": next_obs_txt}
+
+                        env_messages = self.agents[i].format_observation_as_messages(next_obs)
+                        env_msg_tokens, env_msg_masks = self._convert_messages_to_tokens_and_masks(env_messages)
 
                         assistant_msg_tokens, assistant_msg_masks = self._convert_message_to_tokens_and_masks(assistant_msg)
-                        env_msg_tokens, env_msg_masks = self._convert_message_to_tokens_and_masks(env_msg)
+                        # env_msg_tokens, env_msg_masks = self._convert_message_to_tokens_and_masks(env_msg)
 
                         # Reached maximum number of tokens for the trajectory
                         if all_response_token_lens[i] + len(assistant_msg_tokens) + len(env_msg_tokens) + max_prompt_token_len >= self.max_trajectory_length:
@@ -430,7 +436,7 @@ class BatchAgent:
                             all_response_masks[i].extend(truncated_response_masks)
                             # Update conversation (Though it is truncated)
                             all_conversations[i].append(assistant_msg)
-                            all_conversations[i].append(env_msg)
+                            all_conversations[i].extend(env_messages)
                             # Update trajectory (Though it is truncated)
                             trajectories[i].append(
                                 {
@@ -468,7 +474,7 @@ class BatchAgent:
 
                         # Update conversation version
                         all_conversations[i].append(assistant_msg)
-                        all_conversations[i].append(env_msg)
+                        all_conversations[i].extend(env_messages)
 
                         # Update the trajectory
                         trajectories[i].append(
@@ -582,3 +588,15 @@ class BatchAgent:
         msg_mask = [mask_value] * len(msg_tokens)
 
         return msg_tokens, msg_mask
+    
+    def _convert_messages_to_tokens_and_masks(self, messages):
+        all_msg_tokens = []
+        all_msg_masks = []
+
+        for msg in messages:
+            msg_tokens, msg_mask = self._convert_message_to_tokens_and_masks(msg)
+            all_msg_tokens.extend(msg_tokens)
+            all_msg_masks.extend(msg_mask)
+
+        return all_msg_tokens, all_msg_masks
+        
