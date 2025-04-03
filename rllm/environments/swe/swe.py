@@ -12,6 +12,10 @@ from datasets import load_dataset
 import os
 import concurrent.futures
 
+def reorder_observations(paired: List[Tuple[int, Any]]) -> List[Any]:
+    # Sort by idx and extract the obs
+    return [obs for idx, obs in sorted(paired, key=lambda x: x[0])]
+
 class SWEEnv:
     def __init__(self, dataset):
 
@@ -82,6 +86,7 @@ class BatchSWEEnv(BatchedEnv):
             self._env_id.append(f"{i}")
 
         self._batch_size = batch_size
+        self._max_worker = 20
 
     @property
     def env_id(self) -> List[str]:
@@ -92,10 +97,20 @@ class BatchSWEEnv(BatchedEnv):
         return self._batch_size
 
     def reset(self, seed=0) -> Tuple[List, List]:
+        def _reset(idx):
+            obs = self.envs[idx].reset()
+            return idx, obs
+
         observations = []
-        for i, env in enumerate(self.envs):
-            obs = env.reset()
-            observations.append(obs)
+        with concurrent.futures.ThreadPoolExecutor(max_workers=self._batch_size) as executor:
+            future_to_reset = {
+                executor.submit(_reset, idx): idx for idx in range(len(self.envs))
+            }
+            for future in concurrent.futures.as_completed(future_to_reset):
+                idx, observation = future.result()
+                observations.append((idx, observation))
+        observations = reorder_observations(observations)
+
         return observations, [{}] * self.batch_size
 
     def step(self, actions: List[Any], env_idxs: List[int]=[]) -> Tuple[List, List, List, List, List]:
@@ -105,15 +120,38 @@ class BatchSWEEnv(BatchedEnv):
 
         assert len(actions) == len(env_idxs), f"Number of actions ({len(actions)}) must match the env used {len(env_idxs)}"
 
+        def _step(idx, action):
+            obs, reward, done, info = self.envs[idx].step(action)
+            return idx, obs, reward, done, info
+
         observations, rewards, terminateds, truncateds, infos = [], [], [], [], []
-        # Send step command with actions
-        for i, env_idx in enumerate(env_idxs):
-            obs, reward, done, info = self.envs[env_idx].step(actions[i])
-            observations.append(obs),
-            rewards.append(reward)
-            terminateds.append(done)
-            truncateds.append(False)
-            infos.append(info)
+        with concurrent.futures.ThreadPoolExecutor(max_workers=self._max_worker) as executor:
+            future_to_step = {
+                executor.submit(_step, idx, action): (idx, action) for idx, action in zip(env_idxs, actions)
+            }
+            for future in concurrent.futures.as_completed(future_to_step):
+                idx, obs, reward, done, info = future.result()
+                observations.append((idx, obs))
+                rewards.append((idx, reward))
+                terminateds.append((idx, done))
+                truncateds.append((idx, False))
+                infos.append((idx, info))
+        observations = reorder_observations(observations)
+        rewards = reorder_observations(rewards)
+        terminateds = reorder_observations(terminateds)
+        truncateds = reorder_observations(truncateds)
+        infos = reorder_observations(infos)
+
+
+        # observations, rewards, terminateds, truncateds, infos = [], [], [], [], []
+        # # Send step command with actions
+        # for i, env_idx in enumerate(env_idxs):
+        #     obs, reward, done, info = self.envs[env_idx].step(actions[i])
+        #     observations.append(obs),
+        #     rewards.append(reward)
+        #     terminateds.append(done)
+        #     truncateds.append(False)
+        #     infos.append(info)
 
         return (observations, rewards, terminateds, 
                 truncateds, infos)
