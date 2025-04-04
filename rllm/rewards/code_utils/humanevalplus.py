@@ -53,9 +53,10 @@ def run_test(code, test: str = None, timeout=_DEFAULT_TIMEOUT_SECONDS):
     code_to_run = f"""
 {BASE_IMPORTS}
 
+{code}
+
 {test}
 
-{code}
 """
     # solution is in {tmpdir}/solution.py
     with TemporaryDirectory() as tmpdir:
