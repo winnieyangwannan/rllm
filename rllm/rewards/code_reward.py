@@ -16,7 +16,7 @@ import ast
 from rllm.rewards.code_utils.livecodebench import run_test as lcb_run_test
 from rllm.rewards.code_utils.codeforces import run_test as codeforces_run_test
 #from rllm.rewards.code_utils.swebench import swebench_check_correctness
-from rllm.rewards.code_utils.humanevalplus import run_test as humanevalplus_run_test
+from rllm.rewards.code_utils.humanevalplus import run_test as humanevalplus_run_test, get_num_test_cases
 from rllm.rewards.code_utils.taco import run_test as taco_run_test
 from rllm.rewards.code_utils.firejail_exec import code_exec_firejail as lc_code_exec
 from rllm.rewards.code_utils.kodcode import code_exec as kod_code_exec
@@ -256,7 +256,7 @@ def kodcode_check_correctness(test: str, code: str, timeout_per_test: int = 5) -
         print(f"Error in code execution: {output}")
     return succ
 
-def humanevalplus_check_correctness(test: str, code: str, timeout: int = 1000000) -> bool:
+def humanevalplus_check_correctness(test: str, code: str, timeout_per_test: int = 1) -> bool:
     """
     Check if generated code passes all HumanEvalPlus test cases.
     
@@ -271,7 +271,8 @@ def humanevalplus_check_correctness(test: str, code: str, timeout: int = 1000000
     """
     code = clean_code_main_block(code)
 
-    succ, output = humanevalplus_run_test(code, test, timeout)
+    num_test_cases = get_num_test_cases(test)
+    succ, output = humanevalplus_run_test(code, test, timeout_per_test * num_test_cases)
     if not succ:
         print(f"Error in code execution: {output}")
     return succ

@@ -1,3 +1,4 @@
+import ast
 import os
 import subprocess
 import faulthandler
@@ -9,7 +10,33 @@ from rllm.rewards.code_utils.utils import BASE_IMPORTS
 CLI_ARG_SIZE_LIMIT = 1024 * 3
 
 _ERROR_MSG_PREFIX = "Failed to execute program: "
-_DEFAULT_TIMEOUT_SECONDS = 30
+_DEFAULT_TIMEOUT_SECONDS = 60
+
+
+def get_num_test_cases(test_code):
+    # Parse the code into an AST
+    parsed = ast.parse(test_code)
+    
+    # Find the assignment node for 'inputs'
+    inputs_node = None
+    results_node = None
+    
+    for node in ast.walk(parsed):
+        if isinstance(node, ast.Assign):
+            for target in node.targets:
+                if isinstance(target, ast.Name):
+                    if target.id == 'inputs':
+                        inputs_node = node.value
+    
+    if inputs_node is None:
+        return "Could not find inputs or results in the code"
+    
+    # Count number of test cases
+    if isinstance(inputs_node, ast.List):
+        input_count = len(inputs_node.elts)
+    else:
+        input_count = "Unknown (not a direct list)"
+    return input_count
 
 
 def run_test(code, test: str = None, timeout=_DEFAULT_TIMEOUT_SECONDS):
@@ -26,9 +53,9 @@ def run_test(code, test: str = None, timeout=_DEFAULT_TIMEOUT_SECONDS):
     code_to_run = f"""
 {BASE_IMPORTS}
 
-{code}
-
 {test}
+
+{code}
 """
     # solution is in {tmpdir}/solution.py
     with TemporaryDirectory() as tmpdir:
@@ -40,7 +67,6 @@ def run_test(code, test: str = None, timeout=_DEFAULT_TIMEOUT_SECONDS):
             f.write(code_to_run)
             
         command = ["python3", solution_path]
-        
         try:
             result = subprocess.run(
                 command,
