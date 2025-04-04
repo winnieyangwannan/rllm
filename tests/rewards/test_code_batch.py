@@ -5,7 +5,7 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 from rllm.rewards import RewardConfig, RewardInput, RewardType
 from rllm.rewards.code_reward import RewardCodeFn
 from rllm.data.utils import load_dataset
-from rllm.data.dataset_types import TrainDataset
+from rllm.data.dataset_types import TrainDataset, TestDataset
 
 
 def _process_case_leetcode(i, entry):
@@ -123,6 +123,37 @@ def _process_case_kodcode(i, data):
     return i, output, data
 
 
+def _process_case_humanevalplus(i, data):
+    """
+    Process a single test case from the HUMANEVALPLUS dataset.
+    
+    Args:
+        i: Index of the test case
+        data: Test case data containing solutions and tests
+        
+    Returns:
+        tuple: (index, reward output, failed case data if applicable)
+    """
+    solution = data["solutions"]
+    if not solution.startswith("```python") and not solution.endswith("```"):
+        model_response = f"""```python\n{solution}\n```"""
+    else:
+        model_response = solution
+    tests = data["tests"]
+    reward = RewardCodeFn(RewardConfig)
+    input_obj = RewardInput(
+        problem="", 
+        problem_type=RewardType.CODE, 
+        model_response=model_response, 
+        metadata=tests, 
+        data_source="humanevalplus"
+    )
+    output = reward(input_obj)
+    if output.is_correct:
+        return i, output, None
+    return i, output, data
+
+
 def test_batched_reward(dataset: str):
     """
     Test the reward function on the TACO dataset.
@@ -144,6 +175,9 @@ def test_batched_reward(dataset: str):
     elif dataset == "kodcode":
         data = load_dataset(TrainDataset.Code.KODCODE)
         test_fn = _process_case_kodcode
+    elif dataset == "humanevalplus":
+        data = load_dataset(TestDataset.Code.HUMANEVALPLUS)
+        test_fn = _process_case_humanevalplus
     else:
         raise ValueError(f"Invalid dataset: {dataset}")
     
@@ -181,7 +215,7 @@ if __name__ == "__main__":
     #     failed_cases = json.load(f)
     # print(len(failed_cases))
     # test_batched_reward(dataset="taco")
-    test_batched_reward(dataset="primeintellect")
+    test_batched_reward(dataset="humanevalplus")
     # test_batched_reward(dataset="leetcode")
     # test_batched_reward(dataset="kodcode")
     # test_batched_reward(dataset="leetcode")
