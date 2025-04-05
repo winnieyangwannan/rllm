@@ -7,7 +7,7 @@ import concurrent.futures
 from tqdm import tqdm
 
 from rllm.data.utils import load_dataset, TrainDataset, TestDataset, fetch_live_code_bench_system_prompt
-from rllm.rewards.code_reward import RewardCodeFn
+from rllm.rewards.code_reward import RewardCodeFn, extract_code_from_model
 from rllm.rewards.reward_types import RewardInput, RewardConfig, RewardType
 
 def generate_response(client, prompt, model="o3-mini", reasoning_effort="low"):
@@ -49,8 +49,15 @@ def preload_data(dataset_name):
     return dataset
 
 def generation_loop(client, dataset_name, model, reasoning_effort, output_dir, n=1):
-    dataset = preload_data(dataset_name)
-    df = pd.json_normalize(dataset)
+    skip_generation = False
+    if not os.path.exists(os.path.join(output_dir, "responses.parquet")):
+        dataset = preload_data(dataset_name)
+        df = pd.json_normalize(dataset)
+    else:
+        print(f"Loading existing responses from {os.path.join(output_dir, 'responses.parquet')}")
+        df = pd.read_parquet(os.path.join(output_dir, "responses.parquet"))
+        dataset = df.to_dict(orient="records")
+        skip_generation = True
     all_responses = []
     all_scores = []
 
@@ -62,21 +69,32 @@ def generation_loop(client, dataset_name, model, reasoning_effort, output_dir, n
         prompt = fetch_live_code_bench_system_prompt(prompt)
         response_lst = []
         scores_lst = []
-        for _ in range(n):
-            response = generate_response(client, prompt, model=model, reasoning_effort=reasoning_effort)
+        for i in range(n):
+            if skip_generation:
+                response = item["responses"][i]
+            else:
+                response = generate_response(client, prompt, model=model, reasoning_effort=reasoning_effort)
+            
+            if "def solve():" in response:
+                extracted_code = extract_code_from_model(response)
+                # check if extracted_code ends with solve()
+                if extracted_code and not extracted_code.endswith("solve()"):
+                    extracted_code += "\nsolve()\n"
+                response = f"```python\n{extracted_code}```"
+
             response_lst.append(response)
             input_obj = RewardInput(
                 problem="",
                 problem_type=RewardType.CODE,
                 model_response=response,
-                metadata=item["tests"],
+                metadata=item["tests"].tolist(),
                 data_source=dataset_name
             )
             score = reward(input_obj).reward
             scores_lst.append(score)
         return idx, response_lst, scores_lst
 
-    with concurrent.futures.ThreadPoolExecutor(max_workers=10) as executor:
+    with concurrent.futures.ThreadPoolExecutor(max_workers=16) as executor:
         results = list(tqdm(executor.map(process_item, enumerate(dataset)), total=len(dataset)))
         for idx, response_lst, scores_lst in results:
             all_responses.append((idx, response_lst))
@@ -120,9 +138,12 @@ def main():
     client = OpenAI()
 
     try:
-        generation_loop(client, args.dataset_name, "o3-mini", "low", args.output_dir, n=8)
+        generation_loop(client, args.dataset_name, "o1", "low", args.output_dir, n=8)
     except Exception as e:
         print(f"An error occurred: {e}")
+        # print stack trace
+        import traceback
+        traceback.print_exc()
 
 if __name__ == "__main__":
     main()

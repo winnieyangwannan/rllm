@@ -5,6 +5,7 @@ import bisect
 import json
 import re
 import argparse
+import time
 from collections import defaultdict
 from typing import Dict, List, Tuple, Optional, Set
 from tqdm import tqdm
@@ -28,15 +29,28 @@ def percentile_to_codeforces_rating(percentile: float) -> int:
     rating = base_rating + max_rating_increase * (normalized_percentile ** k)
     return round(rating)
 
-def calc_elo_rating(contest_id: int, problem_status: Dict[str, List[bool]], sorted_ratings: List[float]) -> Optional[Tuple[int, float]]:
+def get_json_with_retry(url, timeout=10, sleep_time=4, max_retries=5):
+    """Fetch JSON data from a URL with retries."""
+    tries = 0
+    while tries < max_retries:
+        try:
+            response = requests.get(url, timeout=timeout)
+            response.raise_for_status()  # Raises HTTPError for bad responses
+            return response.json()
+        except Exception as e:
+            print(f"Request to {url} failed with error: {e}. Retrying in {sleep_time} seconds...")
+            time.sleep(sleep_time)
+            tries += 1
+
+def calc_elo_rating(contest_id: int, problem_status: Dict[str, List[bool]], sorted_ratings: List[float], pass_n=None) -> Optional[Tuple[int, float]]:
     """Calculate the Elo rating for a given contest based on problem status."""
     try:
         # Fetch contest data from Codeforces API
-        standings_response = requests.get(f"https://codeforces.com/api/contest.standings?contestId={contest_id}&showUnofficial=false", timeout=10)
-        standings = standings_response.json()
+        # standings_response = requests.get(f"https://codeforces.com/api/contest.standings?contestId={contest_id}&showUnofficial=false", timeout=10)
+        standings = get_json_with_retry(f"https://codeforces.com/api/contest.standings?contestId={contest_id}&showUnofficial=false")
         
-        rating_changes_response = requests.get(f"https://codeforces.com/api/contest.ratingChanges?contestId={contest_id}", timeout=10)
-        rating_changes = rating_changes_response.json()
+        # rating_changes_response = requests.get(f"https://codeforces.com/api/contest.ratingChanges?contestId={contest_id}", timeout=10)
+        rating_changes = get_json_with_retry(f"https://codeforces.com/api/contest.ratingChanges?contestId={contest_id}")
         
         # Process and validate data
         handle_set: Set[str] = set()
@@ -84,7 +98,9 @@ def calc_elo_rating(contest_id: int, problem_status: Dict[str, List[bool]], sort
         for problem in standings["result"]["problems"]:
             prob = f"{problem['contestId']}{problem['index']}"
             if prob in problem_status:
-                for ith, status in enumerate(problem_status[prob]):
+                if pass_n is None:
+                    pass_n = len(problem_status[prob])
+                for ith, status in enumerate(problem_status[prob][:pass_n]):
                     if status == 1.0:
                         if "points" in problem:
                             score += max(0, problem["points"] - 50 * ith)
@@ -119,7 +135,8 @@ def calc_elo_rating(contest_id: int, problem_status: Dict[str, List[bool]], sort
         percentile = get_percentile(l, sorted_ratings)
         return l, percentile
     
-    except Exception:
+    except Exception as e:
+        print(f"Error fetching data for contest ID {contest_id}: {e}")
         return None
 
 def format_grouped_contest_data(submissions: List[List[bool]], problem_ids: List[str]) -> List[Tuple[int, Dict[str, List[bool]]]]:
@@ -152,6 +169,7 @@ def main():
     # Set up argument parser
     parser = argparse.ArgumentParser(description='Calculate Codeforces percentile based on problem submissions')
     parser.add_argument('--results_path', required=True, help='Path to the results JSON file')
+    parser.add_argument('--pass_n', type=int, default=1, help='Number of passes to consider for each problem')
     
     args = parser.parse_args()
     
@@ -184,7 +202,7 @@ def main():
         # Calculate Elo ratings for each contest with progress bar
         contest_elos = []
         for contest_id, problems in tqdm(model_results, desc="Processing contests"):
-            elo_result = calc_elo_rating(contest_id, problems, SORTED_RATINGS)
+            elo_result = calc_elo_rating(contest_id, problems, SORTED_RATINGS, args.pass_n)
             if elo_result is not None:
                 contest_elos.append((contest_id, elo_result))
         
