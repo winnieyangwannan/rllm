@@ -7,10 +7,10 @@ from rllm.environments.env_utils import add_trajectory_reward, add_mc_return, ad
 import torch
 import numpy as np
 import time
+import os
 
 import openai
-from openai import AsyncOpenAI
-client = AsyncOpenAI()
+import ray
 
 
 class AgentExecutionEngine(BatchAgent):
@@ -20,13 +20,13 @@ class AgentExecutionEngine(BatchAgent):
         engine_name,
         tokenizer,
         agent_class,
+        env_class,
         model_path="",
         n_parallel_agents=1,
-        env=None,
         gamma=0.95,
         api_retries=3,
         retry_limit=1,
-        episode_len=5,
+        max_episode_len=5,
         max_trajectory_length=8000,
         agent_args={},
         rollout_engine_args={},
@@ -41,23 +41,24 @@ class AgentExecutionEngine(BatchAgent):
         self.model_path = model_path
 
         # For interaction
-        self.env = env
         self.gamma = gamma
         self.retry_limit = retry_limit
         self.api_retries = api_retries
-        self.episode_len = episode_len
+        self.max_episode_len = max_episode_len
         self.agent_args = agent_args
         self.max_trajectory_length = max_trajectory_length
 
-        self.agents = [agent_class(**agent_args) for _ in range(n_parallel_agents)]
-        self.envs = [self.env for _ in range(self.n_parallel_agents)]
+        self.agents = [agent_class(**agent_args) for _ in range(self.n_parallel_agents)]
+        self.envs = [env_class(**env_args) for _ in range(self.n_parallel_agents)]
 
         # rollout engine args
         self.rollout_engine_args = rollout_engine_args
         self.sampling_params = kwargs.get("sampling_params", None)
 
         if engine_name == "openai":
+            from openai import AsyncOpenAI 
             self.client = AsyncOpenAI(**self.rollout_engine_args)
+
 
     async def get_action_async(self, trajectory, agent, **kwargs):
         if self.engine_name == "openai":
@@ -67,44 +68,35 @@ class AgentExecutionEngine(BatchAgent):
         else:
             raise NotImplementedError
 
+
     async def _get_action_verl_async(self, trajectory, agent, **kwargs):
         """
-        Asynchronous version for getting a single action from verl.
+        Asynchronous version for getting a single action from verl using Ray worker groups.
         """
-        from verl.protocol import pad_dataproto_to_divisor
-        import asyncio
-
         prompt = agent._pre_get_action(trajectory)
         batch = self._convert_prompt_verl([prompt], **kwargs)
         
-        # Pad to match worker group world size
-        batch_padded, pad_size = pad_dataproto_to_divisor(batch, self.rollout_engine.world_size)
+        # Execute the generation on a worker asynchronously
+        obj_ref = self.rollout_engine.execute_worker_async(
+            worker_idx=0,  # Use the first worker
+            method_name='generate',
+            prompts=batch
+        )
         
-        # Add rollout_generator_id (-1 for padding)
-        rollout_generator_id = np.array([0] + [-1] * pad_size, dtype=object)
-        batch_padded.non_tensor_batch["rollout_generator_id"] = rollout_generator_id
+        # Wait for the result
+        done_refs, _ = ray.wait([obj_ref], num_returns=1)
+        output = ray.get(done_refs[0])
         
-        # Run the generator in a separate thread
-        result = None
+        # Process the output
+        output_text = self.tokenizer.batch_decode(
+            output.batch["responses"], skip_special_tokens=False
+        )[0]  # Only one response
         
-        def collect_result():
-            nonlocal result
-            gen_seq_generator = self.rollout_engine.generate_sequences_async(prompts=batch)
-            for output in gen_seq_generator:
-                idx = output.non_tensor_batch["rollout_generator_id"][0]
-                if idx != -1:  # Skip padding
-                    output_text = self.tokenizer.batch_decode(
-                        output.batch["responses"], skip_special_tokens=False
-                    )[0]  # Only one response
-                    pad_token = self.tokenizer.pad_token
-                    response = output_text.replace(pad_token, "")
-                    result = agent._post_get_action(response)
-                    break  # We only need the first result
+        pad_token = self.tokenizer.pad_token
+        response = output_text.replace(pad_token, "")
+        action = agent._post_get_action(response)
         
-        # Run collection in a separate thread
-        await asyncio.to_thread(collect_result)
-        
-        return result
+        return action, response
 
     async def _get_action_openai_async(self, trajectory, agent, **kwargs):
         prompt = agent._pre_get_action(trajectory)
@@ -131,8 +123,155 @@ class AgentExecutionEngine(BatchAgent):
 
         response = await get_response(prompt)
         print("oai response:", response)
-        return agent._post_get_action(response)
+        return agent._post_get_action(response)    
 
+    async def run_agent_episode(self, task_id, task, agent_idx, env_idx):
+        """Run a single agent's episode asynchronously"""
+        agent = self.agents[agent_idx]
+        env = self.envs[env_idx]
+        
+        # Reset environment with the task
+        observation, _ = env.reset(task=task)
+        
+        # Reset agent
+        agent.reset()
+        
+        # Initialize trajectory for this task
+        trajectory = []
+        
+        for _ in range(self.max_episode_len):
+            trajectory.append({
+                "next_observation": observation,
+            })
+
+            # Get action from agent
+            action = await self.get_action_async(trajectory, agent)
+            
+            # Take step in environment
+            next_observation, reward, terminated, truncated, info = env.step(action)
+            
+            # Update agent
+            agent.update(
+                action=action,
+                observation=observation,
+                next_observation=next_observation,
+                reward=reward,
+                terminated=terminated,
+                truncated=truncated,
+                info=info
+            )
+            
+            observation = next_observation
+            
+            # Check if episode is done
+            if terminated or truncated:
+                break
+        
+        return task_id, trajectory
+    
+    async def run_agent_episode_verl(self, task_id, task, agent_idx, env_idx):
+        """Run a single agent's episode asynchronously"""
+        agent = self.agents[agent_idx]
+        env = self.envs[env_idx]
+        
+        # Reset environment with the task
+        observation, _ = env.reset(task=task)
+        
+        # Reset agent
+        agent.reset()
+        
+        # Initialize trajectory for this task
+        trajectory = []
+        
+        # For tracking token lengths
+        prompt_tokens = []
+        response_tokens = []
+        response_masks = []
+        
+        # Initialize with first observation
+        trajectory.append({
+            "next_observation": observation,
+        })
+        
+        # Format initial observation as messages
+        initial_messages = agent.format_observation_as_messages(observation)
+        prompt_tokens, _ = self._convert_messages_to_tokens_and_masks(initial_messages)
+        
+        # Track all messages for conversation history
+        all_messages = initial_messages.copy()
+        
+        steps = 0
+        terminated = False
+        truncated = False
+        
+        while not (terminated or truncated) and steps < self.max_episode_len:
+            steps += 1
+            
+            # Get action from agent
+            action, response = await self.get_action_async(trajectory, agent)
+            
+            # Take step in environment
+            next_observation, reward, terminated, truncated, info = env.step(action)
+            
+            # Update agent
+            agent.update(
+                action=action,
+                observation=observation,
+                next_observation=next_observation,
+                reward=reward,
+                terminated=terminated,
+                truncated=truncated,
+                info=info
+            )
+            
+            # Process response tokens
+            assistant_msg = {"role": "assistant", "content": response}
+            env_messages = agent.format_observation_as_messages(next_observation)
+
+            print("assistant_msg:", assistant_msg)
+            print("env_messages:", env_messages)
+            
+            assistant_msg_tokens, assistant_msg_masks = self._convert_message_to_tokens_and_masks(assistant_msg)
+            env_msg_tokens, env_msg_masks = self._convert_messages_to_tokens_and_masks(env_messages)
+            
+            # Update token collections
+            response_tokens.extend(assistant_msg_tokens + env_msg_tokens)
+            response_masks.extend(assistant_msg_masks + env_msg_masks)
+            
+            # Update conversation history
+            all_messages.append(assistant_msg)
+            all_messages.extend(env_messages)
+            
+            # Update trajectory
+            trajectory.append({
+                "observation": observation,
+                "next_observation": next_observation,
+                "reward": reward,
+                "done": terminated or truncated,
+                "action": action,
+                "info": info,
+                "response": action,
+                "truncated": False,
+            })
+            
+            observation = next_observation
+        
+        # Process trajectory for training
+        processed_trajectory = trajectory[1:]  # Remove sentinel
+        augmented_trajectory = add_mc_return(add_trajectory_reward(processed_trajectory), gamma=self.gamma)
+        training_reward = agent.compute_training_reward(augmented_trajectory)
+        final_trajectory = add_training_reward(augmented_trajectory, training_reward)
+        
+        # Create token result similar to interact_environment
+        token_result = {
+            "prompt_tokens": torch.tensor(prompt_tokens, dtype=torch.long),
+            "response_tokens": torch.tensor(response_tokens, dtype=torch.long),
+            "response_masks": torch.tensor(response_masks, dtype=torch.long),
+            "training_reward": compute_training_score(final_trajectory),
+            "environment_reward": compute_environment_score(final_trajectory),
+        }
+        
+        return task_id, final_trajectory, token_result, all_messages
 
     async def execute_tasks(self, tasks):
         """
@@ -156,57 +295,13 @@ class AgentExecutionEngine(BatchAgent):
         task_queue = list(enumerate(tasks))
         active_requests = []
         
-        async def run_agent_episode(task_id, task, agent_idx, env_idx):
-            """Run a single agent's episode asynchronously"""
-            agent = self.agents[agent_idx]
-            env = self.envs[env_idx]
-            
-            # Reset environment with the task
-            observation, _ = env.reset(task=task)
-            
-            # Reset agent
-            agent.reset()
-            
-            # Initialize trajectory for this task
-            trajectory = []
-            
-            for _ in range(self.episode_len):
-                trajectory.append({
-                    "next_observation": observation,
-                })
-
-                # Get action from agent
-                action = await self.get_action_async(trajectory, agent)
-                
-                # Take step in environment
-                next_observation, reward, terminated, truncated, info = env.step(action)
-                
-                # Update agent
-                agent.update(
-                    action=action,
-                    observation=observation,
-                    next_observation=next_observation,
-                    reward=reward,
-                    terminated=terminated,
-                    truncated=truncated,
-                    info=info
-                )
-                
-                observation = next_observation
-                
-                # Check if episode is done
-                if terminated or truncated:
-                    break
-            
-            return task_id, trajectory
-        
         # Initialize the first batch of tasks
         for i in range(min(max_concurrent, len(task_queue))):
             task_id, task = task_queue.pop(0)
             agent_idx = i % len(self.agents)
             env_idx = i % len(self.envs)
             
-            task_coroutine = run_agent_episode(task_id, task, agent_idx, env_idx)
+            task_coroutine = self.run_agent_episode(task_id, task, agent_idx, env_idx)
             active_requests.append((asyncio.create_task(task_coroutine), agent_idx, env_idx))
         
         # Process tasks and refill the active requests as they complete
@@ -238,7 +333,7 @@ class AgentExecutionEngine(BatchAgent):
                     available_agent, available_env = completed_info
                     
                     # Create a new task with the available agent and environment
-                    new_coroutine = run_agent_episode(new_task_id, new_task, available_agent, available_env)
+                    new_coroutine = self.run_agent_episode(new_task_id, new_task, available_agent, available_env)
                     active_requests.append((asyncio.create_task(new_coroutine), available_agent, available_env))
         
         # Convert the dictionary to a list ordered by task_id

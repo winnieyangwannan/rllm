@@ -57,7 +57,9 @@ def make_map_fn(split: str):
                 'split': split,
                 'index': idx,
                 'task': {"question": question}
-            }
+            },
+            'task': {"question": question},
+            'uid': idx
         }
         return data
     return process_fn

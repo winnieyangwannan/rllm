@@ -20,7 +20,7 @@ class ToolEnvironment:
 
         self.current_data = None
     
-    def reset(self, seed=None, idx=None, task=None):
+    def reset(self, task=None, seed=None):
         """Reset the environment and return initial observations."""
         import random
         if seed is not None:

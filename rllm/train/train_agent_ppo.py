@@ -30,21 +30,24 @@ from verl.workers.reward_manager import NaiveRewardManager
 # from rllm.environments.frozenlake.frozenlake import BatchFrozenLakeEnv
 
 from rllm.trainer.ppo import AgentPPOTrainer
-from rllm.environments.tools.tool_env import BatchToolEnv, ToolEnvironment
+from rllm.environments import ToolEnvironment, SingleTurnEnvironment
 from rllm.models.web_agent import WebAgent
 from rllm.models.frozenlake_agent import FrozenLakeAgent
 from rllm.models.tool_agent import ToolAgent
+from rllm.models.math_agent import MathAgent
 
 ENV_CLASS_MAPPING = {
     # 'browsergym': BatchBrowserGym,
     # 'frozenlake': BatchFrozenLakeEnv,
-    'tool': BatchToolEnv,
+    'tool': ToolEnvironment,
+    'math': SingleTurnEnvironment,
 }
 
 AGENT_CLASS_MAPPING = {
     'webagent': WebAgent,
     'frozenlakeagent': FrozenLakeAgent,
     'tool_agent': ToolAgent,
+    'math_agent': MathAgent,
 }
 
 def setup_environment(config):
@@ -59,6 +62,8 @@ def setup_environment(config):
     elif config.env.name == 'frozenlake':
         return
     elif config.env.name == 'tool':
+        return
+    elif config.env.name == 'math':
         return
 
     raise ValueError(f"Environment subtask not supported, env: {config.env.name}, subtask: {config.env.subtask == 'miniwob'}")
@@ -93,14 +98,16 @@ def main_task(config, compute_score=None):
     from verl.utils import hf_tokenizer
     tokenizer = hf_tokenizer(local_path)
 
-    global_pool_id = 'global_pool'
+    actor_pool_id = 'actor_pool'
+    rollout_pool_id = 'rollout_pool'
+    num_training_gpus = config.trainer.n_training_gpus_per_node
     resource_pool_spec = {
-        global_pool_id: [config.trainer.n_gpus_per_node] * config.trainer.nnodes,
+        actor_pool_id: [num_training_gpus] * config.trainer.nnodes,
+        rollout_pool_id: [config.trainer.n_gpus_per_node - num_training_gpus] * config.trainer.nnodes,
     }
     mapping = {
-        Role.ActorRollout: global_pool_id,
-        Role.Critic: global_pool_id,
-        Role.RefPolicy: global_pool_id,
+        Role.Actor: actor_pool_id,
+        Role.Rollout: rollout_pool_id,
     }
     resource_pool_manager = ResourcePoolManager(resource_pool_spec=resource_pool_spec, mapping=mapping)
 
@@ -109,9 +116,8 @@ def main_task(config, compute_score=None):
     val_reward_fn = NaiveRewardManager(tokenizer=tokenizer, num_examine=1, compute_score=compute_score)
 
     role_worker_mapping = {
-        Role.ActorRollout: ray.remote(ActorRolloutRefWorker),
-        Role.Critic: ray.remote(CriticWorker),
-        Role.RefPolicy: ray.remote(ActorRolloutRefWorker)
+        Role.Actor: ray.remote(ActorRolloutRefWorker),
+        Role.Rollout: ray.remote(ActorRolloutRefWorker)
     }
     
     # Below are agent specific initialization
