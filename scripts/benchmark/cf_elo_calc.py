@@ -207,14 +207,14 @@ def main():
             print("No valid percentiles calculated.")
             return
         
-        avg_percentile = sum(percentiles) / len(percentiles)
         estimated_rating = sum(ratings) / len(ratings)
+        est_percentile = get_percentile(estimated_rating, sorted_ratings)
         
         # Display results
         print("\n" + "="*50)
         print("CODEFORCES PERFORMANCE SUMMARY")
         print("="*50)
-        print(f"Average Percentile: {avg_percentile:.1f}%")
+        print(f"Estimated Percentile: {est_percentile:.1f}%")
         print(f"Estimated Codeforces Rating: {estimated_rating}")
         print(f"Contests Processed: {len(contest_elos)}")
         print("="*50)
