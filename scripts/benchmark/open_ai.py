@@ -48,7 +48,7 @@ def preload_data(dataset_name):
     dataset = load_dataset(ds)
     return dataset
 
-def generation_loop(client, dataset_name, model, reasoning_effort, output_dir, n=1):
+def generation_loop(client, dataset_name, model, reasoning_effort, output_dir, n=1, skip_rewards=False):
     skip_generation = False
     if not os.path.exists(os.path.join(output_dir, "responses.parquet")):
         dataset = preload_data(dataset_name)
@@ -83,14 +83,17 @@ def generation_loop(client, dataset_name, model, reasoning_effort, output_dir, n
                 response = f"```python\n{extracted_code}```"
 
             response_lst.append(response)
-            input_obj = RewardInput(
-                problem="",
-                problem_type=RewardType.CODE,
-                model_response=response,
-                metadata=item["tests"].tolist(),
-                data_source=dataset_name
-            )
-            score = reward(input_obj).reward
+            score = None
+            if not skip_rewards:
+                tests = item["tests"].tolist() if not isinstance(item["tests"], list) else item["tests"]
+                input_obj = RewardInput(
+                    problem="",
+                    problem_type=RewardType.CODE,
+                    model_response=response,
+                    metadata=tests,
+                    data_source=dataset_name
+                )
+                score = reward(input_obj).reward
             scores_lst.append(score)
         return idx, response_lst, scores_lst
 
@@ -138,7 +141,7 @@ def main():
     client = OpenAI()
 
     try:
-        generation_loop(client, args.dataset_name, "o1", "low", args.output_dir, n=8)
+        generation_loop(client, args.dataset_name, "o1-2024-12-17", "low", args.output_dir, n=1)
     except Exception as e:
         print(f"An error occurred: {e}")
         # print stack trace

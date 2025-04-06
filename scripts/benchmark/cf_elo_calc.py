@@ -1,4 +1,6 @@
 #!/usr/bin/env python3
+# https://github.com/QwenLM/CodeElo/blob/main/calc_rating.py
+
 import os
 import requests
 import bisect
@@ -15,19 +17,6 @@ def get_percentile(rating: float, sorted_ratings: List[float]) -> float:
     """Calculate the percentile of a given rating."""
     idx = bisect.bisect_left(sorted_ratings, float(rating))
     return round(idx / len(sorted_ratings) * 100, 1)
-
-def percentile_to_codeforces_rating(percentile: float) -> int:
-    """Convert a percentile (0-100) into an approximate Codeforces Elo rating."""
-    if not (0 <= percentile <= 100):
-        raise ValueError("Percentile must be between 0 and 100.")
-    
-    normalized_percentile = percentile / 100.0
-    base_rating = 800  # Starting rating for Newbies
-    max_rating_increase = 2200  # Range increase from base
-    k = 2  # Curve shaping factor
-    
-    rating = base_rating + max_rating_increase * (normalized_percentile ** k)
-    return round(rating)
 
 def get_json_with_retry(url, timeout=10, sleep_time=4, max_retries=5):
     """Fetch JSON data from a URL with retries."""
@@ -46,10 +35,8 @@ def calc_elo_rating(contest_id: int, problem_status: Dict[str, List[bool]], sort
     """Calculate the Elo rating for a given contest based on problem status."""
     try:
         # Fetch contest data from Codeforces API
-        # standings_response = requests.get(f"https://codeforces.com/api/contest.standings?contestId={contest_id}&showUnofficial=false", timeout=10)
         standings = get_json_with_retry(f"https://codeforces.com/api/contest.standings?contestId={contest_id}&showUnofficial=false")
         
-        # rating_changes_response = requests.get(f"https://codeforces.com/api/contest.ratingChanges?contestId={contest_id}", timeout=10)
         rating_changes = get_json_with_retry(f"https://codeforces.com/api/contest.ratingChanges?contestId={contest_id}")
         
         # Process and validate data
@@ -208,13 +195,16 @@ def main():
         
         # Calculate average percentile
         percentiles = [elo[1][1] for elo in contest_elos if elo[1] is not None]
+
+        # Calculate estimated rating
+        ratings = [elo[1][0] for elo in contest_elos if elo[1] is not None]
         
         if not percentiles:
             print("No valid percentiles calculated.")
             return
         
         avg_percentile = sum(percentiles) / len(percentiles)
-        estimated_rating = percentile_to_codeforces_rating(avg_percentile)
+        estimated_rating = sum(ratings) / len(ratings)
         
         # Display results
         print("\n" + "="*50)
