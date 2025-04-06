@@ -17,6 +17,17 @@ def get_percentile(rating: float, sorted_ratings: List[float]) -> float:
     idx = bisect.bisect_left(sorted_ratings, float(rating))
     return round(idx / len(sorted_ratings) * 100, 1)
 
+def read_ratings(file_path: str) -> List[float]:
+    """Read sorted ratings from a file."""
+    with open(file_path, "r") as f:
+        ratings_dict = json.load(f)  # dict with rating as key (str) and count as value (int)
+    
+    sorted_ratings = []
+    for rating, count in ratings_dict.items():
+        sorted_ratings.extend([float(rating)] * count)
+
+    return sorted(sorted_ratings)
+
 def get_json_with_retry(url, timeout=10, sleep_time=4, max_retries=5):
     """Fetch JSON data from a URL with retries."""
     tries = 0
@@ -162,13 +173,12 @@ def main():
     current_dir = os.path.dirname(os.path.abspath(__file__))
     metadata_path = os.path.join(current_dir, "./codeforces/metadata_cf.json")
     results_path = os.path.abspath(args.results_path)
-    ratings_path = os.path.join(current_dir, "./codeforces/sorted_ratings.json")
+    ratings_path = os.path.join(current_dir, "./codeforces/ratings_2024.json")
     
     # Load required files
     try:
         # Load sorted ratings
-        with open(ratings_path, "r") as f:
-            sorted_ratings = json.load(f)
+        sorted_ratings = read_ratings(ratings_path)
 
         # Load results
         with open(results_path, 'r') as file:

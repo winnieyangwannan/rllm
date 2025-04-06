@@ -26,6 +26,8 @@ def generate_response(client, prompt, model="deepseek-ai/DeepSeek-R1"):
                 model=model,
                 messages=messages,
                 temperature=0.6,
+                top_p=0.95,
+                max_tokens=32768,
                 stream=True
             )
             full_response = ""
@@ -54,7 +56,7 @@ def preload_data(dataset_name):
     dataset = load_dataset(ds)
     return dataset
 
-def generation_loop(client, dataset_name, model, output_dir, n=1, skip_rewards=True):
+def generation_loop(client, dataset_name, model, output_dir, n=1, skip_rewards=False):
     skip_generation = False
     if not os.path.exists(os.path.join(output_dir, "responses.parquet")):
         dataset = preload_data(dataset_name)
