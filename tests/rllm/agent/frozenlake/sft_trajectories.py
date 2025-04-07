@@ -8,7 +8,7 @@ import json
 
 from rllm.environments.frozenlake.frozenlake import FrozenLakeEnv
 from rllm.models.frozenlake_agent import FrozenLakeAgent
-from rllm.rllm.models.agent_execution_engine import AgentExecutionEngine
+from rllm.models.agent_execution_engine import AgentExecutionEngine
 
 def init_vllm_engine(model_name):
     from vllm import LLM, SamplingParams
