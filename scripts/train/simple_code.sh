@@ -49,7 +49,7 @@ python3 -m verl.trainer.main_ppo_pipeline \
     actor_rollout_ref.rollout.tensor_model_parallel_size=1 \
     actor_rollout_ref.rollout.name=vllm \
     actor_rollout_ref.rollout.async_engine=True \
-    actor_rollout_ref.rollout.vllm_log_prob=True \
+    actor_rollout_ref.rollout.enable_log_prob=True \
     actor_rollout_ref.rollout.temperature=0.6 \
     actor_rollout_ref.rollout.val_kwargs.temperature=0.6 \
     actor_rollout_ref.rollout.gpu_memory_utilization=0.85 \
