@@ -10,7 +10,7 @@ import browsergym.miniwob
 
 from rllm.environments.browsergym import BatchBrowserGym
 from rllm.models.web_agent import WebAgent
-from rllm.models.batch_agent import BatchAgent
+from rllm.rllm.models.agent_execution_engine import AgentExecutionEngine
 
 def init_vllm_engine(model_name):
     from vllm import LLM, SamplingParams
@@ -73,7 +73,7 @@ def main():
     )
 
     engine, tokenizer, sampling_params = init_vllm_engine(model_path)
-    agent = BatchAgent(rollout_engine=engine, engine_name="vllm", tokenizer=tokenizer, agent_class=WebAgent, n_parallel_agents=len(selected_envs), episode_len=episode_len, sampling_params=sampling_params, env=env)
+    agent = AgentExecutionEngine(rollout_engine=engine, engine_name="vllm", tokenizer=tokenizer, agent_class=WebAgent, n_parallel_agents=len(selected_envs), episode_len=episode_len, sampling_params=sampling_params, env=env)
     
     timing_raw = {}
     evaluate_trajectories = agent.interact_environment(timing_raw=timing_raw)

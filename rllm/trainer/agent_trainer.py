@@ -24,11 +24,7 @@ from verl.trainer.ppo.ray_trainer import (
     _timer,
 )
 
-from rllm.models.batch_agent import BatchAgent
-from rllm.models.engine import AgentExecutionEngine
-from rllm.environments.tools.tool_env import ToolEnvironment
-
-from verl.single_controller.ray import RayResourcePool, RayWorkerGroup, RayClassWithInitArgs
+from rllm.rllm.models.agent_execution_engine import AgentExecutionEngine
 
 class AgentPPOTrainer(RayPPOTrainer):
 
@@ -49,59 +45,38 @@ class AgentPPOTrainer(RayPPOTrainer):
                          reward_fn, val_reward_fn)
         self.env_class = env_class
         self.agent_class = agent_class
-
-
+    
     def init_workers(self):
-        """Init resource pool and worker group"""
-        self.resource_pool_manager.create_resource_pool()
+        super().init_workers()
 
-        self.resource_pool_to_cls = {pool: {} for pool in self.resource_pool_manager.resource_pool_dict.values()}
+        assert not self.config.actor_rollout_ref.rollout.async_engine, "Must use synchronous engine for agent training"
 
-        assert Role.Actor in self.role_worker_mapping and Role.Rollout in self.role_worker_mapping, "Actor and Rollout must be in role_worker_mapping"
-        actor_resource_pool = self.resource_pool_manager.get_resource_pool(Role.Actor)
-        # actor_gpu_ids = actor_resource_pool.gpu_assignments if isinstance(actor_resource_pool, RayResourcePool) else None
-
-        actor_cls = RayClassWithInitArgs(
-            cls=self.role_worker_mapping[Role.Actor],
-            config=self.config.actor_rollout_ref,
-            role='actor',
-            reward_config=self.config.reward_model,
-        )
-        self.resource_pool_to_cls[actor_resource_pool]['actor'] = actor_cls
-
-        # Get rollout resource pool
-        rollout_resource_pool = self.resource_pool_manager.get_resource_pool(Role.Rollout)
-        # rollout_gpu_ids = rollout_resource_pool.gpu_assignments if isinstance(rollout_resource_pool, RayResourcePool) else None
-        rollout_cls = RayClassWithInitArgs(
-            cls=self.role_worker_mapping[Role.Rollout],
-            config=self.config.actor_rollout_ref,
-            role='rollout',
-            reward_config=self.config.reward_model,
-        )
-        self.resource_pool_to_cls[rollout_resource_pool]['rollout'] = rollout_cls
-
-        self.actor_wg = RayWorkerGroup(resource_pool=actor_resource_pool, ray_cls_with_init=actor_cls)
-        self.rollout_wg = RayWorkerGroup(resource_pool=rollout_resource_pool, ray_cls_with_init=rollout_cls)
-
-        self.actor_wg.init_model()
-        self.rollout_wg.init_model()
-
-        self.agent_engine = AgentExecutionEngine(
-            rollout_engine=self.rollout_wg,
+        # Initialize additional agent class 
+        # Number of agents is set to be 0 initially
+        if self.hybrid_engine: 
+            agent_rollout_wg = self.actor_rollout_wg
+        else:
+            agent_rollout_wg = self.rollout_wg
+        
+        self.agent_execution_engine = AgentExecutionEngine(
+            rollout_engine=agent_rollout_wg,
             engine_name="verl",
             tokenizer=self.tokenizer,
-            agent_class=self.agent_class,
-            # agent_args={
-            #     "model_name": self.config.actor_rollout_ref.model.path,
-            #     "parser_name": "qwen",
-            #     "tools": ["google_search"]
-            # },
             model_path=self.config.actor_rollout_ref.model.path,
-            max_episode_len=self.config.agent.trajectory_episode_len,
+            episode_len=self.config.agent.trajectory_episode_len,
             max_trajectory_length=self.config.agent.max_trajectory_length,
-            env_class=self.env_class
+            max_prompt_length=self.config.data.max_prompt_length,
         )
-        
+
+    def init_envs(self, batch):
+        """
+        Initialize environment depending on env_class with the necessary extra_info, also set uid of the batch.
+        """
+        env_args = batch.non_tensor_batch["extra_info"].tolist()
+        envs = [self.env_class(**env_args[i]) for i in range(len(env_args))]
+        batch.non_tensor_batch["uid"] = np.array([env.env_id for env in envs], dtype=object)
+
+        return envs
 
     def fit_agent(self):
         """
@@ -155,10 +130,11 @@ class AgentPPOTrainer(RayPPOTrainer):
                     "agent_rollout": True,  # no need to generate multiple ones since environment is repeated already
                 }
 
-                with _timer("step", timing_raw):
-                    final_gen_batch_output = self._generate_agent_trajectories(batch, timing_raw=timing_raw, meta_info=batch.meta_info)
+                envs = self.init_envs(batch)
+                agents = [self.agent_class() for _ in range(len(envs))]
 
-                    print("final_gen_batch_output:", final_gen_batch_output)
+                with _timer("step", timing_raw):
+                    final_gen_batch_output = self.generate_agent_trajectory(envs, agents, timing_raw=timing_raw, meta_info=batch.meta_info)
 
                     batch = batch.union(final_gen_batch_output)
                     ####################
@@ -208,9 +184,34 @@ class AgentPPOTrainer(RayPPOTrainer):
                         metrics["batch/solve_none"] = solve_none
                         metrics["batch/solve_all"] = solve_all
 
+                        if self.config.trainer.rejection_sample:
+                            # If no valid samples remain, skip this batch and get a new one
+                            if not valid_mask.any():
+                                continue
+
+                            # Filter batch to keep only valid samples
+                            batch = batch[valid_mask]
+                            batch = dataprotoitem_to_dataproto(batch)
+                            # Round down to the nearest multiple of world size
+                            num_trainer_replicas = self.actor_rollout_wg.world_size
+                            max_batch_size = (
+                                batch.batch["input_ids"].shape[0]
+                                // num_trainer_replicas
+                            ) * num_trainer_replicas
+                            if not max_batch_size:
+                                # give up, you got everything either all wrong or right.
+                                continue
+
+                            size_mask = torch.zeros(
+                                batch.batch["input_ids"].shape[0], dtype=torch.bool
+                            )
+                            size_mask[:max_batch_size] = True
+                            batch = batch[size_mask]
+                            batch = dataprotoitem_to_dataproto(batch)
+
                         # recompute old_log_probs
                         with _timer("old_log_prob", timing_raw):
-                            old_log_prob = self.actor_wg.compute_log_prob(batch)
+                            old_log_prob = self.actor_rollout_wg.compute_log_prob(batch)
                             batch = batch.union(old_log_prob)
 
                         if self.use_reference_policy:
@@ -221,7 +222,19 @@ class AgentPPOTrainer(RayPPOTrainer):
                                 )
                                 batch = batch.union(ref_log_prob)
 
-                        # we don't apply KL penalty to the rewards
+                        # compute rewards with KL penalty if needed
+
+                        # Note: This kl penalty applied directly over the rewards is disabled for GRPO. The kl penalty is applied at dp_actor.py
+                        # where it is subtracted directly from the policy loss
+
+                        # if not self.config.actor_rollout_ref.actor.use_kl_loss:
+                        #     batch, kl_metrics = apply_kl_penalty(batch,
+                        #                                        kl_ctrl=self.kl_ctrl,
+                        #                                        kl_penalty=self.config.algorithm.kl_penalty)
+                        #     metrics.update(kl_metrics)
+                        # else:
+                        #     batch.batch['token_level_rewards'] = batch.batch['token_level_scores']
+
                         batch.batch["token_level_rewards"] = batch.batch["token_level_scores"]
 
                         # compute advantages, executed on the driver process
@@ -230,7 +243,7 @@ class AgentPPOTrainer(RayPPOTrainer):
                             adv_estimator=self.config.algorithm.adv_estimator,
                             gamma=self.config.algorithm.gamma,
                             lam=self.config.algorithm.lam,
-                            # num_repeat=1,
+                            num_repeat=1,
                         )
 
                     # balance the number of valid tokens on each dp rank.
@@ -256,7 +269,7 @@ class AgentPPOTrainer(RayPPOTrainer):
                     if self.config.trainer.critic_warmup <= self.global_steps:
                         # update actor
                         with _timer("update_actor", timing_raw):
-                            actor_output = self.actor_wg.update_actor(batch)
+                            actor_output = self.actor_rollout_wg.update_actor(batch)
                         actor_output_metrics = reduce_metrics(
                             actor_output.meta_info["metrics"]
                         )
@@ -321,9 +334,12 @@ class AgentPPOTrainer(RayPPOTrainer):
                 "agent_rollout": True
             }
 
-            test_output_gen_batch = self._generate_agent_trajectories(
-                test_batch, meta_info=test_batch.meta_info
+            env = self.init_env(test_batch)
+
+            test_output_gen_batch = self.generate_agent_trajectory(
+                env, meta_info=test_batch.meta_info
             )
+            env.close()
 
             test_batch = test_batch.union(test_output_gen_batch)
 
@@ -365,95 +381,32 @@ class AgentPPOTrainer(RayPPOTrainer):
 
         return metric_dict
 
-
-    def _generate_agent_trajectories(self, batch: DataProto, timing_raw={}, meta_info=None):
+    def generate_agent_trajectory(self, envs, agents, timing_raw={}, meta_info=None):
         """
-        Generates agent trajectories by interacting with the environment using continuous batching.
-        
+        Generates agent trajectories by interacting with the environment. Does not close or reset the environment afterwards
+
         Args:
-            tasks: List of tasks to execute.
+            envs: The environments in which the agent interacts.
+            agents: The agents to use for interation.
             timing_raw: Dictionary to store timing information for profiling.
             meta_info (optional): Metadata for veRL generation.
 
         Returns:
             DataProto: Representation of the agent's trajectories.
         """
-
-        envs = self.agent_engine.envs
-        tasks = batch.non_tensor_batch["task"]
-
+        # Reset the agent.
+        self.agent_execution_engine.update_envs_and_agents(envs, agents)
         with _timer("collect_trajectory", timing_raw):
-            import asyncio
-            
-            total_tasks = len(tasks)
-            
-            # Create and run the event loop
-            loop = asyncio.get_event_loop()
-            
-            async def process_all_tasks():
-                # Track available agent/env pairs
-                n_parallel = self.agent_engine.n_parallel_agents
-                available_indices = list(range(n_parallel))
-                
-                # Track all pending tasks
-                pending_tasks = set()
-                trajectories = []
-                next_task_idx = 0
-                
-                # Process tasks until all are complete
-                while len(trajectories) < total_tasks:
-                    # Start new tasks if we have available workers and remaining tasks
-                    while available_indices and next_task_idx < total_tasks:
-                        worker_idx = available_indices.pop(0)
-                        task_id = next_task_idx
-                        task = tasks[task_id]
-                        
-                        # Reset the environment with the current task
-                        envs[worker_idx].reset(task)
-                        # Reset the agent for the new task
-                        self.agent_engine.agents[worker_idx].reset()
-                        
-                        # Create and start the coroutine
-                        coro = self.agent_engine.run_agent_episode_verl(
-                            task_id, task, worker_idx, worker_idx
-                        )
-                        task = asyncio.create_task(coro)
-                        
-                        # Add callback to handle completion
-                        task.add_done_callback(
-                            lambda t, idx=worker_idx, tid=task_id: (
-                                available_indices.append(idx),
-                                pending_tasks.remove(t)
-                            )
-                        )
-                        
-                        pending_tasks.add(task)
-                        next_task_idx += 1
-                    
-                    # Wait for at least one task to complete if there are pending tasks
-                    if pending_tasks:
-                        done, pending_tasks = await asyncio.wait(
-                            pending_tasks, 
-                            return_when=asyncio.FIRST_COMPLETED
-                        )
-                        
-                        # Process completed tasks
-                        for task in done:
-                            _, _, token_result, _ = task.result()
-                            trajectories.append(token_result)
-                    else:
-                        # No pending tasks but not all trajectories collected - this shouldn't happen
-                        # but added as a safeguard
-                        await asyncio.sleep(0.01)
-                
-                return trajectories
-            
-            # Run the continuous batching process
-            trajectories = loop.run_until_complete(process_all_tasks())
+            # Interact_environment returns list of trajectories.
+            trajectories = self.agent_execution_engine.interact_environment(
+                timing_raw=timing_raw, mode="Token", meta_info=meta_info
+            )
 
         with _timer("transform_trajectory", timing_raw):
-            # Transform the trajectories into DataProto format
-            final_gen_batch_output = self._transform_agent_trajectories(trajectories)
+            # Transform the raw trajectories into DataProto format.
+            final_gen_batch_output = self._transform_agent_trajectories(
+                trajectories
+            )
 
         return final_gen_batch_output
 

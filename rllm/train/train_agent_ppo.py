@@ -29,7 +29,7 @@ from verl.workers.reward_manager import NaiveRewardManager
 # from rllm.environments.browsergym import BatchBrowserGym
 # from rllm.environments.frozenlake.frozenlake import BatchFrozenLakeEnv
 
-from rllm.trainer.ppo import AgentPPOTrainer
+from rllm.rllm.trainer.agent_trainer import AgentPPOTrainer
 from rllm.environments import ToolEnvironment, SingleTurnEnvironment
 from rllm.models.web_agent import WebAgent
 from rllm.models.frozenlake_agent import FrozenLakeAgent

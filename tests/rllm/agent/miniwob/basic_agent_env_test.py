@@ -5,7 +5,7 @@ import gymnasium as gym
 import torch
 
 from rllm.models.web_agent import WebAgent
-from rllm.models.batch_agent import BatchAgent
+from rllm.rllm.models.agent_execution_engine import AgentExecutionEngine
 from rllm.environments.browsergym.browsergym import BatchBrowserGym
 
 
@@ -60,7 +60,7 @@ def main():
     model_path = "meta-llama/Llama-3.1-8B-Instruct"
     engine, tokenizer, sampling_params = init_vllm_engine(model_path)
 
-    agent = BatchAgent(rollout_engine=engine, engine_name="vllm", tokenizer=tokenizer, agent_class=WebAgent, n_parallel_agents=2, sampling_params=sampling_params, env=env)
+    agent = AgentExecutionEngine(rollout_engine=engine, engine_name="vllm", tokenizer=tokenizer, agent_class=WebAgent, n_parallel_agents=2, sampling_params=sampling_params, env=env)
     
     trajectories = agent.interact_environment()
         

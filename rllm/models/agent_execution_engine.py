@@ -2,11 +2,8 @@ import openai
 import time
 import os
 from tqdm import tqdm
-import multiprocessing as mp
 import numpy as np
-import threading
-import asyncio
-from queue import Queue, Empty
+from concurrent.futures import ThreadPoolExecutor
 import torch
 
 from verl.trainer.ppo.ray_trainer import _timer
@@ -15,57 +12,62 @@ from rllm.misc import colorful_print
 from rllm.environments.env_utils import add_trajectory_reward, add_mc_return, add_training_reward, compute_training_score, compute_environment_score
 
 
-class BatchAgent:
+class AgentExecutionEngine:
 
     def __init__(
         self,
         rollout_engine,
         engine_name,
         tokenizer,
-        agent_class,
+        agents=[], # List of agents
+        envs=[], # List of environments
         model_path="",
-        n_parallel_agents=1,
-        api_key=None,
-        api_retries=3,
-        env=None,
         gamma=0.95,
+        api_retries=3,
         retry_limit=1,
-        episode_len=5,
+        max_episode_len=5,
+        max_prompt_length=512, # Max prompt length for agent is only applied to first request, all subsequent requests are considered to be results.
         max_trajectory_length=8000,
-        agent_args={},
+        rollout_engine_args={},
         **kwargs,
     ):
         self.rollout_engine = rollout_engine
         self.tokenizer = tokenizer
         self.engine_name = engine_name
-        self.api_key = api_key
-        self.api_retries = api_retries
-        self.agent_class = agent_class
-        self.sampling_params = kwargs.get("sampling_params", None)
-        self.n_parallel_agents = n_parallel_agents
+        self.n_parallel_agents = len(envs)
         self.model_path = model_path
 
-        self.agents = [agent_class(**agent_args) for _ in range(n_parallel_agents)]
-
         # For interaction
-        self.env = env
+        
         self.gamma = gamma
         self.retry_limit = retry_limit
-        self.episode_len = episode_len
-        self.agent_args = agent_args
+        self.api_retries = api_retries
+        self.max_episode_len = max_episode_len
         self.max_trajectory_length = max_trajectory_length
+        self.max_prompt_length = max_prompt_length
 
-    def get_actions(self, trajectories, seq_idxs=[], **kwargs):
+        assert len(agents) == len(envs), f"Number of agents must equal to number of environments but received, {len(agents)} and {len(envs)}"
+        self.agents = agents
+        self.envs = envs
+
+        # rollout engine args
+        self.rollout_engine_args = rollout_engine_args
+        self.sampling_params = kwargs.get("sampling_params", None)
+
+        if engine_name == "openai":
+            from openai import OpenAI 
+            self.client = OpenAI(**self.rollout_engine_args)
+
+    def get_actions(self, trajectories, seq_idxs, **kwargs):
         """
         Return a list of actions with same size as the trajectories list
-        seq_idxs: The list of indexes that the trajectories are from. Used to index into self.agents
+        seq_idxs: The list of indexes that the trajectories are from. Used to index into self.agents and self.envs
 
         return: Tuple (List of actions, List of responses)
         """
-        if seq_idxs:
-            assert len(trajectories) == len(
-                seq_idxs
-            ), f"Number of sequences {len(trajectories)} should equal to the number of agents they are for ({len(seq_idxs)})"
+        assert len(trajectories) == len(
+            seq_idxs
+        ), f"Number of sequences {len(trajectories)} should equal to the number of agents they are for ({len(seq_idxs)})"
 
         if self.engine_name == "verl":
             return self._get_actions_verl(trajectories, seq_idxs, **kwargs)
@@ -194,13 +196,9 @@ class BatchAgent:
             for i, traj in enumerate(trajectories)
         ]
 
-        openai.api_key = self.api_key
-        responses = []
-        with mp.Pool(os.cpu_count()) as pool:
-            for i, response in enumerate(
-                tqdm(pool.imap(self._get_openai_response, prompts), total=len(prompts))
-            ):
-                responses.append(response)
+        # Use ThreadPoolExecutor instead of multiprocessing
+        with ThreadPoolExecutor(max_workers=8) as executor:
+            responses = list(tqdm(executor.map(self.call_openai, prompts), total=len(prompts)))
 
         assert len(responses) == len(
             trajectories
@@ -213,22 +211,18 @@ class BatchAgent:
         return actions, responses
 
 
-    def _get_openai_response(self, prompt):
-        # GPT prompt
+    def _call_openai(self, prompt):
         retries = self.api_retries
         while retries > 0:
             try:
-                # OpenAI API call
-                response = openai.chat.completions.create(
+                response = self.client.chat.completions.create(
                     model="o1-preview", messages=prompt
                 )
-                print("response", response)
                 return response.choices[0].message.content
             except openai.RateLimitError:
                 retries -= 1
                 if retries == 0:
                     return "Error: Rate limit reached and retries exhausted."
-                print(f"Sleep for 5 seconds for API limit.")
                 time.sleep(5)
             except Exception as e:
                 return f"Error processing content: {e}"
@@ -237,11 +231,12 @@ class BatchAgent:
     def _safe_get_actions(self, trajectories, batch_done, **kwargs):
         new_trajectory_sequences = []
         seq_idxs = []
-        responses = [""] * len(trajectories)
-        actions = [""]*len(trajectories)
+        responses = []
+        actions = []
 
         for i, done in enumerate(batch_done):
-            if not done and trajectories[i][-1]['next_observation'] is not None:
+            if not done:
+                assert trajectories[i][-1]['next_observation'] is not None, f"Something went wrong, newest observation is None when trajectory hasn't terminated, index {i}"
                 new_trajectory_sequences.append(trajectories[i])
                 seq_idxs.append(i)
 
@@ -255,17 +250,50 @@ class BatchAgent:
             # ToDO (Sijun): What is the purpose of this?
             for i, idx in enumerate(seq_idxs):
                 if isinstance(gen_actions[i], str):
-                    actions[idx] = gen_actions[i].replace("<|im_end|>", "")
+                    actions.append(gen_actions[i].replace("<|im_end|>", ""))
                 else:
-                    actions[idx] = gen_actions[i]
-                responses[idx] = gen_responses[i].replace("<|im_end|>", "")
-                
-        for action, traj in zip(actions, new_trajectory_sequences):
-            new_obs = traj[-1]['next_observation']
-            if new_obs is None:
-                assert action == "", "Action should be empty, First assert"
+                    actions.append(gen_actions[i])
+                responses.append(gen_responses[i].replace("<|im_end|>", ""))
 
-        return actions, responses
+        return actions, responses, seq_idxs
+
+    def step_env_single(self, env, action):
+        return env.step(action)
+
+    def step_environment(self, actions, seq_idxs):
+        results = [None] * len(seq_idxs)
+
+        with ThreadPoolExecutor(max_workers=len(seq_idxs)) as executor:
+            futures = [
+                executor.submit(self.step_env_single, self.envs[seq_idxs[i]], actions[i])
+                for i in range(len(seq_idxs))
+            ]
+
+            for i, fut in enumerate(futures):
+                results[i] = fut.result()
+
+        # Unpack all results
+        next_observations, rewards, terminateds, truncateds, infos = zip(*results)
+        return list(next_observations), list(rewards), list(terminateds), list(truncateds), list(infos)
+    
+    def reset_env_single(self, env, seed=0):
+        return env.reset(seed=seed)
+
+    def reset_environment(self, seq_idxs, seed=0):
+        results = [None] * len(seq_idxs)
+
+        with ThreadPoolExecutor(max_workers=len(seq_idxs)) as executor:
+            futures = [
+                executor.submit(self.reset_env_single, self.envs[seq_idxs[i]], seed=seed)
+                for i in range(len(seq_idxs))
+            ]
+
+            for i, fut in enumerate(futures):
+                results[i] = fut.result()
+
+        # Unpack all results
+        observations, infos = zip(*results)
+        return list(observations), list(infos)
 
     def interact_environment(self, reset_seed=0, timing_raw={}, mode="Text", **kwargs):
         """
@@ -330,11 +358,10 @@ class BatchAgent:
 
         for _ in range(self.retry_limit):
             try:
-                done = False
                 trajectories = [[] for _ in range(env_batch_size)]
 
                 steps = 0
-                observations, infos = self.env.reset(seed=reset_seed)
+                observations, infos = self.reset_environment(list(range(env_batch_size)), seed=reset_seed)
                 batch_done = [False for _ in range(env_batch_size)]
 
                 # For veRL training
@@ -361,21 +388,18 @@ class BatchAgent:
                     # Update conversation version
                     all_conversations[i].extend(initial_messages)
 
-                if max_prompt_token_len >= self.max_trajectory_length:
+                if max_prompt_token_len > self.max_prompt_length:
                     self.reset()
-                    raise Exception("Initial prompt length already exceeded max_trajectory_length, retrying")
+                    raise Exception("Initial prompt length already exceeded max_prompt_length, retrying")
+                max_prompt_token_len = self.max_prompt_length
                     
                 # get model actions and responses
                 while not all(batch_done) and steps < self.episode_len:
                     steps += 1
                     with _timer("get_actions", timing_raw):
-                        actions, responses = self._safe_get_actions(
+                        actions, responses, seq_idxs = self._safe_get_actions(
                             trajectories, batch_done, **kwargs
                         )
-
-                    for action, done in zip(actions, batch_done):
-                        if done:
-                            assert action == ""
 
                     # environment step
                     try:
@@ -386,7 +410,7 @@ class BatchAgent:
                                 terminateds,
                                 truncateds,
                                 infos,
-                            ) = self.env.step(actions)
+                            ) = self.step_environment(actions, seq_idxs)
                     except Exception as e:
                         print(e)
                         self.reset()
@@ -396,9 +420,9 @@ class BatchAgent:
                         "green",
                     )
 
-                    for i in range(env_batch_size):
+                    for i in seq_idxs:
                         if batch_done[i]:
-                            continue
+                            raise Exception(f"Trajectory has new state but is done. Something went wrong. Index {i}")
 
                         # Update the agent
                         self.agents[i].update(
@@ -532,7 +556,6 @@ class BatchAgent:
 
         if mode == "Conversation":
             return all_conversations
-        
 
     def reset(self):
         """
@@ -541,19 +564,18 @@ class BatchAgent:
         for agent in self.agents:
             agent.reset()
 
-    def update_env(self, env):
+    def update_envs_and_agents(self, envs, agents):
         """
-        Updates the environment and recreates all agents. Instead of reusing existing agents, this method creates new agent instances to match 
-        the batch size of the new environment.
+        Updates the environment and agent. 
 
         Args:
-            env: The new environment instance to be assigned.
+            envs: List of environments to use.
+            agent: List of agents to use.
         """
-        self.n_parallel_agents = env.batch_size
-
-        self.agents = [self.agent_class(**self.agent_args)for _ in range(self.n_parallel_agents)]
-
-        self.env = env
+        assert len(agents) == len(envs), f"Number of agents must equal to number of environments but received, {len(agents)} and {len(envs)}"
+        self.n_parallel_agents = len(envs)
+        self.envs = envs
+        self.agents = agents
 
     def _postprocess_model_chat_template(self, message_text):
         """

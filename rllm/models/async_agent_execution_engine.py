@@ -1,4 +1,4 @@
-from rllm.models.batch_agent import BatchAgent
+from rllm.rllm.models.agent_execution_engine import AgentExecutionEngine
 import asyncio
 from verl.trainer.ppo.ray_trainer import _timer
 from rllm.misc import colorful_print
@@ -13,7 +13,7 @@ import openai
 import ray
 
 
-class AgentExecutionEngine(BatchAgent):
+class AsyncAgentExecutionEngine(AgentExecutionEngine):
     def __init__(
         self,
         rollout_engine,

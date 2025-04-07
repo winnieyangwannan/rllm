@@ -19,7 +19,7 @@ import json
 from rllm.environments.browsergym import BatchBrowserGym
 
 from rllm.models.web_agent import WebAgent
-from rllm.models.batch_agent import BatchAgent
+from rllm.rllm.models.agent_execution_engine import AgentExecutionEngine
 from rllm.environments.browsergym.browsergym import BatchBrowserGym
 import torch 
 
@@ -63,7 +63,7 @@ def main():
         api_key = f.read().strip()
     tokenizer = AutoTokenizer.from_pretrained(model_path, trust_remote_code=True, use_cache=False)
     # Init agent
-    agent = BatchAgent(rollout_engine=None, engine_name="openai", tokenizer=tokenizer, agent_class=WebAgent, n_parallel_agents=len(selected_envs), api_key=api_key, env=env)
+    agent = AgentExecutionEngine(rollout_engine=None, engine_name="openai", tokenizer=tokenizer, agent_class=WebAgent, n_parallel_agents=len(selected_envs), api_key=api_key, env=env)
     timing_raw = {}
     evaluate_trajectories = agent.interact_environment(atiming_raw=timing_raw)
 

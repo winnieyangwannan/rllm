@@ -8,7 +8,7 @@ import json
 
 from rllm.environments.frozenlake.frozenlake import BatchFrozenLakeEnv
 from rllm.models.frozenlake_agent import FrozenLakeAgent
-from rllm.models.batch_agent import BatchAgent
+from rllm.rllm.models.agent_execution_engine import AgentExecutionEngine
 
 def init_vllm_engine(model_name):
     from vllm import LLM, SamplingParams
@@ -45,7 +45,7 @@ def main():
     env = BatchFrozenLakeEnv.from_extra_infos(dataset["extra_info"].tolist()[:number_of_tasks]) # create environment with first 500 tasks
 
     engine, tokenizer, sampling_params = init_vllm_engine(teacher_model_path)
-    agent = BatchAgent(rollout_engine=engine, engine_name="vllm", tokenizer=tokenizer, agent_class=FrozenLakeAgent, n_parallel_agents=env.batch_size, episode_len=episode_len, sampling_params=sampling_params, env=env, model_path=teacher_model_path)
+    agent = AgentExecutionEngine(rollout_engine=engine, engine_name="vllm", tokenizer=tokenizer, agent_class=FrozenLakeAgent, n_parallel_agents=env.batch_size, episode_len=episode_len, sampling_params=sampling_params, env=env, model_path=teacher_model_path)
     
     timing_raw = {}
     evaluate_trajectories = agent.interact_environment(timing_raw=timing_raw, mode="Conversation")

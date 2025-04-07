@@ -126,7 +126,7 @@ class ToolAgent(BaseAgent):
 
 if __name__ == "__main__":
     # Create the environment (no batch_size parameter)
-    env = ToolEnvironment(tools=["google_search"])
+    envs = [ToolEnvironment(tools=["google_search"]), ToolEnvironment(tools=["google_search"])]
     
     # Create the batch agent with the tool agent
     from transformers import AutoTokenizer
@@ -135,7 +135,7 @@ if __name__ == "__main__":
 
     # agent = ToolAgent(model_name="Qwen/Qwen2.5-1.5B-Instruct", tools=["google_search"])
 
-    from rllm.models.engine import AgentExecutionEngine
+    from rllm.rllm.models.async_agent_execution_engine import AsyncAgentExecutionEngine
 
     sampling_params = {
         "model": "gpt-4o",
@@ -143,15 +143,15 @@ if __name__ == "__main__":
         "max_tokens": 8192,
         "top_p": 0.95,
         # "stop": ["```\n\n"],
-        "tools": env.tools.json,
+        "tools": envs[0].tools.json,
     }
+
+    agents = [ToolAgent(tools=["google_search"], model_name="Qwen/Qwen2.5-1.5B-Instruct"), ToolAgent(tools=["google_search"], model_name="Qwen/Qwen2.5-1.5B-Instruct")]
     
-    batch_agent = AgentExecutionEngine(
-        agent_class=ToolAgent,
-        agent_args={"tools": ["google_search"], "model_name": "Qwen/Qwen2.5-1.5B-Instruct"},
+    async_agent_execution_engine = AsyncAgentExecutionEngine(
+        agents=agents,
         engine_name="openai", 
-        n_parallel_agents=2,  # Set to 1 to match environment's fixed batch size
-        env=env,
+        envs=envs,
         tokenizer=tokenizer,  # Using transformers tokenizer
         rollout_engine=None,
         sampling_params=sampling_params
@@ -169,4 +169,4 @@ if __name__ == "__main__":
     tasks = [{"question": task} for task in tasks]
 
     # Run the environment interaction
-    asyncio.run(batch_agent.execute_tasks(tasks))
+    asyncio.run(async_agent_execution_engine.execute_tasks(tasks))
