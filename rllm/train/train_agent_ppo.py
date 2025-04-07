@@ -24,12 +24,12 @@ from verl.trainer.ppo.ray_trainer import ResourcePoolManager, Role
 from verl.workers.fsdp_workers import ActorRolloutRefWorker, CriticWorker
 from verl.workers.reward_manager import NaiveRewardManager
 
-from rllm.rllm.trainer.agent_trainer import AgentPPOTrainer
+from rllm.trainer.agent_trainer import AgentPPOTrainer
 
 from rllm.environments.browsergym.browsergym import BrowserGym
 from rllm.environments.frozenlake.frozenlake import FrozenLakeEnv
 from rllm.environments import ToolEnvironment#, SingleTurnEnvironment
-from rllm.environments.swe.swe import SWEEnv
+# from rllm.environments.swe.swe import SWEEnv
 
 from rllm.models.web_agent import WebAgent
 from rllm.models.frozenlake_agent import FrozenLakeAgent
@@ -40,7 +40,7 @@ from rllm.models.swe_agent import SWEAgent
 ENV_CLASS_MAPPING = {
     'browsergym': BrowserGym,
     'frozenlake': FrozenLakeEnv,
-    'sweenv': SWEEnv,
+    # 'sweenv': SWEEnv,
     'tool': ToolEnvironment,
     # 'math': SingleTurnEnvironment,
 }

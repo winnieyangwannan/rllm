@@ -18,7 +18,7 @@ import pandas as pd
 import json
 
 from rllm.models.web_agent import WebAgent
-from rllm.rllm.models.agent_execution_engine import AgentExecutionEngine
+from rllm.models.agent_execution_engine import AgentExecutionEngine
 from rllm.environments.browsergym.browsergym import BrowserGym
 import torch 
 

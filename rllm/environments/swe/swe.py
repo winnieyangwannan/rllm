@@ -13,74 +13,74 @@ import concurrent.futures
 from ..base_env import BaseEnv
 import json
 
-class SWEEnv(BaseEnv):
-    def __init__(self, dataset):
+# class SWEEnv(BaseEnv):
+#     def __init__(self, dataset):
 
-        # Get all available images
-        # self.available_dataset = load_dataset("r2e-edits/swebench-verified-v1", split="test")
-        self.available_dataset = dataset
-        # TODO: Limit the number to 100 now
-        self.available_dataset = self.available_dataset.select(range(100))
+#         # Get all available images
+#         # self.available_dataset = load_dataset("r2e-edits/swebench-verified-v1", split="test")
+#         self.available_dataset = dataset
+#         # TODO: Limit the number to 100 now
+#         self.available_dataset = self.available_dataset.select(range(100))
 
-        command_files = [
-                "../r2e-edits-internal/src/r2e_edits/agenthub/tools/file_editor.py",
-                "../r2e-edits-internal/src/r2e_edits/agenthub/tools/search.py",
-                "../r2e-edits-internal/src/r2e_edits/agenthub/tools/execute_bash.py",
-                "../r2e-edits-internal/src/r2e_edits/agenthub/tools/finish.py",
-        ]
-        self.command_files = command_files
-        self.max_steps = 40
-        self.env = None
-        # TODO: see if this id makes sense
-        data_as_json = json.dumps(self.available_dataset[:], sort_keys=True)
-        self._env_id = hashlib.sha256(data_as_json.encode("utf-8")).hexdigest()
+#         command_files = [
+#                 "../r2e-edits-internal/src/r2e_edits/agenthub/tools/file_editor.py",
+#                 "../r2e-edits-internal/src/r2e_edits/agenthub/tools/search.py",
+#                 "../r2e-edits-internal/src/r2e_edits/agenthub/tools/execute_bash.py",
+#                 "../r2e-edits-internal/src/r2e_edits/agenthub/tools/finish.py",
+#         ]
+#         self.command_files = command_files
+#         self.max_steps = 40
+#         self.env = None
+#         # TODO: see if this id makes sense
+#         data_as_json = json.dumps(self.available_dataset[:], sort_keys=True)
+#         self._env_id = hashlib.sha256(data_as_json.encode("utf-8")).hexdigest()
     
-    def reset(self, seed=0):
-        select_idx = random.choice(range(len(self.available_dataset)))
-        env_args = EnvArgs(ds = self.available_dataset[select_idx])
-        self.env = RepoEnv(env_args)
+#     def reset(self, seed=0):
+#         select_idx = random.choice(range(len(self.available_dataset)))
+#         env_args = EnvArgs(ds = self.available_dataset[select_idx])
+#         self.env = RepoEnv(env_args)
 
-        # reset environment
-        self.env.reset()
-        self.env.runtime.reset()
-        self.env.runtime.setup_env()
-        self.env.add_commands(self.command_files)
-        self.total_steps = 0
+#         # reset environment
+#         self.env.reset()
+#         self.env.runtime.reset()
+#         self.env.runtime.setup_env()
+#         self.env.add_commands(self.command_files)
+#         self.total_steps = 0
 
-        return self.env.runtime.get_task_instruction()
+#         return self.env.runtime.get_task_instruction()
 
-    def evaluate_reward(self):
-        reward, test_output = self.env.runtime._calculate_reward(get_test_output = True)
-        return reward
+#     def evaluate_reward(self):
+#         reward, test_output = self.env.runtime._calculate_reward(get_test_output = True)
+#         return reward
         
-    def step(self, action: str):
-        action = Action.from_string(action)
-        # Check for max steps
-        if self.total_steps > self.max_steps:
-            return "Max Time steps", 0, True, {}
+#     def step(self, action: str):
+#         action = Action.from_string(action)
+#         # Check for max steps
+#         if self.total_steps > self.max_steps:
+#             return "Max Time steps", 0, True, {}
 
-        if action.function_name == "":
-            return "", 0, False, {}
+#         if action.function_name == "":
+#             return "", 0, False, {}
 
-        obs, reward, done, info = self.env.step(action, timeout = 90)
-        if done:
-            reward = self.evaluate_reward()
+#         obs, reward, done, info = self.env.step(action, timeout = 90)
+#         if done:
+#             reward = self.evaluate_reward()
 
-        self.total_steps += 1
-        return str(obs), reward, done, {}
+#         self.total_steps += 1
+#         return str(obs), reward, done, {}
 
-    def close(self):
-        if self.env is not None:
-            self.env.close()
+#     def close(self):
+#         if self.env is not None:
+#             self.env.close()
 
-    def env_id(self):
-        return self._env_id
+#     def env_id(self):
+#         return self._env_id
     
-    @staticmethod
-    def from_extra_info(extra_info: Dict) -> "SWEEnv":
-        """Abstract static method that constructs an instance from a dictionaries. Used for veRL training"""
-        swe_dataset = load_dataset("r2e-edits/r2e-dockers-v1", split="train")
-        return SWEEnv(swe_dataset)
+#     @staticmethod
+#     def from_extra_info(extra_info: Dict) -> "SWEEnv":
+#         """Abstract static method that constructs an instance from a dictionaries. Used for veRL training"""
+#         swe_dataset = load_dataset("r2e-edits/r2e-dockers-v1", split="train")
+#         return SWEEnv(swe_dataset)
      
 
 

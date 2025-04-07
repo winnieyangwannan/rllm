@@ -8,36 +8,36 @@ import numpy as np
 
 from rllm.models.system_prompts import *
 from rllm.models.agent import BaseAgent
-from r2e_edits.agenthub.action import Action
+# from r2e_edits.agenthub.action import Action
 from typing import Tuple
 
-def parse_response(response_text: str) -> Tuple[str, Action]:
-    """
-    Extracts:
-    - thought: everything before the first <function=...> block
-    - action: the entire first <function=...></function> block
-    Returns (thought, action).
-    """
-    # Regex to match (non-greedily) from `<function=` up to the first `</function>`
-    pattern = re.compile(r"(?s)(<function=.*?</function>)")
-    match = pattern.search(response_text)
+# def parse_response(response_text: str) -> Tuple[str, Action]:
+#     """
+#     Extracts:
+#     - thought: everything before the first <function=...> block
+#     - action: the entire first <function=...></function> block
+#     Returns (thought, action).
+#     """
+#     # Regex to match (non-greedily) from `<function=` up to the first `</function>`
+#     pattern = re.compile(r"(?s)(<function=.*?</function>)")
+#     match = pattern.search(response_text)
 
-    if match:
-        action = match.group(1)  # The entire <function=...></function> block
-        thought = response_text[: match.start()]  # Everything before the block
-    else:
-        # If no match, treat entire text as "thought"
-        thought = response_text
-        action = ""
+#     if match:
+#         action = match.group(1)  # The entire <function=...></function> block
+#         thought = response_text[: match.start()]  # Everything before the block
+#     else:
+#         # If no match, treat entire text as "thought"
+#         thought = response_text
+#         action = ""
 
-    # Strip leading/trailing whitespace
-    thought = thought.strip()
-    action = action.strip()
+#     # Strip leading/trailing whitespace
+#     thought = thought.strip()
+#     action = action.strip()
 
-    # convert action to Action object
-    action = Action.from_string(action)
+#     # convert action to Action object
+#     action = Action.from_string(action)
 
-    return thought, action
+#     return thought, action
 
 logger = logging.getLogger(__name__)
 
@@ -114,24 +114,24 @@ Follow these steps to resolve the issue:
             prompt_text_strings.append(message["text"])
         return " ".join(prompt_text_strings)
 
-    def _post_get_action(self, response):
-        """
-        Extracts the last content enclosed within triple backticks (``` ```) from the response.
+    # def _post_get_action(self, response):
+    #     """
+    #     Extracts the last content enclosed within triple backticks (``` ```) from the response.
 
-        If the response contains multiple segments wrapped in triple backticks, 
-        this function returns the content of the **last** occurrence. 
-        If no such formatting is found, it returns the entire response unmodified.
+    #     If the response contains multiple segments wrapped in triple backticks, 
+    #     this function returns the content of the **last** occurrence. 
+    #     If no such formatting is found, it returns the entire response unmodified.
 
-        Args:
-            response (str): The raw text response to be processed.
+    #     Args:
+    #         response (str): The raw text response to be processed.
 
-        Returns:
-            str: The extracted content from the last occurrence of triple backticks, 
-                or the full response if no match is found.
-        """
-        # TODO: FIXME: Tianjun: we need to re-implement this function
-        thought, action = parse_response(response)
-        return action.to_xml_string()
+    #     Returns:
+    #         str: The extracted content from the last occurrence of triple backticks, 
+    #             or the full response if no match is found.
+    #     """
+    #     # TODO: FIXME: Tianjun: we need to re-implement this function
+    #     thought, action = parse_response(response)
+    #     return action.to_xml_string()
 
     def update(self, action, observation, next_observation, reward, terminated, truncated, info):
         self.action_history.append(action)

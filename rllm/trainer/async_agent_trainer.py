@@ -8,9 +8,9 @@ import queue
 import asyncio
 import numpy as np
 
-from rllm.rllm.models.async_agent_execution_engine import AsyncAgentExecutionEngine
+from rllm.models.async_agent_execution_engine import AsyncAgentExecutionEngine
 
-from rllm.rllm.trainer.agent_trainer import AgentPPOTrainer 
+from rllm.trainer.agent_trainer import AgentPPOTrainer 
 
 from verl.trainer.ppo.ray_trainer_pipeline import (
     Timer,

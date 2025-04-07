@@ -1,4 +1,4 @@
-from rllm.rllm.models.agent_execution_engine import AgentExecutionEngine
+from rllm.models.agent_execution_engine import AgentExecutionEngine
 import asyncio
 from verl.trainer.ppo.ray_trainer import _timer
 from rllm.misc import colorful_print
@@ -79,9 +79,7 @@ class AsyncAgentExecutionEngine(AgentExecutionEngine):
         prompt = agent._pre_get_action(trajectory)
         batch = self._convert_prompt_verl([prompt], **kwargs)
 
-        action, response = await self.scheduler._get_result_verl_async(batch, application_id, **kwargs)
-
-        output = self.scheduler._get_action_verl_async(trajectory, agent)
+        output = await self.scheduler._get_result_verl_async(batch, application_id, **kwargs)
         
         # Process the output
         output_text = self.tokenizer.batch_decode(

@@ -10,7 +10,7 @@ python3 -m rllm.train.train_agent_ppo \
     data.train_batch_size=64 \
     data.max_prompt_length=23000 \
     data.max_response_length=256 \
-    actor_rollout_ref.model.path=/data/colin/code/rllm/tests/rllm/agent/frozenlake/sft_model_output_qwen2.5-1.5b-Instruct \
+    actor_rollout_ref.model.path=Qwen/Qwen2.5-1.5B \
     actor_rollout_ref.model.use_remove_padding=True \
     actor_rollout_ref.model.enable_gradient_checkpointing=True \
     actor_rollout_ref.actor.ppo_mini_batch_size=16 \

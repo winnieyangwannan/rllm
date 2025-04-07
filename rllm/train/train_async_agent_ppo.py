@@ -25,8 +25,8 @@ from verl.workers.fsdp_workers import ActorRolloutRefWorker
 from verl.workers.reward_manager import NaiveRewardManager
 
 
-from rllm.rllm.trainer.async_agent_trainer import AsyncAgentPPOTrainer
-from rllm.rllm.train.train_agent_ppo import ENV_CLASS_MAPPING, AGENT_CLASS_MAPPING, setup_environment
+from rllm.trainer.async_agent_trainer import AsyncAgentPPOTrainer
+from rllm.train.train_agent_ppo import ENV_CLASS_MAPPING, AGENT_CLASS_MAPPING, setup_environment
 
 
 @hydra.main(config_path='config', config_name='ppo_trainer', version_base=None)
@@ -77,9 +77,9 @@ def main_task(config, compute_score=None):
     val_reward_fn = NaiveRewardManager(tokenizer=tokenizer, num_examine=1, compute_score=compute_score)
 
     role_worker_mapping = {
-        Role.Actor: ray.remote(max_concurrency=10)(ActorRolloutRefWorker), #ray.remote(ActorRolloutRefWorker),
-        Role.Rollout: ray.remote(max_concurrency=10)(ActorRolloutRefWorker), #ray.remote(ActorRolloutRefWorker),
-        Role.RefPolicy: ray.remote(max_concurrency=10)(ActorRolloutRefWorker), #ray.remote(ActorRolloutRefWorker),
+        Role.Actor: ray.remote(ActorRolloutRefWorker),
+        Role.Rollout: ray.remote(ActorRolloutRefWorker),
+        Role.RefPolicy: ray.remote(ActorRolloutRefWorker),
     }
     
     # Below are agent specific initialization
