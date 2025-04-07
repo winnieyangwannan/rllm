@@ -16,11 +16,10 @@ os.environ['TOKENIZERS_PARALLELISM'] = 'true'
 
 import pandas as pd
 import json
-from rllm.environments.browsergym import BatchBrowserGym
 
 from rllm.models.web_agent import WebAgent
 from rllm.rllm.models.agent_execution_engine import AgentExecutionEngine
-from rllm.environments.browsergym.browsergym import BatchBrowserGym
+from rllm.environments.browsergym.browsergym import BrowserGym
 import torch 
 
 def main():
@@ -54,18 +53,14 @@ def main():
     rng = np.random.default_rng(seed)
     num_tasks = min(number_of_tasks, len(env_ids))
     selected_envs = rng.choice(env_ids, size=num_tasks, replace=False)
-    env = BatchBrowserGym(
-        env_id=selected_envs,
-        batch_size=len(selected_envs),
-    )
-    api_key_path="keys.txt"
-    with open(api_key_path, "r") as f:
-        api_key = f.read().strip()
+    envs = [BrowserGym(env_id=id) for id in selected_envs]
+    agents = [WebAgent() for _ in selected_envs]
+
     tokenizer = AutoTokenizer.from_pretrained(model_path, trust_remote_code=True, use_cache=False)
     # Init agent
-    agent = AgentExecutionEngine(rollout_engine=None, engine_name="openai", tokenizer=tokenizer, agent_class=WebAgent, n_parallel_agents=len(selected_envs), api_key=api_key, env=env)
+    agent_engine = AgentExecutionEngine(rollout_engine=None, engine_name="openai", tokenizer=tokenizer, agents=agents, envs=envs)
     timing_raw = {}
-    evaluate_trajectories = agent.interact_environment(atiming_raw=timing_raw)
+    evaluate_trajectories = agent_engine.interact_environment(atiming_raw=timing_raw)
 
     evaluate_metrics = {
         "evaluate_rollout.mean": np.mean([
@@ -96,7 +91,6 @@ def main():
     print("Metrics saved")
     torch.save(evaluate_trajectories, os.path.join(output_dir, trajectory_file))
     print("Trajectory saved")
-    env.close()
 
 
 if __name__ == "__main__":

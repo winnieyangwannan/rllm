@@ -38,7 +38,6 @@ class AgentExecutionEngine:
         self.model_path = model_path
 
         # For interaction
-        
         self.gamma = gamma
         self.retry_limit = retry_limit
         self.api_retries = api_retries

@@ -6,7 +6,7 @@ import gymnasium as gym
 import pandas as pd
 import json
 
-from rllm.environments.frozenlake.frozenlake import BatchFrozenLakeEnv
+from rllm.environments.frozenlake.frozenlake import FrozenLakeEnv
 from rllm.models.frozenlake_agent import FrozenLakeAgent
 from rllm.rllm.models.agent_execution_engine import AgentExecutionEngine
 
@@ -42,18 +42,18 @@ def main():
     teacher_model_path = "Qwen/Qwen2.5-72B-Instruct"
 
     dataset = pd.read_parquet(dataset_file_path)
-    env = BatchFrozenLakeEnv.from_extra_infos(dataset["extra_info"].tolist()[:number_of_tasks]) # create environment with first 500 tasks
+    extra_infos = dataset["extra_info"].tolist()[:number_of_tasks]
+    envs = [FrozenLakeEnv.from_extra_info(i) for i in extra_infos]
+    agents = [FrozenLakeAgent() for _ in range(len(extra_infos))]
 
     engine, tokenizer, sampling_params = init_vllm_engine(teacher_model_path)
-    agent = AgentExecutionEngine(rollout_engine=engine, engine_name="vllm", tokenizer=tokenizer, agent_class=FrozenLakeAgent, n_parallel_agents=env.batch_size, episode_len=episode_len, sampling_params=sampling_params, env=env, model_path=teacher_model_path)
+    agent_engine = AgentExecutionEngine(rollout_engine=engine, engine_name="vllm", tokenizer=tokenizer, episode_len=episode_len, sampling_params=sampling_params, model_path=teacher_model_path, envs=envs, agents=agents)
     
     timing_raw = {}
-    evaluate_trajectories = agent.interact_environment(timing_raw=timing_raw, mode="Conversation")
+    evaluate_trajectories = agent_engine.interact_environment(timing_raw=timing_raw, mode="Conversation")
 
     with open(output_file_path, "w", encoding="utf-8") as f:
         json.dump(evaluate_trajectories, f, indent=4, ensure_ascii=False)
-    print("Trajectory saved")
-    env.close()
 
 
 if __name__ == "__main__":

@@ -11,11 +11,17 @@ class BaseEnv(ABC):
         pass
 
     @abstractmethod
-    def reset(self, seed: int = 0) -> Tuple[List, List]:
+    def reset(self, seed: int = 0, **kwargs) -> Tuple[List, List]:
         """Standard Gym reset method."""
         pass
 
     @abstractmethod
     def step(self, action):
         """Standard Gym step method."""
+        pass
+
+    @staticmethod
+    @abstractmethod
+    def from_extra_info(extra_info: Dict) -> "BaseEnv":
+        """Abstract static method that constructs an instance from a dictionaries. Used for veRL training"""
         pass

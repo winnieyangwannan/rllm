@@ -5,7 +5,7 @@ from copy import deepcopy
 import time
 import threading
 import queue
-
+import asyncio
 import numpy as np
 
 from rllm.rllm.models.async_agent_execution_engine import AsyncAgentExecutionEngine
@@ -41,25 +41,25 @@ class AsyncAgentPPOTrainer(AgentPPOTrainer):
         
         agent_rollout_wg = self.rollout_wg
 
-        self.agent = AsyncAgentExecutionEngine(
+        self.agent_execution_engine = AsyncAgentExecutionEngine(
             rollout_engine=agent_rollout_wg,
             engine_name="verl",
             tokenizer=self.tokenizer,
-            agent_class=self.agent_class,
             model_path=self.config.actor_rollout_ref.model.path,
             episode_len=self.config.agent.trajectory_episode_len,
             max_trajectory_length=self.config.agent.max_trajectory_length,
             max_prompt_length=self.config.data.max_prompt_length,
         )
 
-    def init_env(self, batch):
+    def init_envs(self, batch):
         """
         Initialize environment depending on env_class with the necessary extra_info, also set uid of the batch.
         """
-        env = self.env_class.from_extra_infos(extra_infos=batch.non_tensor_batch["extra_info"].tolist())
-        batch.non_tensor_batch["uid"] = np.array(env.env_id, dtype=object)
+        env_args = batch.non_tensor_batch["extra_info"].tolist()
+        envs = [self.env_class(**env_args[i]) for i in range(len(env_args))]
+        batch.non_tensor_batch["uid"] = np.array([env.env_id for env in envs], dtype=object)
 
-        return env
+        return envs
     
     def fit_agent(self):
         """
@@ -112,7 +112,8 @@ class AsyncAgentPPOTrainer(AgentPPOTrainer):
                 metrics = {}
                 timing_raw = {}
 
-                env = self.init_env(batch)
+                envs = self.init_envs(batch)
+                agents = [self.agent_class() for _ in range(len(envs))]
                 
                 with Timer('step', timing_raw):
 
@@ -126,7 +127,7 @@ class AsyncAgentPPOTrainer(AgentPPOTrainer):
                                 q.put((batch_iter, gen_idx, trajectory, dataproto_traj))    
                         print("replay queue stopped abnormally")
                     # Get the generator function which will yield results as they complete
-                    gen_seq_generator = self.generate_agent_trajectories_async(env, timing_raw=timing_raw, meta_info=batch.meta_info)
+                    gen_seq_generator = self.generate_agent_trajectories_async(envs, agents, timing_raw=timing_raw, meta_info=batch.meta_info)
                     thread = threading.Thread(target=create_replay_queue, args=(gen_seq_generator, replay_queue))
                     thread.start()
                     
@@ -303,10 +304,11 @@ class AsyncAgentPPOTrainer(AgentPPOTrainer):
                 "agent_rollout": True, 
             }
 
-            env = self.init_env(test_batch)
+            envs = self.init_envs(test_batch)
+            agents = [self.agent_class() for _ in range(len(envs))]
 
             test_traj_generator = self.generate_agent_trajectories_async(
-                env, meta_info=test_batch.meta_info
+                envs, agents, meta_info=test_batch.meta_info
             )
 
             trajectories = []
@@ -361,14 +363,8 @@ class AsyncAgentPPOTrainer(AgentPPOTrainer):
 
 
 
-    def generate_agent_trajectories_async(self, env, timing_raw={}, meta_info=None):
-        self.agent.update_env(env)
+    def generate_agent_trajectories_async(self, envs, agents, timing_raw={}, meta_info=None):
+        self.agent_execution_engine.update_envs_and_agents(envs, agents)
 
-        trajectories_generator = self.agent.interact_environment_generator(timing_raw=timing_raw, mode="Token", meta_info=meta_info)
-
-        try:
-            for trajectory in trajectories_generator:
-                yield trajectory
-        finally:
-            # Close environment when done (even if an error occurs)
-            env.close()
+        for trajectory in asyncio.run(self.agent_execution_engine.interact_environment_generator(timing_raw=timing_raw, mode="Token", meta_info=meta_info)):
+            yield trajectory

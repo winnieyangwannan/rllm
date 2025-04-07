@@ -334,12 +334,12 @@ class AgentPPOTrainer(RayPPOTrainer):
                 "agent_rollout": True
             }
 
-            env = self.init_env(test_batch)
+            envs = self.init_envs(test_batch)
+            agents = [self.agent_class() for _ in range(len(envs))]
 
             test_output_gen_batch = self.generate_agent_trajectory(
-                env, meta_info=test_batch.meta_info
+                envs, agents, meta_info=test_batch.meta_info
             )
-            env.close()
 
             test_batch = test_batch.union(test_output_gen_batch)
 
@@ -421,7 +421,8 @@ class AgentPPOTrainer(RayPPOTrainer):
         Returns:
             DataProto: A structured dataset containing input tokens, masks, and rewards.
         """
-
+        from verl.utils.torch_functional import pad_sequence_to_length
+        
         all_initial_tokens_list = []
         all_response_tokens_list = []
         all_masks_list = []
@@ -443,7 +444,9 @@ class AgentPPOTrainer(RayPPOTrainer):
             [torch.flip(i, dims=[0]) for i in all_initial_tokens_list], 
             batch_first=True,  
             padding_value=self.tokenizer.pad_token_id,
-        ).flip(dims=[1])                
+        ).flip(dims=[1])        
+
+        prompts_batch = pad_sequence_to_length(prompts_batch, self.config.data.max_prompt_length, self.tokenizer.pad_token_id, left_pad=True)                   
 
         response_batch = torch.nn.utils.rnn.pad_sequence(
             all_response_tokens_list,
@@ -451,9 +454,13 @@ class AgentPPOTrainer(RayPPOTrainer):
             padding_value=self.tokenizer.pad_token_id,
         )
 
+        max_response_length = self.config.agent.max_trajectory_length - self.config.data.max_prompt_length
+        response_batch = pad_sequence_to_length(response_batch, max_response_length, self.tokenizer.pad_token_id, left_pad=False)           
+
         traj_mask = torch.nn.utils.rnn.pad_sequence(
             all_masks_list, batch_first=True, padding_value=0
         )
+        traj_mask = pad_sequence_to_length(traj_mask, max_response_length, 0, left_pad=False) 
 
         trajectory_batch = torch.concat([prompts_batch, response_batch], dim=1)
 

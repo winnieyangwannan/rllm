@@ -6,7 +6,7 @@ import torch
 
 from rllm.models.web_agent import WebAgent
 from rllm.rllm.models.agent_execution_engine import AgentExecutionEngine
-from rllm.environments.browsergym.browsergym import BatchBrowserGym
+from rllm.environments.browsergym.browsergym import BrowserGym
 
 
 def init_vllm_engine(model_name):
@@ -44,10 +44,7 @@ def main():
             "goal": "Locate a parking lot near the Brooklyn Bridge that open 24 hours. Review the user comments about it.",
         }
     ]
-    env = BatchBrowserGym(
-        tasks=tasks,
-        batch_size=2,
-    )
+    envs = [BrowserGym(task=tasks[0]), BrowserGym(task=tasks[1])]
     output_dir = "./agent_batch_test"
     # Set output directory
     if output_dir:
@@ -59,13 +56,12 @@ def main():
 
     model_path = "meta-llama/Llama-3.1-8B-Instruct"
     engine, tokenizer, sampling_params = init_vllm_engine(model_path)
-
-    agent = AgentExecutionEngine(rollout_engine=engine, engine_name="vllm", tokenizer=tokenizer, agent_class=WebAgent, n_parallel_agents=2, sampling_params=sampling_params, env=env)
+    agents = [WebAgent(), WebAgent()]
+    agent_engine = AgentExecutionEngine(rollout_engine=engine, engine_name="vllm", tokenizer=tokenizer, sampling_params=sampling_params, envs=envs, agents=agents)
     
-    trajectories = agent.interact_environment()
+    trajectories = agent_engine.interact_environment()
         
     torch.save(trajectories, os.path.join(output_dir, 'evaluate_trajectories.pt'))
-    env.close()
 
 if __name__ == "__main__":
     main()

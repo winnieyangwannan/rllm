@@ -1,1 +1,0 @@
-from .browsergym import BatchBrowserGym
