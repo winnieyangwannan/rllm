@@ -16,6 +16,7 @@ import ast
 from rllm.rewards.code_utils.livecodebench import run_test as lcb_run_test
 from rllm.rewards.code_utils.codeforces import run_test as codeforces_run_test
 #from rllm.rewards.code_utils.swebench import swebench_check_correctness
+from rllm.rewards.code_utils.humanevalplus import run_test as humanevalplus_run_test, get_num_test_cases
 from rllm.rewards.code_utils.taco import run_test as taco_run_test
 from rllm.rewards.code_utils.firejail_exec import code_exec_firejail as lc_code_exec
 from rllm.rewards.code_utils.kodcode import code_exec as kod_code_exec
@@ -36,6 +37,36 @@ def extract_code_from_model(model_response: str):
     if not code_blocks:
         return None
     return code_blocks[-1].strip()
+
+
+def clean_code_main_block(code: str) -> str:
+    """
+    Removes `if __name__ == "__main__"` blocks from Python code.
+
+    Args:
+        code (str): The input Python code.
+
+    Returns:
+        str: Cleaned code without the main execution block.
+    """
+    code_lines = code.split('\n')
+    filtered_lines = []
+    skip_block = False
+
+    for line in code_lines:
+        if line.strip().startswith('if __name__ == "__main__"') or line.strip().startswith("if __name__ == '__main__'"):
+            skip_block = True
+            continue
+        if skip_block:
+            # Check if we're out of the block (less indentation)
+            if line.strip() and not line.startswith(' ') and not line.startswith('\t'):
+                skip_block = False
+            else:
+                continue
+        filtered_lines.append(line)
+
+    return '\n'.join(filtered_lines)
+
 
 def check_correctness(tests: Union[List[Dict[str, str]], Dict[str, List[str]]], code: str, test_fn, timeout_per_test: int = 12, max_tests: int = 15) -> bool:
     """
@@ -218,25 +249,30 @@ def kodcode_check_correctness(test: str, code: str, timeout_per_test: int = 5) -
     num_tests = test.count('def test')
 
     # Remove 'if __name__ == "__main__":' block if present
-    code_lines = code.split('\n')
-    filtered_lines = []
-    skip_block = False
-
-    for line in code_lines:
-        if line.strip().startswith('if __name__ == "__main__"') or line.strip().startswith("if __name__ == '__main__'"):
-            skip_block = True
-            continue
-        if skip_block:
-            # Check if we're out of the block (less indentation)
-            if line.strip() and not line.startswith(' ') and not line.startswith('\t'):
-                skip_block = False
-            else:
-                continue
-        filtered_lines.append(line)
-
-    code = '\n'.join(filtered_lines)
+    code = clean_code_main_block(code)
     
     succ, output = kod_code_exec(code, test, timeout_per_test * num_tests)
+    if not succ:
+        print(f"Error in code execution: {output}")
+    return succ
+
+def humanevalplus_check_correctness(test: str, code: str, timeout_per_test: int = 1) -> bool:
+    """
+    Check if generated code passes all HumanEvalPlus test cases.
+    
+    Args:
+        test: String of the test file content
+        code: Generated code to test
+        timeout: Maximum execution time in seconds before killing process
+        runtime_debug: Whether to print debug info during test execution
+    
+    Returns:
+        bool: True if all tests pass and result list exists, False otherwise
+    """
+    code = clean_code_main_block(code)
+
+    num_test_cases = get_num_test_cases(test)
+    succ, output = humanevalplus_run_test(code, test, timeout_per_test * num_test_cases)
     if not succ:
         print(f"Error in code execution: {output}")
     return succ
@@ -285,6 +321,8 @@ class RewardCodeFn(RewardFn):
             is_correct = primeintellect_check_correctness(tests, model_code)
         elif dataset_name == "kodcode":
             is_correct = kodcode_check_correctness(tests, model_code)
+        elif dataset_name == "humanevalplus":
+            is_correct = humanevalplus_check_correctness(tests, model_code)
         else:
             is_correct = check_correctness(tests, model_code, test_fn)
 

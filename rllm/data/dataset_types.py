@@ -45,6 +45,7 @@ class TestDataset:
         CODE_CONTESTS = "CODE_CONTESTS"
         LIVECODEBENCH = "LIVECODEBENCH"
         LEETCODE = "LEETCODE"
+        HUMANEVALPLUS = "HUMANEVALPLUS"
     
     class Web(enum.Enum):
         GAIA = "GAIA"
