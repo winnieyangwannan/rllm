@@ -310,12 +310,9 @@ class RewardCodeFn(RewardFn):
         if dataset_name in ["taco", "apps", "code_contests"]:
             test_fn = taco_run_test
             is_correct = check_correctness(tests, model_code, test_fn)
-        elif dataset_name == "codeforces":
-            test_fn = codeforces_run_test
-            is_correct = check_correctness(tests, model_code, test_fn)
         elif dataset_name == "leetcode":
             is_correct = leetcode_check_correctness(tests, model_code)
-        elif dataset_name == "livecodebench":
+        elif dataset_name in ["livecodebench", "codeforces"]:
             is_correct = lcb_check_correctness_v2(tests, model_code, debug=False)
         elif dataset_name == "primeintellect":
             is_correct = primeintellect_check_correctness(tests, model_code)

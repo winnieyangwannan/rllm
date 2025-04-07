@@ -23,3 +23,4 @@ fire
 vertexai
 e2b_code_interpreter
 firecrawl
+together
