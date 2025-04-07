@@ -10,6 +10,8 @@ from rllm.data.utils import load_dataset, TrainDataset, TestDataset, fetch_live_
 from rllm.rewards.code_reward import RewardCodeFn, extract_code_from_model
 from rllm.rewards.reward_types import RewardInput, RewardConfig, RewardType
 
+HUMANEVALPLUS_PROMPT = "Think step by step: please provide an efficient and self-contained Python script that solves the following problem in a markdown code block:\n\n"
+
 def generate_response(client, prompt, model="o3-mini", reasoning_effort="low"):
     
     # append the prompt to the messages
@@ -24,7 +26,8 @@ def generate_response(client, prompt, model="o3-mini", reasoning_effort="low"):
         response = client.chat.completions.create(
             model=model,
             reasoning_effort=reasoning_effort,
-            messages=messages
+            messages=messages,
+            
         )
     except Exception as e:
         print(f"Error generating response: {e}")
@@ -66,16 +69,19 @@ def generation_loop(client, dataset_name, model, reasoning_effort, output_dir, n
     def process_item(args):
         idx, item = args
         prompt = item["problem"]
-        prompt = fetch_live_code_bench_system_prompt(prompt)
+        if dataset_name != "humanevalplus":
+            prompt = fetch_live_code_bench_system_prompt(prompt)
         response_lst = []
         scores_lst = []
         for i in range(n):
             if skip_generation:
                 response = item["responses"][i]
             else:
+                if dataset_name == "humanevalplus":
+                    prompt = HUMANEVALPLUS_PROMPT + prompt
                 response = generate_response(client, prompt, model=model, reasoning_effort=reasoning_effort)
             
-            if "def solve():" in response:
+            if response and "def solve():" in response:
                 extracted_code = extract_code_from_model(response)
                 # check if extracted_code ends with solve()
                 if extracted_code and not extracted_code.endswith("solve()"):
@@ -85,7 +91,10 @@ def generation_loop(client, dataset_name, model, reasoning_effort, output_dir, n
             response_lst.append(response)
             score = None
             if not skip_rewards:
-                tests = item["tests"].tolist() if not isinstance(item["tests"], list) else item["tests"]
+                if dataset_name == "humanevalplus":
+                    tests = item["tests"]
+                else:
+                    tests = item["tests"].tolist() if not isinstance(item["tests"], list) else item["tests"]
                 input_obj = RewardInput(
                     problem="",
                     problem_type=RewardType.CODE,
@@ -97,7 +106,7 @@ def generation_loop(client, dataset_name, model, reasoning_effort, output_dir, n
             scores_lst.append(score)
         return idx, response_lst, scores_lst
 
-    with concurrent.futures.ThreadPoolExecutor(max_workers=16) as executor:
+    with concurrent.futures.ThreadPoolExecutor(max_workers=32) as executor:
         results = list(tqdm(executor.map(process_item, enumerate(dataset)), total=len(dataset)))
         for idx, response_lst, scores_lst in results:
             all_responses.append((idx, response_lst))
@@ -109,10 +118,11 @@ def generation_loop(client, dataset_name, model, reasoning_effort, output_dir, n
 
     # output the overall accuracy
     # Calculate and display pass@1 and pass@n accuracy
-    pass_at_1 = sum([1 for scores in all_scores if any(score > 0 for score in scores[:1])]) / len(all_scores)
-    pass_at_n = sum([1 for scores in all_scores if any(score > 0 for score in scores)]) / len(all_scores)
-    print(f"Pass@1: {pass_at_1:.4f}")
-    print(f"Pass@{n}: {pass_at_n:.4f}")
+    if not skip_rewards:
+        pass_at_1 = sum([1 for scores in all_scores if any(score > 0 for score in scores[:1])]) / len(all_scores)
+        pass_at_n = sum([1 for scores in all_scores if any(score > 0 for score in scores)]) / len(all_scores)
+        print(f"Pass@1: {pass_at_1:.4f}")
+        print(f"Pass@{n}: {pass_at_n:.4f}")
 
     df["responses"] = all_responses
     df["scores"] = all_scores
@@ -141,7 +151,7 @@ def main():
     client = OpenAI()
 
     try:
-        generation_loop(client, args.dataset_name, "o1-2024-12-17", "low", args.output_dir, n=1)
+        generation_loop(client, args.dataset_name, "o3-mini", "low", args.output_dir, n=1)
     except Exception as e:
         print(f"An error occurred: {e}")
         # print stack trace

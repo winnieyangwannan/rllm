@@ -11,6 +11,8 @@ from rllm.data.utils import load_dataset, TrainDataset, TestDataset, fetch_live_
 from rllm.rewards.code_reward import RewardCodeFn, extract_code_from_model
 from rllm.rewards.reward_types import RewardInput, RewardConfig, RewardType
 
+HUMANEVALPLUS_PROMPT = "Think step by step: please provide an efficient and self-contained Python script that solves the following problem in a markdown code block:\n\n"
+
 def generate_response(client, prompt, model="deepseek-ai/DeepSeek-R1"):
     # append the prompt to the messages
     messages = [
@@ -74,13 +76,16 @@ def generation_loop(client, dataset_name, model, output_dir, n=1, skip_rewards=F
     def process_item(args):
         idx, item = args
         prompt = item["problem"]
-        prompt = fetch_live_code_bench_system_prompt(prompt)
+        if dataset_name != "humanevalplus":
+            prompt = fetch_live_code_bench_system_prompt(prompt)
         response_lst = []
         scores_lst = []
         for i in range(n):
             if skip_generation:
                 response = item["responses"][i]
             else:
+                if dataset_name == "humanevalplus":
+                    prompt = HUMANEVALPLUS_PROMPT + prompt
                 response = generate_response(client, prompt, model=model)
             
             if "def solve():" in response:
@@ -93,7 +98,10 @@ def generation_loop(client, dataset_name, model, output_dir, n=1, skip_rewards=F
             response_lst.append(response)
             score = None
             if not skip_rewards:
-                tests = item["tests"].tolist() if not isinstance(item["tests"], list) else item["tests"]
+                if dataset_name == "humanevalplus":
+                    tests = item["tests"]
+                else:
+                    tests = item["tests"].tolist() if not isinstance(item["tests"], list) else item["tests"]
                 input_obj = RewardInput(
                     problem="",
                     problem_type=RewardType.CODE,
