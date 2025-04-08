@@ -68,24 +68,21 @@ def main_task(config, compute_score=None):
     mapping = {
         Role.Actor: actor_pool_id,
         Role.Rollout: rollout_pool_id,
-        Role.RefPolicy: actor_pool_id,
     }
     resource_pool_manager = ResourcePoolManager(resource_pool_spec=resource_pool_spec, mapping=mapping)
-
 
     reward_fn = NaiveRewardManager(tokenizer=tokenizer, num_examine=0, compute_score=compute_score)
     val_reward_fn = NaiveRewardManager(tokenizer=tokenizer, num_examine=1, compute_score=compute_score)
 
     role_worker_mapping = {
         Role.Actor: ray.remote(ActorRolloutRefWorker),
-        Role.Rollout: ray.remote(ActorRolloutRefWorker),
-        Role.RefPolicy: ray.remote(ActorRolloutRefWorker),
+        Role.Rollout: ray.remote(max_concurrency=32)(ActorRolloutRefWorker)
     }
     
     # Below are agent specific initialization
     env_class = ENV_CLASS_MAPPING[config.env.name]
     agent_class = AGENT_CLASS_MAPPING[config.agent.name]
-    setup_environment(config)    
+    setup_environment(config)      
 
     trainer = AsyncAgentPPOTrainer(config=config,
                             tokenizer=tokenizer,

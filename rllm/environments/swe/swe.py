@@ -72,7 +72,7 @@ import json
 #     def close(self):
 #         if self.env is not None:
 #             self.env.close()
-
+#     @property
 #     def env_id(self):
 #         return self._env_id
     

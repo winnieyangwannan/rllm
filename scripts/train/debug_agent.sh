@@ -55,7 +55,7 @@ python3 -m rllm.train.train_agent_ppo \
     actor_rollout_ref.rollout.name=vllm \
     actor_rollout_ref.rollout.async_engine=True \
     actor_rollout_ref.rollout.temperature=0.6 \
-    +actor_rollout_ref.rollout.val_temperature=0.6 \
+    actor_rollout_ref.rollout.val_kwargs.temperature=0.6 \
     actor_rollout_ref.rollout.gpu_memory_utilization=0.5 \
     actor_rollout_ref.rollout.n=1 \
     +actor_rollout_ref.rollout.n_val=1 \

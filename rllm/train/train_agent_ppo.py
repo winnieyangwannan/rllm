@@ -103,16 +103,14 @@ def main_task(config, compute_score=None):
     from verl.utils import hf_tokenizer
     tokenizer = hf_tokenizer(local_path)
 
-    actor_pool_id = 'actor_pool'
-    rollout_pool_id = 'rollout_pool'
-    num_training_gpus = config.trainer.n_training_gpus_per_node
+    global_pool_id = 'global_pool'
     resource_pool_spec = {
-        actor_pool_id: [num_training_gpus] * config.trainer.nnodes,
-        rollout_pool_id: [config.trainer.n_gpus_per_node - num_training_gpus] * config.trainer.nnodes,
+        global_pool_id: [config.trainer.n_gpus_per_node] * config.trainer.nnodes,
     }
     mapping = {
-        Role.Actor: actor_pool_id,
-        Role.Rollout: rollout_pool_id,
+        Role.ActorRollout: global_pool_id,
+        Role.Critic: global_pool_id,
+        Role.RefPolicy: global_pool_id,
     }
     resource_pool_manager = ResourcePoolManager(resource_pool_spec=resource_pool_spec, mapping=mapping)
 
@@ -121,8 +119,9 @@ def main_task(config, compute_score=None):
     val_reward_fn = NaiveRewardManager(tokenizer=tokenizer, num_examine=1, compute_score=compute_score)
 
     role_worker_mapping = {
-        Role.Actor: ray.remote(ActorRolloutRefWorker),
-        Role.Rollout: ray.remote(ActorRolloutRefWorker)
+        Role.ActorRollout: ray.remote(ActorRolloutRefWorker),
+        Role.Critic: ray.remote(CriticWorker),
+        Role.RefPolicy: ray.remote(ActorRolloutRefWorker)
     }
     
     # Below are agent specific initialization

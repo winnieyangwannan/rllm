@@ -23,6 +23,7 @@ from verl.trainer.ppo.ray_trainer import (
     reduce_metrics,
     _timer,
 )
+from verl.single_controller.ray import RayResourcePool, RayWorkerGroup, RayClassWithInitArgs
 
 from rllm.models.agent_execution_engine import AgentExecutionEngine
 
@@ -40,9 +41,9 @@ class AgentPPOTrainer(RayPPOTrainer):
             env_class=None,
             agent_class=None,
         ):
-        super().__init__(config, tokenizer, role_worker_mapping,
-                         resource_pool_manager, ray_worker_group_cls,
-                         reward_fn, val_reward_fn)
+        super().__init__(config=config, tokenizer=tokenizer, role_worker_mapping=role_worker_mapping,
+                         resource_pool_manager=resource_pool_manager, ray_worker_group_cls=ray_worker_group_cls,
+                         reward_fn=reward_fn, val_reward_fn=val_reward_fn)
         self.env_class = env_class
         self.agent_class = agent_class
     
@@ -67,6 +68,50 @@ class AgentPPOTrainer(RayPPOTrainer):
             max_trajectory_length=self.config.agent.max_trajectory_length,
             max_prompt_length=self.config.data.max_prompt_length,
         )
+    # def init_workers(self):
+    #     """Init resource pool and worker group"""
+    #     self.resource_pool_manager.create_resource_pool()
+
+    #     self.resource_pool_to_cls = {pool: {} for pool in self.resource_pool_manager.resource_pool_dict.values()}
+
+    #     assert Role.Actor in self.role_worker_mapping and Role.Rollout in self.role_worker_mapping, "Actor and Rollout must be in role_worker_mapping"
+    #     actor_resource_pool = self.resource_pool_manager.get_resource_pool(Role.Actor)
+    #     # actor_gpu_ids = actor_resource_pool.gpu_assignments if isinstance(actor_resource_pool, RayResourcePool) else None
+
+    #     actor_cls = RayClassWithInitArgs(
+    #         cls=self.role_worker_mapping[Role.Actor],
+    #         config=self.config.actor_rollout_ref,
+    #         role='actor',
+    #         reward_config=self.config.reward_model,
+    #     )
+    #     self.resource_pool_to_cls[actor_resource_pool]['actor'] = actor_cls
+
+    #     # Get rollout resource pool
+    #     rollout_resource_pool = self.resource_pool_manager.get_resource_pool(Role.Rollout)
+    #     # rollout_gpu_ids = rollout_resource_pool.gpu_assignments if isinstance(rollout_resource_pool, RayResourcePool) else None
+    #     rollout_cls = RayClassWithInitArgs(
+    #         cls=self.role_worker_mapping[Role.Rollout],
+    #         config=self.config.actor_rollout_ref,
+    #         role='rollout',
+    #         reward_config=self.config.reward_model,
+    #     )
+    #     self.resource_pool_to_cls[rollout_resource_pool]['rollout'] = rollout_cls
+
+    #     self.actor_wg = RayWorkerGroup(resource_pool=actor_resource_pool, ray_cls_with_init=actor_cls)
+    #     self.rollout_wg = RayWorkerGroup(resource_pool=rollout_resource_pool, ray_cls_with_init=rollout_cls)
+
+    #     self.actor_wg.init_model()
+    #     self.rollout_wg.init_model()
+
+    #     self.agent_execution_engine = AgentExecutionEngine(
+    #         rollout_engine=self.rollout_wg,
+    #         engine_name="verl",
+    #         tokenizer=self.tokenizer,
+    #         model_path=self.config.actor_rollout_ref.model.path,
+    #         episode_len=self.config.agent.trajectory_episode_len,
+    #         max_trajectory_length=self.config.agent.max_trajectory_length,
+    #         max_prompt_length=self.config.data.max_prompt_length,
+    #     )
 
     def init_envs(self, batch):
         """
@@ -243,7 +288,6 @@ class AgentPPOTrainer(RayPPOTrainer):
                             adv_estimator=self.config.algorithm.adv_estimator,
                             gamma=self.config.algorithm.gamma,
                             lam=self.config.algorithm.lam,
-                            num_repeat=1,
                         )
 
                     # balance the number of valid tokens on each dp rank.
@@ -321,7 +365,7 @@ class AgentPPOTrainer(RayPPOTrainer):
         for test_data in self.val_dataloader:
             test_batch = DataProto.from_single_dict(test_data)
 
-            n_val_samples = self.config.actor_rollout_ref.rollout.n_val
+            n_val_samples = self.config.actor_rollout_ref.rollout.val_kwargs.n
             test_batch = test_batch.repeat(repeat_times=n_val_samples, interleave=True)
             test_batch.pop(["input_ids", "attention_mask", "position_ids"])  # these are not needed for environment based interaction
             test_batch.meta_info = {
@@ -330,7 +374,7 @@ class AgentPPOTrainer(RayPPOTrainer):
                 "recompute_log_prob": False,
                 "do_sample": False,
                 "validate": True,
-                "val_temperature": self.config.actor_rollout_ref.rollout.val_temperature,
+                "val_temperature": self.config.actor_rollout_ref.rollout.val_kwargs.temperature,
                 "agent_rollout": True
             }
 
@@ -482,7 +526,7 @@ class AgentPPOTrainer(RayPPOTrainer):
                 score_batch[i, last_valid_idx] = traj_score
                 environment_score_batch[i, last_valid_idx] = environment_scores[i]
 
-        print(f"Shapes after convertion: complete trajectory: {trajectory_batch.size()}, responses: {response_batch.size()}, prompts: {prompts_batch.size()}, traj_mask: {traj_mask.size()}")
+        # print(f"Shapes after convertion: complete trajectory: {trajectory_batch.size()}, responses: {response_batch.size()}, prompts: {prompts_batch.size()}, traj_mask: {traj_mask.size()}")
 
         tensor_batch = {
             "input_ids": trajectory_batch,

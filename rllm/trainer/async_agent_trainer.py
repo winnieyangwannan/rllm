@@ -4,7 +4,8 @@ import torch
 from copy import deepcopy
 import time
 import threading
-import queue
+from threading import Thread
+from queue import Queue
 import asyncio
 import numpy as np
 
@@ -19,30 +20,80 @@ from verl.trainer.ppo.ray_trainer_pipeline import (
 )
 
 from verl import DataProto
-
 from verl.trainer.ppo.ray_trainer import (
+    RayPPOTrainer, 
+    Role, 
+    WorkerType,
+    ResourcePoolManager,
+    RayWorkerGroup,
     compute_timing_metrics, 
     compute_data_metrics,
+    dataprotoitem_to_dataproto,
     compute_advantage,
     reduce_metrics,
-    RayPPOTrainer,
+    _timer,
 )
+from verl.single_controller.ray import RayResourcePool, RayWorkerGroup, RayClassWithInitArgs
 
 
 
 class AsyncAgentPPOTrainer(AgentPPOTrainer):
 
-    def init_workers(self):
-        super(RayPPOTrainer, self).init_workers() # use init_workers from RayTrainer
-        # Initialize additional agent class 
-        assert not self.hybrid_engine, "PPO pipeline trainer does not support hybrid engine, assumes Rollout and Actor are not in the different worker group"
+    # def init_workers(self):
+    #     super(RayPPOTrainer, self).init_workers() # use init_workers from RayTrainer
+    #     # Initialize additional agent class 
+    #     assert not self.hybrid_engine, "PPO pipeline trainer does not support hybrid engine, assumes Rollout and Actor are not in the different worker group"
 
-        assert self.config.actor_rollout_ref.rollout.async_engine, "Must use asynchronous engine for pipelined agent training"
+    #     assert self.config.actor_rollout_ref.rollout.async_engine, "Must use asynchronous engine for pipelined agent training"
         
-        agent_rollout_wg = self.rollout_wg
+    #     agent_rollout_wg = self.rollout_wg
+
+    #     self.agent_execution_engine = AsyncAgentExecutionEngine(
+    #         rollout_engine=agent_rollout_wg,
+    #         engine_name="verl",
+    #         tokenizer=self.tokenizer,
+    #         model_path=self.config.actor_rollout_ref.model.path,
+    #         episode_len=self.config.agent.trajectory_episode_len,
+    #         max_trajectory_length=self.config.agent.max_trajectory_length,
+    #         max_prompt_length=self.config.data.max_prompt_length,
+    #     )
+    def init_workers(self):
+        """Init resource pool and worker group"""
+        self.resource_pool_manager.create_resource_pool()
+
+        self.resource_pool_to_cls = {pool: {} for pool in self.resource_pool_manager.resource_pool_dict.values()}
+
+        assert Role.Actor in self.role_worker_mapping and Role.Rollout in self.role_worker_mapping, "Actor and Rollout must be in role_worker_mapping"
+        actor_resource_pool = self.resource_pool_manager.get_resource_pool(Role.Actor)
+        # actor_gpu_ids = actor_resource_pool.gpu_assignments if isinstance(actor_resource_pool, RayResourcePool) else None
+
+        actor_cls = RayClassWithInitArgs(
+            cls=self.role_worker_mapping[Role.Actor],
+            config=self.config.actor_rollout_ref,
+            role='actor',
+            reward_config=self.config.reward_model,
+        )
+        self.resource_pool_to_cls[actor_resource_pool]['actor'] = actor_cls
+
+        # Get rollout resource pool
+        rollout_resource_pool = self.resource_pool_manager.get_resource_pool(Role.Rollout)
+        # rollout_gpu_ids = rollout_resource_pool.gpu_assignments if isinstance(rollout_resource_pool, RayResourcePool) else None
+        rollout_cls = RayClassWithInitArgs(
+            cls=self.role_worker_mapping[Role.Rollout],
+            config=self.config.actor_rollout_ref,
+            role='rollout',
+            reward_config=self.config.reward_model,
+        )
+        self.resource_pool_to_cls[rollout_resource_pool]['rollout'] = rollout_cls
+
+        self.actor_wg = RayWorkerGroup(resource_pool=actor_resource_pool, ray_cls_with_init=actor_cls)
+        self.rollout_wg = RayWorkerGroup(resource_pool=rollout_resource_pool, ray_cls_with_init=rollout_cls)
+
+        self.actor_wg.init_model()
+        self.rollout_wg.init_model()
 
         self.agent_execution_engine = AsyncAgentExecutionEngine(
-            rollout_engine=agent_rollout_wg,
+            rollout_engine=self.rollout_wg,
             engine_name="verl",
             tokenizer=self.tokenizer,
             model_path=self.config.actor_rollout_ref.model.path,
@@ -92,7 +143,7 @@ class AsyncAgentPPOTrainer(AgentPPOTrainer):
         # we start from step 1
         self.global_steps += 1
 
-        replay_queue = SortedQueue() #queue.Queue()
+        replay_queue = Queue()
         total_mini_batch_iters = 0
         for epoch in range(self.config.trainer.total_epochs):
             for batch_iter, batch_dict in enumerate(self.train_dataloader):
@@ -120,42 +171,38 @@ class AsyncAgentPPOTrainer(AgentPPOTrainer):
                     def create_replay_queue(generator, q):
                         with Timer('gen', timing_raw):
                             for gen_idx, trajectory in enumerate(generator):
-                                if trajectory is None:
-                                    print("replay queue stopped normally")
-                                    return
-                                dataproto_traj = self._transform_agent_trajectories(trajectories=[trajectory])
-                                q.put((batch_iter, gen_idx, trajectory, dataproto_traj))    
-                        print("replay queue stopped abnormally")
+                                q.put((batch_iter, gen_idx, trajectory))    
+
                     # Get the generator function which will yield results as they complete
                     gen_seq_generator = self.generate_agent_trajectories_async(envs, agents, timing_raw=timing_raw, meta_info=batch.meta_info)
                     thread = threading.Thread(target=create_replay_queue, args=(gen_seq_generator, replay_queue))
                     thread.start()
                     
-                    ppo_train_batch_size = self.config.data.train_batch_size
+                    ppo_train_batch_size =  self.config.data.train_batch_size
+                    total_batch_size = ppo_train_batch_size * self.config.actor_rollout_ref.rollout.n
                     ppo_mini_batch_size = self.config.actor_rollout_ref.actor.ppo_mini_batch_size
-                    assert ppo_train_batch_size % ppo_mini_batch_size == 0, "PPO mini batch size must be a divisor of the total training batch size"
-                    ppo_step_minibatch_iter = ppo_train_batch_size // ppo_mini_batch_size
-                    num_loops = ppo_step_minibatch_iter +1 if batch_iter > 0 else  ppo_step_minibatch_iter 
+                    assert total_batch_size % ppo_mini_batch_size == 0, "PPO mini batch size must be a divisor of the total training batch size"
+                    ppo_step_minibatch_iter = total_batch_size // ppo_mini_batch_size
+                    num_loops = ppo_step_minibatch_iter #ppo_step_minibatch_iter +1 if batch_iter > 0 else  ppo_step_minibatch_iter 
                     # Initialize Empty data proto
                     training_batch = []
                     for mini_batch_iter in range(num_loops):
-                        print(f"mini_batch_iter step: {mini_batch_iter + 1} / {num_loops}", flush=True)
+                        print(f"mini_batch_iter: {mini_batch_iter + 1} / {num_loops}", flush=True)
                         if mini_batch_iter == num_loops - 1:
                             while True:
                                 if replay_queue.qsize() >= ppo_mini_batch_size:
                                     break
-                                print("keep waiting", flush=True)
                                 time.sleep(1)
                             break
                         mini_batch_metrics = {}
                         start_time = time.perf_counter()         
                         with Timer('pipeline_gen', timing_raw):
-                            trajecotires = []
+                            trajectories = []
                             for _ in range(ppo_mini_batch_size):
-                                _, _, traj, _ = replay_queue.get()
-                                trajecotires.append(traj)
-                            mini_batch = self._transform_agent_trajectories(trajectories=trajecotires)
-                            mini_batch.non_tensor_batch["uid"] = np.array([traj["uid"] for traj in trajecotires], dtype=object)
+                                _, _, traj = replay_queue.get()
+                                trajectories.append(traj)
+                            mini_batch = self._transform_agent_trajectories(trajectories=trajectories)
+                            mini_batch.non_tensor_batch["uid"] = np.array([traj["uid"] for traj in trajectories], dtype=object)
                         end_time = time.perf_counter()
                         print(f"Generate mini batch took {end_time - start_time:.2f} seconds")
                         
@@ -214,7 +261,7 @@ class AsyncAgentPPOTrainer(AgentPPOTrainer):
                                                   adv_estimator=self.config.algorithm.adv_estimator,
                                                   gamma=self.config.algorithm.gamma,
                                                   lam=self.config.algorithm.lam)
-                        print(f"rebalance started", flush=True)
+
                         self._balance_batch(mini_batch, metrics=mini_batch_metrics)
                         # compute global_valid tokens
                         mini_batch.meta_info['global_token_num'] = torch.sum(mini_batch.batch['attention_mask'], dim=-1).tolist()
@@ -229,9 +276,6 @@ class AsyncAgentPPOTrainer(AgentPPOTrainer):
                         training_batch.append(mini_batch)
                         update_metrics(metrics, mini_batch_metrics)
                         total_mini_batch_iters += 1
-                        print("one more mini batch done", flush=True)
-
-                    print("all mini batch done", flush=True)
 
                     # last_iter_mini_batch_iter = (mini_batch_iter + last_iter_mini_batch_iter - 1) % ppo_step_minibatch_iter
                     with Timer('rollout_model_update', timing_raw):
@@ -268,13 +312,12 @@ class AsyncAgentPPOTrainer(AgentPPOTrainer):
                 logger.log(data=metrics, step=self.global_steps)
                 self.global_steps += 1
 
-                if self.global_steps >= self.total_training_steps:
+                if self.val_reward_fn is not None and self.global_steps >= self.total_training_steps:
 
                     # perform validation after training
-                    if self.val_reward_fn is not None:
-                        val_metrics = self._validate_agent()
-                        pprint(f'Final validation metrics: {val_metrics}')
-                        logger.log(data=val_metrics, step=self.global_steps)
+                    val_metrics = self._validate_agent()
+                    pprint(f'Final validation metrics: {val_metrics}')
+                    logger.log(data=val_metrics, step=self.global_steps)
                     if self.config.trainer.save_freq > 0 and \
                             (self.global_steps - 1) % self.config.trainer.save_freq != 0:
                         with Timer('save_checkpoint', timing_raw):
@@ -289,7 +332,7 @@ class AsyncAgentPPOTrainer(AgentPPOTrainer):
         for test_data in self.val_dataloader:
             test_batch = DataProto.from_single_dict(test_data)
 
-            n_val_samples = self.config.actor_rollout_ref.rollout.n_val
+            n_val_samples = self.config.actor_rollout_ref.rollout.val_kwargs.n
             test_batch = test_batch.repeat(repeat_times=n_val_samples, interleave=True)
             test_batch.pop(
                 ["input_ids", "attention_mask", "position_ids"]
@@ -300,7 +343,7 @@ class AsyncAgentPPOTrainer(AgentPPOTrainer):
                 "recompute_log_prob": False,
                 "do_sample": False,
                 "validate": True,
-                "val_temperature": self.config.actor_rollout_ref.rollout.val_temperature,
+                "val_temperature": self.config.actor_rollout_ref.rollout.val_kwargs.temperature,
                 "agent_rollout": True, 
             }
 
@@ -318,7 +361,7 @@ class AsyncAgentPPOTrainer(AgentPPOTrainer):
 
             if test_batch.meta_info["recompute_log_prob"]:
                 with torch.no_grad():
-                    output = self.actor_rollout_wg.compute_log_prob(test_output_gen_batch)
+                    output = self.actor_wg.compute_log_prob(test_output_gen_batch)
                     test_output_gen_batch = test_output_gen_batch.union(output)
 
             test_batch = test_batch.union(test_output_gen_batch)
@@ -365,6 +408,19 @@ class AsyncAgentPPOTrainer(AgentPPOTrainer):
 
     def generate_agent_trajectories_async(self, envs, agents, timing_raw={}, meta_info=None):
         self.agent_execution_engine.update_envs_and_agents(envs, agents)
+        queue = Queue()
 
-        for trajectory in asyncio.run(self.agent_execution_engine.interact_environment_generator(timing_raw=timing_raw, mode="Token", meta_info=meta_info)):
-            yield trajectory
+        def runner():
+            async def consume():
+                async for item in self.agent_execution_engine.interact_environment_generator(timing_raw=timing_raw, mode="Token", meta_info=meta_info):
+                    queue.put(item)
+                queue.put(None)  # sentinel to signal done
+            asyncio.run(consume())
+
+        Thread(target=runner, daemon=True).start()
+
+        while True:
+            item = queue.get()
+            if item is None:
+                break
+            yield item

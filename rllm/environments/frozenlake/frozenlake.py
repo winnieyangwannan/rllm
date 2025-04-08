@@ -165,6 +165,9 @@ class FrozenLakeEnv(GymFrozenLakeEnv, BaseEnv):
         size = kwargs.pop('size', 8)
         p = kwargs.pop('p', 0.8)
         seed = kwargs.pop('seed', None)
+        self.seed = seed
+        self.size = size
+        self.p = p
         if desc is None:
             random_map = generate_random_map(size=size, p=p, seed=seed)
         else:
@@ -222,7 +225,7 @@ class FrozenLakeEnv(GymFrozenLakeEnv, BaseEnv):
                 is_slippery=self.env_kwargs["is_slippery"],
             )
         GymFrozenLakeEnv.reset(self, seed=seed)
-        return self.render(mode)
+        return self.render(mode), {}
     
     def finished(self):
         player_pos = self._get_player_position()
@@ -241,7 +244,7 @@ class FrozenLakeEnv(GymFrozenLakeEnv, BaseEnv):
         - Check if the action is effective (whether player moves in the env).
         """
         if self.success():
-            return self.render(), 0, True, {"action_is_effective": False}
+            return self.render(), 0, True, False,  {"action_is_effective": False}
         
         if not action:
             action = self.INVALID_ACTION
@@ -250,14 +253,14 @@ class FrozenLakeEnv(GymFrozenLakeEnv, BaseEnv):
         assert not self.success(), "Agent has already reached the goal or hole"
 
         if action == self.INVALID_ACTION: # no penalty for invalid action
-            return self.render(), 0, False, {"action_is_effective": False}
+            return self.render(), 0, False, False, {"action_is_effective": False}
         
         prev_player_position = int(self.s)
 
         player_pos, reward, done, _, prob = GymFrozenLakeEnv.step(self, self.action_map[action])
 
         obs = self.render()
-        return obs, reward, done, {"action_is_effective": prev_player_position != int(player_pos)}
+        return obs, reward, done, False, {"action_is_effective": prev_player_position != int(player_pos)}
     
      
     def render(self, mode='tiny_rgb_array'):
@@ -298,6 +301,7 @@ class FrozenLakeEnv(GymFrozenLakeEnv, BaseEnv):
             lookup = lambda cell: self.GRID_LOOKUP.get(cell, "?")
             return "\n".join("".join(lookup(cell) for cell in row) for row in room_state)
 
+    @property
     def env_id(self):
         return f"{self.seed}-{self.size}-{self.p}"
     
@@ -305,7 +309,7 @@ class FrozenLakeEnv(GymFrozenLakeEnv, BaseEnv):
     def from_extra_info(extra_info) -> "FrozenLakeEnv":
         return FrozenLakeEnv(size=extra_info["size"], seed=extra_info["seed"], p=extra_info["p"])
 
-from ..batch_env import BatchedEnv
+# from ..batch_env import BatchedEnv
 
 # class BatchFrozenLakeEnv(BatchedEnv):
 #     def __init__(

@@ -58,7 +58,6 @@ class Scheduler:
         )
         
         # Wait for the result
-        done_refs, _ = ray.wait([obj_ref], num_returns=1)
-        output = ray.get(done_refs[0])
-        return output
+        output = await obj_ref
+        return output[0]
        

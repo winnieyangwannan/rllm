@@ -31,6 +31,7 @@ class AgentExecutionEngine:
         rollout_engine_args={},
         **kwargs,
     ):
+        assert max_trajectory_length > max_prompt_length, f"Max trajectory length {max_trajectory_length} must be greater than max prompt length {max_prompt_length}."
         self.rollout_engine = rollout_engine
         self.tokenizer = tokenizer
         self.engine_name = engine_name
@@ -85,7 +86,7 @@ class AgentExecutionEngine:
             for i, traj in enumerate(trajectories)
         ]
 
-        print("messages:", prompts)
+        # print("messages:", prompts)
 
         batch = self._convert_prompt_verl(prompts, **kwargs)
 
@@ -245,7 +246,7 @@ class AgentExecutionEngine:
                 seq_idxs,
                 **kwargs,
             )
-
+            assert len(gen_actions) == len(seq_idxs), f"Number of actions {len(gen_actions)} returned does not match number of trajectories {len(seq_idxs)}"
             # ToDO (Sijun): What is the purpose of this?
             for i, idx in enumerate(seq_idxs):
                 if isinstance(gen_actions[i], str):
@@ -345,9 +346,8 @@ class AgentExecutionEngine:
             - Trajectories content in the Token version has truncation due to max_trajectory_length reflected, but not in Text or Conversation.
 
         """
-        assert self.env, f"Env cannot be empty, but got {self.env}"
-        assert hasattr(self.env, "batch_size"), "Env does not have batch_size attribute"
-        env_batch_size = self.env.batch_size
+        assert self.envs, f"Env cannot be empty, but got {self.envs}"
+        env_batch_size = len(self.envs)
         assert (
             env_batch_size == self.n_parallel_agents
         ), "Number of parallel environments should match number of parallel agents."
@@ -377,15 +377,20 @@ class AgentExecutionEngine:
                 for i, obs in enumerate(observations):
                     trajectories[i].append({"next_observation": obs})
 
-                    initial_messages = self.agents[i].format_observation_as_messages(obs)
-
-                    prompt_tokens, _ = self._convert_messages_to_tokens_and_masks(initial_messages)
+                    # initial_messages = self.agents[i].format_observation_as_messages(obs)
+                    initial_msg = {
+                        "role": "user",
+                        "content": self.agents[i].convert_observation_to_string(obs, with_system_prompt=True),
+                    }
+                    prompt_tokens, _ = self._convert_message_to_tokens_and_masks(initial_msg)
+                    # prompt_tokens, _ = self._convert_messages_to_tokens_and_masks(initial_messages)
 
                     max_prompt_token_len = max(max_prompt_token_len, len(prompt_tokens))
                     all_prompt_tokens[i] = prompt_tokens
 
                     # Update conversation version
-                    all_conversations[i].extend(initial_messages)
+                    all_conversations[i].append(initial_msg)
+                    # all_conversations[i].extend(initial_messages)
 
                 if max_prompt_token_len > self.max_prompt_length:
                     self.reset()
@@ -393,7 +398,7 @@ class AgentExecutionEngine:
                 max_prompt_token_len = self.max_prompt_length
                     
                 # get model actions and responses
-                while not all(batch_done) and steps < self.episode_len:
+                while not all(batch_done) and steps < self.max_episode_len:
                     steps += 1
                     with _timer("get_actions", timing_raw):
                         actions, responses, seq_idxs = self._safe_get_actions(
@@ -413,20 +418,21 @@ class AgentExecutionEngine:
                     except Exception as e:
                         print(e)
                         self.reset()
+                        raise(e)
 
                     colorful_print(
                         f"Step {steps} in environment interation done. {len(actions)} actions generated. responses: {responses}, actions: {actions}\n",
                         "green",
                     )
 
-                    for i in seq_idxs:
-                        if batch_done[i]:
+                    for i, idx in enumerate(seq_idxs):
+                        if batch_done[idx]:
                             raise Exception(f"Trajectory has new state but is done. Something went wrong. Index {i}")
 
                         # Update the agent
-                        self.agents[i].update(
+                        self.agents[idx].update(
                             actions[i],
-                            observations[i],
+                            observations[idx],
                             next_observations[i],
                             rewards[i],
                             terminateds[i],
@@ -438,32 +444,33 @@ class AgentExecutionEngine:
                         assistant_msg = {"role": "assistant", "content": responses[i]}
 
                         next_obs = next_observations[i]
-                        # next_obs_txt = self.agents[i].convert_observation_to_string(next_obs, with_system_prompt=False)
-                        # env_msg = {"role": "user", "content": next_obs_txt}
+                        next_obs_txt = self.agents[idx].convert_observation_to_string(next_obs, with_system_prompt=False)
+                        env_msg = {"role": "user", "content": next_obs_txt}
 
-                        env_messages = self.agents[i].format_observation_as_messages(next_obs)
-                        env_msg_tokens, env_msg_masks = self._convert_messages_to_tokens_and_masks(env_messages)
+                        # env_msg = self.agents[idx].format_observation_as_messages(next_obs)
+                        # env_msg_tokens, env_msg_masks = self._convert_messages_to_tokens_and_masks(env_messages)
 
                         assistant_msg_tokens, assistant_msg_masks = self._convert_message_to_tokens_and_masks(assistant_msg)
-                        # env_msg_tokens, env_msg_masks = self._convert_message_to_tokens_and_masks(env_msg)
+                        env_msg_tokens, env_msg_masks = self._convert_message_to_tokens_and_masks(env_msg)
 
                         # Reached maximum number of tokens for the trajectory
-                        if all_response_token_lens[i] + len(assistant_msg_tokens) + len(env_msg_tokens) + max_prompt_token_len >= self.max_trajectory_length:
+                        if all_response_token_lens[idx] + len(assistant_msg_tokens) + len(env_msg_tokens) + max_prompt_token_len >= self.max_trajectory_length:
                             # Truncation length
-                            truncation_length = self.max_trajectory_length - max_prompt_token_len - all_response_token_lens[i]
+                            truncation_length = self.max_trajectory_length - max_prompt_token_len - all_response_token_lens[idx]
                             # Truncate the response and masks
                             truncated_response_tokens = (assistant_msg_tokens + env_msg_tokens)[:truncation_length]
                             truncated_response_masks = (assistant_msg_masks + env_msg_masks)[:truncation_length]
                             # Update the token version of trajectory (Though it is truncated)
-                            all_response_tokens[i].extend(truncated_response_tokens)
-                            all_response_masks[i].extend(truncated_response_masks)
+                            all_response_tokens[idx].extend(truncated_response_tokens)
+                            all_response_masks[idx].extend(truncated_response_masks)
                             # Update conversation (Though it is truncated)
-                            all_conversations[i].append(assistant_msg)
-                            all_conversations[i].extend(env_messages)
+                            all_conversations[idx].append(assistant_msg)
+                            all_conversations[idx].append(env_msg)
+                            # all_conversations[idx].extend(env_messages)
                             # Update trajectory (Though it is truncated)
-                            trajectories[i].append(
+                            trajectories[idx].append(
                                 {
-                                    "observation": observations[i],
+                                    "observation": observations[idx],
                                     "next_observation": next_observations[i],
                                     "reward": 0, # TODO: May need to update this to be minimum environment score in the future
                                     "done": terminateds[i] or truncateds[i],
@@ -473,36 +480,37 @@ class AgentExecutionEngine:
                                     "truncated": True,
                                 }
                             )
-                            batch_done[i] = True
+                            batch_done[idx] = True
                             colorful_print(
-                                f"Trajectory {i} completed due to maximum trajectory length reached. But entire Text or Conversation will be returned. Reward is {rewards[i]}. \n",
+                                f"Trajectory {idx} completed due to maximum trajectory length reached. But entire Text or Conversation will be returned. Reward is {rewards[i]}. \n",
                                 "yellow",
                             )
                             continue
 
                         # If an environment is done, handle the completed trajectory
                         if terminateds[i] or truncateds[i]:
-                            batch_done[i] = True
+                            batch_done[idx] = True
                             colorful_print(
-                        f"Trajectory {i} completed due to {'terminaion' if terminateds[i] else 'truncation'}. Reward is {rewards[i]}. \n",
+                                f"Trajectory {idx} completed due to {'terminaion' if terminateds[i] else 'truncation'}. Reward is {rewards[i]}. \n",
                                 "green",
                             )
 
                         # Update repsonse token length
-                        all_response_token_lens[i] += len(assistant_msg_tokens) + len(env_msg_tokens)
+                        all_response_token_lens[idx] += len(assistant_msg_tokens) + len(env_msg_tokens)
 
                         # Update the token version of trajectory
-                        all_response_tokens[i].extend(assistant_msg_tokens + env_msg_tokens)
-                        all_response_masks[i].extend(assistant_msg_masks + env_msg_masks)
+                        all_response_tokens[idx].extend(assistant_msg_tokens + env_msg_tokens)
+                        all_response_masks[idx].extend(assistant_msg_masks + env_msg_masks)
 
                         # Update conversation version
-                        all_conversations[i].append(assistant_msg)
-                        all_conversations[i].extend(env_messages)
+                        all_conversations[idx].append(assistant_msg)
+                        all_conversations[idx].append(env_msg)
+                        # all_conversations[idx].extend(env_messages)
 
                         # Update the trajectory
-                        trajectories[i].append(
+                        trajectories[idx].append(
                             {
-                                "observation": observations[i],
+                                "observation": observations[idx],
                                 "next_observation": next_observations[i],
                                 "reward": rewards[i],
                                 "done": terminateds[i] or truncateds[i],
@@ -512,7 +520,7 @@ class AgentExecutionEngine:
                                 "truncated": False,
                             }
                         )
-                        observations[i] = next_observations[i]
+                        observations[idx] = next_observations[i]
 
                 break
 

@@ -64,6 +64,7 @@ class AsyncAgentExecutionEngine(AgentExecutionEngine):
 
     # multithread safe generator function
     async def get_action_async(self, trajectory, agent, application_id, **kwargs):
+        # currently load balancing only happens with verl
         if self.engine_name == "openai":
             return await self._get_action_openai_async(trajectory, agent, **kwargs)
         elif self.engine_name == "verl":
@@ -79,8 +80,9 @@ class AsyncAgentExecutionEngine(AgentExecutionEngine):
         prompt = agent._pre_get_action(trajectory)
         batch = self._convert_prompt_verl([prompt], **kwargs)
 
-        output = await self.scheduler._get_result_verl_async(batch, application_id, **kwargs)
-        
+        # output = await self.scheduler._get_result_verl_async(batch, application_id, **kwargs)
+        output = await self.scheduler._get_result_verl_async_v2(batch, application_id, **kwargs) 
+
         # Process the output
         output_text = self.tokenizer.batch_decode(
             output.batch["responses"], skip_special_tokens=False
@@ -89,7 +91,7 @@ class AsyncAgentExecutionEngine(AgentExecutionEngine):
         pad_token = self.tokenizer.pad_token
         response = output_text.replace(pad_token, "")
         action = agent._post_get_action(response)
-        
+
         return action, response
 
     async def _get_action_openai_async(self, trajectory, agent, **kwargs):
@@ -125,7 +127,7 @@ class AsyncAgentExecutionEngine(AgentExecutionEngine):
         env = self.envs[idx]
         
         # Reset environment with the task
-        obs, _ = env.reset()
+        observation, _ = env.reset()
         
         # Reset agent
         agent.reset()
@@ -146,7 +148,7 @@ class AsyncAgentExecutionEngine(AgentExecutionEngine):
         # compute initial prompt tokens
         initial_msg = {
             "role": "user",
-            "content": agent.convert_observation_to_string(obs, with_system_prompt=True),
+            "content": agent.convert_observation_to_string(observation, with_system_prompt=True),
         }
         prompt_tokens, _ = self._convert_message_to_tokens_and_masks(initial_msg)
         prompt_token_len = len(prompt_tokens)
@@ -159,13 +161,13 @@ class AsyncAgentExecutionEngine(AgentExecutionEngine):
             raise Exception("Initial prompt length already exceeded max_prompt_length, retrying")
 
         termination_reason = "episode_len"
-        for _ in range(self.max_episode_len):
-            trajectory.append({
-                "next_observation": observation,
-            })
 
+        trajectory.append({
+                "next_observation": observation,
+        })
+        for _ in range(self.max_episode_len):
             # Get action from agent
-            action, response = await self.get_action_async(trajectory, agent, application_id)
+            action, response = await self.get_action_async(trajectory, agent, application_id, **kwargs)
             
             # Take step in environment
             next_observation, reward, terminated, truncated, info = env.step(action)
@@ -278,19 +280,26 @@ class AsyncAgentExecutionEngine(AgentExecutionEngine):
                 "response_masks": torch.tensor(response_mask, dtype=torch.long),
                 "training_reward": training_reward,
                 "environment_reward": env_reward,
-                "uid": self.env.env_id
+                "uid": env.env_id
             }
             return token_result
 
         if mode == "Conversation":
             return conversations
         
+    async def run_agent_trajectory_with_retry(self, idx, application_id, seed=0, mode="Text", **kwargs):
+        for _ in range(self.retry_limit):
+            try:
+                return await self.run_agent_trajectory(idx, application_id=application_id, seed=seed, mode=mode, **kwargs)
+            except Exception as e:
+                print(e)
+                continue
 
     async def interact_environment_generator(self, reset_seed=0, timing_raw={}, mode="Text", **kwargs):
         application_ids = [str(uuid.uuid4()) for _ in range(self.n_parallel_agents)]
 
         tasks = [
-            self.run_agent_trajectory(i, application_id=application_ids[i], seed=reset_seed, mode=mode, **kwargs)
+            self.run_agent_trajectory_with_retry(i, application_id=application_ids[i], seed=reset_seed, mode=mode, **kwargs)
             for i in range(self.n_parallel_agents)
         ]
 
@@ -299,4 +308,4 @@ class AsyncAgentExecutionEngine(AgentExecutionEngine):
                 result = await coro
                 yield result
             except Exception as e:
-                print(f"[Agent Error] {e}")
+                raise e
