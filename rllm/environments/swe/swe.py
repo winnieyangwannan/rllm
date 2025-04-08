@@ -85,7 +85,9 @@ class BatchSWEEnv(BatchedEnv):
         self._env_id = []
         for i in range(batch_size):
             np_random, _ = seeding.np_random(seeds[i])
-            select_idx = np_random.integers(0, len(swe_dataset))
+            # select_idx = np_random.integers(0, len(swe_dataset))
+            # TODO: Limit the number to 100 now
+            select_idx = np_random.integers(0, 100)
             self.envs.append(SWEEnv(swe_dataset, select_idx=select_idx))
             self._env_id.append(f"{select_idx}")
 
