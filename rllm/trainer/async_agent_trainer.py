@@ -169,9 +169,15 @@ class AsyncAgentPPOTrainer(AgentPPOTrainer):
                 with Timer('step', timing_raw):
 
                     def create_replay_queue(generator, q):
+                        uid_to_trajectories = {} # mapping of environment id (uid) to trajectories. Only put to queue in groups of size self.config.actor_rollout_ref.rollout.n
                         with Timer('gen', timing_raw):
-                            for gen_idx, trajectory in enumerate(generator):
-                                q.put((batch_iter, gen_idx, trajectory))    
+                            for _, trajectory in enumerate(generator):
+                                uid = trajectory['uid']
+                                if uid not in uid_to_trajectories:
+                                    uid_to_trajectories[uid] = []
+                                uid_to_trajectories[uid].append(trajectory)
+                                if len(uid_to_trajectories[uid] == self.config.actor_rollout_ref.rollout.n):
+                                    q.put((batch_iter, uid_to_trajectories[uid]))    
 
                     # Get the generator function which will yield results as they complete
                     gen_seq_generator = self.generate_agent_trajectories_async(envs, agents, timing_raw=timing_raw, meta_info=batch.meta_info)
@@ -179,10 +185,9 @@ class AsyncAgentPPOTrainer(AgentPPOTrainer):
                     thread.start()
                     
                     ppo_train_batch_size =  self.config.data.train_batch_size
-                    total_batch_size = ppo_train_batch_size * self.config.actor_rollout_ref.rollout.n
                     ppo_mini_batch_size = self.config.actor_rollout_ref.actor.ppo_mini_batch_size
-                    assert total_batch_size % ppo_mini_batch_size == 0, "PPO mini batch size must be a divisor of the total training batch size"
-                    ppo_step_minibatch_iter = total_batch_size // ppo_mini_batch_size
+                    assert ppo_train_batch_size % ppo_mini_batch_size == 0, "PPO mini batch size must be a divisor of the total training batch size"
+                    ppo_step_minibatch_iter = ppo_train_batch_size // ppo_mini_batch_size
                     num_loops = ppo_step_minibatch_iter #ppo_step_minibatch_iter +1 if batch_iter > 0 else  ppo_step_minibatch_iter 
                     # Initialize Empty data proto
                     training_batch = []
@@ -199,8 +204,8 @@ class AsyncAgentPPOTrainer(AgentPPOTrainer):
                         with Timer('pipeline_gen', timing_raw):
                             trajectories = []
                             for _ in range(ppo_mini_batch_size):
-                                _, _, traj = replay_queue.get()
-                                trajectories.append(traj)
+                                _, trajes = replay_queue.get()
+                                trajectories.extend(trajes)
                             mini_batch = self._transform_agent_trajectories(trajectories=trajectories)
                             mini_batch.non_tensor_batch["uid"] = np.array([traj["uid"] for traj in trajectories], dtype=object)
                         end_time = time.perf_counter()
