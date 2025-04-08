@@ -11,13 +11,14 @@ import random
 from datasets import load_dataset
 import os
 import concurrent.futures
+from gymnasium.utils import seeding
 
 def reorder_observations(paired: List[Tuple[int, Any]]) -> List[Any]:
     # Sort by idx and extract the obs
     return [obs for idx, obs in sorted(paired, key=lambda x: x[0])]
 
 class SWEEnv:
-    def __init__(self, dataset):
+    def __init__(self, dataset, select_idx):
 
         # Get all available images
         # self.available_dataset = load_dataset("r2e-edits/swebench-verified-v1", split="test")
@@ -34,10 +35,10 @@ class SWEEnv:
         self.command_files = command_files
         self.max_steps = 40
         self.env = None
+        self.select_idx = select_idx
     
     def reset(self):
-        select_idx = random.choice(range(len(self.available_dataset)))
-        env_args = EnvArgs(ds = self.available_dataset[select_idx])
+        env_args = EnvArgs(ds = self.available_dataset[self.select_idx])
         self.env = RepoEnv(env_args)
 
         # reset environment
@@ -77,13 +78,18 @@ class BatchSWEEnv(BatchedEnv):
     def __init__(
         self,
         batch_size,
+        seeds,
     ):
         swe_dataset = load_dataset("r2e-edits/r2e-dockers-v1", split="train")
         self.envs = []
         self._env_id = []
         for i in range(batch_size):
-            self.envs.append(SWEEnv(swe_dataset))
-            self._env_id.append(f"{i}")
+            np_random, _ = seeding.np_random(seeds[i])
+            # select_idx = np_random.integers(0, len(swe_dataset))
+            # TODO: Limit the number to 100 now
+            select_idx = np_random.integers(0, 100)
+            self.envs.append(SWEEnv(swe_dataset, select_idx=select_idx))
+            self._env_id.append(f"{select_idx}")
 
         self._batch_size = batch_size
         self._max_worker = 20
@@ -177,4 +183,7 @@ class BatchSWEEnv(BatchedEnv):
 
     @staticmethod
     def from_extra_infos(extra_infos: List[Dict]) -> "BatchSWEEnv":
-        return BatchSWEEnv(batch_size=len(extra_infos))
+        seeds = [
+                i["seed"] for i in extra_infos
+        ]
+        return BatchSWEEnv(batch_size=len(extra_infos), seeds=seeds)
