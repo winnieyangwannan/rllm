@@ -176,8 +176,9 @@ class AsyncAgentPPOTrainer(AgentPPOTrainer):
                                 if uid not in uid_to_trajectories:
                                     uid_to_trajectories[uid] = []
                                 uid_to_trajectories[uid].append(trajectory)
-                                if len(uid_to_trajectories[uid] == self.config.actor_rollout_ref.rollout.n):
+                                if len(uid_to_trajectories[uid]) == self.config.actor_rollout_ref.rollout.n:
                                     q.put((batch_iter, uid_to_trajectories[uid]))    
+                                    del uid_to_trajectories[uid] # so even if there is replicas it's still grouped correctly
 
                     # Get the generator function which will yield results as they complete
                     gen_seq_generator = self.generate_agent_trajectories_async(envs, agents, timing_raw=timing_raw, meta_info=batch.meta_info)
@@ -197,6 +198,7 @@ class AsyncAgentPPOTrainer(AgentPPOTrainer):
                             while True:
                                 if replay_queue.qsize() >= ppo_mini_batch_size:
                                     break
+                                print("waiting for last item")
                                 time.sleep(1)
                             break
                         mini_batch_metrics = {}
