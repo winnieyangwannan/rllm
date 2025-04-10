@@ -9,8 +9,8 @@ from browsergym.core.action.highlevel import HighLevelActionSet
 from browsergym.utils.obs import flatten_axtree_to_str, flatten_dom_to_str, prune_html
 from PIL import Image
 
-from rllm.models.system_prompts import *
-from rllm.models.agent import BaseAgent
+from rllm.agents.system_prompts import *
+from rllm.agents.agent import BaseAgent
 
 
 logger = logging.getLogger(__name__)

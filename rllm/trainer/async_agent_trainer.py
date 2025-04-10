@@ -9,7 +9,7 @@ from queue import Queue
 import asyncio
 import numpy as np
 
-from rllm.models.async_agent_execution_engine import AsyncAgentExecutionEngine
+from rllm.engine.async_agent_execution_engine import AsyncAgentExecutionEngine
 
 from rllm.trainer.agent_trainer import AgentPPOTrainer 
 
@@ -39,24 +39,6 @@ from verl.single_controller.ray import RayResourcePool, RayWorkerGroup, RayClass
 
 class AsyncAgentPPOTrainer(AgentPPOTrainer):
 
-    # def init_workers(self):
-    #     super(RayPPOTrainer, self).init_workers() # use init_workers from RayTrainer
-    #     # Initialize additional agent class 
-    #     assert not self.hybrid_engine, "PPO pipeline trainer does not support hybrid engine, assumes Rollout and Actor are not in the different worker group"
-
-    #     assert self.config.actor_rollout_ref.rollout.async_engine, "Must use asynchronous engine for pipelined agent training"
-        
-    #     agent_rollout_wg = self.rollout_wg
-
-    #     self.agent_execution_engine = AsyncAgentExecutionEngine(
-    #         rollout_engine=agent_rollout_wg,
-    #         engine_name="verl",
-    #         tokenizer=self.tokenizer,
-    #         model_path=self.config.actor_rollout_ref.model.path,
-    #         episode_len=self.config.agent.trajectory_episode_len,
-    #         max_trajectory_length=self.config.agent.max_trajectory_length,
-    #         max_prompt_length=self.config.data.max_prompt_length,
-    #     )
     def init_workers(self):
         """Init resource pool and worker group"""
         self.resource_pool_manager.create_resource_pool()

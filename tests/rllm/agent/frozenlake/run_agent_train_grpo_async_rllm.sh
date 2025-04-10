@@ -48,4 +48,4 @@ python3 -m rllm.train.train_async_agent_ppo \
     env.name=frozenlake \
     agent.name=frozenlakeagent \
     agent.max_trajectory_length=5000 \
-    agent.trajectory_episode_len=10 > output_grpo_async_rllm.log 2>&1
+    agent.trajectory_episode_len=10 

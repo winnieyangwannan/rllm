@@ -6,8 +6,8 @@ import collections
 
 import numpy as np
 
-from rllm.models.system_prompts import *
-from rllm.models.agent import BaseAgent
+from rllm.agents.system_prompts import *
+from rllm.agents.agent import BaseAgent
 # from r2e_edits.agenthub.action import Action
 from typing import Tuple
 

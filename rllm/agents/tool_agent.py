@@ -4,7 +4,7 @@ import logging
 from typing import Dict, List
 
 from rllm.environments.tools.tool_env import ToolEnvironment
-from rllm.models.agent import BaseAgent
+from rllm.agents.agent import BaseAgent
 from rllm.parser import get_tool_parser
 from rllm.tools.multi_tool import MultiTool
 
@@ -135,7 +135,7 @@ if __name__ == "__main__":
 
     # agent = ToolAgent(model_name="Qwen/Qwen2.5-1.5B-Instruct", tools=["google_search"])
 
-    from rllm.models.async_agent_execution_engine import AsyncAgentExecutionEngine
+    from rllm.engine.async_agent_execution_engine import AsyncAgentExecutionEngine
 
     sampling_params = {
         "model": "gpt-4o",

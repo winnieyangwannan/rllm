@@ -25,7 +25,7 @@ from verl.trainer.ppo.ray_trainer import (
 )
 from verl.single_controller.ray import RayResourcePool, RayWorkerGroup, RayClassWithInitArgs
 
-from rllm.models.agent_execution_engine import AgentExecutionEngine
+from rllm.engine.agent_execution_engine import AgentExecutionEngine
 
 class AgentPPOTrainer(RayPPOTrainer):
 
@@ -68,50 +68,6 @@ class AgentPPOTrainer(RayPPOTrainer):
             max_trajectory_length=self.config.agent.max_trajectory_length,
             max_prompt_length=self.config.data.max_prompt_length,
         )
-    # def init_workers(self):
-    #     """Init resource pool and worker group"""
-    #     self.resource_pool_manager.create_resource_pool()
-
-    #     self.resource_pool_to_cls = {pool: {} for pool in self.resource_pool_manager.resource_pool_dict.values()}
-
-    #     assert Role.Actor in self.role_worker_mapping and Role.Rollout in self.role_worker_mapping, "Actor and Rollout must be in role_worker_mapping"
-    #     actor_resource_pool = self.resource_pool_manager.get_resource_pool(Role.Actor)
-    #     # actor_gpu_ids = actor_resource_pool.gpu_assignments if isinstance(actor_resource_pool, RayResourcePool) else None
-
-    #     actor_cls = RayClassWithInitArgs(
-    #         cls=self.role_worker_mapping[Role.Actor],
-    #         config=self.config.actor_rollout_ref,
-    #         role='actor',
-    #         reward_config=self.config.reward_model,
-    #     )
-    #     self.resource_pool_to_cls[actor_resource_pool]['actor'] = actor_cls
-
-    #     # Get rollout resource pool
-    #     rollout_resource_pool = self.resource_pool_manager.get_resource_pool(Role.Rollout)
-    #     # rollout_gpu_ids = rollout_resource_pool.gpu_assignments if isinstance(rollout_resource_pool, RayResourcePool) else None
-    #     rollout_cls = RayClassWithInitArgs(
-    #         cls=self.role_worker_mapping[Role.Rollout],
-    #         config=self.config.actor_rollout_ref,
-    #         role='rollout',
-    #         reward_config=self.config.reward_model,
-    #     )
-    #     self.resource_pool_to_cls[rollout_resource_pool]['rollout'] = rollout_cls
-
-    #     self.actor_wg = RayWorkerGroup(resource_pool=actor_resource_pool, ray_cls_with_init=actor_cls)
-    #     self.rollout_wg = RayWorkerGroup(resource_pool=rollout_resource_pool, ray_cls_with_init=rollout_cls)
-
-    #     self.actor_wg.init_model()
-    #     self.rollout_wg.init_model()
-
-    #     self.agent_execution_engine = AgentExecutionEngine(
-    #         rollout_engine=self.rollout_wg,
-    #         engine_name="verl",
-    #         tokenizer=self.tokenizer,
-    #         model_path=self.config.actor_rollout_ref.model.path,
-    #         episode_len=self.config.agent.trajectory_episode_len,
-    #         max_trajectory_length=self.config.agent.max_trajectory_length,
-    #         max_prompt_length=self.config.data.max_prompt_length,
-    #     )
 
     def init_envs(self, batch):
         """
@@ -525,8 +481,6 @@ class AgentPPOTrainer(RayPPOTrainer):
             if last_valid_idx >= 0 and last_valid_idx < score_batch.shape[1]:
                 score_batch[i, last_valid_idx] = traj_score
                 environment_score_batch[i, last_valid_idx] = environment_scores[i]
-
-        # print(f"Shapes after convertion: complete trajectory: {trajectory_batch.size()}, responses: {response_batch.size()}, prompts: {prompts_batch.size()}, traj_mask: {traj_mask.size()}")
 
         tensor_batch = {
             "input_ids": trajectory_batch,

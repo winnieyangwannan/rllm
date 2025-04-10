@@ -31,10 +31,10 @@ from rllm.environments.frozenlake.frozenlake import FrozenLakeEnv
 from rllm.environments import ToolEnvironment#, SingleTurnEnvironment
 # from rllm.environments.swe.swe import SWEEnv
 
-from rllm.models.web_agent import WebAgent
-from rllm.models.frozenlake_agent import FrozenLakeAgent
-from rllm.models.tool_agent import ToolAgent
-from rllm.models.swe_agent import SWEAgent
+from rllm.agents.web_agent import WebAgent
+from rllm.agents.frozenlake_agent import FrozenLakeAgent
+from rllm.agents.tool_agent import ToolAgent
+from rllm.agents.swe_agent import SWEAgent
 # from rllm.models.math_agent import MathAgent
 
 ENV_CLASS_MAPPING = {
