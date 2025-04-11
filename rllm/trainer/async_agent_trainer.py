@@ -1,40 +1,32 @@
-import uuid
-from pprint import pprint
-import torch
-from copy import deepcopy
-import time
-import threading
-from threading import Thread
-from queue import Queue
 import asyncio
+import threading
+import time
+from pprint import pprint
+from queue import Queue
+from threading import Thread
+
 import numpy as np
+import torch
 
 from rllm.engine.async_agent_execution_engine import AsyncAgentExecutionEngine
-
-from rllm.trainer.agent_trainer import AgentPPOTrainer 
-
+from rllm.trainer.agent_trainer import AgentPPOTrainer
+from verl import DataProto
+from verl.single_controller.ray import (
+    RayClassWithInitArgs,
+    RayWorkerGroup,
+)
+from verl.trainer.ppo.ray_trainer import (
+    RayWorkerGroup,
+    Role,
+    compute_advantage,
+    compute_data_metrics,
+    compute_timing_metrics,
+    reduce_metrics,
+)
 from verl.trainer.ppo.ray_trainer_pipeline import (
     Timer,
     update_metrics,
-    SortedQueue,
 )
-
-from verl import DataProto
-from verl.trainer.ppo.ray_trainer import (
-    RayPPOTrainer, 
-    Role, 
-    WorkerType,
-    ResourcePoolManager,
-    RayWorkerGroup,
-    compute_timing_metrics, 
-    compute_data_metrics,
-    dataprotoitem_to_dataproto,
-    compute_advantage,
-    reduce_metrics,
-    _timer,
-)
-from verl.single_controller.ray import RayResourcePool, RayWorkerGroup, RayClassWithInitArgs
-
 
 
 class AsyncAgentPPOTrainer(AgentPPOTrainer):
@@ -100,8 +92,9 @@ class AsyncAgentPPOTrainer(AgentPPOTrainer):
         The driver process only need to call the compute functions of the worker group through RPC to construct the PPO dataflow.
         The light-weight advantage computation is done on the driver process.
         """
-        from verl.utils.tracking import Tracking
         from omegaconf import OmegaConf
+
+        from verl.utils.tracking import Tracking
 
         logger = Tracking(project_name=self.config.trainer.project_name,
                           experiment_name=self.config.trainer.experiment_name,
@@ -170,19 +163,19 @@ class AsyncAgentPPOTrainer(AgentPPOTrainer):
                     ppo_train_batch_size =  self.config.data.train_batch_size
                     ppo_mini_batch_size = self.config.actor_rollout_ref.actor.ppo_mini_batch_size
                     assert ppo_train_batch_size % ppo_mini_batch_size == 0, "PPO mini batch size must be a divisor of the total training batch size"
-                    ppo_step_minibatch_iter = ppo_train_batch_size // ppo_mini_batch_size
+                    ppo_step_minibatch_iter = ppo_train_batch_size // ppo_mini_batch_size                    
                     num_loops = ppo_step_minibatch_iter #ppo_step_minibatch_iter +1 if batch_iter > 0 else  ppo_step_minibatch_iter 
                     # Initialize Empty data proto
                     training_batch = []
                     for mini_batch_iter in range(num_loops):
                         print(f"mini_batch_iter: {mini_batch_iter + 1} / {num_loops}", flush=True)
-                        if mini_batch_iter == num_loops - 1:
-                            while True:
-                                if replay_queue.qsize() >= ppo_mini_batch_size:
-                                    break
-                                print("waiting for last item")
-                                time.sleep(1)
-                            break
+                        # if mini_batch_iter == num_loops - 1:
+                        #     while True:
+                        #         if replay_queue.qsize() >= ppo_mini_batch_size:
+                        #             break
+                        #         print("waiting for last item, current queue size is", replay_queue.qsize())
+                        #         time.sleep(1)
+                        #     break
                         mini_batch_metrics = {}
                         start_time = time.perf_counter()         
                         with Timer('pipeline_gen', timing_raw):

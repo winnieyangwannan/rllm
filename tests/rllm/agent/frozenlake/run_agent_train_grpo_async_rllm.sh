@@ -7,7 +7,7 @@ python3 -m rllm.train.train_async_agent_ppo \
     algorithm.adv_estimator=grpo \
     data.train_files=$HOME/data/rllm-frozenlake/train.parquet \
     data.val_files=$HOME/data/rllm-frozenlake/test.parquet \
-    data.train_batch_size=16 \
+    data.train_batch_size=8 \
     data.max_prompt_length=2048 \
     data.max_response_length=512 \
     actor_rollout_ref.model.path=Qwen/Qwen2-0.5B \
@@ -39,8 +39,8 @@ python3 -m rllm.train.train_async_agent_ppo \
     trainer.experiment_name='7b-ppo-frozenlake_agent' \
     +trainer.val_before_train=True \
     trainer.default_hdfs_dir=null \
-    trainer.n_gpus_per_node=2 \
-    trainer.n_training_gpus_per_node=1 \
+    trainer.n_gpus_per_node=4 \
+    trainer.n_training_gpus_per_node=2 \
     trainer.nnodes=1 \
     trainer.save_freq=80 \
     trainer.test_freq=5 \
@@ -48,4 +48,4 @@ python3 -m rllm.train.train_async_agent_ppo \
     env.name=frozenlake \
     agent.name=frozenlakeagent \
     agent.max_trajectory_length=5000 \
-    agent.trajectory_episode_len=10 
+    agent.trajectory_episode_len=5
