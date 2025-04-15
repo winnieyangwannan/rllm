@@ -44,4 +44,4 @@ python3 -m verl.trainer.main_ppo_agent \
     env.name=sweenv \
     agent.name=sweagent \
     agent.max_trajectory_length=32000 \
-    agent.trajectory_episode_len=40
+    agent.max_episodes=40

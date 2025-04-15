@@ -48,4 +48,4 @@ python3 -m rllm.train.train_async_agent_ppo \
     env.name=frozenlake \
     agent.name=frozenlakeagent \
     agent.max_trajectory_length=20000 \
-    agent.max_episodes=5
+    agent.max_episodes=5 

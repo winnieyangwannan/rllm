@@ -21,6 +21,6 @@ python -m verl.trainer.main_trajectory \
     env.subtask=miniwob \
     env.miniwob_url="$MINIWOB_URL" \
     agent.name=webagent \
-    agent.trajectory_episode_len=10
+    agent.max_episodes=10
     
     
