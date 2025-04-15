@@ -25,7 +25,7 @@ class AgentExecutionEngine:
         gamma=0.95,
         api_retries=3,
         retry_limit=1,
-        max_episode_len=5,
+        max_episodes=5,
         max_prompt_length=512, # Max prompt length for agent is only applied to first request, all subsequent requests are considered to be results.
         max_trajectory_length=8000,
         rollout_engine_args={},
@@ -42,7 +42,7 @@ class AgentExecutionEngine:
         self.gamma = gamma
         self.retry_limit = retry_limit
         self.api_retries = api_retries
-        self.max_episode_len = max_episode_len
+        self.max_episodes = max_episodes
         self.max_trajectory_length = max_trajectory_length
         self.max_prompt_length = max_prompt_length
 
@@ -322,7 +322,7 @@ class AgentExecutionEngine:
             - "action" (Any): The action taken at this step.
             - "response" (str): The assistant's response.
             - "training_reward" (float): The computed reward signal for training purposes.
-            - "truncated" (bool): If this end step resulted in max_episode_length exceed
+            - "truncated" (bool): If this end step resulted in max_episodes exceed
 
             or
 
@@ -377,20 +377,14 @@ class AgentExecutionEngine:
                 for i, obs in enumerate(observations):
                     trajectories[i].append({"next_observation": obs})
 
-                    # initial_messages = self.agents[i].format_observation_as_messages(obs)
-                    initial_msg = {
-                        "role": "user",
-                        "content": self.agents[i].convert_observation_to_string(obs, with_system_prompt=True),
-                    }
-                    prompt_tokens, _ = self._convert_message_to_tokens_and_masks(initial_msg)
-                    # prompt_tokens, _ = self._convert_messages_to_tokens_and_masks(initial_messages)
+                    initial_messages = self.agents[i].format_observation_as_messages(obs)
+                    prompt_tokens, _ = self._convert_messages_to_tokens_and_masks(initial_messages)
 
                     max_prompt_token_len = max(max_prompt_token_len, len(prompt_tokens))
                     all_prompt_tokens[i] = prompt_tokens
 
                     # Update conversation version
-                    all_conversations[i].append(initial_msg)
-                    # all_conversations[i].extend(initial_messages)
+                    all_conversations[i].extend(initial_messages)
 
                 if max_prompt_token_len > self.max_prompt_length:
                     self.reset()
@@ -398,7 +392,7 @@ class AgentExecutionEngine:
                 max_prompt_token_len = self.max_prompt_length
                     
                 # get model actions and responses
-                while not all(batch_done) and steps < self.max_episode_len:
+                while not all(batch_done) and steps < self.max_episodes:
                     steps += 1
                     with _timer("get_actions", timing_raw):
                         actions, responses, seq_idxs = self._safe_get_actions(
@@ -444,14 +438,10 @@ class AgentExecutionEngine:
                         assistant_msg = {"role": "assistant", "content": responses[i]}
 
                         next_obs = next_observations[i]
-                        next_obs_txt = self.agents[idx].convert_observation_to_string(next_obs, with_system_prompt=False)
-                        env_msg = {"role": "user", "content": next_obs_txt}
-
-                        # env_msg = self.agents[idx].format_observation_as_messages(next_obs)
-                        # env_msg_tokens, env_msg_masks = self._convert_messages_to_tokens_and_masks(env_messages)
+                        env_messages = self.agents[idx].format_observation_as_messages(next_obs, with_system_prompt=False)
+                        env_msg_tokens, env_msg_masks = self._convert_messages_to_tokens_and_masks(env_messages)
 
                         assistant_msg_tokens, assistant_msg_masks = self._convert_message_to_tokens_and_masks(assistant_msg)
-                        env_msg_tokens, env_msg_masks = self._convert_message_to_tokens_and_masks(env_msg)
 
                         # Reached maximum number of tokens for the trajectory
                         if all_response_token_lens[idx] + len(assistant_msg_tokens) + len(env_msg_tokens) + max_prompt_token_len >= self.max_trajectory_length:
@@ -465,8 +455,7 @@ class AgentExecutionEngine:
                             all_response_masks[idx].extend(truncated_response_masks)
                             # Update conversation (Though it is truncated)
                             all_conversations[idx].append(assistant_msg)
-                            all_conversations[idx].append(env_msg)
-                            # all_conversations[idx].extend(env_messages)
+                            all_conversations[idx].extend(env_messages)
                             # Update trajectory (Though it is truncated)
                             trajectories[idx].append(
                                 {
@@ -504,8 +493,7 @@ class AgentExecutionEngine:
 
                         # Update conversation version
                         all_conversations[idx].append(assistant_msg)
-                        all_conversations[idx].append(env_msg)
-                        # all_conversations[idx].extend(env_messages)
+                        all_conversations[idx].extend(env_messages)
 
                         # Update the trajectory
                         trajectories[idx].append(

@@ -45,4 +45,4 @@ python3 -m verl.trainer.main_ppo_agent \
     env.name=frozenlake \
     agent.name=frozenlakeagent \
     agent.max_trajectory_length=5000 \
-    agent.trajectory_episode_len=20 > output_loop.log 2>&1
+    agent.max_episodes=20 > output_loop.log 2>&1

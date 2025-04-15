@@ -76,7 +76,7 @@ class AsyncAgentPPOTrainer(AgentPPOTrainer):
             agent_class=self.agent_class,
             agent_args=self.config.agent.get("agent_args", {}),
             model_path=self.config.actor_rollout_ref.model.path,
-            max_episodes=self.config.agent.trajectory_episode_len,
+            max_episodes=self.config.agent.max_episodes,
             max_trajectory_length=self.config.agent.max_trajectory_length,
             max_prompt_length=self.config.data.max_prompt_length,
             env_class=self.env_class,
