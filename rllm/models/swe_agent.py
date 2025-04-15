@@ -1,15 +1,13 @@
-import base64
-import io
 import logging
 import re
-import collections
+from typing import Tuple
 
 import numpy as np
 
 from rllm.models.system_prompts import *
 from rllm.models.agent import BaseAgent
-from r2e_edits.agenthub.action import Action
-from typing import Tuple
+
+from r2egym.agenthub.action import Action
 
 def parse_response(response_text: str) -> Tuple[str, Action]:
     """

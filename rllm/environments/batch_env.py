@@ -62,6 +62,6 @@ class BatchedEnv(ABC):
 
     @staticmethod
     @abstractmethod
-    def from_extra_infos(extra_infos: List[Dict]) -> "BatchedEnv":
+    def from_json(extra_infos: List[Dict]) -> "BatchedEnv":
         """Abstract static method that constructs an instance from a list of dictionaries. Used for veRL training"""
         pass

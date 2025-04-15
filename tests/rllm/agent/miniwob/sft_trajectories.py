@@ -47,7 +47,7 @@ def main():
     teacher_model_path = "Qwen/Qwen2.5-72B-Instruct"
 
     dataset = pd.read_parquet(dataset_file_path)
-    env = BatchBrowserGym.from_extra_infos(dataset["extra_info"].tolist()[:number_of_tasks])
+    env = BatchBrowserGym.from_json(dataset["extra_info"].tolist()[:number_of_tasks])
 
     engine, tokenizer, sampling_params = init_vllm_engine(teacher_model_path)
     agent = BatchAgent(rollout_engine=engine, engine_name="vllm", tokenizer=tokenizer, agent_class=WebAgent, n_parallel_agents=env.batch_size, episode_len=episode_len, sampling_params=sampling_params, env=env, model_path=teacher_model_path)

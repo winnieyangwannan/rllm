@@ -163,7 +163,7 @@ class BatchBrowserGym(BatchedEnv):
             conn.close()
 
     @staticmethod
-    def from_extra_infos(extra_infos: List[Dict]) -> "BatchBrowserGym":
+    def from_json(extra_infos: List[Dict]) -> "BatchBrowserGym":
         env_ids = [
             i["environment_id"] for i in extra_infos
         ]

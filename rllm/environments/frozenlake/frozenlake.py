@@ -362,7 +362,7 @@ class BatchFrozenLakeEnv(BatchedEnv):
         return
 
     @staticmethod
-    def from_extra_infos(extra_infos: List[Dict]) -> "BatchFrozenLakeEnv":
+    def from_json(extra_infos: List[Dict]) -> "BatchFrozenLakeEnv":
         seeds = [
             i["seed"] for i in extra_infos
         ]
