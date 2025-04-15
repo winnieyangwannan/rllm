@@ -11,6 +11,8 @@ class Router:
         self.rollout_engine = rollout_engine
 
         self.world_size = self.rollout_engine.world_size
+        self.tp_size = getattr(self.rollout_engine, 'tp_size', 1)
+
         self.next_placement = 0
         self.cache_map = {} # application id to underlying engine mapping, for verl it's id->worker
 
@@ -26,7 +28,7 @@ class Router:
         """
         # Execute the generation on a worker asynchronously
         obj_ref = self.rollout_engine.execute_worker_async(
-            worker_idx=self._get_worker_idx(application_id),  # Use the first worker
+            worker_idx=self._get_worker_idx(application_id),
             method_name='generate',
             prompts=batch
         )
@@ -41,13 +43,42 @@ class Router:
         Asynchronous version for getting a single action from verl using Ray worker groups.
         """
         # Execute the generation on a worker asynchronously
-        obj_ref = self.rollout_engine.execute_worker_async(
-            worker_idx=self._get_worker_idx(application_id),  # Use the first worker
-            method_name='generate_async',
-            prompts=batch
-        )
+
+        if self.tp_size == 1:
+
+            worker_idx = self._get_worker_idx(application_id)
+            obj_ref = self.rollout_engine.execute_worker_async(
+                worker_idx=worker_idx,
+                method_name='generate_async',
+                prompts=batch
+            )
+            
+            # Wait for the result
+            output = await obj_ref
+            return output[0]
+
         
-        # Wait for the result
-        output = await obj_ref
-        return output[0]
-       
+        # When tp > 1, schedule the request to all tp workers
+        # Get the base worker index for this application
+        base_worker_idx = self._get_worker_idx(application_id)
+            
+        # Create a list of worker indices to use (wrapping around if needed)
+        worker_indices = [(base_worker_idx + i) % self.world_size for i in range(self.tp_size)]
+        
+        # Execute the generation on multiple workers asynchronously
+        obj_refs = [
+            self.rollout_engine.execute_worker_async(
+                worker_idx=idx,
+                method_name="generate_async",
+                prompts=batch,
+                **kwargs
+            )
+            for idx in worker_indices
+        ]
+        
+        # Wait for all results
+        done_refs, _ = ray.wait(obj_refs, num_returns=self.tp_size)
+        outputs = ray.get(done_refs)
+        
+        # Return the first result (all workers should return the same result when using tensor parallelism)
+        return outputs[0][0]

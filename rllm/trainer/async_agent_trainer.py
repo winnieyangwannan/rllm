@@ -65,6 +65,7 @@ class AsyncAgentPPOTrainer(AgentPPOTrainer):
 
         self.actor_wg.init_model()
         self.rollout_wg.init_model()
+        setattr(self.rollout_wg, 'tp_size', self.config.actor_rollout_ref.rollout.get('tensor_model_parallel_size', 1))
 
         self.agent_execution_engine = AsyncAgentExecutionEngine(
             rollout_engine=self.rollout_wg,
