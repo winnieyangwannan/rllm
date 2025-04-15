@@ -347,12 +347,10 @@ class AsyncAgentExecutionEngine(AgentExecutionEngine):
             )
             for i in range(self.n_parallel_agents)
         ]
-        i = 1
+
         for coro in asyncio.as_completed(tasks):
             try:
                 result = await coro
-                print(f"yielded {i}/{len(tasks)}")
-                i += 1
                 yield result
             except Exception as e:
                 raise e
