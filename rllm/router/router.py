@@ -16,9 +16,6 @@ class Router:
         self.next_placement = 0
         self.cache_map = {} # application id to underlying engine mapping, for verl it's id->worker
 
-        # used to synchronize verl sharding manager enter and exit
-        self.lock = asyncio.Lock()
-        self.active_requests = 0
 
     def _get_worker_idx(self, application_id):
         if application_id not in self.cache_map:
@@ -28,16 +25,10 @@ class Router:
 
     # The two functions below are to invoke sharding managers concurrently so all_gather doesn't hang
     async def __enter__(self):
-        async with self.lock:
-            if self.active_requests == 0:
-                self.rollout_engine.generate_async_sharding_manager_enter()
-            self.active_requests += 1
+        self.rollout_engine.generate_async_sharding_manager_enter()
 
     async def __exit__(self):
-        async with self.lock:
-            self.active_requests -= 1
-            if self.active_requests == 0:
-                self.rollout_engine.generate_async_sharding_manager_exit()
+        self.rollout_engine.generate_async_sharding_manager_exit()
        
     async def _get_result_verl_async(self, batch, application_id, **kwargs):
         """
