@@ -84,8 +84,7 @@ class AsyncAgentExecutionEngine(AgentExecutionEngine):
         prompt = agent._pre_get_action(trajectory)
         batch = self._convert_prompt_verl([prompt], **kwargs)
 
-        # output = await self.router._get_result_verl_async(batch, application_id, **kwargs)
-        output = await self.router._get_result_verl_async_v2(
+        output = await self.router._get_result_verl_async(
             batch, application_id, **kwargs
         )
 

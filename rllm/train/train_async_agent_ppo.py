@@ -76,7 +76,7 @@ def main_task(config, compute_score=None):
 
     role_worker_mapping = {
         Role.Actor: ray.remote(ActorRolloutRefWorker),
-        Role.Rollout: ray.remote(max_concurrency=32)(ActorRolloutRefWorker)
+        Role.Rollout: ray.remote(max_concurrency=1024)(ActorRolloutRefWorker)
     }
     
     # Below are agent specific initialization
