@@ -67,23 +67,41 @@ class AsyncAgentPPOTrainer(AgentPPOTrainer):
         self.rollout_wg.init_model()
         setattr(self.rollout_wg, 'tp_size', self.config.actor_rollout_ref.rollout.get('tensor_model_parallel_size', 1))
 
+        # self.agent_execution_engine = AsyncAgentExecutionEngine(
+        #     rollout_engine=self.rollout_wg,
+        #     engine_name="verl",
+        #     tokenizer=self.tokenizer,
+        #     model_path=self.config.actor_rollout_ref.model.path,
+        #     episode_len=self.config.agent.trajectory_episode_len,
+        #     max_trajectory_length=self.config.agent.max_trajectory_length,
+        #     max_prompt_length=self.config.data.max_prompt_length,
+        # )
+
         self.agent_execution_engine = AsyncAgentExecutionEngine(
             rollout_engine=self.rollout_wg,
             engine_name="verl",
             tokenizer=self.tokenizer,
+            agent_class=self.agent_class,
+            agent_args=self.config.agent.get("agent_args", {}),
             model_path=self.config.actor_rollout_ref.model.path,
-            episode_len=self.config.agent.trajectory_episode_len,
+            max_episodes=self.config.agent.max_episodes,
             max_trajectory_length=self.config.agent.max_trajectory_length,
             max_prompt_length=self.config.data.max_prompt_length,
+            env_class=self.env_class,
+            env_args=self.config.env.get("env_args", {}),
         )
 
-    def init_envs(self, batch):
+    def init_envs_and_agents(self, batch):
         """
         Initialize environment depending on env_class with the necessary extra_info, also set uid of the batch.
         """
         env_args = batch.non_tensor_batch["extra_info"].tolist()
         envs = [self.env_class(**env_args[i]) for i in range(len(env_args))]
-        batch.non_tensor_batch["uid"] = np.array([env.env_id for env in envs], dtype=object)
+        agents = [self.agent_class(**self.config.agent.get("agent_args", {})) for _ in range(len(envs))]
+        for i, env in enumerate(envs):
+            env.env_id = batch.non_tensor_batch["uid"][i]
+
+        self.agent_execution_engine.update_envs_and_agents(envs, agents)
 
         return envs
     
@@ -139,8 +157,7 @@ class AsyncAgentPPOTrainer(AgentPPOTrainer):
                 metrics = {}
                 timing_raw = {}
 
-                envs = self.init_envs(batch)
-                agents = [self.agent_class() for _ in range(len(envs))]
+                self.init_envs_and_agents(batch)
                 
                 with Timer('step', timing_raw):
 
@@ -157,7 +174,7 @@ class AsyncAgentPPOTrainer(AgentPPOTrainer):
                                     del uid_to_trajectories[uid] # so even if there is replicas it's still grouped correctly
 
                     # Get the generator function which will yield results as they complete
-                    gen_seq_generator = self.generate_agent_trajectories_async(envs, agents, timing_raw=timing_raw, meta_info=batch.meta_info)
+                    gen_seq_generator = self.generate_agent_trajectories_async(timing_raw=timing_raw, meta_info=batch.meta_info)
                     thread = threading.Thread(target=create_replay_queue, args=(gen_seq_generator, replay_queue))
                     thread.start()
                     
@@ -329,12 +346,11 @@ class AsyncAgentPPOTrainer(AgentPPOTrainer):
                 "val_temperature": self.config.actor_rollout_ref.rollout.val_kwargs.temperature,
                 "agent_rollout": True, 
             }
-
-            envs = self.init_envs(test_batch)
-            agents = [self.agent_class() for _ in range(len(envs))]
+            
+            self.init_envs_and_agents(test_batch)
 
             test_traj_generator = self.generate_agent_trajectories_async(
-                envs, agents, meta_info=test_batch.meta_info
+                meta_info=test_batch.meta_info
             )
 
             trajectories = []
@@ -389,8 +405,7 @@ class AsyncAgentPPOTrainer(AgentPPOTrainer):
 
 
 
-    def generate_agent_trajectories_async(self, envs, agents, timing_raw={}, meta_info=None):
-        self.agent_execution_engine.update_envs_and_agents(envs, agents)
+    def generate_agent_trajectories_async(self, timing_raw={}, meta_info=None):
         queue = Queue()
 
         def runner():

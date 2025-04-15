@@ -35,7 +35,8 @@ def main():
                 "prompt": [{"role": "user", "content": ""}],
                 "ability": "bfs",
                 "reward_model": {"style": "rule", "ground_truth": {"target": 0, "numbers": [0, 0]}},
-                "extra_info": {"split": split, "index": idx, "seed": seed, "size": size, "p": p}
+                "extra_info": {"split": split, "index": idx, "seed": seed, "size": size, "p": p},
+                "uid": f"{seed}_{size}_{p}"
             }
         return process_fn
 

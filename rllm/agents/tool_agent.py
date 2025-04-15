@@ -105,15 +105,6 @@ class ToolAgent(BaseAgent):
             return trajectory[-1]["reward"]
         return 0.0
     
-    def convert_observation_to_string(self, obs, with_system_prompt=False):
-        if 'question' in obs:
-            self.messages.append({"role": "user", "content": obs['question']})
-        elif 'tool_outputs' in obs:
-            for id, tool_output_str in obs['tool_outputs'].items():
-                self.messages.append({"role": "tool", "content": tool_output_str, "tool_call_id": id})
-
-        return obs
-    
     def format_observation_as_messages(self, obs):
         messages = []
         if 'question' in obs:

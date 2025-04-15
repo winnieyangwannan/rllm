@@ -22,7 +22,7 @@ python3 -m rllm.train.train_async_agent_ppo \
     actor_rollout_ref.actor.fsdp_config.optimizer_offload=True \
     actor_rollout_ref.rollout.tensor_model_parallel_size=1 \
     actor_rollout_ref.rollout.temperature=0.9 \
-    actor_rollout_ref.rollout.gpu_memory_utilization=0.3 \
+    actor_rollout_ref.rollout.gpu_memory_utilization=0.6 \
     actor_rollout_ref.rollout.name=vllm \
     actor_rollout_ref.rollout.async_engine=True \
     actor_rollout_ref.rollout.n=4 \
@@ -37,7 +37,7 @@ python3 -m rllm.train.train_async_agent_ppo \
     trainer.logger=['console','wandb'] \
     trainer.project_name='rllm-agent' \
     trainer.experiment_name='7b-ppo-frozenlake_agent' \
-    +trainer.val_before_train=True \
+    +trainer.val_before_train=False \
     trainer.default_hdfs_dir=null \
     trainer.n_gpus_per_node=4 \
     trainer.n_training_gpus_per_node=2 \
@@ -48,4 +48,4 @@ python3 -m rllm.train.train_async_agent_ppo \
     env.name=frozenlake \
     agent.name=frozenlakeagent \
     agent.max_trajectory_length=5000 \
-    agent.trajectory_episode_len=5
+    agent.max_episodes=5 \

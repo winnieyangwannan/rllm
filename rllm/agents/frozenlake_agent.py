@@ -212,13 +212,11 @@ Now it is your turn, please show your thinking process and put the final action 
         return True
 
 
-    def convert_observation_to_string(self, obs, with_system_prompt=False):
-
-        messages = ""
+    def format_observation_as_messages(self, obs, with_system_prompt=False):
+        messages = []
         if with_system_prompt:
-            messages += self.SYSTEM_PROMPT
+            messages.append({"role": "system", "content": self.SYSTEM_PROMPT})
 
-        messages += "Current Observation: \n" + obs + "\n You have not achieved the goal, P has not reached G yet. Please give the next action."
+        messages.append({"role": "user", "content": "Current Observation: \n" + obs + "\n You have not achieved the goal, P has not reached G yet. Please give the next action."})
 
         return messages
-

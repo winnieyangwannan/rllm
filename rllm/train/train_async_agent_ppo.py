@@ -26,7 +26,7 @@ from verl.workers.reward_manager import NaiveRewardManager
 
 
 from rllm.trainer.async_agent_trainer import AsyncAgentPPOTrainer
-from rllm.train.train_agent_ppo import ENV_CLASS_MAPPING, AGENT_CLASS_MAPPING, setup_environment
+from rllm.train.env_agent_mappings import ENV_CLASS_MAPPING, AGENT_CLASS_MAPPING, setup_environment
 
 
 @hydra.main(config_path='config', config_name='ppo_trainer', version_base=None)
@@ -76,7 +76,7 @@ def main_task(config, compute_score=None):
 
     role_worker_mapping = {
         Role.Actor: ray.remote(ActorRolloutRefWorker),
-        Role.Rollout: ray.remote(max_concurrency=1)(ActorRolloutRefWorker)
+        Role.Rollout: ray.remote(max_concurrency=32)(ActorRolloutRefWorker)
     }
     
     # Below are agent specific initialization
@@ -95,9 +95,7 @@ def main_task(config, compute_score=None):
                             agent_class=agent_class)
     
     trainer.init_workers()
-    trainer.fit_agent()
-    
-
+    trainer.fit_agent()    
 
 if __name__ == '__main__':
     main()

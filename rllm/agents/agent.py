@@ -83,16 +83,8 @@ class BaseAgent(ABC):
         return trajectory[-1]["reward"]
     
     @abstractmethod
-    def convert_observation_to_string(self, obs, with_system_prompt=False):
+    def format_observation_as_messages(self, obs):
         """
-        Convert an observation into a formatted string representation.
-
-        Args:
-            obs (Any): The observation to be converted. The exact structure depends on the environment.
-            with_system_prompt (bool, optional): If True, includes a system prompt in the formatted output.
-                                                 Defaults to False.
-
-        Returns:
-            str: The formatted string representation of the observation.
+        Format an observation into a list of messages.
         """
-        return ""
+        return []

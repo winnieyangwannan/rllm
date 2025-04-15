@@ -14,7 +14,7 @@ from typing import List, Optional, Tuple, Any, Dict
 import hashlib
 import numpy as np
 import copy
-from ..base_env import BaseEnv
+from rllm.environments.base.base_env import BaseEnv
 
 
 # DFS to check that it's a valid path.
@@ -168,6 +168,9 @@ class FrozenLakeEnv(GymFrozenLakeEnv, BaseEnv):
         self.seed = seed
         self.size = size
         self.p = p
+
+        self._env_id = f"{seed}_{size}_{p}"
+
         if desc is None:
             random_map = generate_random_map(size=size, p=p, seed=seed)
         else:
@@ -301,88 +304,10 @@ class FrozenLakeEnv(GymFrozenLakeEnv, BaseEnv):
             lookup = lambda cell: self.GRID_LOOKUP.get(cell, "?")
             return "\n".join("".join(lookup(cell) for cell in row) for row in room_state)
 
-    @property
-    def env_id(self):
-        return f"{self.seed}-{self.size}-{self.p}"
+    # @property
+    # def env_id(self):
+    #     return f"{self.seed}-{self.size}-{self.p}"
     
     @staticmethod
     def from_extra_info(extra_info) -> "FrozenLakeEnv":
         return FrozenLakeEnv(size=extra_info["size"], seed=extra_info["seed"], p=extra_info["p"])
-
-# from ..batch_env import BatchedEnv
-
-# class BatchFrozenLakeEnv(BatchedEnv):
-#     def __init__(
-#         self,
-#         batch_size,
-#         seeds, 
-#         sizes,
-#         ps,
-#     ):
-#         self.envs = []
-#         self._env_id = []
-#         for i in range(batch_size):
-#             seed = seeds[i]
-#             size = sizes[i]
-#             p = ps[i]
-#             self.envs.append(FrozenLakeEnv(size=size, seed=seed, p=p))
-#             self._env_id.append(f"{seed}-{size}-{p}")
-
-#         self._batch_size = batch_size
-
-#     @property
-#     def env_id(self) -> List[str]:
-#         return self._env_id
-
-#     @property
-#     def batch_size(self) -> int:
-#         return self._batch_size
-    
-#     def reset(self, seed=0) -> Tuple[List, List]:
-#         observations = []
-#         for i, env in enumerate(self.envs):
-#             obs = env.reset(reset_map=False)
-#             observations.append(obs)
-#         return observations, [{}] * self.batch_size
-
-
-#     def step(self, actions: List[Any], env_idxs: List[int]=[]) -> Tuple[List, List, List, List, List]:
-
-#         if not env_idxs:
-#             assert len(actions) == self.batch_size, "Number of actions must match batch size"
-#             env_idxs = list(range(len(actions)))
-
-#         assert len(actions) == len(env_idxs), f"Number of actions ({len(actions)}) must match the env used {len(env_idxs)}"
-
-#         observations, rewards, terminateds, truncateds, infos = [], [], [], [], []
-#         # Send step command with actions
-#         for i, env_idx in enumerate(env_idxs):
-#             obs, reward, done, info = self.envs[env_idx].step(actions[i])
-#             observations.append(obs),
-#             rewards.append(reward)
-#             terminateds.append(done)
-#             truncateds.append(False)
-#             infos.append(info)
-
-
-#         return (observations, rewards, terminateds, 
-#                 truncateds, infos)
-
-
-#     def close(self):
-#         return
-
-#     @staticmethod
-#     def from_extra_infos(extra_infos: List[Dict]) -> "BatchFrozenLakeEnv":
-#         seeds = [
-#             i["seed"] for i in extra_infos
-#         ]
-#         sizes = [
-#             i["size"] for i in extra_infos
-#         ]
-#         ps = [
-#             i["p"] for i in extra_infos
-#         ]
-
-#         return BatchFrozenLakeEnv(batch_size=len(seeds), seeds=seeds, sizes=sizes, ps=ps)
-

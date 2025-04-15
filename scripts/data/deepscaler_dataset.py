@@ -59,7 +59,8 @@ def make_map_fn(split: str):
             },
             "extra_info": {
                 'split': split,
-                'index': idx
+                'index': idx,
+                "task": {"question": question, "answer": answer},
             },
             "task": {"question": question, "answer": answer},
             "uid": idx

@@ -21,49 +21,49 @@ class AsyncAgentExecutionEngine(AgentExecutionEngine):
         rollout_engine,
         engine_name,
         tokenizer,
-        agents=[],  # List of agents
-        envs=[],  # List of environments
+        agent_class,
+        env_class,
         model_path="",
+        n_parallel_agents=1,
         gamma=0.95,
         api_retries=3,
         retry_limit=1,
-        max_episode_len=5,
-        max_prompt_length=512,  # Max prompt length for agent is only applied to first request, all subsequent requests are considered to be results.
-        max_trajectory_length=8000,
+        max_episodes=5,
+        max_trajectory_length=8192,
+        max_prompt_length=1024,
+        agent_args={},
         rollout_engine_args={},
+        env_args={},
         **kwargs,
     ):
         self.rollout_engine = rollout_engine
         self.tokenizer = tokenizer
         self.engine_name = engine_name
-        self.n_parallel_agents = len(envs)
+        self.agent_class = agent_class
+        self.n_parallel_agents = n_parallel_agents
         self.model_path = model_path
 
         # For interaction
         self.gamma = gamma
         self.retry_limit = retry_limit
         self.api_retries = api_retries
-        self.max_episode_len = max_episode_len
+        self.max_episodes = max_episodes
+        self.agent_args = agent_args
         self.max_trajectory_length = max_trajectory_length
         self.max_prompt_length = max_prompt_length
 
-        assert (
-            len(agents) == len(envs)
-        ), f"Number of agents must equal to number of environments but received, {len(agents)} and {len(envs)}"
-        self.agents = agents
-        self.envs = envs
+        self.agents = [agent_class(**agent_args) for _ in range(self.n_parallel_agents)]
+        self.envs = [env_class(**env_args) for _ in range(self.n_parallel_agents)]
 
         # rollout engine args
         self.rollout_engine_args = rollout_engine_args
         self.sampling_params = kwargs.get("sampling_params", None)
 
         if engine_name == "openai":
-            from openai import AsyncOpenAI
-
+            from openai import AsyncOpenAI 
             self.client = AsyncOpenAI(**self.rollout_engine_args)
-
-        # All generation is done via scheduler. Currently only works for verl
-        self.router = Router(rollout_engine=rollout_engine)
+        if engine_name == "verl":
+            self.router = Router(rollout_engine=rollout_engine)
 
     # multithread safe generator function
     async def get_action_async(self, trajectory, agent, application_id, **kwargs):
@@ -148,23 +148,17 @@ class AsyncAgentExecutionEngine(AgentExecutionEngine):
         prompt_tokens = []
         response_len = 0
         response_tokens = []
-        response_mask = []
+        response_masks = []
 
         # For returning conversations
         conversations = []
 
-        # compute initial prompt tokens
-        initial_msg = {
-            "role": "user",
-            "content": agent.convert_observation_to_string(
-                observation, with_system_prompt=True
-            ),
-        }
-        prompt_tokens, _ = self._convert_message_to_tokens_and_masks(initial_msg)
+        initial_messages = agent.format_observation_as_messages(observation)
+        prompt_tokens, _ = self._convert_messages_to_tokens_and_masks(initial_messages)
         prompt_token_len = len(prompt_tokens)
 
         # Update conversation version
-        conversations.append(initial_msg)
+        conversations.extend(initial_messages)
 
         if prompt_token_len > self.max_prompt_length:
             agent.reset()
@@ -179,7 +173,7 @@ class AsyncAgentExecutionEngine(AgentExecutionEngine):
                 "next_observation": observation,
             }
         )
-        for _ in range(self.max_episode_len):
+        for _ in range(self.max_episodes):
             # Get action from agent
             action, response = await self.get_action_async(
                 trajectory, agent, application_id, **kwargs
@@ -198,20 +192,12 @@ class AsyncAgentExecutionEngine(AgentExecutionEngine):
                 truncated=truncated,
                 info=info,
             )
-            # Compute the response tokens and response masks for the trajectory
+            # Process response tokens
             assistant_msg = {"role": "assistant", "content": response}
-
-            next_obs_txt = agent.convert_observation_to_string(
-                next_observation, with_system_prompt=False
-            )
-            env_msg = {"role": "user", "content": next_obs_txt}
-
-            assistant_msg_tokens, assistant_msg_masks = (
-                self._convert_message_to_tokens_and_masks(assistant_msg)
-            )
-            env_msg_tokens, env_msg_masks = self._convert_message_to_tokens_and_masks(
-                env_msg
-            )
+            env_messages = agent.format_observation_as_messages(next_observation)
+            
+            assistant_msg_tokens, assistant_msg_masks = self._convert_message_to_tokens_and_masks(assistant_msg)
+            env_msg_tokens, env_msg_masks = self._convert_messages_to_tokens_and_masks(env_messages)
 
             # Reached maximum number of tokens for the trajectory
             if (
@@ -232,12 +218,15 @@ class AsyncAgentExecutionEngine(AgentExecutionEngine):
                 truncated_response_masks = (assistant_msg_masks + env_msg_masks)[
                     :truncation_length
                 ]
-                # Update the token version of trajectory (Though it is truncated)
+
+                # Update token collections
                 response_tokens.extend(truncated_response_tokens)
-                response_mask.extend(truncated_response_masks)
-                # Update conversation (Though it is truncated)
+                response_masks.extend(truncated_response_masks)
+                
+                # Update conversation history
                 conversations.append(assistant_msg)
-                conversations.append(env_msg)
+                conversations.extend(env_messages)
+
                 # Update trajectory (Though it is truncated)
                 trajectory.append(
                     {
@@ -253,22 +242,23 @@ class AsyncAgentExecutionEngine(AgentExecutionEngine):
                 )
 
                 colorful_print(
-                    f"Trajectory {idx} completed due to maximum trajectory length reached. But entire Text or Conversation will be returned. Reward is {rewards[i]}. \n",
+                    f"Trajectory {idx} completed due to maximum trajectory length reached. But entire Text or Conversation will be returned. \n",
                     "yellow",
                 )
                 termination_reason = ""  # no longer need, already logged
                 # handle returning
                 break
+            
             # Update repsonse token length
             response_len += len(assistant_msg_tokens) + len(env_msg_tokens)
 
             # Update the token version of trajectory
             response_tokens.extend(assistant_msg_tokens + env_msg_tokens)
-            response_mask.extend(assistant_msg_masks + env_msg_masks)
+            response_masks.extend(assistant_msg_masks + env_msg_masks)
 
             # Update conversation version
             conversations.append(assistant_msg)
-            conversations.append(env_msg)
+            conversations.extend(env_messages)
 
             # Update the trajectory
             trajectory.append(
@@ -314,7 +304,7 @@ class AsyncAgentExecutionEngine(AgentExecutionEngine):
             token_result = {
                 "prompt_tokens": torch.tensor(prompt_tokens, dtype=torch.long),
                 "response_tokens": torch.tensor(response_tokens, dtype=torch.long),
-                "response_masks": torch.tensor(response_mask, dtype=torch.long),
+                "response_masks": torch.tensor(response_masks, dtype=torch.long),
                 "training_reward": training_reward,
                 "environment_reward": env_reward,
                 "uid": env.env_id,

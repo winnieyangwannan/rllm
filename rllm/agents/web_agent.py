@@ -343,14 +343,10 @@ Action: ```send_msg_to_user("The price for a 15\\" laptop is 1499 USD.")```
         
         return True
 
-        
-    def convert_observation_to_string(self, obs, with_system_prompt=False):
-        obs = self._preproc_obs(obs)
-
+    def format_observation_as_messages(self, obs, with_system_prompt=False):
         messages = []
         if with_system_prompt:
             messages.extend(self.get_system_msg(obs))
 
         messages.extend(self.get_user_msg(obs, append_action=with_system_prompt))
-
-        return self._format_msgs_as_str(messages)
+        return messages
