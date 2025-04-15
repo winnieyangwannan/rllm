@@ -28,16 +28,6 @@ class Router:
         Asynchronous version for getting a single action from verl using Ray worker groups.
         """
         # Execute the generation on a worker asynchronously
-
-        obj_ref = self.rollout_engine.execute_worker_async(
-            worker_idx=self._get_worker_idx(application_id),  # Use the first worker
-            method_name='generate_async',
-            prompts=batch
-        )
-        
-        # Wait for the result
-        output = await obj_ref
-        return output[0]
        
         if self.tp_size == 1:
             worker_idx = self._get_worker_idx(application_id)
