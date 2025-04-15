@@ -62,7 +62,9 @@ class AsyncAgentExecutionEngine(AgentExecutionEngine):
         if engine_name == "openai":
             from openai import AsyncOpenAI 
             self.client = AsyncOpenAI(**self.rollout_engine_args)
-        if engine_name == "verl":
+            
+        if self.engine_name == "verl":
+            # All generation is done via scheduler. Currently only works for verl
             self.router = Router(rollout_engine=rollout_engine)
 
     # multithread safe generator function
@@ -162,7 +164,7 @@ class AsyncAgentExecutionEngine(AgentExecutionEngine):
         if prompt_token_len > self.max_prompt_length:
             agent.reset()
             raise Exception(
-                "Initial prompt length already exceeded max_prompt_length, retrying"
+                f"Trajectory {idx}: initial prompt length already exceeded max_prompt_length, retrying"
             )
 
         termination_reason = "episode_len"
@@ -241,7 +243,7 @@ class AsyncAgentExecutionEngine(AgentExecutionEngine):
                 )
 
                 colorful_print(
-                    f"Trajectory {idx} completed due to maximum trajectory length reached. But entire Text or Conversation will be returned. \n",
+                    f"Trajectory {idx} completed due to maximum trajectory length reached. But entire Text or Conversation will be returned. Reward is 0. \n",
                     "yellow",
                 )
                 termination_reason = ""  # no longer need, already logged
@@ -324,10 +326,15 @@ class AsyncAgentExecutionEngine(AgentExecutionEngine):
             except Exception as e:
                 print(e)
                 continue
+        raise Exception(f"Trajectory {idx} cannot complete. Please check the log message")
 
     async def interact_environment_generator(
         self, reset_seed=0, timing_raw={}, mode="Text", **kwargs
     ):
+        # Note: this function is not concurrecy safe due to the router.__enter__ and router.__exit__
+        if self.engine_name == "verl":
+            await self.router.__enter__()
+
         application_ids = [str(uuid.uuid4()) for _ in range(self.n_parallel_agents)]
 
         tasks = [
@@ -340,10 +347,14 @@ class AsyncAgentExecutionEngine(AgentExecutionEngine):
             )
             for i in range(self.n_parallel_agents)
         ]
-
+        i = 1
         for coro in asyncio.as_completed(tasks):
             try:
                 result = await coro
+                print(f"yielded {i}/{len(tasks)}")
+                i += 1
                 yield result
             except Exception as e:
                 raise e
+        if self.engine_name == "verl":
+            await self.router.__exit__()

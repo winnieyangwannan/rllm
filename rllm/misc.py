@@ -10,7 +10,7 @@ import torch
 import random
 
 def colorful_print(string: str, *args, **kwargs) -> None:
-    print(click.style(string, *args, **kwargs))
+    print(click.style(string, *args, **kwargs), flush=True)
 
 def colorful_warning(string: str, *args, **kwargs) -> None:
     warnings.warn(click.style(string, *args, **kwargs))
