@@ -19,33 +19,27 @@ class Router:
     def _get_worker_idx(self, application_id):
         if application_id not in self.cache_map:
             self.cache_map[application_id] = self.next_placement
-            self.next_placement = (self.next_placement + 1) % self.world_size
+            self.next_placement = (self.next_placement + self.tp_size) % self.world_size
         return self.cache_map[application_id]
 
+       
     async def _get_result_verl_async(self, batch, application_id, **kwargs):
         """
         Asynchronous version for getting a single action from verl using Ray worker groups.
         """
         # Execute the generation on a worker asynchronously
+
         obj_ref = self.rollout_engine.execute_worker_async(
-            worker_idx=self._get_worker_idx(application_id),
-            method_name='generate',
+            worker_idx=self._get_worker_idx(application_id),  # Use the first worker
+            method_name='generate_async',
             prompts=batch
         )
         
         # Wait for the result
-        done_refs, _ = ray.wait([obj_ref], num_returns=1)
-        output = ray.get(done_refs[0])
-        return output
+        output = await obj_ref
+        return output[0]
        
-    async def _get_result_verl_async_v2(self, batch, application_id, **kwargs):
-        """
-        Asynchronous version for getting a single action from verl using Ray worker groups.
-        """
-        # Execute the generation on a worker asynchronously
-
         if self.tp_size == 1:
-
             worker_idx = self._get_worker_idx(application_id)
             obj_ref = self.rollout_engine.execute_worker_async(
                 worker_idx=worker_idx,
@@ -56,8 +50,8 @@ class Router:
             # Wait for the result
             output = await obj_ref
             return output[0]
-
         
+
         # When tp > 1, schedule the request to all tp workers
         # Get the base worker index for this application
         base_worker_idx = self._get_worker_idx(application_id)
