@@ -17,6 +17,7 @@ from verl.single_controller.ray import (
 )
 from verl.trainer.ppo.ray_trainer import (
     RayWorkerGroup,
+    RayPPOTrainer,
     Role,
     compute_advantage,
     compute_data_metrics,
@@ -32,9 +33,10 @@ from verl.trainer.ppo.ray_trainer_pipeline import (
 class AsyncAgentPPOTrainer(AgentPPOTrainer):
 
     def init_workers(self):
+       
+        assert not self.hybrid_engine, "PPO pipeline trainer does not support hybrid engine, assumes Rollout and Actor are not in the different worker group"
         """Init resource pool and worker group"""
         self.resource_pool_manager.create_resource_pool()
-
         self.resource_pool_to_cls = {pool: {} for pool in self.resource_pool_manager.resource_pool_dict.values()}
 
         assert Role.Actor in self.role_worker_mapping and Role.Rollout in self.role_worker_mapping, "Actor and Rollout must be in role_worker_mapping"
@@ -74,7 +76,7 @@ class AsyncAgentPPOTrainer(AgentPPOTrainer):
             agent_class=self.agent_class,
             agent_args=self.config.agent.get("agent_args", {}),
             model_path=self.config.actor_rollout_ref.model.path,
-            max_episodes=self.config.agent.max_episodes,
+            max_episodes=self.config.agent.trajectory_episode_len,
             max_trajectory_length=self.config.agent.max_trajectory_length,
             max_prompt_length=self.config.data.max_prompt_length,
             env_class=self.env_class,
@@ -86,10 +88,8 @@ class AsyncAgentPPOTrainer(AgentPPOTrainer):
         Initialize environment depending on env_class with the necessary extra_info, also set uid of the batch.
         """
         env_args = batch.non_tensor_batch["extra_info"].tolist()
-        envs = [self.env_class(**env_args[i]) for i in range(len(env_args))]
+        envs = [self.env_class.from_extra_info(env_args[i]) for i in range(len(env_args))]
         agents = [self.agent_class(**self.config.agent.get("agent_args", {})) for _ in range(len(envs))]
-        for i, env in enumerate(envs):
-            env.env_id = batch.non_tensor_batch["uid"][i]
 
         self.agent_execution_engine.update_envs_and_agents(envs, agents)
 
@@ -131,7 +131,7 @@ class AsyncAgentPPOTrainer(AgentPPOTrainer):
         total_mini_batch_iters = 0
         for epoch in range(self.config.trainer.total_epochs):
             for batch_iter, batch_dict in enumerate(self.train_dataloader):
-                print(f"step: {self.global_steps}")
+                print(f"step: {self.global_steps}", flush=True)
                 batch: DataProto = DataProto.from_single_dict(batch_dict)
                 batch = batch.repeat(
                     repeat_times=self.config.actor_rollout_ref.rollout.n,
@@ -178,12 +178,12 @@ class AsyncAgentPPOTrainer(AgentPPOTrainer):
                     for mini_batch_iter in range(num_loops):
                         print(f"mini_batch_iter: {mini_batch_iter + 1} / {num_loops}", flush=True)
                         # if mini_batch_iter == num_loops - 1:
-                        #     while True:
-                        #         if replay_queue.qsize() >= ppo_mini_batch_size:
-                        #             break
-                        #         print("waiting for last item, current queue size is", replay_queue.qsize())
-                        #         time.sleep(1)
-                        #     break
+                        #   while True:
+                        #       if replay_queue.qsize() >= ppo_mini_batch_size:
+                        #           break
+                        #       print("waiting for last item, current queue size is", replay_queue.qsize())
+                        #       time.sleep(1)
+                        
                         mini_batch_metrics = {}
                         start_time = time.perf_counter()         
                         with Timer('pipeline_gen', timing_raw):
@@ -257,6 +257,7 @@ class AsyncAgentPPOTrainer(AgentPPOTrainer):
                         mini_batch.meta_info['global_token_num'] = torch.sum(mini_batch.batch['attention_mask'], dim=-1).tolist()
                         # update actor
                         start_time = time.perf_counter()
+
                         with Timer('update_actor', timing_raw):
                             actor_output = self.actor_wg.update_actor_mini_batch(mini_batch)
                         actor_output_metrics = reduce_metrics(actor_output.meta_info['metrics'])
@@ -266,7 +267,7 @@ class AsyncAgentPPOTrainer(AgentPPOTrainer):
                         training_batch.append(mini_batch)
                         update_metrics(metrics, mini_batch_metrics)
                         total_mini_batch_iters += 1
-
+  
                     # last_iter_mini_batch_iter = (mini_batch_iter + last_iter_mini_batch_iter - 1) % ppo_step_minibatch_iter
                     with Timer('rollout_model_update', timing_raw):
                         updated_actor_module_fsdp_ref = self.actor_wg.get_state_dict()

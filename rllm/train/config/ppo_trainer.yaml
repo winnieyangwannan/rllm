@@ -211,5 +211,5 @@ env:
 
 agent:
   name: tool_agent
-  max_episodes: 20
+  trajectory_episode_len: 20
   max_trajectory_length: 8000
