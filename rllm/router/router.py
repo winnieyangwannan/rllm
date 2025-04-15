@@ -24,10 +24,10 @@ class Router:
         return self.cache_map[application_id]
 
     # The two functions below are to invoke sharding managers concurrently so all_gather doesn't hang
-    async def __enter__(self):
+    def __enter__(self):
         self.rollout_engine.generate_async_sharding_manager_enter()
 
-    async def __exit__(self):
+    def __exit__(self):
         self.rollout_engine.generate_async_sharding_manager_exit()
        
     async def _get_result_verl_async(self, batch, application_id, **kwargs):

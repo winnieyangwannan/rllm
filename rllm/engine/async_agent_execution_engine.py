@@ -333,7 +333,7 @@ class AsyncAgentExecutionEngine(AgentExecutionEngine):
     ):
         # Note: this function is not concurrecy safe due to the router.__enter__ and router.__exit__
         if self.engine_name == "verl":
-            await self.router.__enter__()
+            self.router.__enter__()
 
         application_ids = [str(uuid.uuid4()) for _ in range(self.n_parallel_agents)]
 
@@ -358,4 +358,4 @@ class AsyncAgentExecutionEngine(AgentExecutionEngine):
                 raise e
             
         if self.engine_name == "verl":
-            await self.router.__exit__()
+            self.router.__exit__()
