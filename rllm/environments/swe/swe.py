@@ -12,7 +12,7 @@ import r2egym
 from r2egym.agenthub.environment.env import EnvArgs, RepoEnv
 from r2egym.agenthub.action import Action
 
-from ..batch_env import BatchedEnv
+from rllm.environments.batch_env import BatchedEnv
 
 R2EGYM_PATH = os.path.dirname(r2egym.__file__)
 # List of tools to be used in the environment.
@@ -26,6 +26,7 @@ R2EGYM_COMMAND_FILES = [
 R2E_ENV_IDS = [
     "R2E-Gym/R2E-Gym-Subset",
     "R2E-Gym/R2E-Gym-V1",
+    "R2E-Gym/R2E-Gym-Lite",
     "R2E-Gym/SWE-Bench-Verified",
     "R2E-Gym/SWE-Bench-Lite",
 ]
@@ -137,6 +138,7 @@ class BatchSWEEnv(BatchedEnv):
         dataset_name: str = "R2E-Gym/R2E-Gym-Lite",
         split: str = "train", # Must be either "train" or "test"
         seeds: List[int] = None,
+        truncate_dataset_size: int = None, # Limit # of Docker images to use
     ):
         """Initialize the batched SWE environment.
         
@@ -144,6 +146,7 @@ class BatchSWEEnv(BatchedEnv):
             batch_size: Number of environments to run in parallel
             seeds: Random seeds for each environment
         """
+        self._batch_size = batch_size
         assert dataset_name in R2E_ENV_IDS, \
             f"Dataset name {dataset_name} not in {R2E_ENV_IDS}"
         self.dataset_name = dataset_name
@@ -155,20 +158,22 @@ class BatchSWEEnv(BatchedEnv):
         self.seeds = seeds
         
         self.full_dataset = load_dataset(dataset_name, split=split)
+        if truncate_dataset_size:
+            self.full_dataset = self.full_dataset.select(range(truncate_dataset_size))
+        
         self.envs = []
         self.env_ids = []
         for i in range(batch_size):
             if self.seeds:
                 np_random, _ = seeding.np_random(seeds[i])
-                # select_idx = np_random.integers(0, len(swe_dataset))
-                # TODO: Limit the number to 100 now
-                select_idx = np_random.integers(0, 100)
+                select_idx = np_random.integers(0, len(self.full_dataset))
             else:
                 select_idx = None
-            self.envs.append(SWEEnv(self.full_dataset, idx=select_idx))
-            self.env_ids.append(f"SWE:{select_idx}-{uuid.uuid4()[:6]}")
+            # Ensure idx is a standard Python int for dataset indexing
+            env_idx = int(select_idx) if select_idx is not None else None
+            self.envs.append(SWEEnv(self.full_dataset, idx=env_idx))
+            self.env_ids.append(f"SWE:{select_idx}-{str(uuid.uuid4())[:6]}")
 
-        self.batch_size = batch_size
         self.max_workers = 32
 
     @property
@@ -179,7 +184,7 @@ class BatchSWEEnv(BatchedEnv):
     @property
     def batch_size(self) -> int:
         """Get the batch size."""
-        return self.batch_size
+        return self._batch_size
 
     def reset(self, seed=0) -> Tuple[List, List]:
         """Reset all environments in parallel.
@@ -199,11 +204,11 @@ class BatchSWEEnv(BatchedEnv):
             [(idx,) for idx in range(len(self.envs))],
             max_workers=self.max_workers
         ) as results:
-            observations = [obs for _, obs in sorted(results, key=lambda x: x[0])]
+            observations = [obs for _, (_, obs) in sorted(results, key=lambda x: x[0])]
 
         return observations, [{}] * self.batch_size
 
-    def step(self, actions: List[str], env_idxs: List[int]=[]) -> Tuple[List, List, List, List, List]:
+    def step(self, actions: List[str], env_idxs: List[int] = []) -> Tuple[List, List, List, List, List]:
         """Step the environments in parallel.
         
         Args:
@@ -219,7 +224,8 @@ class BatchSWEEnv(BatchedEnv):
 
         assert len(actions) == len(env_idxs), f"Number of actions ({len(actions)}) must match the env used {len(env_idxs)}"
 
-        
+        observations, rewards, dones, truncates, infos = [], [], [], [], []
+
         def _step_env(idx, action):
             obs, reward, done, info = self.envs[idx].step(action)
             return idx, obs, reward, done, info
@@ -231,14 +237,14 @@ class BatchSWEEnv(BatchedEnv):
         ) as results:
             # Unpack and reorder results
             sorted_results = sorted(results, key=lambda x: x[0])
-            observations = [obs for _, (idx, obs, _, _, _) in sorted_results]
-            rewards = [reward for _, (idx, _, reward, _, _) in sorted_results]
-            dones = [done for _, (idx, _, _, done, _) in sorted_results]
-            truncates = [False for _ in sorted_results]
-            infos = [info for _, (idx, _, _, _, info) in sorted_results]
+            for _, (_, obs, reward, done, info) in sorted_results:
+                observations.append(obs)
+                rewards.append(reward)
+                dones.append(done)
+                truncates.append(False)
+                infos.append(info)
 
-        return (observations, rewards, dones, 
-                truncates, infos)
+        return observations, rewards, dones, truncates, infos
 
     def close(self):
         """Close all environments."""
@@ -274,4 +280,15 @@ class BatchSWEEnv(BatchedEnv):
         seeds = [
             i["seed"] for i in extra_infos
         ]
-        return BatchSWEEnv(batch_size=len(extra_infos), seeds=seeds)
+        # Pass default dataset_name and split, as they are not in extra_infos
+        return BatchSWEEnv(
+            batch_size=len(extra_infos), 
+            seeds=seeds,
+            dataset_name="R2E-Gym/SWE-Bench-Lite", # Add default
+            split="test" # Add default
+        )
+
+if __name__ == "__main__":
+    env = BatchSWEEnv(batch_size=2)
+    print(env.reset())
+    print(env.close())
