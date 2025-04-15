@@ -76,7 +76,7 @@ class AsyncAgentPPOTrainer(AgentPPOTrainer):
             agent_class=self.agent_class,
             agent_args=self.config.agent.get("agent_args", {}),
             model_path=self.config.actor_rollout_ref.model.path,
-            max_episodes=self.config.agent.max_episodes,
+            max_episodes=self.config.agent.trajectory_episode_len,
             max_trajectory_length=self.config.agent.max_trajectory_length,
             max_prompt_length=self.config.data.max_prompt_length,
             env_class=self.env_class,
@@ -88,10 +88,8 @@ class AsyncAgentPPOTrainer(AgentPPOTrainer):
         Initialize environment depending on env_class with the necessary extra_info, also set uid of the batch.
         """
         env_args = batch.non_tensor_batch["extra_info"].tolist()
-        envs = [self.env_class(**env_args[i]) for i in range(len(env_args))]
+        envs = [self.env_class.from_extra_info(env_args[i]) for i in range(len(env_args))]
         agents = [self.agent_class(**self.config.agent.get("agent_args", {})) for _ in range(len(envs))]
-        for i, env in enumerate(envs):
-            env.env_id = batch.non_tensor_batch["uid"][i]
 
         self.agent_execution_engine.update_envs_and_agents(envs, agents)
 

@@ -52,8 +52,8 @@ class AsyncAgentExecutionEngine(AgentExecutionEngine):
         self.max_trajectory_length = max_trajectory_length
         self.max_prompt_length = max_prompt_length
 
-        self.agents = [agent_class(**agent_args) for _ in range(self.n_parallel_agents)]
-        self.envs = [env_class(**env_args) for _ in range(self.n_parallel_agents)]
+        # self.agents = [agent_class(**agent_args) for _ in range(self.n_parallel_agents)]
+        # self.envs = [env_class(**env_args) for _ in range(self.n_parallel_agents)]
 
         # rollout engine args
         self.rollout_engine_args = rollout_engine_args

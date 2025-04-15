@@ -47,10 +47,5 @@ python3 -m rllm.train.train_async_agent_ppo \
     trainer.total_epochs=100 \
     env.name=frozenlake \
     agent.name=frozenlakeagent \
-<<<<<<< HEAD
-    agent.max_trajectory_length=5000 \
-    agent.max_episodes=5 \
-=======
     agent.max_trajectory_length=20000 \
-    agent.trajectory_episode_len=5 > agent_grpo_async_rllm_log.log 2>&1
->>>>>>> 4981a0c (bug fix)
+    agent.trajectory_episode_len=5

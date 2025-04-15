@@ -304,9 +304,9 @@ class FrozenLakeEnv(GymFrozenLakeEnv, BaseEnv):
             lookup = lambda cell: self.GRID_LOOKUP.get(cell, "?")
             return "\n".join("".join(lookup(cell) for cell in row) for row in room_state)
 
-    # @property
-    # def env_id(self):
-    #     return f"{self.seed}-{self.size}-{self.p}"
+    @property
+    def env_id(self):
+        return f"{self.seed}-{self.size}-{self.p}"
     
     @staticmethod
     def from_extra_info(extra_info) -> "FrozenLakeEnv":
