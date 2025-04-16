@@ -14,7 +14,6 @@ FILE_IDS = {
 }
 
 # Get the rllm package path
-import rllm
 RLLM_PATH = os.path.dirname(os.path.dirname(rllm.__file__))
 
 # Define the destination paths

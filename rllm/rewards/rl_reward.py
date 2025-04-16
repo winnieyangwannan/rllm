@@ -2,6 +2,7 @@ from rllm.rewards.reward_types import RewardConfig, RewardFn, RewardInput, Rewar
 from rllm.rewards.math_reward import RewardMathFn
 from rllm.rewards.code_reward import rllm_reward_fn_code 
 from rllm.rewards.math_reward import rllm_reward_fn_math
+from rllm.data.dataset_types import TestDataset, TrainDataset
 from typing import Union, List
 import json 
 
@@ -35,7 +36,7 @@ class RLRewardFn(RewardFn):
         )
 
 def rllm_reward_fn(data_source: str, llm_solution: str, ground_truth: Union[str, List[str]], extra_info={}, **kwargs):
-    if data_source in ["apps", "taco", "code_contests", "codeforces", "livecodebench", "kodcode", "leetcode", "primeintellect", "humanevalplus"]:
+    if data_source.upper() in [e.name for e in list(TestDataset.Code) + list(TrainDataset.Code)]:
         try:
             ground_truth = json.loads(ground_truth)
         except json.JSONDecodeError:
