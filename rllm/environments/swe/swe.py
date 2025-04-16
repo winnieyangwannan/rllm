@@ -21,7 +21,6 @@ R2EGYM_COMMAND_FILES = [
     os.path.join(R2EGYM_PATH, "agenthub/tools/search.py"),
     os.path.join(R2EGYM_PATH, "agenthub/tools/execute_bash.py"),
     os.path.join(R2EGYM_PATH, "agenthub/tools/finish.py"),
-    os.path.join(R2EGYM_PATH, "agenthub/tools/search_dir.py"),
 ]
 R2E_ENV_IDS = [
     "R2E-Gym/R2E-Gym-Subset",
