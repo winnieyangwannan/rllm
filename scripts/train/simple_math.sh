@@ -26,8 +26,8 @@ fi
 # Train over a single node, 8 A100-80GB GPUs.
 python3 -m verl.trainer.main_ppo \
     algorithm.adv_estimator=grpo \
-    data.train_files=$HOME/rllm/data/math_train.parquet \
-    data.val_files=$HOME/rllm/data/math.parquet \
+    data.train_files=$HOME/rllm-internal/data/math_train.parquet \
+    data.val_files=$HOME/rllm-internal/data/math.parquet \
     data.train_batch_size=64 \
     data.val_batch_size=512 \
     data.max_prompt_length=2048 \
@@ -46,10 +46,9 @@ python3 -m verl.trainer.main_ppo \
     actor_rollout_ref.actor.fsdp_config.param_offload=False \
     actor_rollout_ref.actor.fsdp_config.optimizer_offload=False \
     actor_rollout_ref.rollout.tensor_model_parallel_size=1 \
-    actor_rollout_ref.rollout.name=sglang \
+    actor_rollout_ref.rollout.name=vllm \
     actor_rollout_ref.rollout.async_engine=False \
     actor_rollout_ref.rollout.enable_log_prob=False \
-    actor_rollout_ref.rollout.enable_tools=False \
     actor_rollout_ref.rollout.temperature=0.6 \
     actor_rollout_ref.rollout.val_kwargs.temperature=0.6 \
     actor_rollout_ref.rollout.gpu_memory_utilization=0.85 \
@@ -63,11 +62,10 @@ python3 -m verl.trainer.main_ppo \
     trainer.logger=['console','wandb'] \
     trainer.project_name='deepscaler' \
     trainer.experiment_name='deepscaler-math-debug' \
-    +trainer.val_before_train=False \
+    trainer.val_before_train=True \
     trainer.n_gpus_per_node=8 \
     trainer.nnodes=1 \
-    trainer.save_freq=1 \
-    trainer.test_freq=1 \
+    trainer.save_freq=10 \
+    trainer.test_freq=10 \
     trainer.default_hdfs_dir=null \
-    trainer.remove_previous_ckpt_in_save=True \
     trainer.total_epochs=30 "${@:1}"

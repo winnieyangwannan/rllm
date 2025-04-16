@@ -42,5 +42,5 @@ class BrowserGym(BaseEnv):
         return self.env.step(action)
 
     @staticmethod
-    def from_extra_info(extra_info) -> "BrowserGym":
+    def from_json(extra_info) -> "BrowserGym":
         return BrowserGym(env_id=extra_info["environment_id"])

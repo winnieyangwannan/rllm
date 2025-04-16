@@ -4,19 +4,13 @@
 
 ```bash
 # Fetch both rllm and verl.
-git clone --recurse-submodules https://github.com/deepscaler/rllm.git
+git clone --recurse-submodules https://github.com/agentica-project/rllm-internal.git
 # Install dependencies.
 cd rllm
-pip install -e ./verl
+pip install -e ./verl[vllm,gpu,sglang]
 pip install -e .
 pip install -r requirements.txt
 ```
-
-Install SGLang (if `sglang` is specified in verl):
-```
-pip install --upgrade pip
-pip install uv
-uv pip install "sglang[all]>=0.4.4.post3" --find-links https://flashinfer.ai/whl/cu124/torch2.5/flashinfer-python
 ```
 
 ## Dataset Setup
@@ -31,17 +25,6 @@ python deepscaler_dataset.py
 python code_dataset.py
 ```
 
-Install Python Dependencies:
-
-```bash
-pip install -r ./verl/requirements.txt
-pip install -e ./verl
-pip install google-cloud-aiplatform latex2sympy2 pylatexenc sentence_transformers
-pip install -e .
-# Don't forget to install this, or training run will crash!
-```
-
-
 ## Train
 ```bash
 cd scripts/train
@@ -52,16 +35,10 @@ cd scripts/train
 
 ### WandB
 
-````bash
+```bash
 wandb login
 wandb init
-### Run Unit Tests
-
-Unit tests are in the `test/` folder and uses pytest. To run:
-
-```bash
-PYTHONPATH=. pytest tests/rllm/rewards/tests.py
-````
+```
 
 ### WebAgent 
 

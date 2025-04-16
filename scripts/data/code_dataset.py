@@ -14,10 +14,13 @@ import pandas as pd
 import json 
 
 from verl.utils.hdfs_io import makedirs
-
+# Get the rllm package path
+import rllm
 from rllm.data.dataset_types import TestDataset, TrainDataset
 from rllm.data.utils import load_dataset, fetch_live_code_bench_system_prompt
 from datasets import concatenate_datasets
+
+RLLM_PATH = os.path.dirname(os.path.dirname(rllm.__file__))
 
 def make_map_fn(split: str):
     """Create a mapping function to process dataset examples.
@@ -71,7 +74,7 @@ def make_map_fn(split: str):
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='Process datasets for DeepScaler training')
-    parser.add_argument('--local_dir', default=os.path.expanduser('~/rllm/data'),
+    parser.add_argument('--local_dir', default=os.path.join(RLLM_PATH, 'data'),
                        help='Local directory to save processed datasets')
     parser.add_argument('--hdfs_dir', default=None,
                        help='Optional HDFS directory to copy datasets to')
@@ -119,8 +122,6 @@ if __name__ == '__main__':
     # save all code dataset
     all_train_df = pd.DataFrame(all_train_data)
     all_train_df.to_parquet(os.path.join(local_dir, 'deepscaler_code.parquet'))
-    # Save a json version of deepscaler_code.parquet
-    all_train_df.to_json(os.path.join(local_dir, 'deepscaler_code.json'), orient='records')
 
     #Process and save each test dataset separately
     all_test_data = []
@@ -135,4 +136,3 @@ if __name__ == '__main__':
                 all_test_data.append(processed_example)
         test_df = pd.DataFrame(test_data)
         test_df.to_parquet(os.path.join(local_dir, f'test_{dataset_name}.parquet'))
-        test_df.to_json(os.path.join(local_dir, f'test_{dataset_name}.json'), orient='records')

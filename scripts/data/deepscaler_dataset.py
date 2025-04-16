@@ -13,8 +13,11 @@ import pandas as pd
 from verl.utils.hdfs_io import copy, makedirs
 from verl.utils.reward_score.math import last_boxed_only_string, remove_boxed
 
+import rllm
 from rllm.data.utils import load_dataset
 from rllm.data.dataset_types import TrainDataset, TestDataset
+
+RLLM_PATH = os.path.dirname(os.path.dirname(rllm.__file__))
 
 
 def extract_solution(solution_str: str) -> str:
@@ -71,7 +74,7 @@ def make_map_fn(split: str):
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='Process datasets for DeepScaler training')
-    parser.add_argument('--local_dir', default=os.path.expanduser('~/rllm/data'),
+    parser.add_argument('--local_dir', default=os.path.join(RLLM_PATH, 'data'),
                        help='Local directory to save processed datasets')
     parser.add_argument('--hdfs_dir', default=None,
                        help='Optional HDFS directory to copy datasets to')
@@ -84,7 +87,7 @@ if __name__ == '__main__':
     makedirs(local_dir, exist_ok=True)
 
     # Initialize datasets
-    train_datasets = [TrainDataset.Math.DEEPSCALER_7B]
+    train_datasets = [TrainDataset.Math.DEEPSCALER]
     train_dataset = load_dataset(train_datasets[0])
     test_datasets = [TestDataset.Math.AIME, TestDataset.Math.AMC, TestDataset.Math.MATH, TestDataset.Math.MINERVA, TestDataset.Math.OLYMPIAD_BENCH]
     
@@ -110,10 +113,10 @@ if __name__ == '__main__':
         dataset_name = test_dataset.value.lower()
         test_df = pd.DataFrame(test_data)
         test_df.to_parquet(os.path.join(local_dir, f'{dataset_name}.parquet'))
-        print(f"{dataset_name} test data size:", len(test_data))
+        print(f"{test_dataset.value} test data size:", len(test_data))
 
     # Save training dataset
-    print("train data size:", len(train_data))
+    print("Train data size:", len(train_data))
     train_df = pd.DataFrame(train_data)
     train_df.to_parquet(os.path.join(local_dir, 'train.parquet'))
 

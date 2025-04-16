@@ -309,5 +309,5 @@ class FrozenLakeEnv(GymFrozenLakeEnv, BaseEnv):
     #     return f"{self.seed}-{self.size}-{self.p}"
     
     @staticmethod
-    def from_extra_info(extra_info) -> "FrozenLakeEnv":
+    def from_json(extra_info) -> "FrozenLakeEnv":
         return FrozenLakeEnv(size=extra_info["size"], seed=extra_info["seed"], p=extra_info["p"])
