@@ -5,8 +5,8 @@ export PYTORCH_CUDA_ALLOC_CONF="expandable_segments:True"
 
 python3 -m verl.trainer.main_ppo_agent \
     algorithm.adv_estimator=grpo \
-    data.train_files=/home/colin/data/rllm-frozenlake/train.parquet \
-    data.val_files=/home/colin/data/rllm-frozenlake/test.parquet \
+    data.train_files=$HOME/data/rllm-frozenlake/train.parquet \
+    data.val_files=$HOME/data/rllm-frozenlake/test.parquet \
     data.train_batch_size=32 \
     data.max_prompt_length=28000 \
     data.max_response_length=4000 \
