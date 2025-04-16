@@ -354,6 +354,114 @@ class AsyncAgentExecutionEngine(AgentExecutionEngine):
                 yield result
             except Exception as e:
                 raise e
+
+    async def execute_tasks(self, tasks):
+        """
+        Run asynchronous interactions between the agent and environment where each agent
+        has its own environment instance and can proceed independently.
+        
+        Args:
+            tasks: List of tasks to process
+            max_concurrent: Maximum number of concurrent tasks to process (defaults to self.n_parallel_agents)
             
-        if self.engine_name == "verl":
-            self.router.__exit__()
+        Returns:
+            A list of trajectories, one for each task.
+        """
+
+        max_concurrent = self.n_parallel_agents
+        
+        # Initialize results list to store trajectories for all tasks
+        all_trajectories = {}
+        
+        # Create a queue of tasks to process
+        task_queue = list(enumerate(tasks))
+        active_requests = []
+        
+        async def run_agent_episode(task_id, task, agent_idx, env_idx):
+            """Run a single agent's episode asynchronously"""
+            agent = self.agents[agent_idx]
+            env = self.envs[env_idx]
+            
+            # Reset environment with the task
+            observation, _ = env.reset(task=task)
+            
+            # Reset agent
+            agent.reset()
+            
+            # Initialize trajectory for this task
+            trajectory = []
+            
+            for _ in range(self.episode_len):
+                trajectory.append({
+                    "next_observation": observation,
+                })
+
+                # Get action from agent
+                action = await self.get_action_async(trajectory, agent)
+                
+                # Take step in environment
+                next_observation, reward, terminated, truncated, info = env.step(action)
+                
+                # Update agent
+                agent.update(
+                    action=action,
+                    observation=observation,
+                    next_observation=next_observation,
+                    reward=reward,
+                    terminated=terminated,
+                    truncated=truncated,
+                    info=info
+                )
+                
+                observation = next_observation
+                
+                # Check if episode is done
+                if terminated or truncated:
+                    break
+            
+            return task_id, trajectory
+        
+        # Initialize the first batch of tasks
+        for i in range(min(max_concurrent, len(task_queue))):
+            task_id, task = task_queue.pop(0)
+            agent_idx = i % len(self.agents)
+            env_idx = i % len(self.envs)
+            
+            task_coroutine = run_agent_episode(task_id, task, agent_idx, env_idx)
+            active_requests.append((asyncio.create_task(task_coroutine), agent_idx, env_idx))
+        
+        # Process tasks and refill the active requests as they complete
+        while active_requests:
+            # Wait for any task to complete
+            done, pending = await asyncio.wait(
+                [task for task, _, _ in active_requests],
+                return_when=asyncio.FIRST_COMPLETED
+            )
+            
+            completed_info = None
+            for task, agent_idx, env_idx in active_requests:
+                if task in done:
+                    completed_info = (agent_idx, env_idx)
+                    break
+                    
+            # Update active_requests with pending tasks
+            active_requests = [(task, agent_idx, env_idx) for task, agent_idx, env_idx in active_requests 
+                              if task in pending]
+            
+            # Process completed tasks and add new ones
+            for completed_task in done:
+                task_id, trajectory = await completed_task
+                all_trajectories[task_id] = trajectory
+                
+                # If there are more tasks in the queue, add a new one
+                if task_queue and completed_info is not None:
+                    new_task_id, new_task = task_queue.pop(0)
+                    available_agent, available_env = completed_info
+                    
+                    # Create a new task with the available agent and environment
+                    new_coroutine = run_agent_episode(new_task_id, new_task, available_agent, available_env)
+                    active_requests.append((asyncio.create_task(new_coroutine), available_agent, available_env))
+        
+        # Convert the dictionary to a list ordered by task_id
+        ordered_trajectories = [all_trajectories[i] for i in range(len(all_trajectories))]
+        return ordered_trajectories
