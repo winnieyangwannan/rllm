@@ -66,7 +66,7 @@ class MathAgent(BaseAgent):
         
         return obs
     
-    def format_observation_as_messages(self, obs):
+    def format_observation_as_messages(self, obs, **kwargs):
         messages = []
         if 'question' in obs:
             messages.append({"role": "user", "content": obs['question'] + self.instruction})

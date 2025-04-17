@@ -89,7 +89,10 @@ class AsyncAgentPPOTrainer(AgentPPOTrainer):
         """
         env_args = batch.non_tensor_batch["extra_info"].tolist()
         envs = [self.env_class.from_extra_info(env_args[i]) for i in range(len(env_args))]
+        # envs = [self.env_class(**env_args[i]) for i in range(len(env_args))]
         agents = [self.agent_class(**self.config.agent.get("agent_args", {})) for _ in range(len(envs))]
+
+        batch.non_tensor_batch["uid"] = np.array([env.env_id for env in envs], dtype=object)
 
         self.agent_execution_engine.update_envs_and_agents(envs, agents)
 
@@ -203,13 +206,15 @@ class AsyncAgentPPOTrainer(AgentPPOTrainer):
                             reward_tensor = mini_batch.batch['token_level_scores'] # already computed
                             print('Reward tensor:', reward_tensor.sum(-1))
                         
-                            # Rejection sampling based on rewards
                             # Group rewards by uid
                             uids = mini_batch.non_tensor_batch['uid']
                             unique_uids = np.unique(uids)
                             valid_mask = torch.ones(len(uids), dtype=torch.bool)
                             solve_none = 0
                             solve_all = 0
+                            solve_partial = 0
+
+                            print(f"num unique_uids: {len(unique_uids)}")
                             for uid in unique_uids:
                                 uid_mask = uids == uid
                                 uid_rewards = reward_tensor[uid_mask].sum(-1)  # Sum rewards for each sequence
@@ -221,11 +226,13 @@ class AsyncAgentPPOTrainer(AgentPPOTrainer):
                                 elif (uid_rewards == 1).all():
                                     valid_mask[uid_mask] = False
                                     solve_all += 1
+                                else:
+                                    solve_partial += 1
                             
                             # Log to metrics
                             mini_batch_metrics['batch/solve_none'] = solve_none
                             mini_batch_metrics['batch/solve_all'] = solve_all
-                            
+                            mini_batch_metrics['batch/solve_partial'] = solve_partial
                             
                             if self.config.actor_rollout_ref.rollout.vllm_log_prob:
                                 # Avoid recompute log_prob bugs. Log probs from vLLM. (Could be buggy)

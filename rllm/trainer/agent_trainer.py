@@ -69,16 +69,6 @@ class AgentPPOTrainer(RayPPOTrainer):
             max_prompt_length=self.config.data.max_prompt_length,
         )
 
-    # def init_envs(self, batch):
-    #     """
-    #     Initialize environment depending on env_class with the necessary extra_info, also set uid of the batch.
-    #     """
-    #     env_args = batch.non_tensor_batch["extra_info"].tolist()
-    #     envs = [self.env_class(**env_args[i]) for i in range(len(env_args))]
-    #     batch.non_tensor_batch["uid"] = np.array([env.env_id for env in envs], dtype=object)
-
-    #     return envs
-
     def init_envs_and_agents(self, batch):
         """
         Initialize environment depending on env_class with the necessary extra_info, also set uid of the batch.
@@ -86,6 +76,8 @@ class AgentPPOTrainer(RayPPOTrainer):
         env_args = batch.non_tensor_batch["extra_info"].tolist()
         envs = [self.env_class.from_extra_info(env_args[i]) for i in range(len(env_args))]
         agents = [self.agent_class(**self.config.agent.get("agent_args", {})) for _ in range(len(envs))]
+
+        batch.non_tensor_batch["uid"] = np.array([env.env_id for env in envs], dtype=object)
 
         self.agent_execution_engine.update_envs_and_agents(envs, agents)
 
