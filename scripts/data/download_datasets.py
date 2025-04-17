@@ -1,6 +1,7 @@
 import os
 import gdown
 import shutil
+import rllm
 
 # Define the Google Drive file IDs for the JSON files
 FILE_IDS = {
@@ -9,20 +10,21 @@ FILE_IDS = {
     "train_livecodebench.json": "1-lKdRfRjytdTltgLyAxTqVRoksI2cJfU",
     "test_livecodebench.json": "1B0sotl48BLd4gqlitL5HVJf1cy3RxpEV",
     "kodcode.json": "1STMAebzGjJtgl5OcOhG-4hjdAiLAWiY6",
-    "primeintellect_old.json": "1Av2d_1DlVDB5mTL3AWOP0Eb-1Ft8e3fO",
     "primeintellect.json": "1o-4P5fUBZd75PM9qfSXInPYXzfW5dfYm",
 }
 
+# Get the rllm package path
+import rllm
+RLLM_PATH = os.path.dirname(os.path.dirname(rllm.__file__))
+
 # Define the destination paths
 DEST_PATHS = {
-
-    "train_taco.json": os.path.expanduser("~/rllm/rllm/data/train/code/taco.json"),
-    "olympiad.json": os.path.expanduser("~/rllm/rllm/data/train/math/olympiad.json"),
-    "test_livecodebench.json": os.path.expanduser("~/rllm/rllm/data/test/code/livecodebench.json"),
-    "train_livecodebench.json": os.path.expanduser("~/rllm/rllm/data/train/code/livecodebench.json"),
-    "kodcode.json": os.path.expanduser("~/rllm/rllm/data/train/code/kodcode.json"),
-    "primeintellect_old.json": os.path.expanduser("~/rllm/rllm/data/train/code/primeintellect_old.json"),
-    "primeintellect.json": os.path.expanduser("~/rllm/rllm/data/train/code/primeintellect.json"),
+    "train_taco.json": os.path.join(RLLM_PATH, "rllm/data/train/code/taco.json"),
+    "olympiad.json": os.path.join(RLLM_PATH, "rllm/data/train/math/olympiad.json"), 
+    "test_livecodebench.json": os.path.join(RLLM_PATH, "rllm/data/test/code/livecodebench.json"),
+    "train_livecodebench.json": os.path.join(RLLM_PATH, "rllm/data/train/code/livecodebench.json"),
+    "kodcode.json": os.path.join(RLLM_PATH, "rllm/data/train/code/kodcode.json"),
+    "primeintellect.json": os.path.join(RLLM_PATH, "rllm/data/train/code/primeintellect.json"),
 }
 
 # Create the necessary directories
