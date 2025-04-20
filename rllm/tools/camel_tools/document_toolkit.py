@@ -115,11 +115,9 @@ class DocumentProcessingToolkit(BaseToolkit):
             except Exception:
                 logger.debug(f"The raw xml data is: {content}")
                 return True, content
-
         if self._is_webpage(document_path):
             extracted_text = self._extract_webpage_content(document_path)
             return True, extracted_text
-
         else:
             # judge if url
             parsed_url = urlparse(document_path)
@@ -127,17 +125,14 @@ class DocumentProcessingToolkit(BaseToolkit):
             if not is_url:
                 if not os.path.exists(document_path):
                     return False, f"Document not found at path: {document_path}."
+            else:
+                document_path = self._download_file(document_path)
 
             # if is docx file, use docx2markdown to convert it
             if document_path.endswith(".docx"):
-                if is_url:
-                    tmp_path = self._download_file(document_path)
-                else:
-                    tmp_path = document_path
-
-                file_name = os.path.basename(tmp_path)
+                file_name = os.path.basename(document_path)
                 md_file_path = f"{file_name}.md"
-                docx_to_markdown(tmp_path, md_file_path)
+                docx_to_markdown(document_path, md_file_path)
 
                 # load content of md file
                 with open(md_file_path, "r") as f:
@@ -148,11 +143,6 @@ class DocumentProcessingToolkit(BaseToolkit):
                 # try using pypdf to extract text from pdf
                 try:
                     from PyPDF2 import PdfReader
-
-                    if is_url:
-                        tmp_path = self._download_file(document_path)
-                        document_path = tmp_path
-
                     # Open file in binary mode for PdfReader
                     f = open(document_path, "rb")
                     reader = PdfReader(f)
@@ -252,10 +242,11 @@ class DocumentProcessingToolkit(BaseToolkit):
         # app = FirecrawlApp(api_key=api_key)
 
         app = FirecrawlApp(api_url="http://0.0.0.0:3002")
-
+        print("STARTING CRAWL")
         data = app.crawl_url(
             url, params={"limit": 1, "scrapeOptions": {"formats": ["markdown"]}}
         )
+        print("ENDING CRAWL")
         logger.debug(f"Extractred data from {url}: {data}")
         if len(data["data"]) == 0:
             if data["success"]:
@@ -270,14 +261,19 @@ class DocumentProcessingToolkit(BaseToolkit):
         try:
             response = requests.get(url, stream=True)
             response.raise_for_status()
+            
             file_name = url.split("/")[-1]
+            content_type = response.headers.get('Content-Type', '')
+            ext = mimetypes.guess_extension(content_type.split(';')[0])
+            if ext and not file_name.endswith(ext):
+                file_name += ext
 
             file_path = os.path.join(self.cache_dir, file_name)
 
             with open(file_path, "wb") as file:
                 for chunk in response.iter_content(chunk_size=8192):
                     file.write(chunk)
-
+            print(f"Downloaded file to {file_path}")
             return file_path
 
         except requests.exceptions.RequestException as e:

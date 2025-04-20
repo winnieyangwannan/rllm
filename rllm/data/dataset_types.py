@@ -29,6 +29,9 @@ class TrainDataset:
         PRIMEINTELLECT = "PRIMEINTELLECT"
         KODCODE = "KODCODE"
 
+    class Web(enum.Enum):
+        GAIA = "GAIA"
+
 class TestDataset:
 
     class Math(enum.Enum):

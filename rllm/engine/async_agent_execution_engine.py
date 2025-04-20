@@ -126,7 +126,8 @@ class AsyncAgentExecutionEngine(AgentExecutionEngine):
 
         response = await get_response(prompt)
         print("oai response:", response)
-        return agent._post_get_action(response), response
+        # Unsure if this is correct way to process response.choices[0].message
+        return agent._post_get_action(response), str(response.choices[0].message)
 
     async def run_agent_trajectory(
         self, idx, application_id, seed=0, mode="Text", **kwargs
@@ -176,10 +177,10 @@ class AsyncAgentExecutionEngine(AgentExecutionEngine):
         )
         for _ in range(self.max_episodes):
             # Get action from agent
+            
             action, response = await self.get_action_async(
                 trajectory, agent, application_id, **kwargs
             )
-
             # Take step in environment
             next_observation, reward, terminated, truncated, info = env.step(action)
 
@@ -241,7 +242,6 @@ class AsyncAgentExecutionEngine(AgentExecutionEngine):
                         "truncated": True,
                     }
                 )
-
                 colorful_print(
                     f"Trajectory {idx} completed due to maximum trajectory length reached. But entire Text or Conversation will be returned. Reward is 0. \n",
                     "yellow",
@@ -375,93 +375,28 @@ class AsyncAgentExecutionEngine(AgentExecutionEngine):
         
         # Create a queue of tasks to process
         task_queue = list(enumerate(tasks))
-        active_requests = []
-        
-        async def run_agent_episode(task_id, task, agent_idx, env_idx):
-            """Run a single agent's episode asynchronously"""
-            agent = self.agents[agent_idx]
-            env = self.envs[env_idx]
-            
-            # Reset environment with the task
-            observation, _ = env.reset(task=task)
-            
-            # Reset agent
-            agent.reset()
-            
-            # Initialize trajectory for this task
-            trajectory = []
-            
-            for _ in range(self.episode_len):
-                trajectory.append({
-                    "next_observation": observation,
-                })
+        semaphore = asyncio.Semaphore(max_concurrent)
+        index_queue = asyncio.Queue(maxsize=max_concurrent)
+        for i in range(max_concurrent):
+            index_queue.put_nowait(i)
 
-                # Get action from agent
-                action = await self.get_action_async(trajectory, agent)
-                
-                # Take step in environment
-                next_observation, reward, terminated, truncated, info = env.step(action)
-                
-                # Update agent
-                agent.update(
-                    action=action,
-                    observation=observation,
-                    next_observation=next_observation,
-                    reward=reward,
-                    terminated=terminated,
-                    truncated=truncated,
-                    info=info
-                )
-                
-                observation = next_observation
-                
-                # Check if episode is done
-                if terminated or truncated:
-                    break
-            
-            return task_id, trajectory
+        async def sem_wrapper(task_id, task):
+            async with semaphore:
+                # Get an available index
+                index = await index_queue.get()
+                try:
+                    self.envs[index].reset(task=task)
+                    res = await self.run_agent_trajectory(index, task_id)
+                    return task_id, res
+                finally:
+                    # Put the index back in the queue when done
+                    await index_queue.put(index)
         
-        # Initialize the first batch of tasks
-        for i in range(min(max_concurrent, len(task_queue))):
-            task_id, task = task_queue.pop(0)
-            agent_idx = i % len(self.agents)
-            env_idx = i % len(self.envs)
-            
-            task_coroutine = run_agent_episode(task_id, task, agent_idx, env_idx)
-            active_requests.append((asyncio.create_task(task_coroutine), agent_idx, env_idx))
+        # Create a queue of tasks to process
+        task_queue = list(enumerate(tasks))
+        # Run all tasks concurrently
+        results = await asyncio.gather(*[sem_wrapper(task_id, task) for task_id, task in task_queue])
         
-        # Process tasks and refill the active requests as they complete
-        while active_requests:
-            # Wait for any task to complete
-            done, pending = await asyncio.wait(
-                [task for task, _, _ in active_requests],
-                return_when=asyncio.FIRST_COMPLETED
-            )
-            
-            completed_info = None
-            for task, agent_idx, env_idx in active_requests:
-                if task in done:
-                    completed_info = (agent_idx, env_idx)
-                    break
-                    
-            # Update active_requests with pending tasks
-            active_requests = [(task, agent_idx, env_idx) for task, agent_idx, env_idx in active_requests 
-                              if task in pending]
-            
-            # Process completed tasks and add new ones
-            for completed_task in done:
-                task_id, trajectory = await completed_task
-                all_trajectories[task_id] = trajectory
-                
-                # If there are more tasks in the queue, add a new one
-                if task_queue and completed_info is not None:
-                    new_task_id, new_task = task_queue.pop(0)
-                    available_agent, available_env = completed_info
-                    
-                    # Create a new task with the available agent and environment
-                    new_coroutine = run_agent_episode(new_task_id, new_task, available_agent, available_env)
-                    active_requests.append((asyncio.create_task(new_coroutine), available_agent, available_env))
-        
-        # Convert the dictionary to a list ordered by task_id
+        all_trajectories = {task_id: trajectory for task_id, trajectory in results}
         ordered_trajectories = [all_trajectories[i] for i in range(len(all_trajectories))]
         return ordered_trajectories
