@@ -28,14 +28,14 @@ def _postprocess_model_chat_template(message_text):
 
 # Step 1: Tokenize the full chat at once
 full_text = tokenizer.apply_chat_template(messages, tokenize=False, add_generation_prompt=False)
-full_text = _postprocess_model_chat_template(full_text)
+# full_text = _postprocess_model_chat_template(full_text)
 full_ids = tokenizer(full_text, add_special_tokens=False).input_ids
 
 # Step 2: Tokenize individual messages with chat template, then concatenate
 individual_ids = []
 for i in range(len(messages)):
     partial = tokenizer.apply_chat_template([messages[i]], tokenize=False, add_generation_prompt=False)
-    partial = _postprocess_model_chat_template(partial)
+    # partial = _postprocess_model_chat_template(partial)
     tokens = tokenizer(partial, add_special_tokens=False).input_ids
     individual_ids.extend(tokens)
 
@@ -54,7 +54,7 @@ if not is_equal:
 
 # Step 4: (Optional) Decode for sanity
 print("\nDecoded full:")
-print(tokenizer.decode(full_ids))
+print(repr(tokenizer.decode(full_ids)))
 
 print("\nDecoded individual concat:")
-print(tokenizer.decode(individual_ids))
+print(repr(tokenizer.decode(individual_ids)))

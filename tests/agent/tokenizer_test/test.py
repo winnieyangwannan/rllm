@@ -15,12 +15,12 @@ messages = [
 
 # 1. Apply chat template for generation-time prompt of B
 gen_prompt = tokenizer.apply_chat_template(messages[:1], tokenize=False, add_generation_prompt=True)
-print(f"Generation time prompt after chat template: {gen_prompt}")
+print(f"Generation time prompt after chat template: {repr(gen_prompt)}")
 gen_prompt_ids = tokenizer(gen_prompt, add_special_tokens=False).input_ids
 
 # 2. Apply chat template for full conversation [A, B, C, D]
 full_prompt = tokenizer.apply_chat_template(messages, tokenize=False, add_generation_prompt=False)
-print(f"Full prompt after chat template: {full_prompt}")
+print(f"Full prompt after chat template: {repr(full_prompt)}")
 full_prompt_ids = tokenizer(full_prompt, add_special_tokens=False).input_ids
 
 # 3. Compare
@@ -35,7 +35,7 @@ if not is_prefix:
             break
 
 print("\nDecoded generation-time prompt:")
-print(tokenizer.decode(gen_prompt_ids))
+print(repr(tokenizer.decode(gen_prompt_ids)))
 
 print("\nDecoded full prompt prefix:")
-print(tokenizer.decode(full_prompt_ids[:len(gen_prompt_ids)]))
+print(repr(tokenizer.decode(full_prompt_ids[:len(gen_prompt_ids)])))

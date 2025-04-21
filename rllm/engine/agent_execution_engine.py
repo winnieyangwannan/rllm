@@ -256,14 +256,15 @@ class AgentExecutionEngine:
                 **kwargs,
             )
             assert len(gen_actions) == len(seq_idxs), f"Number of actions {len(gen_actions)} returned does not match number of trajectories {len(seq_idxs)}"
-            # ToDO (Sijun): What is the purpose of this?
-            for i, idx in enumerate(seq_idxs):
-                if isinstance(gen_actions[i], str):
-                    actions.append(self._postprocess_model_response(gen_actions[i]))
-                else:
-                    actions.append(gen_actions[i])
-                responses.append(self._postprocess_model_response(gen_responses[i]))
-
+            # # ToDO (Sijun): What is the purpose of this?
+            # for i, idx in enumerate(seq_idxs):
+            #     if isinstance(gen_actions[i], str):
+            #         actions.append(self._postprocess_model_response(gen_actions[i]))
+            #     else:
+            #         actions.append(gen_actions[i])
+            #     responses.append(self._postprocess_model_response(gen_responses[i]))
+            actions = gen_actions
+            responses = gen_responses
         return actions, responses, seq_idxs
 
     def step_env_single(self, env, action):
@@ -597,16 +598,17 @@ class AgentExecutionEngine:
         if any(substring in self.model_path.lower() for substring in ('qwen', 'qwen')):
             # from https://huggingface.co/Qwen/Qwen2.5-7B-Instruct/blob/main/tokenizer_config.json, a default system message is inserted. So we manually remove the first occurance of default system message.
             # This is currently assuming no tool call.
-            target = "<|im_start|>system\nYou are Qwen, created by Alibaba Cloud. You are a helpful assistant.<|im_end|>\n"
-            if message_text.startswith(target):
-                message_text = message_text[len(target):]  # Remove only if it’s at the start
+            if not first_msg:
+                target = "<|im_start|>system\nYou are Qwen, created by Alibaba Cloud. You are a helpful assistant.<|im_end|>\n"
+                if message_text.startswith(target):
+                    message_text = message_text[len(target):]  # Remove only if it’s at the start
 
-            target = "<|im_start|>system\nYou are a helpful assistant.<|im_end|>\n"
-            if message_text.startswith(target):
-                message_text = message_text[len(target):]  # Remove only if it’s at the start
+                target = "<|im_start|>system\nYou are a helpful assistant.<|im_end|>\n"
+                if message_text.startswith(target):
+                    message_text = message_text[len(target):]  # Remove only if it’s at the start
         
         if any(substring in self.model_path.lower() for substring in ('deepseek-r1-distill-qwen')):
-            target = "<think>"
+            target = "<think>\n"
             if message_text.endswith(target):
                 message_text = message_text[:-len(target)]
             
@@ -617,17 +619,20 @@ class AgentExecutionEngine:
 
         return message_text
     
-    def _postprocess_model_response(self, message_text):
-        """
-        Postprocesses the model output text to be clean and ready to be formatted into message again. 
+    # def _postprocess_model_response(self, message_text):
+    #     """
+    #     Postprocesses the model output text to be clean and ready to be formatted into message again. 
 
-        """
-        # TODO: this needs to be edited for each new chat template.
-        return message_text.replace(self.tokenizer.eos_token, "") # replace ending eos_token
+    #     """
+    #     # TODO: this needs to be edited for each new chat template.
+    #     return message_text.replace(self.tokenizer.eos_token, "") # replace ending eos_token
     
     def _convert_message_to_tokens_and_masks(self, msg, first_msg=False):
-
-        # We assume for now all user message will add the generation prompt
+        # TODO: this needs to be edited for each new chat template.
+        if msg["role"] == "assistant":
+            if msg["content"].endswith(self.tokenizer.eos_token):
+                msg["content"] = msg["content"][:-len(self.tokenizer.eos_token)]
+        
         msg_text = self.tokenizer.apply_chat_template(
             [msg], tokenize=False, add_generation_prompt=False
         )
