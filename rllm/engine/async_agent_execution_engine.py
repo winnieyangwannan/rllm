@@ -79,9 +79,6 @@ class AsyncAgentExecutionEngine(AgentExecutionEngine):
         else:
             raise NotImplementedError
         
-        if isinstance(action, str):
-            action = self._postprocess_model_response(action)
-        response = self._postprocess_model_response(response)
         return action, response
         
     async def _get_action_verl_async(self, trajectory, agent, application_id, **kwargs):
@@ -240,10 +237,11 @@ class AsyncAgentExecutionEngine(AgentExecutionEngine):
                         "next_observation": next_observation,
                         "reward": 0,  # TODO: May need to update this to be minimum environment score in the future
                         "done": terminated or truncated,
-                        "action": action,
+                        "action": action if not isinstance(action, str) else self._postprocess_model_response(action),
+                        "response": self._postprocess_model_response(response),
                         "info": info,
-                        "response": response,
                         "truncated": True,
+                        
                     }
                 )
 
@@ -269,9 +267,9 @@ class AsyncAgentExecutionEngine(AgentExecutionEngine):
                     "next_observation": next_observation,
                     "reward": reward,
                     "done": terminated or truncated,
-                    "action": action,
                     "info": info,
-                    "response": response,
+                    "action": action if not isinstance(action, str) else self._postprocess_model_response(action),
+                    "response": self._postprocess_model_response(response),
                     "truncated": True,
                 }
             )

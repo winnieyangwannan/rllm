@@ -498,7 +498,7 @@ class AgentExecutionEngine:
                                 "next_observation": next_observations[i],
                                 "reward": rewards[i],
                                 "done": terminateds[i] or truncateds[i],
-                                "action": self._postprocess_model_response(actions[i]),
+                                "action": actions[i] if not isinstance(actions[i], str) else self._postprocess_model_response(actions[i]),
                                 "info": infos[i],
                                 "response": self._postprocess_model_response(responses[i]),
                                 "truncated": False,
