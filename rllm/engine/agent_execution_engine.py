@@ -498,9 +498,9 @@ class AgentExecutionEngine:
                                 "next_observation": next_observations[i],
                                 "reward": rewards[i],
                                 "done": terminateds[i] or truncateds[i],
-                                "action": actions[i],
+                                "action": self._postprocess_model_response(actions[i]),
                                 "info": infos[i],
-                                "response": responses[i],
+                                "response": self._postprocess_model_response(responses[i]),
                                 "truncated": False,
                             }
                         )
@@ -619,19 +619,21 @@ class AgentExecutionEngine:
 
         return message_text
     
-    # def _postprocess_model_response(self, message_text):
-    #     """
-    #     Postprocesses the model output text to be clean and ready to be formatted into message again. 
+    def _postprocess_model_response(self, message_text):
+        """
+        Postprocesses the model output text to be clean and ready to be formatted into message again. 
 
-    #     """
-    #     # TODO: this needs to be edited for each new chat template.
-    #     return message_text.replace(self.tokenizer.eos_token, "") # replace ending eos_token
+        """
+        # TODO: this needs to be edited for each new chat template.
+        return message_text.replace(self.tokenizer.eos_token, "") # replace ending eos_token
     
     def _convert_message_to_tokens_and_masks(self, msg, first_msg=False):
         # TODO: this needs to be edited for each new chat template.
+        has_eos = False
         if msg["role"] == "assistant":
             if msg["content"].endswith(self.tokenizer.eos_token):
                 msg["content"] = msg["content"][:-len(self.tokenizer.eos_token)]
+                has_eos = True
         
         msg_text = self.tokenizer.apply_chat_template(
             [msg], tokenize=False, add_generation_prompt=False
@@ -650,6 +652,9 @@ class AgentExecutionEngine:
             for i in range(1, len(msg_mask)):
                 if msg_tokens[i] == self.tokenizer.pad_token:
                     msg_mask[i] = 0
+            # Mask out the eos appended due to chat_template
+            if not has_eos:
+                msg_mask[-1] = 0
 
         return msg_tokens, msg_mask
     
