@@ -71,14 +71,19 @@ class AsyncAgentExecutionEngine(AgentExecutionEngine):
     async def get_action_async(self, trajectory, agent, application_id, **kwargs):
         # currently load balancing only happens with verl
         if self.engine_name == "openai":
-            return await self._get_action_openai_async(trajectory, agent, **kwargs)
+            action, response = await self._get_action_openai_async(trajectory, agent, **kwargs)
         elif self.engine_name == "verl":
-            return await self._get_action_verl_async(
+            action, response = await self._get_action_verl_async(
                 trajectory, agent, application_id, **kwargs
             )
         else:
             raise NotImplementedError
-
+        
+        if isinstance(action, str):
+            action = self._postprocess_model_response(action)
+        response = self._postprocess_model_response(response)
+        return action, response
+        
     async def _get_action_verl_async(self, trajectory, agent, application_id, **kwargs):
         """
         Asynchronous version for getting a single action from verl using Ray worker groups.
@@ -155,7 +160,7 @@ class AsyncAgentExecutionEngine(AgentExecutionEngine):
         conversations = []
 
         initial_messages = agent.format_observation_as_messages(observation)
-        prompt_tokens, _ = self._convert_messages_to_tokens_and_masks(initial_messages)
+        prompt_tokens, _ = self._convert_messages_to_tokens_and_masks(initial_messages, first_msg=True)
         prompt_token_len = len(prompt_tokens)
 
         # Update conversation version
@@ -195,9 +200,9 @@ class AsyncAgentExecutionEngine(AgentExecutionEngine):
             )
             # Process response tokens
             assistant_msg = {"role": "assistant", "content": response}
+            assistant_msg_tokens, assistant_msg_masks = self._convert_messages_to_tokens_and_masks([assistant_msg])
+
             env_messages = agent.format_observation_as_messages(next_observation)
-            
-            assistant_msg_tokens, assistant_msg_masks = self._convert_message_to_tokens_and_masks(assistant_msg)
             env_msg_tokens, env_msg_masks = self._convert_messages_to_tokens_and_masks(env_messages)
 
             # Reached maximum number of tokens for the trajectory
@@ -213,10 +218,10 @@ class AsyncAgentExecutionEngine(AgentExecutionEngine):
                     self.max_trajectory_length - self.max_prompt_length - response_len
                 )
                 # Truncate the response and masks
-                truncated_response_tokens = (assistant_msg_tokens + env_msg_tokens)[
+                truncated_response_tokens = (assistant_msg_tokens)[
                     :truncation_length
                 ]
-                truncated_response_masks = (assistant_msg_masks + env_msg_masks)[
+                truncated_response_masks = (assistant_msg_masks)[
                     :truncation_length
                 ]
 
@@ -226,7 +231,7 @@ class AsyncAgentExecutionEngine(AgentExecutionEngine):
                 
                 # Update conversation history
                 conversations.append(assistant_msg)
-                conversations.extend(env_messages)
+                # conversations.extend(env_messages)
 
                 # Update trajectory (Though it is truncated)
                 trajectory.append(
@@ -242,24 +247,20 @@ class AsyncAgentExecutionEngine(AgentExecutionEngine):
                     }
                 )
 
-                colorful_print(
-                    f"Trajectory {idx} completed due to maximum trajectory length reached. But entire Text or Conversation will be returned. Reward is 0. \n",
-                    "yellow",
-                )
+                # colorful_print(
+                #     f"Trajectory {idx} completed due to maximum trajectory length reached. But entire Text or Conversation will be returned. Reward is 0. \n",
+                #     "yellow",
+                # )
                 termination_reason = ""  # no longer need, already logged
                 # handle returning
                 break
             
-            # Update repsonse token length
-            response_len += len(assistant_msg_tokens) + len(env_msg_tokens)
 
             # Update the token version of trajectory
-            response_tokens.extend(assistant_msg_tokens + env_msg_tokens)
-            response_masks.extend(assistant_msg_masks + env_msg_masks)
-
+            response_tokens.extend(assistant_msg_tokens)
+            response_masks.extend(assistant_msg_masks)
             # Update conversation version
             conversations.append(assistant_msg)
-            conversations.extend(env_messages)
 
             # Update the trajectory
             trajectory.append(
@@ -281,12 +282,19 @@ class AsyncAgentExecutionEngine(AgentExecutionEngine):
             if terminated or truncated:
                 termination_reason = "termination" if terminated else "truncation"
                 break
+            
+            # Insert the environment tokens
+            response_tokens.extend(env_msg_tokens)
+            response_masks.extend(env_msg_masks)
+            conversations.extend(env_messages)
+            # Update repsonse token length
+            response_len += len(assistant_msg_tokens) + len(env_msg_tokens)
 
-        if termination_reason:
-            colorful_print(
-                f"Trajectory {idx} completed due to {termination_reason}. Reward is {reward}. \n",
-                "green",
-            )
+        # if termination_reason:
+        #     colorful_print(
+        #         f"Trajectory {idx} completed due to {termination_reason}. Reward is {reward}. \n",
+        #         "green",
+        #     )
 
         trajectory = trajectory[1:]
         augmented_trajectory = add_mc_return(

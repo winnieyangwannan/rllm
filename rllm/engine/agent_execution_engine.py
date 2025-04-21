@@ -126,14 +126,23 @@ class AgentExecutionEngine:
 
         old_padding_side = self.tokenizer.padding_side
         self.tokenizer.padding_side = "left"
-        inputs = self.tokenizer.apply_chat_template(
+
+        # Apply chat template to get raw strings (no tokenization yet)
+        formatted_prompts = self.tokenizer.apply_chat_template(
             prompts,
             add_generation_prompt=True,
+            tokenize=False
+        )
+
+        # Post-process each string.
+        formatted_prompts = [self._postprocess_model_chat_template(p, first_msg=True) for p in formatted_prompts]
+
+        # Tokenize the final processed strings
+        inputs = self.tokenizer(
+            formatted_prompts,
             padding=True,
             truncation=True,
             return_tensors="pt",
-            return_dict=True,
-            tokenize=True,
         )
         self.tokenizer.padding_side = old_padding_side
 
@@ -250,10 +259,10 @@ class AgentExecutionEngine:
             # ToDO (Sijun): What is the purpose of this?
             for i, idx in enumerate(seq_idxs):
                 if isinstance(gen_actions[i], str):
-                    actions.append(gen_actions[i].replace("<|im_end|>", ""))
+                    actions.append(self._postprocess_model_response(gen_actions[i]))
                 else:
                     actions.append(gen_actions[i])
-                responses.append(gen_responses[i].replace("<|im_end|>", ""))
+                responses.append(self._postprocess_model_response(gen_responses[i]))
 
         return actions, responses, seq_idxs
 
@@ -378,7 +387,7 @@ class AgentExecutionEngine:
                     trajectories[i].append({"next_observation": obs})
 
                     initial_messages = self.agents[i].format_observation_as_messages(obs)
-                    prompt_tokens, _ = self._convert_messages_to_tokens_and_masks(initial_messages)
+                    prompt_tokens, _ = self._convert_messages_to_tokens_and_masks(initial_messages, first_msg=True)
 
                     max_prompt_token_len = max(max_prompt_token_len, len(prompt_tokens))
                     all_prompt_tokens[i] = prompt_tokens
@@ -436,26 +445,26 @@ class AgentExecutionEngine:
                         
                         # Compute the response tokens and response masks for the trajectory
                         assistant_msg = {"role": "assistant", "content": responses[i]}
+                        assistant_msg_tokens, assistant_msg_masks = self._convert_messages_to_tokens_and_masks([assistant_msg], first_msg=False)
 
                         next_obs = next_observations[i]
                         env_messages = self.agents[idx].format_observation_as_messages(next_obs, with_system_prompt=False)
-                        env_msg_tokens, env_msg_masks = self._convert_messages_to_tokens_and_masks(env_messages)
+                        env_msg_tokens, env_msg_masks = self._convert_messages_to_tokens_and_masks(env_messages, first_msg=False)
 
-                        assistant_msg_tokens, assistant_msg_masks = self._convert_message_to_tokens_and_masks(assistant_msg)
+                        
 
                         # Reached maximum number of tokens for the trajectory
                         if all_response_token_lens[idx] + len(assistant_msg_tokens) + len(env_msg_tokens) + max_prompt_token_len >= self.max_trajectory_length:
                             # Truncation length
                             truncation_length = self.max_trajectory_length - max_prompt_token_len - all_response_token_lens[idx]
                             # Truncate the response and masks
-                            truncated_response_tokens = (assistant_msg_tokens + env_msg_tokens)[:truncation_length]
-                            truncated_response_masks = (assistant_msg_masks + env_msg_masks)[:truncation_length]
+                            truncated_response_tokens = (assistant_msg_tokens)[:truncation_length]
+                            truncated_response_masks = (assistant_msg_masks)[:truncation_length]
                             # Update the token version of trajectory (Though it is truncated)
                             all_response_tokens[idx].extend(truncated_response_tokens)
                             all_response_masks[idx].extend(truncated_response_masks)
                             # Update conversation (Though it is truncated)
                             all_conversations[idx].append(assistant_msg)
-                            all_conversations[idx].extend(env_messages)
                             # Update trajectory (Though it is truncated)
                             trajectories[idx].append(
                                 {
@@ -470,31 +479,17 @@ class AgentExecutionEngine:
                                 }
                             )
                             batch_done[idx] = True
-                            colorful_print(
-                                f"Trajectory {idx} completed due to maximum trajectory length reached. But entire Text or Conversation will be returned. Reward is {rewards[i]}. \n",
-                                "yellow",
-                            )
+                            # colorful_print(
+                            #     f"Trajectory {idx} completed due to maximum trajectory length reached. But entire Text or Conversation will be returned. Reward is {rewards[i]}. \n",
+                            #     "yellow",
+                            # )
                             continue
-
-                        # If an environment is done, handle the completed trajectory
-                        if terminateds[i] or truncateds[i]:
-                            batch_done[idx] = True
-                            colorful_print(
-                                f"Trajectory {idx} completed due to {'terminaion' if terminateds[i] else 'truncation'}. Reward is {rewards[i]}. \n",
-                                "green",
-                            )
-
-                        # Update repsonse token length
-                        all_response_token_lens[idx] += len(assistant_msg_tokens) + len(env_msg_tokens)
-
+                        
                         # Update the token version of trajectory
-                        all_response_tokens[idx].extend(assistant_msg_tokens + env_msg_tokens)
-                        all_response_masks[idx].extend(assistant_msg_masks + env_msg_masks)
-
+                        all_response_tokens[idx].extend(assistant_msg_tokens)
+                        all_response_masks[idx].extend(assistant_msg_masks)
                         # Update conversation version
                         all_conversations[idx].append(assistant_msg)
-                        all_conversations[idx].extend(env_messages)
-
                         # Update the trajectory
                         trajectories[idx].append(
                             {
@@ -509,6 +504,21 @@ class AgentExecutionEngine:
                             }
                         )
                         observations[idx] = next_observations[i]
+                        # If an environment is done, handle the completed trajectory
+                        if terminateds[i] or truncateds[i]:
+                            batch_done[idx] = True
+                            # colorful_print(
+                            #     f"Trajectory {idx} completed due to {'terminaion' if terminateds[i] else 'truncation'}. Reward is {rewards[i]}. \n",
+                            #     "green",
+                            # )
+                            continue
+
+                        # Insert env tokens to the results
+                        all_response_tokens[idx].extend(env_msg_tokens)
+                        all_response_masks[idx].extend(env_msg_masks)
+                        all_conversations[idx].extend(env_messages)
+                        # Update repsonse token length
+                        all_response_token_lens[idx] += len(assistant_msg_tokens) + len(env_msg_tokens)
 
                 break
 
@@ -572,9 +582,10 @@ class AgentExecutionEngine:
         self.envs = envs
         self.agents = agents
 
-    def _postprocess_model_chat_template(self, message_text):
+    def _postprocess_model_chat_template(self, message_text, first_msg=False):
         """
-        Postprocesses the chat template output by removing any automatically added system message.
+        Postprocesses the chat template output by removing any automatically added system message. 
+        And extract the content such that individually formatted messages can be safely concatenated to a conversation.
 
         Args:
             message_text (str): The formatted message text.
@@ -582,35 +593,67 @@ class AgentExecutionEngine:
         Returns:
             str: The processed message text without the default system message.
         """
-        if any(substring in self.model_path.lower() for substring in ('qwen2', 'qwen2.5')):
+        # TODO: this needs to be edited for each new chat template.
+        if any(substring in self.model_path.lower() for substring in ('qwen', 'qwen')):
             # from https://huggingface.co/Qwen/Qwen2.5-7B-Instruct/blob/main/tokenizer_config.json, a default system message is inserted. So we manually remove the first occurance of default system message.
             # This is currently assuming no tool call.
             target = "<|im_start|>system\nYou are Qwen, created by Alibaba Cloud. You are a helpful assistant.<|im_end|>\n"
             if message_text.startswith(target):
-                return message_text[len(target):]  # Remove only if it’s at the start
-            return message_text
+                message_text = message_text[len(target):]  # Remove only if it’s at the start
+
+            target = "<|im_start|>system\nYou are a helpful assistant.<|im_end|>\n"
+            if message_text.startswith(target):
+                message_text = message_text[len(target):]  # Remove only if it’s at the start
+        
+        if any(substring in self.model_path.lower() for substring in ('deepseek-r1-distill-qwen')):
+            target = "<think>"
+            if message_text.endswith(target):
+                message_text = message_text[:-len(target)]
+            
+            if not first_msg:
+                target = "<｜begin▁of▁sentence｜>"
+                if message_text.startswith(target):
+                    message_text = message_text[len(target):]
 
         return message_text
     
-    def _convert_message_to_tokens_and_masks(self, msg):
+    def _postprocess_model_response(self, message_text):
+        """
+        Postprocesses the model output text to be clean and ready to be formatted into message again. 
+
+        """
+        # TODO: this needs to be edited for each new chat template.
+        return message_text.replace(self.tokenizer.eos_token, "") # replace ending eos_token
+    
+    def _convert_message_to_tokens_and_masks(self, msg, first_msg=False):
+
+        # We assume for now all user message will add the generation prompt
         msg_text = self.tokenizer.apply_chat_template(
             [msg], tokenize=False, add_generation_prompt=False
         )
-        msg_text = self._postprocess_model_chat_template(msg_text)
+        msg_text = self._postprocess_model_chat_template(msg_text, first_msg=first_msg)
 
         msg_tokens = self.tokenizer.encode(msg_text, add_special_tokens=False)
 
         mask_value = 1 if msg["role"] == "assistant" else 0
         msg_mask = [mask_value] * len(msg_tokens)
 
+        # need some additional masking like overlap token which should came from prompt's add_generation_prompt
+        if mask_value == 1:
+            # TODO: this needs to be edited for each new chat template. mask out the first token which is <Assistant>
+            msg_mask[0] = 0
+            for i in range(1, len(msg_mask)):
+                if msg_tokens[i] == self.tokenizer.pad_token:
+                    msg_mask[i] = 0
+
         return msg_tokens, msg_mask
     
-    def _convert_messages_to_tokens_and_masks(self, messages):
+    def _convert_messages_to_tokens_and_masks(self, messages, first_msg=False):
         all_msg_tokens = []
         all_msg_masks = []
 
-        for msg in messages:
-            msg_tokens, msg_mask = self._convert_message_to_tokens_and_masks(msg)
+        for i, msg in enumerate(messages):
+            msg_tokens, msg_mask = self._convert_message_to_tokens_and_masks(msg, first_msg=(first_msg and i == 0))
             all_msg_tokens.extend(msg_tokens)
             all_msg_masks.extend(msg_mask)
 
