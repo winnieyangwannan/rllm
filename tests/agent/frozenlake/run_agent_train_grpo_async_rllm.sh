@@ -27,7 +27,7 @@ python3 -m rllm.train.train_async_agent_ppo \
     actor_rollout_ref.rollout.async_engine=True \
     actor_rollout_ref.rollout.n=4 \
     actor_rollout_ref.rollout.val_kwargs.n=1 \
-    actor_rollout_ref.rollout.vllm_log_prob=False \
+    actor_rollout_ref.rollout.enable_log_prob=False \
     actor_rollout_ref.ref.fsdp_config.param_offload=True \
     actor_rollout_ref.ref.log_prob_micro_batch_size_per_gpu=1 \
     actor_rollout_ref.rollout.log_prob_micro_batch_size_per_gpu=1 \

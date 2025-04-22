@@ -68,6 +68,8 @@ class AsyncAgentExecutionEngine(AgentExecutionEngine):
         if self.engine_name == "verl":
             # All generation is done via scheduler. Currently only works for verl
             self.router = Router(rollout_engine=rollout_engine)
+        
+        self.load_tokenizer_template()
 
         self.chat_template_parser = ChatTemplateParser.get_parser(self.tokenizer)
 
@@ -161,7 +163,7 @@ class AsyncAgentExecutionEngine(AgentExecutionEngine):
         conversations = []
 
         initial_messages = agent.format_observation_as_messages(observation)
-        prompt_tokens, _ = self._convert_messages_to_tokens_and_masks(initial_messages, first_msg=True)
+        prompt_tokens, _ = self._convert_messages_to_tokens_and_masks(initial_messages, contains_first_msg=True, contains_generation_msg=True)
         prompt_token_len = len(prompt_tokens)
 
         # Update conversation version
@@ -201,10 +203,10 @@ class AsyncAgentExecutionEngine(AgentExecutionEngine):
             )
             # Process response tokens
             assistant_msg = {"role": "assistant", "content": response}
-            assistant_msg_tokens, assistant_msg_masks = self._convert_messages_to_tokens_and_masks([assistant_msg])
+            assistant_msg_tokens, assistant_msg_masks = self._convert_messages_to_tokens_and_masks([assistant_msg], contains_first_msg=False, contains_generation_msg=False)
 
             env_messages = agent.format_observation_as_messages(next_observation)
-            env_msg_tokens, env_msg_masks = self._convert_messages_to_tokens_and_masks(env_messages)
+            env_msg_tokens, env_msg_masks = self._convert_messages_to_tokens_and_masks(env_messages, contains_first_msg=False, contains_generation_msg=True)
 
             # Reached maximum number of tokens for the trajectory
             if (
@@ -241,8 +243,8 @@ class AsyncAgentExecutionEngine(AgentExecutionEngine):
                         "next_observation": next_observation,
                         "reward": 0,  # TODO: May need to update this to be minimum environment score in the future
                         "done": terminated or truncated,
-                        "action": action if not isinstance(action, str) else self._postprocess_model_response(action),
-                        "response": self._postprocess_model_response(response),
+                        "action": action,
+                        "response": response,
                         "info": info,
                         "truncated": True,
                         
@@ -272,8 +274,8 @@ class AsyncAgentExecutionEngine(AgentExecutionEngine):
                     "reward": reward,
                     "done": terminated or truncated,
                     "info": info,
-                    "action": action if not isinstance(action, str) else self._postprocess_model_response(action),
-                    "response": self._postprocess_model_response(response),
+                    "action": action,
+                    "response": response,
                     "truncated": True,
                 }
             )

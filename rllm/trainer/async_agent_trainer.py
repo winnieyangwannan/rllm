@@ -234,7 +234,7 @@ class AsyncAgentPPOTrainer(AgentPPOTrainer):
                             mini_batch_metrics['batch/solve_all'] = solve_all
                             mini_batch_metrics['batch/solve_partial'] = solve_partial
                             
-                            if self.config.actor_rollout_ref.rollout.vllm_log_prob:
+                            if self.config.actor_rollout_ref.rollout.enable_log_prob:
                                 # Avoid recompute log_prob bugs. Log probs from vLLM. (Could be buggy)
                                 mini_batch.meta_info['micro_batch_size'] = self.config.actor_rollout_ref.rollout.log_prob_micro_batch_size_per_gpu
                                 mini_batch.meta_info['max_token_len'] = self.config.actor_rollout_ref.rollout.log_prob_max_token_len_per_gpu
@@ -253,7 +253,7 @@ class AsyncAgentPPOTrainer(AgentPPOTrainer):
                                     mini_batch = mini_batch.union(ref_log_prob)
                             
                             mini_batch.batch['token_level_rewards'] = mini_batch.batch['token_level_scores']
-                                                    # compute advantages, executed on the driver process
+                            # compute advantages, executed on the driver process
                             mini_batch = compute_advantage(mini_batch,
                                                   adv_estimator=self.config.algorithm.adv_estimator,
                                                   gamma=self.config.algorithm.gamma,
