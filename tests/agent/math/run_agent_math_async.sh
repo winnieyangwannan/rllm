@@ -18,7 +18,7 @@ python3 -m rllm.train.train_async_agent_ppo \
     actor_rollout_ref.actor.ppo_mini_batch_size=16 \
     actor_rollout_ref.actor.use_dynamic_bsz=True \
     actor_rollout_ref.actor.ppo_max_token_len_per_gpu=24000 \
-    actor_rollout_ref.actor.use_kl_loss=True \
+    actor_rollout_ref.actor.use_kl_loss=False \
     actor_rollout_ref.actor.kl_loss_coef=0.001 \
     actor_rollout_ref.actor.kl_loss_type=low_var_kl \
     actor_rollout_ref.actor.ulysses_sequence_parallel_size=1 \
@@ -41,16 +41,17 @@ python3 -m rllm.train.train_async_agent_ppo \
     trainer.critic_warmup=0 \
     trainer.logger=['console','wandb'] \
     trainer.project_name='deepscaler' \
-    trainer.experiment_name='deepscaler-math-debug' \
+    trainer.experiment_name='deepscaler-math-async-debug' \
     trainer.val_before_train=True \
-    trainer.n_gpus_per_node=8 \
+    trainer.n_training_gpus_per_node=2 \
+    trainer.n_gpus_per_node=4 \
     trainer.nnodes=1 \
     trainer.save_freq=2000 \
     trainer.test_freq=10 \
     trainer.default_hdfs_dir=null \
     env.name=math \
     agent.name=math_agent \
-    agent.max_trajectory_length=8192 \
+    agent.max_trajectory_length=4096 \
     agent.max_episodes=1 \
     trainer.total_epochs=30 "${@:1}" \
 
