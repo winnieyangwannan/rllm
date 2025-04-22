@@ -141,9 +141,12 @@ class AgentExecutionEngine:
         old_padding_side = self.tokenizer.padding_side
         self.tokenizer.padding_side = "left"
 
-        formatted_prompts = [self.chat_template_parser.parse(prompt) for prompt in prompts]
+        # formatted_prompts = [self.chat_template_parser.parse(prompt) for prompt in prompts]
+        prompts = self.tokenizer.apply_chat_template(
+            prompts, add_generation_prompt=True, tokenize=False
+        )
         # Post-process each string.
-        # formatted_prompts = [self._postprocess_model_chat_template(p, is_first_msg=True, is_generation_msg=True) for p in formatted_prompts]
+        formatted_prompts = [self._postprocess_model_chat_template(p, is_first_msg=True, is_generation_msg=True) for p in prompts]
 
         # Tokenize the final processed strings
         inputs = self.tokenizer(
@@ -638,11 +641,11 @@ class AgentExecutionEngine:
                 has_eos = True 
         
 
-        # msg_text = self.tokenizer.apply_chat_template(
-        #     [msg], tokenize=False, add_generation_prompt=generation_msg,
-        # )
-        # msg_text = self._postprocess_model_chat_template(msg_text, is_first_msg=first_msg, is_generation_msg=generation_msg)
-        msg_text = self.chat_template_parser.parse([msg])
+        msg_text = self.tokenizer.apply_chat_template(
+            [msg], tokenize=False, add_generation_prompt=generation_msg,
+        )
+        msg_text = self._postprocess_model_chat_template(msg_text, is_first_msg=first_msg, is_generation_msg=generation_msg)
+        # msg_text = self.chat_template_parser.parse([msg])
 
         msg_tokens = self.tokenizer.encode(msg_text, add_special_tokens=False)
 
@@ -653,20 +656,23 @@ class AgentExecutionEngine:
         # need some additional masking like overlap token which should came from prompt's add_generation_prompt
         if mask_value == 1:
             # Mask out the assistant token at the beginning
-            assistant_token = self.chat_template_parser.assistant_token
-            assistant_token_ids = self.tokenizer.encode(assistant_token, add_special_tokens=False)
+            # assistant_token = self.chat_template_parser.assistant_token
+            # assistant_token_ids = self.tokenizer.encode(assistant_token, add_special_tokens=False)
             
-            # Mask out the assistant token
-            for i in range(min(len(assistant_token_ids), len(msg_tokens))):
-                # Assert that we're actually masking the assistant token
-                assert msg_tokens[i] == assistant_token_ids[i], f"Expected token {assistant_token_ids[i]} but got {msg_tokens[i]}"
-                msg_mask[i] = 0
+            # # Mask out the assistant token
+            # for i in range(min(len(assistant_token_ids), len(msg_tokens))):
+            #     # Assert that we're actually masking the assistant token
+            #     assert msg_tokens[i] == assistant_token_ids[i], f"Expected token {assistant_token_ids[i]} but got {msg_tokens[i]}"
+            
+            # Remove assistant token not from generation
+            msg_mask = msg_mask[1:]
+            msg_tokens = msg_tokens[1:]
 
-            for i in range(1, len(msg_mask)):
+            for i in range(0, len(msg_mask)):
                 if msg_tokens[i] == self.tokenizer.pad_token_id:
                     msg_mask[i] = 0
 
-            # Mask out the eos appended due to chat_template
+            # Mask out the eos appended due to chat_template if it exists
             if not has_eos and msg_tokens[-1] == self.tokenizer.eos_token_id:
                 msg_mask[-1] = 0
 

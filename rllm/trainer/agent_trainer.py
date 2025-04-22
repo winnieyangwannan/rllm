@@ -533,6 +533,7 @@ class AgentPPOTrainer(RayPPOTrainer):
             assert torch.equal(batch["input_ids"][i], trajectory_batch[i])
             assert torch.equal(batch["attention_mask"][i], attention_mask[i])
             assert torch.equal(mask_slice, traj_mask[i])
+        print("all verified")
 
 
         tensor_batch = {
