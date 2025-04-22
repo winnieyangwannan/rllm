@@ -486,6 +486,8 @@ class AgentPPOTrainer(RayPPOTrainer):
                 environment_score_batch[i, last_valid_idx] = environment_scores[i]
 
         for i in range(len(prompts_batch)):
+
+            # PROMPT CHECK
             if not torch.equal(batch["prompts"][i], prompts_batch[i]):
                 print(f"[Diff in PROMPT at index {i}]")
                 print(batch["prompts"][i].shape)
@@ -495,8 +497,15 @@ class AgentPPOTrainer(RayPPOTrainer):
                 print(prompts_batch[i].shape)
                 print(prompts_batch[i].tolist())
                 print(prompts_batch[i].dtype)
-                print("→ prompts_batch :",    repr(self.tokenizer.decode(prompts_batch[i], skip_special_tokens=False)))
+                print("→ prompts_batch   :", repr(self.tokenizer.decode(prompts_batch[i], skip_special_tokens=False)))
 
+                diff = batch["prompts"][i] != prompts_batch[i]
+                first_diff_idx = diff.nonzero(as_tuple=True)[0][0].item()
+                print(f"  First mismatch at position {first_diff_idx}")
+                print(f"  batch['prompts'][{i}][{first_diff_idx}] = {batch['prompts'][i][first_diff_idx].item()} ({repr(self.tokenizer.decode(batch['prompts'][i][first_diff_idx:first_diff_idx+1], skip_special_tokens=False))})")
+                print(f"  prompts_batch[{i}][{first_diff_idx}]    = {prompts_batch[i][first_diff_idx].item()} ({repr(self.tokenizer.decode(prompts_batch[i][first_diff_idx:first_diff_idx+1], skip_special_tokens=False))})")
+
+            # RESPONSE CHECK
             if not torch.equal(batch["responses"][i], response_batch[i]):
                 print(f"[Diff in RESPONSE at index {i}]")
                 print(batch["responses"][i].shape)
@@ -506,13 +515,27 @@ class AgentPPOTrainer(RayPPOTrainer):
                 print(response_batch[i].shape)
                 print(response_batch[i].tolist())
                 print(response_batch[i].dtype)
-                print("→ response_batch   :",   repr(self.tokenizer.decode(response_batch[i], skip_special_tokens=False)))
+                print("→ response_batch   :", repr(self.tokenizer.decode(response_batch[i], skip_special_tokens=False)))
 
+                diff = batch["responses"][i] != response_batch[i]
+                first_diff_idx = diff.nonzero(as_tuple=True)[0][0].item()
+                print(f"  First mismatch at position {first_diff_idx}")
+                print(f"  batch['responses'][{i}][{first_diff_idx}] = {batch['responses'][i][first_diff_idx].item()} ({repr(self.tokenizer.decode(batch['responses'][i][first_diff_idx:first_diff_idx+1], skip_special_tokens=False))})")
+                print(f"  response_batch[{i}][{first_diff_idx}]   = {response_batch[i][first_diff_idx].item()} ({repr(self.tokenizer.decode(response_batch[i][first_diff_idx:first_diff_idx+1], skip_special_tokens=False))})")
+
+            # INPUT_IDS CHECK
             if not torch.equal(batch["input_ids"][i], trajectory_batch[i]):
                 print(f"[Diff in INPUT_IDS at index {i}]")
-                print("→ batch['input_ids']:", repr(self.tokenizer.decode(batch["input_ids"][i], skip_special_tokens=False)))
-                print("→ trajectory_batch :",   repr(self.tokenizer.decode(trajectory_batch[i], skip_special_tokens=False)))
+                print("→ batch['input_ids'] :", repr(self.tokenizer.decode(batch["input_ids"][i], skip_special_tokens=False)))
+                print("→ trajectory_batch   :", repr(self.tokenizer.decode(trajectory_batch[i], skip_special_tokens=False)))
 
+                diff = batch["input_ids"][i] != trajectory_batch[i]
+                first_diff_idx = diff.nonzero(as_tuple=True)[0][0].item()
+                print(f"  First mismatch at position {first_diff_idx}")
+                print(f"  batch['input_ids'][{i}][{first_diff_idx}] = {batch['input_ids'][i][first_diff_idx].item()} ({repr(self.tokenizer.decode(batch['input_ids'][i][first_diff_idx:first_diff_idx+1], skip_special_tokens=False))})")
+                print(f"  trajectory_batch[{i}][{first_diff_idx}]  = {trajectory_batch[i][first_diff_idx].item()} ({repr(self.tokenizer.decode(trajectory_batch[i][first_diff_idx:first_diff_idx+1], skip_special_tokens=False))})")
+
+            # ATTENTION_MASK CHECK
             if not torch.equal(batch["attention_mask"][i], attention_mask[i]):
                 print(f"[Diff in ATTENTION_MASK at index {i}]")
                 print(batch["attention_mask"][i].dtype)
@@ -520,7 +543,13 @@ class AgentPPOTrainer(RayPPOTrainer):
                 print(attention_mask[i].dtype)
                 print("→ attention_mask          :", attention_mask[i].tolist())
 
-            # Assuming max_prompt_length is an int, and traj_mask is [bsz, seqlen]
+                diff = batch["attention_mask"][i] != attention_mask[i]
+                first_diff_idx = diff.nonzero(as_tuple=True)[0][0].item()
+                print(f"  First mismatch at position {first_diff_idx}")
+                print(f"  batch['attention_mask'][{i}][{first_diff_idx}] = {batch['attention_mask'][i][first_diff_idx].item()}")
+                print(f"  attention_mask[{i}][{first_diff_idx}]         = {attention_mask[i][first_diff_idx].item()}")
+
+            # TRAJ_MASK SUBSECTION CHECK
             mask_slice = batch["attention_mask"][i][self.config.data.max_prompt_length:]
             diff = mask_slice != traj_mask[i]
             if diff.any():
@@ -528,10 +557,9 @@ class AgentPPOTrainer(RayPPOTrainer):
                 print(f"[Diff in TRAJ_MASK at index {i}] First mismatch at position {first_diff_idx}")
                 print(f"  batch['mask'][slice][{first_diff_idx}] = {mask_slice[first_diff_idx].item()}")
                 print(f"  traj_mask[{i}][{first_diff_idx}]       = {traj_mask[i][first_diff_idx].item()}")
-                print(f"token there in batch['responses'] is", repr(self.tokenizer.decode(batch["responses"][i][first_diff_idx], skip_special_tokens=False)))
-                print(f"token there in responses is", repr(self.tokenizer.decode(response_batch[i][first_diff_idx], skip_special_tokens=False)))
+                print(f"  token there in batch['responses']      = {repr(self.tokenizer.decode(batch['responses'][i][first_diff_idx:first_diff_idx+1], skip_special_tokens=False))}")
+                print(f"  token there in response_batch          = {repr(self.tokenizer.decode(response_batch[i][first_diff_idx:first_diff_idx+1], skip_special_tokens=False))}")
 
-            
             assert torch.equal(batch["prompts"][i], prompts_batch[i])
             assert torch.equal(batch["responses"][i], response_batch[i])
             assert torch.equal(batch["input_ids"][i], trajectory_batch[i])

@@ -118,6 +118,7 @@ class AgentExecutionEngine:
             tokens = responses_tokens[i]
             attn = attention_mask[i]
 
+            text = self.tokenizer.decode(tokens, skip_special_tokens=False)
             # Find last index where attention == 1
             non_pad_indices = (attn == 1).nonzero(as_tuple=True)[0]
             if len(non_pad_indices) == 0:
