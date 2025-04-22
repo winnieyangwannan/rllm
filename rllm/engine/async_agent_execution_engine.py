@@ -1,18 +1,20 @@
-from rllm.engine.agent_execution_engine import AgentExecutionEngine
 import asyncio
-from rllm.misc import colorful_print
-from rllm.environments.env_utils import (
-    add_trajectory_reward,
-    add_mc_return,
-    add_training_reward,
-    compute_training_score,
-    compute_environment_score,
-)
-from rllm.router.router import Router
-import torch
 import uuid
 
 import openai
+import torch
+
+from rllm.engine.agent_execution_engine import AgentExecutionEngine
+from rllm.environments.env_utils import (
+    add_mc_return,
+    add_training_reward,
+    add_trajectory_reward,
+    compute_environment_score,
+    compute_training_score,
+)
+from rllm.misc import colorful_print
+from rllm.parser.chat_template.parser import ChatTemplateParser
+from rllm.router.router import Router
 
 
 class AsyncAgentExecutionEngine(AgentExecutionEngine):
@@ -60,12 +62,14 @@ class AsyncAgentExecutionEngine(AgentExecutionEngine):
         self.sampling_params = kwargs.get("sampling_params", None)
 
         if engine_name == "openai":
-            from openai import AsyncOpenAI 
+            from openai import AsyncOpenAI
             self.client = AsyncOpenAI(**self.rollout_engine_args)
             
         if self.engine_name == "verl":
             # All generation is done via scheduler. Currently only works for verl
             self.router = Router(rollout_engine=rollout_engine)
+
+        self.chat_template_parser = ChatTemplateParser.get_parser(self.tokenizer)
 
     # multithread safe generator function
     async def get_action_async(self, trajectory, agent, application_id, **kwargs):

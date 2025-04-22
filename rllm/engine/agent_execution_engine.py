@@ -10,7 +10,7 @@ from verl.trainer.ppo.ray_trainer import _timer
 
 from rllm.misc import colorful_print
 from rllm.environments.env_utils import add_trajectory_reward, add_mc_return, add_training_reward, compute_training_score, compute_environment_score
-
+from rllm.parser.chat_template.parser import ChatTemplateParser
 
 class AgentExecutionEngine:
 
@@ -57,6 +57,8 @@ class AgentExecutionEngine:
         if engine_name == "openai":
             from openai import OpenAI 
             self.client = OpenAI(**self.rollout_engine_args)
+
+        self.chat_template_parser = ChatTemplateParser.get_parser(self.tokenizer)
 
     def get_actions(self, trajectories, seq_idxs, **kwargs):
         """
@@ -128,14 +130,16 @@ class AgentExecutionEngine:
         self.tokenizer.padding_side = "left"
 
         # Apply chat template to get raw strings (no tokenization yet)
-        formatted_prompts = self.tokenizer.apply_chat_template(
-            prompts,
-            add_generation_prompt=True,
-            tokenize=False
-        )
+        # formatted_prompts = self.tokenizer.apply_chat_template(
+        #     prompts,
+        #     add_generation_prompt=True,
+        #     tokenize=False
+        # )
 
-        # Post-process each string.
-        formatted_prompts = [self._postprocess_model_chat_template(p, first_msg=True) for p in formatted_prompts]
+        # # Post-process each string.
+        # formatted_prompts = [self._postprocess_model_chat_template(p, first_msg=True) for p in formatted_prompts]
+
+        formatted_prompts = [self.chat_template_parser.parse(prompt) for prompt in prompts]
 
         # Tokenize the final processed strings
         inputs = self.tokenizer(
@@ -633,12 +637,14 @@ class AgentExecutionEngine:
         if msg["role"] == "assistant":
             if msg["content"].endswith(self.tokenizer.eos_token):
                 msg["content"] = msg["content"][:-len(self.tokenizer.eos_token)]
-                has_eos = True
+                has_eos = True 
         
-        msg_text = self.tokenizer.apply_chat_template(
-            [msg], tokenize=False, add_generation_prompt=False
-        )
-        msg_text = self._postprocess_model_chat_template(msg_text, first_msg=first_msg)
+        # msg_text = self.tokenizer.apply_chat_template(
+        #     [msg], tokenize=False, add_generation_prompt=False
+        # )
+        # msg_text = self._postprocess_model_chat_template(msg_text, first_msg=first_msg)
+
+        msg_text = self.chat_template_parser.parse([msg])
 
         msg_tokens = self.tokenizer.encode(msg_text, add_special_tokens=False)
 
@@ -647,11 +653,20 @@ class AgentExecutionEngine:
 
         # need some additional masking like overlap token which should came from prompt's add_generation_prompt
         if mask_value == 1:
-            # TODO: this needs to be edited for each new chat template. mask out the first token which is <Assistant>
-            msg_mask[0] = 0
+            # Mask out the assistant token at the beginning
+            assistant_token = self.chat_template_parser.assistant_token
+            assistant_token_ids = self.tokenizer.encode(assistant_token, add_special_tokens=False)
+            
+            # Mask out the assistant token
+            for i in range(min(len(assistant_token_ids), len(msg_tokens))):
+                # Assert that we're actually masking the assistant token
+                assert msg_tokens[i] == assistant_token_ids[i], f"Expected token {assistant_token_ids[i]} but got {msg_tokens[i]}"
+                msg_mask[i] = 0
+
             for i in range(1, len(msg_mask)):
                 if msg_tokens[i] == self.tokenizer.pad_token:
                     msg_mask[i] = 0
+
             # Mask out the eos appended due to chat_template
             if not has_eos:
                 msg_mask[-1] = 0
@@ -666,6 +681,20 @@ class AgentExecutionEngine:
             msg_tokens, msg_mask = self._convert_message_to_tokens_and_masks(msg, first_msg=(first_msg and i == 0))
             all_msg_tokens.extend(msg_tokens)
             all_msg_masks.extend(msg_mask)
+
+
+        # Print the decoded message that gets masked out
+        masked_indices = [i for i, mask in enumerate(all_msg_masks) if mask == 1]
+        if masked_indices:
+            masked_tokens = [all_msg_tokens[i] for i in masked_indices]
+            masked_text = self.tokenizer.decode(masked_tokens)
+            # colorful_print(f"Masked text: {masked_text}", "red")
+        
+        # Print the original decoded tokens
+        original_text = self.tokenizer.decode(all_msg_tokens)
+        # colorful_print(f"Original tokens: {original_text}", "green")
+
+        # import pdb; pdb.set_trace()
 
         return all_msg_tokens, all_msg_masks
         
