@@ -47,5 +47,4 @@ python3 -m rllm.train.train_agent_ppo \
     trainer.total_epochs=100 \
     env.name=frozenlake \
     agent.name=frozenlakeagent \
-    agent.max_trajectory_length=5000 \
     agent.max_episodes=5

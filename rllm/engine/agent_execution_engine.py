@@ -127,7 +127,7 @@ class AgentExecutionEngine:
             self.agents[seq_idxs[i]]._post_get_action(responses[i])
             for i in range(len(trajectories))
         ]
-        return actions, responses #, output.batch
+        return actions, responses, output.batch
 
     def _convert_prompt_verl(self, prompts, **kwargs):
         """
@@ -150,12 +150,12 @@ class AgentExecutionEngine:
             formatted_prompts,
             padding=True,
             return_tensors="pt",
+            add_special_tokens=False,
         )
         self.tokenizer.padding_side = old_padding_side
 
         input_ids = inputs["input_ids"]
         attention_mask = inputs["attention_mask"]
-
         # pad to max sizes
         input_ids = pad_sequence_to_length(input_ids,
                                            max_seq_len=self.max_prompt_length,
@@ -165,7 +165,6 @@ class AgentExecutionEngine:
                                            max_seq_len=self.max_prompt_length,
                                            pad_token_id=0,
                                            left_pad=True)
-        
         position_ids = compute_position_id_with_mask(attention_mask)
         batch_dict = {
             "input_ids": input_ids,
@@ -267,14 +266,14 @@ class AgentExecutionEngine:
                 seq_idxs.append(i)
 
         if len(new_trajectory_sequences) > 0:
-            actions, responses = self.get_actions(
+            actions, responses, batch = self.get_actions(
                 new_trajectory_sequences,
                 seq_idxs,
                 **kwargs,
             )
             assert len(actions) == len(seq_idxs), f"Number of actions {len(actions)} returned does not match number of trajectories {len(seq_idxs)}"
 
-        return actions, responses, seq_idxs
+        return actions, responses, seq_idxs, batch
 
     def step_env_single(self, env, action):
         return env.step(action)
@@ -414,7 +413,7 @@ class AgentExecutionEngine:
                 while not all(batch_done) and steps < self.max_episodes:
                     steps += 1
                     with _timer("get_actions", timing_raw):
-                        actions, responses, seq_idxs = self._safe_get_actions(
+                        actions, responses, seq_idxs, batch = self._safe_get_actions(
                             trajectories, batch_done, **kwargs
                         )
 
@@ -566,7 +565,7 @@ class AgentExecutionEngine:
                     "response_masks": torch.tensor(response_masks, dtype=torch.long),
                     "training_reward": training_reward,
                     "environment_reward": env_reward,
-                    # "batch": batch,
+                    "batch": batch,
                 })
             return token_result
 
@@ -618,16 +617,16 @@ class AgentExecutionEngine:
                     message_text = message_text[len(target):]  # Remove only if it’s at the start
         
         if any(substring in self.model_path.lower() for substring in ('deepseek-r1-distill-qwen')):
-            if is_generation_msg:
-                target = "<think>\n"
-                if message_text.endswith(target):
-                    message_text = message_text[:-len(target)]
+            # if is_generation_msg:
+            #     target = "<think>\n"
+            #     if message_text.endswith(target):
+            #         message_text = message_text[:-len(target)]
             
-            if not is_first_msg:
-                target = "<｜begin▁of▁sentence｜>"
-                if message_text.startswith(target):
-                    message_text = message_text[len(target):]
-
+            # if not is_first_msg:
+            #     target = "<｜begin▁of▁sentence｜>"
+            #     if message_text.startswith(target):
+            #         message_text = message_text[len(target):]
+            pass
         return message_text
     
     

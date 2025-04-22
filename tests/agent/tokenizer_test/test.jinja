@@ -31,3 +31,7 @@
         {{- '\n' + '```output' + '\n' + message['content'] + '\n' + '```' + '\n' -}}
     {%- endif -%}
 {%- endfor -%}
+
+{%- if add_generation_prompt -%}
+    {{- '<｜Assistant｜><think>\n' -}}
+{%- endif -%}

@@ -65,7 +65,7 @@ class AgentPPOTrainer(RayPPOTrainer):
             tokenizer=self.tokenizer,
             model_path=self.config.actor_rollout_ref.model.path,
             max_episodes=self.config.agent.max_episodes,
-            max_trajectory_length=self.config.agent.max_trajectory_length,
+            max_trajectory_length=self.config.data.max_response_length,
             max_prompt_length=self.config.data.max_prompt_length,
         )
 
@@ -433,13 +433,13 @@ class AgentPPOTrainer(RayPPOTrainer):
             prompt_tokens = traj["prompt_tokens"]
             response_tokens = traj["response_tokens"]
             # test if trajectory is empty
-            assert prompt_tokens.numel() != 0 and response_tokens.numel() != 0, f"Both prompt {prompt_tokens.numel()} and response {response_tokens.numel()} of trajectory shouldn't be empty. Please check make sure environment is working and the config: episode_length, max_trajectory_length, etc"
+            assert prompt_tokens.numel() != 0 and response_tokens.numel() != 0, f"Both prompt {prompt_tokens.numel()} and response {response_tokens.numel()} of trajectory shouldn't be empty. Please check make sure environment is working and the config"
             all_initial_tokens_list.append(prompt_tokens)
             all_response_tokens_list.append(response_tokens)
             all_masks_list.append(traj["response_masks"])
             traj_scores.append(traj["training_reward"])
             environment_scores.append(traj["environment_reward"])
-            # batch = traj["batch"]
+            batch = traj["batch"]
 
         # reverse the list and create tensors, pad, then flip to achieve left padding
         prompts_batch = torch.nn.utils.rnn.pad_sequence(
@@ -456,8 +456,7 @@ class AgentPPOTrainer(RayPPOTrainer):
             padding_value=self.tokenizer.pad_token_id,
         )
 
-        max_response_length = self.config.agent.max_trajectory_length - self.config.data.max_prompt_length
-        # max_response_length = self.config.data.max_response_length
+        max_response_length = self.config.data.max_response_length
         response_batch = pad_sequence_to_length(response_batch, max_response_length, self.tokenizer.pad_token_id, left_pad=False)           
 
         traj_mask = torch.nn.utils.rnn.pad_sequence(
@@ -485,55 +484,55 @@ class AgentPPOTrainer(RayPPOTrainer):
                 score_batch[i, last_valid_idx] = traj_score
                 environment_score_batch[i, last_valid_idx] = environment_scores[i]
 
-        # for i in range(len(prompts_batch)):
-        #     if not torch.equal(batch["prompts"][i], prompts_batch[i]):
-        #         print(f"[Diff in PROMPT at index {i}]")
-        #         print(batch["prompts"][i].shape)
-        #         print(batch["prompts"][i].tolist())
-        #         print(batch["prompts"][i].dtype)
-        #         print("→ batch['prompts']:", repr(self.tokenizer.decode(batch["prompts"][i], skip_special_tokens=False)))
-        #         print(prompts_batch[i].shape)
-        #         print(prompts_batch[i].tolist())
-        #         print(prompts_batch[i].dtype)
-        #         print("→ prompts_batch :",    repr(self.tokenizer.decode(prompts_batch[i], skip_special_tokens=False)))
+        for i in range(len(prompts_batch)):
+            if not torch.equal(batch["prompts"][i], prompts_batch[i]):
+                print(f"[Diff in PROMPT at index {i}]")
+                print(batch["prompts"][i].shape)
+                print(batch["prompts"][i].tolist())
+                print(batch["prompts"][i].dtype)
+                print("→ batch['prompts']:", repr(self.tokenizer.decode(batch["prompts"][i], skip_special_tokens=False)))
+                print(prompts_batch[i].shape)
+                print(prompts_batch[i].tolist())
+                print(prompts_batch[i].dtype)
+                print("→ prompts_batch :",    repr(self.tokenizer.decode(prompts_batch[i], skip_special_tokens=False)))
 
-        #     if not torch.equal(batch["responses"][i], response_batch[i]):
-        #         print(f"[Diff in RESPONSE at index {i}]")
-        #         print(batch["responses"][i].shape)
-        #         print(batch["responses"][i].tolist())
-        #         print(batch["responses"][i].dtype)
-        #         print("→ batch['responses']:", repr(self.tokenizer.decode(batch["responses"][i], skip_special_tokens=False)))
-        #         print(response_batch[i].shape)
-        #         print(response_batch[i].tolist())
-        #         print(response_batch[i].dtype)
-        #         print("→ response_batch   :",   repr(self.tokenizer.decode(response_batch[i], skip_special_tokens=False)))
+            if not torch.equal(batch["responses"][i], response_batch[i]):
+                print(f"[Diff in RESPONSE at index {i}]")
+                print(batch["responses"][i].shape)
+                print(batch["responses"][i].tolist())
+                print(batch["responses"][i].dtype)
+                print("→ batch['responses']:", repr(self.tokenizer.decode(batch["responses"][i], skip_special_tokens=False)))
+                print(response_batch[i].shape)
+                print(response_batch[i].tolist())
+                print(response_batch[i].dtype)
+                print("→ response_batch   :",   repr(self.tokenizer.decode(response_batch[i], skip_special_tokens=False)))
 
-        #     if not torch.equal(batch["input_ids"][i], trajectory_batch[i]):
-        #         print(f"[Diff in INPUT_IDS at index {i}]")
-        #         print("→ batch['input_ids']:", repr(self.tokenizer.decode(batch["input_ids"][i], skip_special_tokens=False)))
-        #         print("→ trajectory_batch :",   repr(self.tokenizer.decode(trajectory_batch[i], skip_special_tokens=False)))
+            if not torch.equal(batch["input_ids"][i], trajectory_batch[i]):
+                print(f"[Diff in INPUT_IDS at index {i}]")
+                print("→ batch['input_ids']:", repr(self.tokenizer.decode(batch["input_ids"][i], skip_special_tokens=False)))
+                print("→ trajectory_batch :",   repr(self.tokenizer.decode(trajectory_batch[i], skip_special_tokens=False)))
 
-        #     if not torch.equal(batch["attention_mask"][i], attention_mask[i]):
-        #         print(f"[Diff in ATTENTION_MASK at index {i}]")
-        #         print(batch["attention_mask"][i].dtype)
-        #         print("→ batch['attention_mask'] :", batch["attention_mask"][i].tolist())
-        #         print(attention_mask[i].dtype)
-        #         print("→ attention_mask          :", attention_mask[i].tolist())
+            if not torch.equal(batch["attention_mask"][i], attention_mask[i]):
+                print(f"[Diff in ATTENTION_MASK at index {i}]")
+                print(batch["attention_mask"][i].dtype)
+                print("→ batch['attention_mask'] :", batch["attention_mask"][i].tolist())
+                print(attention_mask[i].dtype)
+                print("→ attention_mask          :", attention_mask[i].tolist())
 
-        #     # Assuming max_prompt_length is an int, and traj_mask is [bsz, seqlen]
-        #     mask_slice = batch["attention_mask"][i][self.config.data.max_prompt_length:]
-        #     if not torch.equal(mask_slice, traj_mask[i]):
-        #         print(f"[Diff in TRAJ_MASK at index {i}]")
-        #         print(mask_slice.dtype)
-        #         print("→ batch['mask'][slice]:", mask_slice.tolist())
-        #         print(traj_mask[i].dtype)
-        #         print("→ traj_mask[i]        :", traj_mask[i].tolist())
+            # Assuming max_prompt_length is an int, and traj_mask is [bsz, seqlen]
+            mask_slice = batch["attention_mask"][i][self.config.data.max_prompt_length:]
+            if not torch.equal(mask_slice, traj_mask[i]):
+                print(f"[Diff in TRAJ_MASK at index {i}]")
+                print(mask_slice.dtype)
+                print("→ batch['mask'][slice]:", mask_slice.tolist())
+                print(traj_mask[i].dtype)
+                print("→ traj_mask[i]        :", traj_mask[i].tolist())
             
-        #     assert torch.equal(batch["prompts"][i], prompts_batch[i])
-        #     assert torch.equal(batch["responses"][i], response_batch[i])
-        #     assert torch.equal(batch["input_ids"][i], trajectory_batch[i])
-        #     assert torch.equal(batch["attention_mask"][i], attention_mask[i])
-        #     assert torch.equal(mask_slice, traj_mask[i])
+            assert torch.equal(batch["prompts"][i], prompts_batch[i])
+            assert torch.equal(batch["responses"][i], response_batch[i])
+            assert torch.equal(batch["input_ids"][i], trajectory_batch[i])
+            assert torch.equal(batch["attention_mask"][i], attention_mask[i])
+            assert torch.equal(mask_slice, traj_mask[i])
 
 
         tensor_batch = {

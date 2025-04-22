@@ -9,7 +9,7 @@ python3 -m rllm.train.train_agent_ppo \
     data.val_files=$HOME/rllm/data/math.parquet \
     data.train_batch_size=64 \
     data.val_batch_size=512 \
-    data.max_prompt_length=2048 \
+    data.max_prompt_length=1024 \
     data.max_response_length=2048 \
     actor_rollout_ref.model.path=deepseek-ai/DeepSeek-R1-Distill-Qwen-1.5B  \
     actor_rollout_ref.actor.optim.lr=1e-6 \
@@ -49,6 +49,5 @@ python3 -m rllm.train.train_agent_ppo \
     trainer.default_hdfs_dir=null \
     env.name=math \
     agent.name=math_agent \
-    agent.max_trajectory_length=4096 \
     agent.max_episodes=1 \
     trainer.total_epochs=30 "${@:1}" \

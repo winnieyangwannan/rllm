@@ -41,7 +41,7 @@ python3 -m rllm.train.train_async_agent_ppo \
     trainer.critic_warmup=0 \
     trainer.logger=['console','wandb'] \
     trainer.project_name='deepscaler' \
-    trainer.experiment_name='deepscaler-math-async-debug' \
+    trainer.experiment_name='deepscaler-math-async-test' \
     trainer.val_before_train=True \
     trainer.n_training_gpus_per_node=2 \
     trainer.n_gpus_per_node=4 \
@@ -51,7 +51,6 @@ python3 -m rllm.train.train_async_agent_ppo \
     trainer.default_hdfs_dir=null \
     env.name=math \
     agent.name=math_agent \
-    agent.max_trajectory_length=4096 \
     agent.max_episodes=1 \
     trainer.total_epochs=30 "${@:1}" \
 

@@ -45,5 +45,4 @@ python3 -m verl.trainer.main_ppo_agent \
     env.subtask=miniwob \
     env.miniwob_url="$MINIWOB_URL" \
     agent.name=webagent \
-    agent.max_trajectory_length=8000 \
     agent.max_episodes=20 > output_grpo.log 2>&1
