@@ -466,7 +466,8 @@ class AgentPPOTrainer(RayPPOTrainer):
 
         trajectory_batch = torch.concat([prompts_batch, response_batch], dim=1)
 
-        attention_mask = torch.where(trajectory_batch != self.tokenizer.pad_token_id, 1, 0)
+        prompt_mask = torch.where(prompts_batch != self.tokenizer.pad_token_id, 1, 0)
+        attention_mask = torch.cat((prompt_mask, traj_mask), dim=-1)
 
         # Compute position_ids
         position_ids = (torch.cumsum(attention_mask, dim=1) - 1) * attention_mask
@@ -521,12 +522,15 @@ class AgentPPOTrainer(RayPPOTrainer):
 
             # Assuming max_prompt_length is an int, and traj_mask is [bsz, seqlen]
             mask_slice = batch["attention_mask"][i][self.config.data.max_prompt_length:]
-            if not torch.equal(mask_slice, traj_mask[i]):
-                print(f"[Diff in TRAJ_MASK at index {i}]")
-                print(mask_slice.dtype)
-                print("→ batch['mask'][slice]:", mask_slice.tolist())
-                print(traj_mask[i].dtype)
-                print("→ traj_mask[i]        :", traj_mask[i].tolist())
+            diff = mask_slice != traj_mask[i]
+            if diff.any():
+                first_diff_idx = diff.nonzero(as_tuple=True)[0][0].item()
+                print(f"[Diff in TRAJ_MASK at index {i}] First mismatch at position {first_diff_idx}")
+                print(f"  batch['mask'][slice][{first_diff_idx}] = {mask_slice[first_diff_idx].item()}")
+                print(f"  traj_mask[{i}][{first_diff_idx}]       = {traj_mask[i][first_diff_idx].item()}")
+                print(f"token there in batch['responses'] is", repr(self.tokenizer.decode(batch["responses"][i][first_diff_idx], skip_special_tokens=False)))
+                print(f"token there in responses is", repr(self.tokenizer.decode(response_batch[i][first_diff_idx], skip_special_tokens=False)))
+
             
             assert torch.equal(batch["prompts"][i], prompts_batch[i])
             assert torch.equal(batch["responses"][i], response_batch[i])
@@ -534,7 +538,7 @@ class AgentPPOTrainer(RayPPOTrainer):
             assert torch.equal(batch["attention_mask"][i], attention_mask[i])
             assert torch.equal(mask_slice, traj_mask[i])
         print("all verified")
-
+        assert False, ""
 
         tensor_batch = {
             "input_ids": trajectory_batch,

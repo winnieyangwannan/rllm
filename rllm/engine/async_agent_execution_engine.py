@@ -213,20 +213,22 @@ class AsyncAgentExecutionEngine(AgentExecutionEngine):
                 response_len
                 + len(assistant_msg_tokens)
                 + len(env_msg_tokens)
-                + self.max_prompt_length
                 >= self.max_trajectory_length
             ):
                 # Truncation length
                 truncation_length = (
-                    self.max_trajectory_length - self.max_prompt_length - response_len
+                    self.max_trajectory_length - response_len
                 )
                 # Truncate the response and masks
-                truncated_response_tokens = (assistant_msg_tokens)[
-                    :truncation_length
-                ]
-                truncated_response_masks = (assistant_msg_masks)[
-                    :truncation_length
-                ]
+                truncated_response_tokens = assistant_msg_tokens
+                truncated_response_masks = assistant_msg_masks
+                if truncation_length < len(truncated_response_tokens):
+                    truncated_response_tokens = (assistant_msg_tokens)[
+                        :truncation_length
+                    ]
+                    truncated_response_masks = (assistant_msg_masks)[
+                        :truncation_length
+                    ]
 
                 # Update token collections
                 response_tokens.extend(truncated_response_tokens)

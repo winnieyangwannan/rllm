@@ -108,16 +108,26 @@ class AgentExecutionEngine:
         output_padded = self.rollout_engine.generate_sequences(batch_padded)
         
         output = unpad_dataproto(output_padded, pad_size=pad_size)
+        attention_mask = output.batch["attention_mask"][:, self.max_prompt_length:]
+        responses_tokens = output.batch["responses"]
 
-        output_text = self.tokenizer.batch_decode(
-            output.batch["responses"], skip_special_tokens=False
-        )
-
-        pad_token = self.tokenizer.pad_token
         responses = []
-        for i, text in enumerate(output_text):
-            rsp = text.replace(pad_token, "")
-            responses.append(rsp)
+        batch_size = responses_tokens.size(0)
+
+        for i in range(batch_size):
+            tokens = responses_tokens[i]
+            attn = attention_mask[i]
+
+            # Find last index where attention == 1
+            non_pad_indices = (attn == 1).nonzero(as_tuple=True)[0]
+            if len(non_pad_indices) == 0:
+                trimmed = tokens[:0]  # empty
+            else:
+                last_valid_idx = non_pad_indices[-1].item()
+                trimmed = tokens[:last_valid_idx + 1]  # include the last valid token
+
+            text = self.tokenizer.decode(trimmed, skip_special_tokens=False)
+            responses.append(text)
 
         assert len(responses) == len(
             trajectories
@@ -410,7 +420,6 @@ class AgentExecutionEngine:
                 if max_prompt_token_len > self.max_prompt_length:
                     self.reset()
                     raise Exception("Initial prompt length already exceeded max_prompt_length, retrying")
-                max_prompt_token_len = self.max_prompt_length
                     
                 # get model actions and responses
                 while not all(batch_done) and steps < self.max_episodes:
@@ -465,12 +474,15 @@ class AgentExecutionEngine:
 
 
                         # Reached maximum number of tokens for the trajectory
-                        if all_response_token_lens[idx] + len(assistant_msg_tokens) + len(env_msg_tokens) + max_prompt_token_len >= self.max_trajectory_length:
+                        if all_response_token_lens[idx] + len(assistant_msg_tokens) + len(env_msg_tokens) > self.max_trajectory_length:
                             # Truncation length
-                            truncation_length = self.max_trajectory_length - max_prompt_token_len - all_response_token_lens[idx]
+                            truncation_length = self.max_trajectory_length - all_response_token_lens[idx]
                             # Truncate the response and masks
-                            truncated_response_tokens = (assistant_msg_tokens)[:truncation_length]
-                            truncated_response_masks = (assistant_msg_masks)[:truncation_length]
+                            truncated_response_tokens = (assistant_msg_tokens)
+                            truncated_response_masks = (assistant_msg_masks)
+                            if truncation_length < len(assistant_msg_tokens):
+                                truncated_response_tokens = (assistant_msg_tokens)[:truncation_length]
+                                truncated_response_masks = (assistant_msg_masks)[:truncation_length]
                             # Update the token version of trajectory (Though it is truncated)
                             all_response_tokens[idx].extend(truncated_response_tokens)
                             all_response_masks[idx].extend(truncated_response_masks)
@@ -634,13 +646,6 @@ class AgentExecutionEngine:
     
     
     def _convert_message_to_tokens_and_masks(self, msg, first_msg=False, generation_msg=False):
-        has_eos = False
-        if msg["role"] == "assistant":
-            if msg["content"].endswith(self.tokenizer.eos_token):
-                msg["content"] = msg["content"][:-len(self.tokenizer.eos_token)]
-                has_eos = True 
-        
-
         msg_text = self.tokenizer.apply_chat_template(
             [msg], tokenize=False, add_generation_prompt=generation_msg,
         )
@@ -667,14 +672,7 @@ class AgentExecutionEngine:
             # Remove assistant token not from generation
             msg_mask = msg_mask[1:]
             msg_tokens = msg_tokens[1:]
-
-            for i in range(0, len(msg_mask)):
-                if msg_tokens[i] == self.tokenizer.pad_token_id:
-                    msg_mask[i] = 0
-
-            # Mask out the eos appended due to chat_template if it exists
-            if not has_eos and msg_tokens[-1] == self.tokenizer.eos_token_id:
-                msg_mask[-1] = 0
+            # NOTE: new template does not add eos so no check for that
 
         return msg_tokens, msg_mask
     

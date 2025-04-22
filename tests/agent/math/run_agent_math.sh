@@ -38,7 +38,7 @@ python3 -m rllm.train.train_agent_ppo \
     actor_rollout_ref.ref.fsdp_config.param_offload=True \
     algorithm.kl_ctrl.kl_coef=0.001 \
     trainer.critic_warmup=0 \
-    trainer.logger=['console','wandb'] \
+    trainer.logger=['console'] \
     trainer.project_name='deepscaler' \
     trainer.experiment_name='deepscaler-math-debug-sync-test' \
     trainer.val_before_train=True \
