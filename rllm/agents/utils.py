@@ -54,26 +54,15 @@ def convert_messages_to_tokens_and_masks(messages: List[Dict[str, str]], tokeniz
 
     def _convert_message_to_tokens_and_masks(msg, first_msg=False, generation_msg=False):
         msg_text = parser.parse([msg], add_generation_prompt=generation_msg, is_first_msg=first_msg)
-        msg_tokens = tokenizer.encode(msg_text, add_special_tokens=False)
 
+        # Remove the assistant token since it is contained in previous message as generation prompt
+        if msg["role"] == "assistant":
+            assert msg_text.startswith(parser.assistant_token), f"Expected assistant token {parser.assistant_token} but got {msg_text}"
+            msg_text = msg_text.replace(parser.assistant_token, "")
+
+        msg_tokens = tokenizer.encode(msg_text, add_special_tokens=False)
         mask_value = 1 if msg["role"] == "assistant" else 0
         msg_mask = [mask_value] * len(msg_tokens)
-
-        #TODO: make this adhere to each tokenizer
-        # need some additional masking like overlap token which should came from prompt's add_generation_prompt
-        if mask_value == 1:
-            # Mask out the assistant token at the beginning
-            assistant_token = parser.assistant_token
-            assistant_token_ids = tokenizer.encode(assistant_token, add_special_tokens=False)
-
-            # Assert that the message start with the assistant token
-            for i in range(min(len(assistant_token_ids), len(msg_tokens))):
-                assert msg_tokens[i] == assistant_token_ids[i], f"Expected token {assistant_token_ids[i]} but got {msg_tokens[i]}"
-            
-            # Remove assistant token not from generation
-            msg_mask = msg_mask[len(assistant_token_ids):]
-            msg_tokens = msg_tokens[len(assistant_token_ids):]
-            # NOTE: new template does not add eos so no check for that
 
         return msg_tokens, msg_mask
 
