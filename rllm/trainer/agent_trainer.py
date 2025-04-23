@@ -439,7 +439,6 @@ class AgentPPOTrainer(RayPPOTrainer):
             all_masks_list.append(traj["response_masks"])
             traj_scores.append(traj["training_reward"])
             environment_scores.append(traj["environment_reward"])
-            batch = traj["batch"]
 
         # reverse the list and create tensors, pad, then flip to achieve left padding
         prompts_batch = torch.nn.utils.rnn.pad_sequence(
