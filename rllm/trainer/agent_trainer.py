@@ -65,19 +65,9 @@ class AgentPPOTrainer(RayPPOTrainer):
             tokenizer=self.tokenizer,
             model_path=self.config.actor_rollout_ref.model.path,
             max_episodes=self.config.agent.max_episodes,
-            max_trajectory_length=self.config.agent.max_trajectory_length,
+            max_trajectory_length=self.config.data.max_response_length,
             max_prompt_length=self.config.data.max_prompt_length,
         )
-
-    # def init_envs(self, batch):
-    #     """
-    #     Initialize environment depending on env_class with the necessary extra_info, also set uid of the batch.
-    #     """
-    #     env_args = batch.non_tensor_batch["extra_info"].tolist()
-    #     envs = [self.env_class(**env_args[i]) for i in range(len(env_args))]
-    #     batch.non_tensor_batch["uid"] = np.array([env.env_id for env in envs], dtype=object)
-
-    #     return envs
 
     def init_envs_and_agents(self, batch):
         """
@@ -86,6 +76,8 @@ class AgentPPOTrainer(RayPPOTrainer):
         env_args = batch.non_tensor_batch["extra_info"].tolist()
         envs = [self.env_class.from_extra_info(env_args[i]) for i in range(len(env_args))]
         agents = [self.agent_class(**self.config.agent.get("agent_args", {})) for _ in range(len(envs))]
+
+        batch.non_tensor_batch["uid"] = np.array([env.env_id for env in envs], dtype=object)
 
         self.agent_execution_engine.update_envs_and_agents(envs, agents)
 
@@ -436,11 +428,12 @@ class AgentPPOTrainer(RayPPOTrainer):
         all_masks_list = []
         traj_scores = []
         environment_scores = []
+        batch = None
         for traj in trajectories:
             prompt_tokens = traj["prompt_tokens"]
             response_tokens = traj["response_tokens"]
             # test if trajectory is empty
-            assert prompt_tokens.numel() != 0 and response_tokens.numel() != 0, f"Both prompt {prompt_tokens.numel()} and response {response_tokens.numel()} of trajectory shouldn't be empty. Please check make sure environment is working and the config: episode_length, max_trajectory_length, etc"
+            assert prompt_tokens.numel() != 0 and response_tokens.numel() != 0, f"Both prompt {prompt_tokens.numel()} and response {response_tokens.numel()} of trajectory shouldn't be empty. Please check make sure environment is working and the config"
             all_initial_tokens_list.append(prompt_tokens)
             all_response_tokens_list.append(response_tokens)
             all_masks_list.append(traj["response_masks"])
@@ -462,7 +455,7 @@ class AgentPPOTrainer(RayPPOTrainer):
             padding_value=self.tokenizer.pad_token_id,
         )
 
-        max_response_length = self.config.agent.max_trajectory_length - self.config.data.max_prompt_length
+        max_response_length = self.config.data.max_response_length
         response_batch = pad_sequence_to_length(response_batch, max_response_length, self.tokenizer.pad_token_id, left_pad=False)           
 
         traj_mask = torch.nn.utils.rnn.pad_sequence(
@@ -472,7 +465,8 @@ class AgentPPOTrainer(RayPPOTrainer):
 
         trajectory_batch = torch.concat([prompts_batch, response_batch], dim=1)
 
-        attention_mask = torch.where(trajectory_batch != self.tokenizer.pad_token_id, 1, 0)
+        prompt_mask = torch.where(prompts_batch != self.tokenizer.pad_token_id, 1, 0)
+        attention_mask = torch.cat((prompt_mask, traj_mask), dim=-1)
 
         # Compute position_ids
         position_ids = (torch.cumsum(attention_mask, dim=1) - 1) * attention_mask

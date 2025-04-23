@@ -31,7 +31,6 @@ python3 -m rllm.train.train_agent_ppo \
     env.name=math \
     agent.name=math_agent \
     agent.max_episodes=5 \
-    agent.max_trajectory_length=2048 \
     data.train_batch_size=8 \
     data.val_batch_size=512 \
     data.max_prompt_length=2048 \

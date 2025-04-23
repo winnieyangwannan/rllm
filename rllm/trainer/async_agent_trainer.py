@@ -77,7 +77,7 @@ class AsyncAgentPPOTrainer(AgentPPOTrainer):
             agent_args=self.config.agent.get("agent_args", {}),
             model_path=self.config.actor_rollout_ref.model.path,
             max_episodes=self.config.agent.max_episodes,
-            max_trajectory_length=self.config.agent.max_trajectory_length,
+            max_trajectory_length=self.config.data.max_response_length,
             max_prompt_length=self.config.data.max_prompt_length,
             env_class=self.env_class,
             env_args=self.config.env.get("env_args", {}),
@@ -89,7 +89,10 @@ class AsyncAgentPPOTrainer(AgentPPOTrainer):
         """
         env_args = batch.non_tensor_batch["extra_info"].tolist()
         envs = [self.env_class.from_extra_info(env_args[i]) for i in range(len(env_args))]
+        # envs = [self.env_class(**env_args[i]) for i in range(len(env_args))]
         agents = [self.agent_class(**self.config.agent.get("agent_args", {})) for _ in range(len(envs))]
+
+        batch.non_tensor_batch["uid"] = np.array([env.env_id for env in envs], dtype=object)
 
         self.agent_execution_engine.update_envs_and_agents(envs, agents)
 
@@ -203,13 +206,15 @@ class AsyncAgentPPOTrainer(AgentPPOTrainer):
                             reward_tensor = mini_batch.batch['token_level_scores'] # already computed
                             print('Reward tensor:', reward_tensor.sum(-1))
                         
-                            # Rejection sampling based on rewards
                             # Group rewards by uid
                             uids = mini_batch.non_tensor_batch['uid']
                             unique_uids = np.unique(uids)
                             valid_mask = torch.ones(len(uids), dtype=torch.bool)
                             solve_none = 0
                             solve_all = 0
+                            solve_partial = 0
+
+                            print(f"num unique_uids: {len(unique_uids)}")
                             for uid in unique_uids:
                                 uid_mask = uids == uid
                                 uid_rewards = reward_tensor[uid_mask].sum(-1)  # Sum rewards for each sequence
@@ -221,13 +226,15 @@ class AsyncAgentPPOTrainer(AgentPPOTrainer):
                                 elif (uid_rewards == 1).all():
                                     valid_mask[uid_mask] = False
                                     solve_all += 1
+                                else:
+                                    solve_partial += 1
                             
                             # Log to metrics
                             mini_batch_metrics['batch/solve_none'] = solve_none
                             mini_batch_metrics['batch/solve_all'] = solve_all
+                            mini_batch_metrics['batch/solve_partial'] = solve_partial
                             
-                            
-                            if self.config.actor_rollout_ref.rollout.vllm_log_prob:
+                            if self.config.actor_rollout_ref.rollout.enable_log_prob:
                                 # Avoid recompute log_prob bugs. Log probs from vLLM. (Could be buggy)
                                 mini_batch.meta_info['micro_batch_size'] = self.config.actor_rollout_ref.rollout.log_prob_micro_batch_size_per_gpu
                                 mini_batch.meta_info['max_token_len'] = self.config.actor_rollout_ref.rollout.log_prob_max_token_len_per_gpu
@@ -246,7 +253,7 @@ class AsyncAgentPPOTrainer(AgentPPOTrainer):
                                     mini_batch = mini_batch.union(ref_log_prob)
                             
                             mini_batch.batch['token_level_rewards'] = mini_batch.batch['token_level_scores']
-                                                    # compute advantages, executed on the driver process
+                            # compute advantages, executed on the driver process
                             mini_batch = compute_advantage(mini_batch,
                                                   adv_estimator=self.config.algorithm.adv_estimator,
                                                   gamma=self.config.algorithm.gamma,

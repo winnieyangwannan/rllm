@@ -18,9 +18,11 @@ class SingleTurnEnvironment(BaseEnv):
             task: Dictionary containing the task information, including at least a "question" field
             reward_fn: Function that takes (response, task) and returns a float reward
         """
+        super().__init__()
         self.task = task
         self.reward_fn = reward_fn or (lambda response, task: 0.0)
         self.done = False
+        self._env_id = hash(str(self.task)) if self.task else ""
     
     def reset(self, task=None, seed=None):
         """Reset the environment and return initial observations."""
@@ -64,3 +66,7 @@ class SingleTurnEnvironment(BaseEnv):
 
         # Return results
         return next_obs, reward, terminated, truncated, info 
+    
+    @staticmethod
+    def from_extra_info(extra_info: Dict) -> "SingleTurnEnvironment":
+        return SingleTurnEnvironment(task=extra_info["task"] if "task" in extra_info else None, reward_fn=extra_info["reward_fn"] if "reward_fn" in extra_info else None)
