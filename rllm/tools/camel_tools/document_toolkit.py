@@ -239,9 +239,9 @@ class DocumentProcessingToolkit(BaseToolkit):
         from firecrawl import FirecrawlApp
 
         # Initialize the FirecrawlApp with your API key
-        # app = FirecrawlApp(api_key=api_key)
+        app = FirecrawlApp(api_key=api_key)
 
-        app = FirecrawlApp(api_url="http://0.0.0.0:3002")
+        # app = FirecrawlApp(api_url="http://0.0.0.0:3002")
         print("STARTING CRAWL")
         data = app.crawl_url(
             url, params={"limit": 1, "scrapeOptions": {"formats": ["markdown"]}}
