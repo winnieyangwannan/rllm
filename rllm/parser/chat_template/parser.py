@@ -2,8 +2,8 @@ class ChatTemplateParser:
     def __init__(self, tokenizer):
         self.tokenizer = tokenizer
 
-    def parse(self, messages):
-        return self.tokenizer.apply_chat_template(messages, tokenize=False, add_generation_prompt=False)
+    def parse(self, messages, add_generation_prompt=False, **kwargs):
+        return self.tokenizer.apply_chat_template(messages, tokenize=False, add_generation_prompt=add_generation_prompt)
 
     @classmethod
     def get_parser(cls, tokenizer):
@@ -45,9 +45,14 @@ class DeepseekQwenChatTemplateParser(ChatTemplateParser):
         self.system_token = ''
         self.user_token = '<｜User｜>'
         self.assistant_token = '<｜Assistant｜>'
+        self.generation_prompt = self.assistant_token
 
-    def parse(self, messages):
+    def parse(self, messages, add_generation_prompt=False, is_first_msg=False):
         result = ''
+
+        if is_first_msg:
+            result += self.bos_token
+
         for message in messages:
             if message["role"] == "system":
                 result += self.parse_system(message)
@@ -57,6 +62,9 @@ class DeepseekQwenChatTemplateParser(ChatTemplateParser):
                 result += self.parse_assistant(message)
             else:
                 raise NotImplementedError(f"Unsupported message role: {message['role']}")
+
+        if add_generation_prompt:
+            result += self.generation_prompt
         return result
 
     def parse_system(self, message):
@@ -66,7 +74,7 @@ class DeepseekQwenChatTemplateParser(ChatTemplateParser):
         return self.user_token + message['content']
     
     def parse_assistant(self, message):
-        return self.assistant_token + message['content'] + self.eos_token
+        return self.assistant_token + message['content'] #+ self.eos_token
     
 
 class QwenChatTemplateParser(ChatTemplateParser):
@@ -78,9 +86,14 @@ class QwenChatTemplateParser(ChatTemplateParser):
         self.user_token = '<|im_start|>user\n'
         self.assistant_token = '<|im_start|>assistant\n'
         self.eot_token = '<|im_end|>\n'
+        self.generation_prompt = self.assistant_token
 
-    def parse(self, messages):
+    def parse(self, messages, add_generation_prompt=False, is_first_msg=False):
         result = ''
+
+        if is_first_msg:
+            result += self.system_token + "You are Qwen, created by Alibaba Cloud. You are a helpful assistant." + self.eot_token
+
         for message in messages:
             if message["role"] == "system":
                 result += self.parse_system(message)
@@ -90,6 +103,9 @@ class QwenChatTemplateParser(ChatTemplateParser):
                 result += self.parse_assistant(message)
             else:
                 raise NotImplementedError(f"Unsupported message role: {message['role']}")
+
+        if add_generation_prompt:
+            result += self.generation_prompt
         return result
 
     def parse_system(self, message):

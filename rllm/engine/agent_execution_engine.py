@@ -59,19 +59,6 @@ class AgentExecutionEngine:
             self.client = OpenAI(**self.rollout_engine_args)
 
         self.chat_template_parser = ChatTemplateParser.get_parser(self.tokenizer)
-        self.load_tokenizer_template()
-
-    def load_tokenizer_template(self):
-        """Loads customized tokenizer chat template for supported models
-        """
-        template_path = os.path.join(os.path.dirname(__file__), "../templates/")
-        template_path = os.path.abspath(template_path)
-        if any(substring in self.model_path.lower() for substring in ('deepseek-r1-distill-qwen')):
-            with open(f"{template_path}/r1-distill-qwen-agent.jinja", "r") as f:
-                template_str = f.read()
-                self.tokenizer.chat_template = template_str
-                return
-        print("No customized chat template found. Using Original template.")
 
     def get_actions(self, trajectories, seq_idxs, **kwargs):
         """
@@ -86,10 +73,6 @@ class AgentExecutionEngine:
 
         if self.engine_name == "verl":
             return self._get_actions_verl(trajectories, seq_idxs, **kwargs)
-        elif self.engine_name == "vllm":
-            return self._get_actions_vllm(trajectories, seq_idxs, **kwargs)
-        elif self.engine_name == "openai":
-            return self._get_actions_openai(trajectories, seq_idxs, **kwargs)
         else:
             raise NotImplementedError
 
@@ -138,7 +121,7 @@ class AgentExecutionEngine:
             self.agents[seq_idxs[i]]._post_get_action(responses[i])
             for i in range(len(trajectories))
         ]
-        return actions, responses, output.batch
+        return actions, responses
 
     def _convert_prompt_verl(self, prompts, **kwargs):
         """
@@ -151,13 +134,8 @@ class AgentExecutionEngine:
         
         old_padding_side = self.tokenizer.padding_side
         self.tokenizer.padding_side = "left"
-
-        # formatted_prompts = [self.chat_template_parser.parse(prompt) for prompt in prompts]
-        prompts = self.tokenizer.apply_chat_template(
-            prompts, add_generation_prompt=True, tokenize=False
-        )
-        # Post-process each string.
-        formatted_prompts = [self._postprocess_model_chat_template(p, is_first_msg=True, is_generation_msg=True) for p in prompts]
+        
+        formatted_prompts = [self.chat_template_parser.parse(prompt, add_generation_prompt=True, is_first_msg=True) for prompt in prompts]
 
         # Tokenize the final processed strings
         inputs = self.tokenizer(
@@ -194,78 +172,7 @@ class AgentExecutionEngine:
             data.meta_info = union_two_dict(data.meta_info, meta_info)
 
         return data
-
-    def _get_actions_vllm(self, trajectories, seq_idxs, **kwargs):
-        # Format each observation into a prompt
-        prompts = [
-            self.agents[seq_idxs[i]]._pre_get_action(traj)
-            for i, traj in enumerate(trajectories)
-        ]
-
-        prompts_token = self.tokenizer.apply_chat_template(
-            prompts, add_generation_prompt=True, tokenize=False
-        )
-
-        # Generate responses using vLLM
-        outputs = self.rollout_engine.generate(
-            prompts=prompts_token, sampling_params=self.sampling_params, use_tqdm=False
-        )
-
-        # Decode the output token IDs into text
-        responses = []
-        # Get the generated text directly from the RequestOutput object
-        for i, output in enumerate(outputs):
-            rsp = output.outputs[0].text
-            responses.append(rsp)
-
-        assert len(responses) == len(
-            trajectories
-        ), f"Number of responses {len(responses)} should equal to the number of trajectories ({len(trajectories)})"
-
-        actions = [
-            self.agents[seq_idxs[i]]._post_get_action(responses[i])
-            for i in range(len(trajectories))
-        ]
-        return actions, responses
-
-
-    def _get_actions_openai(self, trajectories, seq_idxs, **kwargs):
-        prompts = [
-            self.agents[seq_idxs[i]]._pre_get_action(traj)
-            for i, traj in enumerate(trajectories)
-        ]
-
-        # Use ThreadPoolExecutor instead of multiprocessing
-        with ThreadPoolExecutor(max_workers=8) as executor:
-            responses = list(tqdm(executor.map(self.call_openai, prompts), total=len(prompts)))
-
-        assert len(responses) == len(
-            trajectories
-        ), f"Number of responses {len(responses)} should equal to the number of trajectories ({len(trajectories)})"
-
-        actions = [
-            self.agents[seq_idxs[i]]._post_get_action(responses[i])
-            for i in range(len(trajectories))
-        ]
-        return actions, responses
-
-
-    def _call_openai(self, prompt):
-        retries = self.api_retries
-        while retries > 0:
-            try:
-                response = self.client.chat.completions.create(
-                    model="o1-preview", messages=prompt
-                )
-                return response.choices[0].message.content
-            except openai.RateLimitError:
-                retries -= 1
-                if retries == 0:
-                    return "Error: Rate limit reached and retries exhausted."
-                time.sleep(5)
-            except Exception as e:
-                return f"Error processing content: {e}"
-
+    
     # deals with the case when the trajectory is done
     def _safe_get_actions(self, trajectories, batch_done, **kwargs):
         new_trajectory_sequences = []
@@ -280,14 +187,14 @@ class AgentExecutionEngine:
                 seq_idxs.append(i)
 
         if len(new_trajectory_sequences) > 0:
-            actions, responses, batch = self.get_actions(
+            actions, responses = self.get_actions(
                 new_trajectory_sequences,
                 seq_idxs,
                 **kwargs,
             )
             assert len(actions) == len(seq_idxs), f"Number of actions {len(actions)} returned does not match number of trajectories {len(seq_idxs)}"
 
-        return actions, responses, seq_idxs, batch
+        return actions, responses, seq_idxs
 
     def step_env_single(self, env, action):
         return env.step(action)
@@ -426,7 +333,7 @@ class AgentExecutionEngine:
                 while not all(batch_done) and steps < self.max_episodes:
                     steps += 1
                     with _timer("get_actions", timing_raw):
-                        actions, responses, seq_idxs, batch = self._safe_get_actions(
+                        actions, responses, seq_idxs = self._safe_get_actions(
                             trajectories, batch_done, **kwargs
                         )
 
@@ -632,26 +539,11 @@ class AgentExecutionEngine:
                 if message_text.startswith(target):
                     message_text = message_text[len(target):]  # Remove only if it’s at the start
         
-        if any(substring in self.model_path.lower() for substring in ('deepseek-r1-distill-qwen')):
-            # if is_generation_msg:
-            #     target = "<think>\n"
-            #     if message_text.endswith(target):
-            #         message_text = message_text[:-len(target)]
-            
-            # if not is_first_msg:
-            #     target = "<｜begin▁of▁sentence｜>"
-            #     if message_text.startswith(target):
-            #         message_text = message_text[len(target):]
-            pass
         return message_text
     
     
-    def _convert_message_to_tokens_and_masks(self, msg, first_msg=False, generation_msg=False):
-        msg_text = self.tokenizer.apply_chat_template(
-            [msg], tokenize=False, add_generation_prompt=generation_msg,
-        )
-        msg_text = self._postprocess_model_chat_template(msg_text, is_first_msg=first_msg, is_generation_msg=generation_msg)
-        # msg_text = self.chat_template_parser.parse([msg])
+    def _convert_message_to_tokens_and_masks(self, msg, first_msg=False, generation_msg=False):        
+        msg_text = self.chat_template_parser.parse([msg], add_generation_prompt=generation_msg, is_first_msg=first_msg)
 
         msg_tokens = self.tokenizer.encode(msg_text, add_special_tokens=False)
 
@@ -662,17 +554,16 @@ class AgentExecutionEngine:
         # need some additional masking like overlap token which should came from prompt's add_generation_prompt
         if mask_value == 1:
             # Mask out the assistant token at the beginning
-            # assistant_token = self.chat_template_parser.assistant_token
-            # assistant_token_ids = self.tokenizer.encode(assistant_token, add_special_tokens=False)
-            
-            # # Mask out the assistant token
-            # for i in range(min(len(assistant_token_ids), len(msg_tokens))):
-            #     # Assert that we're actually masking the assistant token
-            #     assert msg_tokens[i] == assistant_token_ids[i], f"Expected token {assistant_token_ids[i]} but got {msg_tokens[i]}"
+            assistant_token = self.chat_template_parser.assistant_token
+            assistant_token_ids = self.tokenizer.encode(assistant_token, add_special_tokens=False)
+
+            # Assert that the message start with the assistant token
+            for i in range(min(len(assistant_token_ids), len(msg_tokens))):
+                assert msg_tokens[i] == assistant_token_ids[i], f"Expected token {assistant_token_ids[i]} but got {msg_tokens[i]}"
             
             # Remove assistant token not from generation
-            msg_mask = msg_mask[1:]
-            msg_tokens = msg_tokens[1:]
+            msg_mask = msg_mask[len(assistant_token_ids):]
+            msg_tokens = msg_tokens[len(assistant_token_ids):]
             # NOTE: new template does not add eos so no check for that
 
         return msg_tokens, msg_mask
@@ -688,20 +579,6 @@ class AgentExecutionEngine:
             msg_tokens, msg_mask = self._convert_message_to_tokens_and_masks(msg, first_msg=(contains_first_msg and i == 0), generation_msg=(contains_generation_msg and i == len(messages) - 1))
             all_msg_tokens.extend(msg_tokens)
             all_msg_masks.extend(msg_mask)
-
-
-        # Print the decoded message that gets masked out
-        masked_indices = [i for i, mask in enumerate(all_msg_masks) if mask == 1]
-        if masked_indices:
-            masked_tokens = [all_msg_tokens[i] for i in masked_indices]
-            masked_text = self.tokenizer.decode(masked_tokens)
-            # colorful_print(f"Masked text: {masked_text}", "red")
-        
-        # Print the original decoded tokens
-        original_text = self.tokenizer.decode(all_msg_tokens)
-        # colorful_print(f"Original tokens: {original_text}", "green")
-
-        # import pdb; pdb.set_trace()
 
         return all_msg_tokens, all_msg_masks
         

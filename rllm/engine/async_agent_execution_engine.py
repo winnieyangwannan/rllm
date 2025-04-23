@@ -61,15 +61,12 @@ class AsyncAgentExecutionEngine(AgentExecutionEngine):
         self.rollout_engine_args = rollout_engine_args
         self.sampling_params = kwargs.get("sampling_params", None)
 
-        if engine_name == "openai":
+        if self.engine_name == "openai":
             from openai import AsyncOpenAI
-            self.client = AsyncOpenAI(**self.rollout_engine_args)
-            
-        if self.engine_name == "verl":
+            self.client = AsyncOpenAI(**self.rollout_engine_args) 
+        elif self.engine_name == "verl":
             # All generation is done via scheduler. Currently only works for verl
             self.router = Router(rollout_engine=rollout_engine)
-        
-        self.load_tokenizer_template()
 
         self.chat_template_parser = ChatTemplateParser.get_parser(self.tokenizer)
 
@@ -98,13 +95,19 @@ class AsyncAgentExecutionEngine(AgentExecutionEngine):
             batch, application_id, **kwargs
         )
 
-        # Process the output
-        output_text = self.tokenizer.batch_decode(
-            output.batch["responses"], skip_special_tokens=False
-        )[0]  # Only one response
+        attn = output.batch["attention_mask"][0, self.max_prompt_length:]
+        tokens = output.batch["responses"][0]
 
-        pad_token = self.tokenizer.pad_token
-        response = output_text.replace(pad_token, "")
+        # Find last index where attention == 1
+        non_pad_indices = (attn == 1).nonzero(as_tuple=True)[0]
+        if len(non_pad_indices) == 0:
+            trimmed = tokens[:0]  # empty
+        else:
+            last_valid_idx = non_pad_indices[-1].item()
+            trimmed = tokens[:last_valid_idx + 1]  # include the last valid token
+
+        response = self.tokenizer.decode(trimmed, skip_special_tokens=False)
+
         action = agent._post_get_action(response)
 
         return action, response
@@ -213,7 +216,7 @@ class AsyncAgentExecutionEngine(AgentExecutionEngine):
                 response_len
                 + len(assistant_msg_tokens)
                 + len(env_msg_tokens)
-                >= self.max_trajectory_length
+                > self.max_trajectory_length
             ):
                 # Truncation length
                 truncation_length = (
