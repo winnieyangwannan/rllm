@@ -4,7 +4,7 @@ from contextlib import contextmanager
 from typing import List, Dict, Any, Tuple, Callable, Iterator, Optional, Union
 
 
-def add_trajectory_reward(trajectory: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+def compute_trajectory_reward(trajectory: "Trajectory") -> "Trajectory":
     """
     Add trajectory reward to the dict of each interaction.
 
@@ -16,83 +16,31 @@ def add_trajectory_reward(trajectory: List[Dict[str, Any]]) -> List[Dict[str, An
     """
     if not trajectory:
         return trajectory
-    trajectory_reward = np.sum([d["reward"] for d in trajectory])
-    for d in trajectory:
-        d.update({"trajectory_reward": trajectory_reward})
+    trajectory_reward = np.sum([d.reward for d in trajectory.steps])
+    trajectory.reward = trajectory_reward
     return trajectory
 
 
-def add_mc_return(trajectory: List[Dict[str, Any]], gamma: float = 0.95) -> List[Dict[str, Any]]:
+def compute_mc_return(trajectory: "Trajectory", gamma: float = 0.95) -> "Trajectory":
     """
-    Add Monte Carlo returns to each step in the trajectory.
+    In-place Monte Carlo returns for a Trajectory dataclass.
+
+    G_t = R_{t+1} + γ * G_{t+1}
 
     Args:
-        trajectory: List of dictionaries representing each step in the trajectory.
-        gamma: Discount factor for future rewards.
+        trajectory: Trajectory object whose .steps is a list of Step objects.
+        gamma: Discount factor.
 
     Returns:
-        The updated trajectory with mc_return added to each step.
+        The same Trajectory, with each step.mc_return filled.
     """
-    if not trajectory:
-        return trajectory
-    trajectory_rewards = np.array([d["reward"] for d in trajectory]).reshape(1, -1)
-    gamma_row = np.cumprod(np.ones((1, trajectory_rewards.shape[1])) * gamma)
-    gamma_matrix = np.triu(gamma_row.reshape(1, -1) / gamma_row.reshape(-1, 1))
-    mc_returns = np.sum(trajectory_rewards * gamma_matrix, axis=1)
-    for d, mc in zip(trajectory, mc_returns):
-        d.update({"mc_return": mc})
+    G = 0.0
+    # Walk backward through the list of Step objects
+    for step in reversed(trajectory.steps):
+        # step.reward is R_{t+1} by your definition
+        G = step.reward + gamma * G
+        step.mc_return = G
     return trajectory
-
-
-def add_training_reward(trajectory: List[Dict[str, Any]], training_reward: float) -> List[Dict[str, Any]]:
-    """
-    Add training reward to the dict of each interaction.
-
-    Args:
-        trajectory: List of dictionaries representing each step in the trajectory.
-        training_reward: The reward value to add to each step.
-
-    Returns:
-        The updated trajectory with training_reward added to each step.
-    """
-    if not trajectory:
-        return trajectory
-    for d in trajectory:
-        d.update({"training_reward": training_reward})
-    return trajectory
-
-
-def compute_training_score(trajectory: List[Dict[str, Any]]) -> float:
-    """
-    Computes the reward for training in a given trajectory.
-
-    Args:
-        trajectory: A list of step dictionaries, where each step 
-                   contains at least the key "training_reward".
-
-    Returns:
-        The training score extracted from the first step. Returns 0 if the 
-        trajectory is empty.
-    """
-    return trajectory[0]["training_reward"] if trajectory else 0
-
-
-def compute_environment_score(trajectory: List[Dict[str, Any]]) -> float:
-    """
-    Computes the overall environment score for a given trajectory.
-
-    This function extracts the total trajectory reward from the first step in the trajectory.
-    If the trajectory is empty, it returns a default score of 0.
-
-    Args:
-        trajectory: A list of step dictionaries, where the first step 
-                   contains the key "trajectory_reward".
-
-    Returns:
-        The environment score extracted from the first step. Returns 0 if the 
-        trajectory is empty.
-    """
-    return trajectory[0]["trajectory_reward"] if trajectory else 0
 
 
 @contextmanager

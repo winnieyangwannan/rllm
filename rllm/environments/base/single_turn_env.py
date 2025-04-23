@@ -1,6 +1,7 @@
 from typing import Callable, Dict, Optional
 
 from rllm.environments.base.base_env import BaseEnv
+from rllm.rewards.rl_reward import rllm_reward_fn
 
 class SingleTurnEnvironment(BaseEnv):
     """
@@ -10,7 +11,7 @@ class SingleTurnEnvironment(BaseEnv):
     
     def __init__(self, 
                  task: Optional[Dict] = None, 
-                 reward_fn: Optional[Callable[[str, Dict], float]] = None, **kwargs):
+                **kwargs):
         """
         Initialize the single turn environment.
         
@@ -20,7 +21,7 @@ class SingleTurnEnvironment(BaseEnv):
         """
         super().__init__()
         self.task = task
-        self.reward_fn = reward_fn or (lambda response, task: 0.0)
+        self.reward_fn = rllm_reward_fn
         self.done = False
         self._env_id = hash(str(self.task)) if self.task else ""
     
@@ -51,22 +52,10 @@ class SingleTurnEnvironment(BaseEnv):
         """
         # In a single turn environment, any action leads to termination
         self.done = True
-        
-        # Calculate reward using the provided reward function
-        reward = self.reward_fn(action, self.task)
-        
-        # Always terminate after a single step
-        terminated = True
-        truncated = False
-        
-        # Empty observation since we're done
-        next_obs = {}
-
-        info = self.task
-
+        reward = self.reward_fn(data_source="", llm_solution=action, ground_truth=self.task["answer"])
         # Return results
-        return next_obs, reward, terminated, truncated, info 
-    
+        return {}, reward, self.done, self.task
+
     @staticmethod
-    def from_extra_info(extra_info: Dict) -> "SingleTurnEnvironment":
-        return SingleTurnEnvironment(task=extra_info["task"] if "task" in extra_info else None, reward_fn=extra_info["reward_fn"] if "reward_fn" in extra_info else None)
+    def from_json(info: Dict) -> "SingleTurnEnvironment":
+        return SingleTurnEnvironment(task=info["task"])

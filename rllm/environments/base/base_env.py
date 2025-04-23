@@ -1,10 +1,11 @@
 from abc import ABC, abstractmethod
 from typing import List
 from typing import Any, List, Tuple, Dict
+import uuid
 
 class BaseEnv(ABC):
     def __init__(self):
-        self._env_id = None
+        self._env_id = str(uuid.uuid4())[:8] # Convert UUID to string before slicing
         
     @property
     def env_id(self) -> str:
@@ -29,3 +30,11 @@ class BaseEnv(ABC):
     def step(self, action):
         """Standard Gym step method."""
         pass
+
+    def close(self):
+        """Standard Gym close method."""
+        pass
+
+    @staticmethod
+    def from_json(info: Dict) -> "BaseEnv":
+        return BaseEnv()

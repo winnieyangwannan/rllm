@@ -1,8 +1,10 @@
 
 import json
 from rllm.tools.multi_tool import MultiTool
-from typing import List, Dict
+from typing import List, Dict, Union
+
 from rllm.environments.base.base_env import BaseEnv
+from rllm.rewards.rl_reward import rllm_reward_fn
 
 from typing import Any, Tuple, Optional
 
@@ -17,8 +19,9 @@ class ToolEnvironment(BaseEnv):
 
         self.tools = MultiTool(tools)
         self.task = task
-
+        self.reward_fn = rllm_reward_fn
         self.current_data = None
+        self.data_source = self.task.get("data_source", "")
     
     def reset(self, task=None, seed=None):
         """Reset the environment and return initial observations."""
@@ -35,7 +38,7 @@ class ToolEnvironment(BaseEnv):
         # Return a single observation in a list to maintain the batch structure
         return {"question": self.task["question"]}, {}
     
-    def step(self, action):
+    def step(self, action: Union[List[Dict], str, Dict]):
         """
         Take a step in the environment based on the action.
         
@@ -43,27 +46,43 @@ class ToolEnvironment(BaseEnv):
             actions: List containing a single action string from the agent
             
         Returns:
-            next_observations, rewards, terminateds, truncateds, infos
+            next_observations, rewards, terminateds, infos
         """
+        if isinstance(action, dict):
+            action = [action]
         self.step_count += 1
         
         reward = 0
-        
         # Check if we should terminate
-        terminated = self.step_count >= self.max_steps
-        truncated = False
+        done = self.step_count >= self.max_steps or isinstance(action, str)
+        # Check if action contains a "finish" tool call
+        if isinstance(action, list) and action:
+            for tool_call in action:
+                if tool_call.get('function', {}).get('name') == 'finish':
+                    done = True
+                    break
+        if done:
+            # Cannot find tool calls which means the agent is not using the tool and is done.
+            if isinstance(action, str):
+                llm_solution = action
+            elif isinstance(action, list):
+                # Find the finish tool call
+                finish_action = None
+                for tool_call in action:
+                    if tool_call.get('function', {}).get('name') == 'finish':
+                        finish_action = tool_call
+                        break
+                arguments = finish_action.get('function', {}).get('arguments', {})
+                llm_solution = json.loads(arguments).get('response', '')
+            reward = self.reward_fn(data_source=self.data_source, llm_solution=llm_solution, ground_truth=self.task["answer"])
+            return {}, reward, done, {"response": action}
 
-        next_obs = {}
-
-        if action is not None and isinstance(action, list):
-            tool_calls = action
-            tool_outputs = self._execute_tool_calls(tool_calls)
-            next_obs = {"tool_outputs": tool_outputs}
-        else:
-            terminated = True
+        tool_calls = action
+        tool_outputs = self._execute_tool_calls(tool_calls)
+        next_obs = {"tool_outputs": tool_outputs}
 
         # Return results as lists with single items to maintain batch structure
-        return next_obs, reward, terminated, truncated, {"response": action}
+        return next_obs, reward, done, {"response": action}
     
 
     def _execute_tool_calls(self, tool_calls: List[Dict]):
@@ -79,7 +98,6 @@ class ToolEnvironment(BaseEnv):
             tool_name = tool_call['function']['name']
             tool_args = json.loads(tool_call['function']['arguments'])
             tool_output = self.tools(tool_name=tool_name, **tool_args)
-
             tool_output_str = tool_output.output
             if isinstance(tool_output_str, (dict, list)):
                 tool_output_str = json.dumps(tool_output_str)
@@ -105,5 +123,21 @@ class ToolEnvironment(BaseEnv):
         return tool_outputs
     
     @staticmethod
-    def from_extra_info(extra_info: Dict) -> "ToolEnvironment":
+    def from_json(extra_info: Dict) -> "ToolEnvironment":
         return ToolEnvironment(task=extra_info['task'])
+
+if __name__ == "__main__":
+    env = ToolEnvironment(task={"question": "What is the 1+2?", "answer": "3"}, tools=["google_search"])
+    obs, _ = env.reset()
+    next_obs, reward, done, info = env.step(action=[{"function": {"name": "google_search", "arguments": json.dumps({"query": "What is the 1+2?"})}, "id": "1"}])
+    print(next_obs)
+    print(reward)
+    print(done)
+    print(info)
+
+    # Finish enviornment, note that this function is created in tool_agent.py if no tool calls are found in LLM response.
+    next_obs, reward, done, info = env.step(action=[{"function": {"name": "finish", "arguments": json.dumps({"response": "<think> I think the answer is </think> \\boxed{{3}}"})}, "id": "2"}])
+    print(next_obs)
+    print(reward)
+    print(done)
+    print(info)

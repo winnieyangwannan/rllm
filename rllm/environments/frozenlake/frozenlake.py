@@ -247,7 +247,7 @@ class FrozenLakeEnv(GymFrozenLakeEnv, BaseEnv):
         - Check if the action is effective (whether player moves in the env).
         """
         if self.success():
-            return self.render(), 0, True, False,  {"action_is_effective": False}
+            return self.render(), 0, True, {"action_is_effective": False}
         
         if not action:
             action = self.INVALID_ACTION
@@ -256,14 +256,14 @@ class FrozenLakeEnv(GymFrozenLakeEnv, BaseEnv):
         assert not self.success(), "Agent has already reached the goal or hole"
 
         if action == self.INVALID_ACTION: # no penalty for invalid action
-            return self.render(), 0, False, False, {"action_is_effective": False}
+            return self.render(), 0, False, {"action_is_effective": False}
         
         prev_player_position = int(self.s)
 
         player_pos, reward, done, _, prob = GymFrozenLakeEnv.step(self, self.action_map[action])
 
         obs = self.render()
-        return obs, reward, done, False, {"action_is_effective": prev_player_position != int(player_pos)}
+        return obs, reward, done, {"action_is_effective": prev_player_position != int(player_pos)}
     
      
     def render(self, mode='tiny_rgb_array'):

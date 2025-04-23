@@ -9,7 +9,7 @@ python3 -m verl.trainer.main_ppo_agent \
     data.val_files=$HOME/data/rllm-miniwob/test.parquet \
     data.train_batch_size=64 \
     data.max_prompt_length=23000 \
-    data.max_response_length=1024 \
+    data.max_response_length=8000 \
     actor_rollout_ref.model.path=/home/colin/code/rllm/tests/rllm/agent/miniwob/sft_model_output_qwen2.5_7b \
     actor_rollout_ref.model.use_remove_padding=True \
     actor_rollout_ref.model.enable_gradient_checkpointing=True \
@@ -51,4 +51,4 @@ python3 -m verl.trainer.main_ppo_agent \
     env.subtask=miniwob \
     env.miniwob_url="$MINIWOB_URL" \
     agent.name=webagent \
-    agent.max_episodes=20 > output_ppo.log 2>&1
+    agent.max_steps=20 > output_ppo.log 2>&1

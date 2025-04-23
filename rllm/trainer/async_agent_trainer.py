@@ -4,6 +4,7 @@ import time
 from pprint import pprint
 from queue import Queue
 from threading import Thread
+import uuid
 
 import numpy as np
 import torch
@@ -17,7 +18,6 @@ from verl.single_controller.ray import (
 )
 from verl.trainer.ppo.ray_trainer import (
     RayWorkerGroup,
-    RayPPOTrainer,
     Role,
     compute_advantage,
     compute_data_metrics,
@@ -73,12 +73,12 @@ class AsyncAgentPPOTrainer(AgentPPOTrainer):
             rollout_engine=self.rollout_wg,
             engine_name="verl",
             tokenizer=self.tokenizer,
+            model_path=self.config.actor_rollout_ref.model.path,
+            max_steps=self.config.agent.max_steps,
+            max_response_length=self.config.data.max_response_length,
+            max_prompt_length=self.config.data.max_prompt_length,
             agent_class=self.agent_class,
             agent_args=self.config.agent.get("agent_args", {}),
-            model_path=self.config.actor_rollout_ref.model.path,
-            max_episodes=self.config.agent.max_episodes,
-            max_trajectory_length=self.config.data.max_response_length,
-            max_prompt_length=self.config.data.max_prompt_length,
             env_class=self.env_class,
             env_args=self.config.env.get("env_args", {}),
         )
@@ -88,12 +88,9 @@ class AsyncAgentPPOTrainer(AgentPPOTrainer):
         Initialize environment depending on env_class with the necessary extra_info, also set uid of the batch.
         """
         env_args = batch.non_tensor_batch["extra_info"].tolist()
-        envs = [self.env_class.from_extra_info(env_args[i]) for i in range(len(env_args))]
-        # envs = [self.env_class(**env_args[i]) for i in range(len(env_args))]
+        envs = [self.env_class.from_json(env_args[i]) for i in range(len(env_args))]
         agents = [self.agent_class(**self.config.agent.get("agent_args", {})) for _ in range(len(envs))]
-
-        batch.non_tensor_batch["uid"] = np.array([env.env_id for env in envs], dtype=object)
-
+        #batch.non_tensor_batch["uid"] = np.array([env.env_id for env in envs], dtype=object)
         self.agent_execution_engine.update_envs_and_agents(envs, agents)
 
         return envs
@@ -135,7 +132,9 @@ class AsyncAgentPPOTrainer(AgentPPOTrainer):
         for epoch in range(self.config.trainer.total_epochs):
             for batch_iter, batch_dict in enumerate(self.train_dataloader):
                 print(f"step: {self.global_steps}", flush=True)
+                
                 batch: DataProto = DataProto.from_single_dict(batch_dict)
+                batch.non_tensor_batch['uid'] = np.array([str(uuid.uuid4()) for _ in range(len(batch.batch))], dtype=object)
                 batch = batch.repeat(
                     repeat_times=self.config.actor_rollout_ref.rollout.n,
                     interleave=True,
@@ -180,13 +179,6 @@ class AsyncAgentPPOTrainer(AgentPPOTrainer):
                     training_batch = []
                     for mini_batch_iter in range(num_loops):
                         print(f"mini_batch_iter: {mini_batch_iter + 1} / {num_loops}", flush=True)
-                        # if mini_batch_iter == num_loops - 1:
-                        #   while True:
-                        #       if replay_queue.qsize() >= ppo_mini_batch_size:
-                        #           break
-                        #       print("waiting for last item, current queue size is", replay_queue.qsize())
-                        #       time.sleep(1)
-                        
                         mini_batch_metrics = {}
                         start_time = time.perf_counter()         
                         with Timer('pipeline_gen', timing_raw):
@@ -311,7 +303,6 @@ class AsyncAgentPPOTrainer(AgentPPOTrainer):
                 self.global_steps += 1
 
                 if self.val_reward_fn is not None and self.global_steps >= self.total_training_steps:
-
                     # perform validation after training
                     val_metrics = self._validate_agent()
                     pprint(f'Final validation metrics: {val_metrics}')
@@ -339,9 +330,8 @@ class AsyncAgentPPOTrainer(AgentPPOTrainer):
                 "eos_token_id": self.tokenizer.eos_token_id,
                 "pad_token_id": self.tokenizer.pad_token_id,
                 "recompute_log_prob": False,
-                "do_sample": False,
+                "do_sample": self.config.actor_rollout_ref.rollout.val_kwargs.do_sample,
                 "validate": True,
-                "val_temperature": self.config.actor_rollout_ref.rollout.val_kwargs.temperature,
                 "agent_rollout": True, 
             }
             

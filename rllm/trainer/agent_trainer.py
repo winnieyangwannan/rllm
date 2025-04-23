@@ -64,8 +64,8 @@ class AgentPPOTrainer(RayPPOTrainer):
             engine_name="verl",
             tokenizer=self.tokenizer,
             model_path=self.config.actor_rollout_ref.model.path,
-            max_episodes=self.config.agent.max_episodes,
-            max_trajectory_length=self.config.data.max_response_length,
+            max_steps=self.config.agent.max_steps,
+            max_response_length=self.config.data.max_response_length,
             max_prompt_length=self.config.data.max_prompt_length,
         )
 
@@ -74,10 +74,10 @@ class AgentPPOTrainer(RayPPOTrainer):
         Initialize environment depending on env_class with the necessary extra_info, also set uid of the batch.
         """
         env_args = batch.non_tensor_batch["extra_info"].tolist()
-        envs = [self.env_class.from_extra_info(env_args[i]) for i in range(len(env_args))]
+        envs = [self.env_class.from_json(env_args[i]) for i in range(len(env_args))]
         agents = [self.agent_class(**self.config.agent.get("agent_args", {})) for _ in range(len(envs))]
 
-        batch.non_tensor_batch["uid"] = np.array([env.env_id for env in envs], dtype=object)
+        #batch.non_tensor_batch["uid"] = np.array([env.env_id for env in envs], dtype=object)
 
         self.agent_execution_engine.update_envs_and_agents(envs, agents)
 
@@ -119,6 +119,7 @@ class AgentPPOTrainer(RayPPOTrainer):
             pprint(f"epoch {epoch}, step {self.global_steps} started")
             for batch_dict in self.train_dataloader:
                 batch: DataProto = DataProto.from_single_dict(batch_dict)
+                batch.non_tensor_batch['uid'] = np.array([str(uuid.uuid4()) for _ in range(len(batch.batch))], dtype=object)
                 batch = batch.repeat(
                     repeat_times=self.config.actor_rollout_ref.rollout.n,
                     interleave=True,
@@ -333,7 +334,6 @@ class AgentPPOTrainer(RayPPOTrainer):
                 "recompute_log_prob": False,
                 "do_sample": False,
                 "validate": True,
-                "val_temperature": self.config.actor_rollout_ref.rollout.val_kwargs.temperature,
                 "agent_rollout": True
             }
 
@@ -376,7 +376,7 @@ class AgentPPOTrainer(RayPPOTrainer):
 
         metric_dict = {}
         for data_source, rewards in data_source_reward.items():
-            metric_dict[f"val/train_score/{data_source}"] = np.mean(rewards)
+            metric_dict[f"val/test_score/{data_source}"] = np.mean(rewards)
 
         for data_source, env_rewards in data_source_env_reward.items():
             metric_dict[f"val/env_score/{data_source}"] = np.mean(env_rewards)
@@ -428,7 +428,7 @@ class AgentPPOTrainer(RayPPOTrainer):
         all_masks_list = []
         traj_scores = []
         environment_scores = []
-        batch = None
+
         for traj in trajectories:
             prompt_tokens = traj["prompt_tokens"]
             response_tokens = traj["response_tokens"]

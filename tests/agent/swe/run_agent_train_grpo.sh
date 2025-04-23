@@ -8,8 +8,8 @@ python3 -m verl.trainer.main_ppo_agent \
     data.train_files=$HOME/data/rllm-frozenlake/train.parquet \
     data.val_files=$HOME/data/rllm-frozenlake/test.parquet \
     data.train_batch_size=32 \
-    data.max_prompt_length=28000 \
-    data.max_response_length=4000 \
+    data.max_prompt_length=4096 \
+    data.max_response_length=32000 \
     actor_rollout_ref.model.path="r2e-edits/qwen25coder-7b-instruct-end2end_sonnet_combined_maxstep40-rft-20k_bz8_epoch2_lr1en5-v2" \
     actor_rollout_ref.model.use_remove_padding=True \
     actor_rollout_ref.model.enable_gradient_checkpointing=True \
@@ -43,4 +43,4 @@ python3 -m verl.trainer.main_ppo_agent \
     trainer.total_epochs=100 \
     env.name=sweenv \
     agent.name=sweagent \
-    agent.max_episodes=40
+    agent.max_steps=40

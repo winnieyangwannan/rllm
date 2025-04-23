@@ -9,7 +9,7 @@ python3 -m verl.trainer.main_ppo_agent \
     data.val_files=$HOME/data/rllm-frozenlake/test.parquet \
     data.train_batch_size=64 \
     data.max_prompt_length=23000 \
-    data.max_response_length=256 \
+    data.max_response_length=8192 \
     actor_rollout_ref.model.path=/data/colin/code/rllm/tests/rllm/agent/frozenlake/sft_model_output_qwen2.5-1.5b-Instruct \
     actor_rollout_ref.model.use_remove_padding=True \
     actor_rollout_ref.model.enable_gradient_checkpointing=True \
@@ -44,4 +44,4 @@ python3 -m verl.trainer.main_ppo_agent \
     trainer.total_epochs=100 \
     env.name=frozenlake \
     agent.name=frozenlakeagent \
-    agent.max_episodes=20 > output_loop.log 2>&1
+    agent.max_steps=20 > output_loop.log 2>&1

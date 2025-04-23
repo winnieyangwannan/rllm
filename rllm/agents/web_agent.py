@@ -263,7 +263,7 @@ Action: ```send_msg_to_user("The price for a 15\\" laptop is 1499 USD.")```
         return " ".join(prompt_text_strings)
 
 
-    def _post_get_action(self, response):
+    def process_model_response(self, response):
         """
         Extracts the last content enclosed within triple backticks (``` ```) from the response.
 
@@ -275,13 +275,15 @@ Action: ```send_msg_to_user("The price for a 15\\" laptop is 1499 USD.")```
             response (str): The raw text response to be processed.
 
         Returns:
-            str: The extracted content from the last occurrence of triple backticks, 
-                or the full response if no match is found.
+            Tuple[str, str]: A tuple containing:
+                - The extracted action (content from the last occurrence of triple backticks
+                  or the full response if no match is found)
+                - The processed response
         """
         matches = re.findall(r'```(.*?)```', response, re.DOTALL)  # Find all occurrences
         if matches:
-            return matches[-1] 
-        return response 
+            return matches[-1], response 
+        return response, response 
 
 
     def update(self, action, observation, next_observation, reward, terminated, truncated, info):
