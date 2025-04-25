@@ -169,8 +169,6 @@ class FrozenLakeEnv(GymFrozenLakeEnv, BaseEnv):
         self.size = size
         self.p = p
 
-        self._env_id = f"{seed}_{size}_{p}"
-
         if desc is None:
             random_map = generate_random_map(size=size, p=p, seed=seed)
         else:
@@ -303,10 +301,6 @@ class FrozenLakeEnv(GymFrozenLakeEnv, BaseEnv):
         if mode == 'tiny_rgb_array':
             lookup = lambda cell: self.GRID_LOOKUP.get(cell, "?")
             return "\n".join("".join(lookup(cell) for cell in row) for row in room_state)
-
-    # @property
-    # def env_id(self):
-    #     return f"{self.seed}-{self.size}-{self.p}"
     
     @staticmethod
     def from_json(extra_info) -> "FrozenLakeEnv":

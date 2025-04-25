@@ -23,7 +23,6 @@ class SingleTurnEnvironment(BaseEnv):
         self.task = task
         self.reward_fn = rllm_reward_fn
         self.done = False
-        self._env_id = hash(str(self.task)) if self.task else ""
     
     def reset(self, task=None, seed=None):
         """Reset the environment and return initial observations."""

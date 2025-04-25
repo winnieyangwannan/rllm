@@ -2,6 +2,7 @@ import os
 import time
 import traceback
 from concurrent.futures import ThreadPoolExecutor
+from typing import List
 
 import numpy as np
 import torch
@@ -440,7 +441,7 @@ class AgentExecutionEngine:
                     for i, idx in enumerate(seq_idxs):
                         if all_dones[idx]:
                             raise Exception(f"Trajectory {idx} has new state but was marked done. Something went wrong.")
-                        infos[idx]['max_steps'] = self.max_steps
+                        infos[i]['max_steps'] = self.max_steps
                         self.agents[idx].update_from_env(
                             observation=next_observations[i],
                             reward=rewards[i],
@@ -537,6 +538,7 @@ class AgentExecutionEngine:
                     "response_masks": torch.tensor(response_masks, dtype=torch.long),
                     "training_reward": self.agents[i].compute_training_reward(trajectories[i]) if hasattr(self.agents[i], "compute_training_reward") else trajectories[i].steps[-1].reward,
                     "environment_reward": trajectories[i].reward,
+                    "idx": self.envs[i].idx,
                 })
             return token_result
         elif mode == "Conversation":
@@ -566,4 +568,8 @@ class AgentExecutionEngine:
         )
         self.n_parallel_agents = len(envs)
         self.envs = envs
+        # For keeping track of the environment index in the batch.
+        for idx, env in enumerate(envs):
+            env.idx = idx
         self.agents = agents
+        

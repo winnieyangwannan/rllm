@@ -113,6 +113,9 @@ class AsyncAgentExecutionEngine(AgentExecutionEngine):
             The processed response text with padding tokens removed
         """
         batch = self._convert_prompt_verl([prompt], **kwargs)
+        
+        if 'max_tokens' in kwargs:
+            batch.meta_info['max_tokens'] = kwargs['max_tokens']
 
         output = await self.router._get_result_verl_async(
             batch, application_id, **kwargs
@@ -216,6 +219,8 @@ class AsyncAgentExecutionEngine(AgentExecutionEngine):
         for step_idx in range(self.max_steps):
             # Get action from agent
             chat_completions_messages = agent.chat_completions
+            # Max remaining tokens left for the response
+            kwargs['max_tokens'] = self.max_response_length - response_token_len
             response = await self.get_model_response(
                 chat_completions_messages,
                 application_id,
@@ -281,7 +286,7 @@ class AsyncAgentExecutionEngine(AgentExecutionEngine):
 
             # Check if episode is done
             if done:
-                termination_reason = "ENV_TERMINATE"
+                termination_reason = "ENV_DONE"
                 break
 
             response_tokens.extend(env_msg_tokens)
@@ -317,7 +322,7 @@ class AsyncAgentExecutionEngine(AgentExecutionEngine):
                 "response_masks": torch.tensor(response_masks, dtype=torch.long),
                 "training_reward": agent.compute_training_reward(trajectory) if hasattr(agent, "compute_training_reward") else trajectory.steps[-1].reward,
                 "environment_reward": trajectory.reward,
-                "uid": env.env_id,
+                "idx": env.idx,
             }
             return token_result
         elif mode == "Conversation":
