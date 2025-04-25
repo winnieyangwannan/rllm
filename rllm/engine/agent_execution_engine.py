@@ -135,6 +135,8 @@ class AgentExecutionEngine:
 
         # because of veRL's chunking. we need to pad number of prompts to be a multiple of worker group world size
         batch_padded, pad_size = pad_dataproto_to_divisor(batch, self.rollout_engine.world_size)
+        if 'max_tokens' in kwargs:
+            batch_padded.meta_info['max_tokens'] = kwargs['max_tokens']
         output_padded = self.rollout_engine.generate_sequences(batch_padded)
         
         output = unpad_dataproto(output_padded, pad_size=pad_size)
@@ -414,6 +416,8 @@ class AgentExecutionEngine:
                     steps += 1
                     with _timer("get_actions", timing_raw):
                         prompts = [self.agents[i].chat_completions for i in range(env_batch_size)]
+                        max_tokens = self.max_response_length - min(all_response_token_lens)
+                        kwargs['max_tokens'] = max_tokens
                         responses, seq_idxs = self.get_model_response_batched(
                             prompts, all_dones, **kwargs
                         )
@@ -469,7 +473,7 @@ class AgentExecutionEngine:
 
                         all_response_token_lens[idx] += len(assistant_msg_tokens) + len(env_msg_tokens)
                         # Reached maximum number of tokens for the trajectory
-                        if all_response_token_lens[idx] > self.max_response_length:
+                        if all_response_token_lens[idx] >= self.max_response_length:
                             # Truncation length
                             truncation_length = self.max_response_length - all_response_token_lens[idx]
                             # Truncate the response and masks

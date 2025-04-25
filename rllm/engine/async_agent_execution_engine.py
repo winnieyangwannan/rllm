@@ -258,7 +258,7 @@ class AsyncAgentExecutionEngine(AgentExecutionEngine):
             # Update repsonse token length
             response_token_len += len(assistant_msg_tokens) + len(env_msg_tokens)
             # Reached maximum number of tokens for the trajectory
-            if response_token_len > self.max_response_length:
+            if response_token_len >= self.max_response_length:
                 # Truncation length
                 truncation_length = self.max_response_length - response_token_len
                 # Truncate the response and masks

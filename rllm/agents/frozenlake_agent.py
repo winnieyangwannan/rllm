@@ -20,7 +20,7 @@ logger = logging.getLogger(__name__)
 
 class FrozenLakeAgent(BaseAgent):
 
-    SYSTEM_PROMPT = """You are walking on a frozen lake.
+    SYSTEM_PROMPT = """You are Qwen, created by Alibaba Cloud. You are a helpful assistant. You are walking on a frozen lake.
 
 FrozenLake Quick Guide
 Goal: Reach the goal (G). Player (P) and Goal (G) must overlap.
@@ -224,13 +224,13 @@ You should plan ahead and try to achieve it in minimum number of steps.
         if not trajectory.steps:
             return 0
         
-        reward = trajectory.steps[-1].reward        
+        reward = trajectory.steps[-1].reward
+        reward_penalty = 0    
         for step in trajectory.steps:
             if not self.validate_step(step):
-                reward -= 0.2
+                reward_penalty = -0.5
                 break
-            
-        return reward
+        return reward + reward_penalty
 
     def validate_step(self, trajectory_step: Step) -> bool:
         action_str = trajectory_step.action
