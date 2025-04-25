@@ -479,8 +479,7 @@ class AgentPPOTrainer(RayPPOTrainer):
 
         trajectory_batch = torch.concat([prompts_batch, response_batch], dim=1)
 
-        prompt_mask = torch.where(prompts_batch != self.tokenizer.pad_token_id, 1, 0)
-        attention_mask = torch.cat((prompt_mask, traj_mask), dim=-1)
+        attention_mask = torch.where(trajectory_batch != self.tokenizer.pad_token_id, 1, 0)
 
         # Compute position_ids
         position_ids = (torch.cumsum(attention_mask, dim=1) - 1) * attention_mask
