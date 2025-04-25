@@ -91,7 +91,8 @@ class QwenChatTemplateParser(ChatTemplateParser):
     def parse(self, messages, add_generation_prompt=False, is_first_msg=False):
         result = ''
 
-        if is_first_msg:
+        # if the first message is not a system message, add the system message
+        if is_first_msg and messages[0]["role"] != "system":
             result += self.system_token + "You are Qwen, created by Alibaba Cloud. You are a helpful assistant." + self.eot_token
 
         for message in messages:
