@@ -27,12 +27,6 @@ class BrowserGym(BaseEnv):
         if task:
             worker_kwargs["task_kwargs"] = task
         self.env = gym.make(env_id, **worker_kwargs)
-
-
-    @property
-    def env_id(self) -> str:
-        return self._env_id
-
     
     def reset(self, seed=0):
         return self.env.reset(seed)

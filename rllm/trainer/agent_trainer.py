@@ -1,4 +1,7 @@
 import concurrent.futures
+import asyncio
+from threading import Thread
+from queue import Queue
 from typing import Type, Dict, List
 import numpy as np
 import torch
@@ -26,6 +29,7 @@ from verl.trainer.ppo.ray_trainer import (
 from verl.single_controller.ray import RayResourcePool, RayWorkerGroup, RayClassWithInitArgs
 
 from rllm.engine.agent_execution_engine import AgentExecutionEngine
+from rllm.engine.async_agent_execution_engine import AsyncAgentExecutionEngine
 
 class AgentPPOTrainer(RayPPOTrainer):
 
@@ -50,8 +54,6 @@ class AgentPPOTrainer(RayPPOTrainer):
     def init_workers(self):
         super().init_workers()
 
-        assert not self.config.actor_rollout_ref.rollout.async_engine, "Must use synchronous engine for agent training"
-
         # Initialize additional agent class 
         # Number of agents is set to be 0 initially
         if self.hybrid_engine: 
@@ -59,15 +61,30 @@ class AgentPPOTrainer(RayPPOTrainer):
         else:
             agent_rollout_wg = self.rollout_wg
         
-        self.agent_execution_engine = AgentExecutionEngine(
-            rollout_engine=agent_rollout_wg,
-            engine_name="verl",
-            tokenizer=self.tokenizer,
-            model_path=self.config.actor_rollout_ref.model.path,
-            max_steps=self.config.agent.max_steps,
-            max_response_length=self.config.data.max_response_length,
-            max_prompt_length=self.config.data.max_prompt_length,
-        )
+        if self.config.agent.async_engine:
+            self.agent_execution_engine = AsyncAgentExecutionEngine(
+                rollout_engine=agent_rollout_wg,
+                engine_name="verl",
+                tokenizer=self.tokenizer,
+                model_path=self.config.actor_rollout_ref.model.path,
+                max_steps=self.config.agent.max_steps,
+                max_response_length=self.config.data.max_response_length,
+                max_prompt_length=self.config.data.max_prompt_length,
+                agent_class=self.agent_class,
+                agent_args=self.config.agent.get("agent_args", {}),
+                env_class=self.env_class,
+                env_args=self.config.env.get("env_args", {}),
+            )
+        else:
+            self.agent_execution_engine = AgentExecutionEngine(
+                rollout_engine=agent_rollout_wg,
+                engine_name="verl",
+                tokenizer=self.tokenizer,
+                model_path=self.config.actor_rollout_ref.model.path,
+                max_steps=self.config.agent.max_steps,
+                max_response_length=self.config.data.max_response_length,
+                max_prompt_length=self.config.data.max_prompt_length,
+            )
 
     def init_envs_and_agents(self, batch):
         """
@@ -76,9 +93,6 @@ class AgentPPOTrainer(RayPPOTrainer):
         env_args = batch.non_tensor_batch["extra_info"].tolist()
         envs = [self.env_class.from_json(env_args[i]) for i in range(len(env_args))]
         agents = [self.agent_class(**self.config.agent.get("agent_args", {})) for _ in range(len(envs))]
-
-        #batch.non_tensor_batch["uid"] = np.array([env.env_id for env in envs], dtype=object)
-
         self.agent_execution_engine.update_envs_and_agents(envs, agents)
 
         return envs
@@ -128,23 +142,16 @@ class AgentPPOTrainer(RayPPOTrainer):
                 metrics = {}
                 timing_raw = {}
 
-                ####################
-                ####################
-                # must pop those keys for generation so they no longer exist
                 batch.pop(batch_keys=["input_ids", "attention_mask", "position_ids"])
                 batch.meta_info = {
                     "agent_rollout": True,  # no need to generate multiple ones since environment is repeated already
                 }
 
-                self.init_envs_and_agents(batch)
-
                 with _timer("step", timing_raw):
+                    self.init_envs_and_agents(batch)
                     final_gen_batch_output = self.generate_agent_trajectory(timing_raw=timing_raw, meta_info=batch.meta_info)
 
                     batch = batch.union(final_gen_batch_output)
-                    ####################
-                    ####################
-
                     # compute values
                     if self.use_critic:
                         with _timer("values", timing_raw):
@@ -342,7 +349,6 @@ class AgentPPOTrainer(RayPPOTrainer):
             test_output_gen_batch = self.generate_agent_trajectory(
                 meta_info=test_batch.meta_info
             )
-
             test_batch = test_batch.union(test_output_gen_batch)
 
             # use environment score to report validation reward
@@ -397,10 +403,18 @@ class AgentPPOTrainer(RayPPOTrainer):
             DataProto: Representation of the agent's trajectories.
         """
         with _timer("collect_trajectory", timing_raw):
-            # Interact_environment returns list of trajectories.
-            trajectories = self.agent_execution_engine.interact_environment(
-                timing_raw=timing_raw, mode="Token", meta_info=meta_info
-            )
+            trajectories = []
+            if self.config.agent.async_engine:
+                gen_seq_generator = self.generate_agent_trajectories_async(timing_raw=timing_raw, meta_info=meta_info)
+                for _, trajectory in enumerate(gen_seq_generator):
+                    trajectories.append(trajectory)
+            else:
+                # Interact_environment returns list of trajectories.
+                trajectories = self.agent_execution_engine.interact_environment(
+                    timing_raw=timing_raw, mode="Token", meta_info=meta_info
+                )
+        # Sort trajectories by their idx, to ensure they are in order.
+        trajectories.sort(key=lambda x: x["idx"])
 
         with _timer("transform_trajectory", timing_raw):
             # Transform the raw trajectories into DataProto format.
@@ -496,4 +510,20 @@ class AgentPPOTrainer(RayPPOTrainer):
         }
 
         return DataProto.from_dict(tensors=tensor_batch)
+
+
+    def generate_agent_trajectories_async(self, timing_raw={}, meta_info=None):
+        queue = Queue()
+        def runner():
+            async def consume():
+                async for item in self.agent_execution_engine.interact_environment_generator(timing_raw=timing_raw, mode="Token", meta_info=meta_info):
+                    queue.put(item)
+                queue.put(None)  # sentinel to signal done
+            asyncio.run(consume())
+        Thread(target=runner, daemon=True).start()
+        while True:
+            item = queue.get()
+            if item is None:
+                break
+            yield item
     

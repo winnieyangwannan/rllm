@@ -317,7 +317,7 @@ class AsyncAgentExecutionEngine(AgentExecutionEngine):
                 "response_masks": torch.tensor(response_masks, dtype=torch.long),
                 "training_reward": agent.compute_training_reward(trajectory) if hasattr(agent, "compute_training_reward") else trajectory.steps[-1].reward,
                 "environment_reward": trajectory.reward,
-                "uid": env.env_id,
+                "idx": env.idx,
             }
             return token_result
         elif mode == "Conversation":

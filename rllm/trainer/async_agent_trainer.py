@@ -82,18 +82,6 @@ class AsyncAgentPPOTrainer(AgentPPOTrainer):
             env_class=self.env_class,
             env_args=self.config.env.get("env_args", {}),
         )
-
-    def init_envs_and_agents(self, batch):
-        """
-        Initialize environment depending on env_class with the necessary extra_info, also set uid of the batch.
-        """
-        env_args = batch.non_tensor_batch["extra_info"].tolist()
-        envs = [self.env_class.from_json(env_args[i]) for i in range(len(env_args))]
-        agents = [self.agent_class(**self.config.agent.get("agent_args", {})) for _ in range(len(envs))]
-        #batch.non_tensor_batch["uid"] = np.array([env.env_id for env in envs], dtype=object)
-        self.agent_execution_engine.update_envs_and_agents(envs, agents)
-
-        return envs
     
     def fit_agent(self):
         """
@@ -157,7 +145,8 @@ class AsyncAgentPPOTrainer(AgentPPOTrainer):
                         uid_to_trajectories = {} # mapping of environment id (uid) to trajectories. Only put to queue in groups of size self.config.actor_rollout_ref.rollout.n
                         with Timer('gen', timing_raw):
                             for _, trajectory in enumerate(generator):
-                                uid = trajectory['uid']
+                                # For example, idx=(0,1,2,3), (4,5,6,7) for pass of N=4 belong to the same sample.
+                                uid = trajectory['idx']//self.config.actor_rollout_ref.rollout.n
                                 if uid not in uid_to_trajectories:
                                     uid_to_trajectories[uid] = []
                                 uid_to_trajectories[uid].append(trajectory)
@@ -187,7 +176,8 @@ class AsyncAgentPPOTrainer(AgentPPOTrainer):
                                 _, trajes = replay_queue.get()
                                 trajectories.extend(trajes)
                             mini_batch = self._transform_agent_trajectories(trajectories=trajectories)
-                            mini_batch.non_tensor_batch["uid"] = np.array([traj["uid"] for traj in trajectories], dtype=object)
+                            ids2uids = [traj["idx"]//self.config.actor_rollout_ref.rollout.n for traj in trajectories]
+                            mini_batch.non_tensor_batch["uid"] = np.array(ids2uids, dtype=object)
                         end_time = time.perf_counter()
                         print(f"Generate mini batch took {end_time - start_time:.2f} seconds")
                         
@@ -390,23 +380,3 @@ class AsyncAgentPPOTrainer(AgentPPOTrainer):
             metric_dict[f"val/env_score/{data_source}"] = np.mean(env_rewards)
 
         return metric_dict
-
-
-
-    def generate_agent_trajectories_async(self, timing_raw={}, meta_info=None):
-        queue = Queue()
-
-        def runner():
-            async def consume():
-                async for item in self.agent_execution_engine.interact_environment_generator(timing_raw=timing_raw, mode="Token", meta_info=meta_info):
-                    queue.put(item)
-                queue.put(None)  # sentinel to signal done
-            asyncio.run(consume())
-
-        Thread(target=runner, daemon=True).start()
-
-        while True:
-            item = queue.get()
-            if item is None:
-                break
-            yield item
