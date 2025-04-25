@@ -495,5 +495,88 @@ class AgentPPOTrainer(RayPPOTrainer):
             "environment_scores": environment_score_batch,
         }
 
+        self.visualize_trajectory(DataProto.from_dict(tensors=tensor_batch))
+
         return DataProto.from_dict(tensors=tensor_batch)
     
+
+
+    def visualize_trajectory(self, tensor_batch, sample_idx=0, max_samples=1):
+        """
+        Visualize the trajectory from tensor_batch by detokenizing prompts and responses,
+        and highlighting the masked parts with color.
+        
+        Args:
+            tensor_batch: The tensor batch containing trajectory data
+            sample_idx: Starting index of samples to visualize
+            max_samples: Maximum number of samples to visualize
+        """
+        from rllm.misc import colorful_print
+
+        # Get the relevant tensors
+        prompts = tensor_batch.batch["prompts"]
+        responses = tensor_batch.batch["responses"]
+        traj_mask = tensor_batch.batch["traj_mask"]
+        token_level_scores = tensor_batch.batch["token_level_scores"]
+        environment_scores = tensor_batch.batch["environment_scores"]
+        
+        batch_size = prompts.shape[0]
+        end_idx = min(sample_idx + max_samples, batch_size)
+        
+        for i in range(sample_idx, end_idx):
+            colorful_print(f"\n===== Sample {i} =====", fg="cyan", bold=True)
+            
+            # Detokenize prompt
+            prompt_tokens = prompts[i]
+            prompt_mask = prompt_tokens != self.tokenizer.pad_token_id
+            valid_prompt_tokens = prompt_tokens[prompt_mask]
+            prompt_text = self.tokenizer.decode(valid_prompt_tokens)
+            
+            colorful_print("Prompt:", fg="green", bold=True)
+            colorful_print(f"{prompt_text}\n", fg="green")
+            
+            # Detokenize response with color highlighting for masked tokens
+            response_tokens = responses[i]
+            response_mask = traj_mask[i]
+            
+            # Get non-padding tokens
+            valid_indices = response_tokens != self.tokenizer.pad_token_id
+            valid_response_tokens = response_tokens[valid_indices]
+            valid_response_mask = response_mask[valid_indices]
+            
+            # Then show token-by-token with masking
+            colorful_print("Response with masking:", fg="yellow", bold=True)
+            
+            for j, (token, mask) in enumerate(zip(valid_response_tokens, valid_response_mask)):
+                token_text = self.tokenizer.decode(token)
+                
+                # Check if this token has a reward
+                has_reward = token_level_scores[i, j] != 0
+                has_env_reward = environment_scores[i, j] != 0
+                
+                # Apply different colors based on mask and rewards
+                if mask == 0:
+                    # Masked token (not used in training)
+                    colorful_print(token_text, fg="red", end="")
+                elif has_reward or has_env_reward:
+                    # Token with reward
+                    colorful_print(token_text, bg="green", end="")
+                    
+                    reward_info = ""
+                    if has_reward:
+                        reward_info += f" R:{token_level_scores[i, j].item():.2f}"
+                    if has_env_reward:
+                        reward_info += f" ER:{environment_scores[i, j].item():.2f}"
+                    
+                    colorful_print(reward_info, fg="magenta", end="")
+                else:
+                    # Normal token used in training
+                    colorful_print(token_text, fg="blue", end="")
+            
+            print()  # New line after all tokens
+            
+            # Print reward summary
+            total_reward = token_level_scores[i].sum().item()
+            total_env_reward = environment_scores[i].sum().item()
+            colorful_print("Rewards:", fg="green", bold=True)
+            print(f" Training={total_reward:.2f}, Environment={total_env_reward:.2f}")

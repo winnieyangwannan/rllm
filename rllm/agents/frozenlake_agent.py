@@ -41,9 +41,10 @@ Reach goal: +1.0
 
 You will be provided the current observation, please decide on the next Action.
 You should show your thought process and then input the final action in ``` ```.
-You should only output the NEXT ACTION at each interation in the ``` ```.
+You should only output the NEXT ACTION at each interation in the ``` ```. For example, if you want to move up, you should output ```Up```.
 You should plan ahead and try to achieve it in minimum number of steps.
 """
+
 # Below are examples for an interaction:
 # Example1:
 # User: Current Observation:
@@ -121,7 +122,7 @@ You should plan ahead and try to achieve it in minimum number of steps.
         if self._trajectory.steps and self._trajectory.steps[-1].action is not None: # Check if the last step has an action (meaning it's a completed step)
             last_step_obs_str = self._trajectory.steps[-1].observation
             if last_step_obs_str == current_obs_str:
-                user_prompt_content += "\nYour last response is invalid. Your position didn't change at all. You may need to recheck your thinking process, action outputted, and the format of response."
+                user_prompt_content += "\nYour last response is invalid. Your position didn't change at all. You may need to recheck your thinking process, action outputted, and the format of response. Remember, you should only output the NEXT ACTION at each interation in the ``` ```. For example, if you want to move up, you should output ```Up```."
 
         # Update the last step in the trajectory with the outcome (next_observation, reward, done, info)
         if self._trajectory.steps:
@@ -222,15 +223,14 @@ You should plan ahead and try to achieve it in minimum number of steps.
     def compute_training_reward(self, trajectory: Trajectory) -> float:
         if not trajectory.steps:
             return 0
-
-        if trajectory.steps[-1].reward == 1.0 and trajectory.steps[-1].done:
-            return 1
-
+        
+        reward = trajectory.steps[-1].reward        
         for step in trajectory.steps:
             if not self.validate_step(step):
-                return -1
+                reward -= 0.2
+                break
             
-        return 0
+        return reward
 
     def validate_step(self, trajectory_step: Step) -> bool:
         action_str = trajectory_step.action
