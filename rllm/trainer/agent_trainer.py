@@ -411,8 +411,8 @@ class AgentPPOTrainer(RayPPOTrainer):
                 for _, trajectory in enumerate(gen_seq_generator):
                     trajectories.append(trajectory)
             else:
-                # Interact_environment returns list of trajectories.
-                trajectories = self.agent_execution_engine.interact_environment(
+                # generate_trajectories returns list of trajectories.
+                trajectories = self.agent_execution_engine.generate_trajectories(
                     timing_raw=timing_raw, mode="Token", meta_info=meta_info
                 )
         # Sort trajectories by their idx, to ensure they are in order.

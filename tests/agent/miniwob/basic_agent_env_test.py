@@ -59,7 +59,7 @@ def main():
     agents = [WebAgent(), WebAgent()]
     agent_engine = AgentExecutionEngine(rollout_engine=engine, engine_name="vllm", tokenizer=tokenizer, sampling_params=sampling_params, envs=envs, agents=agents)
     
-    trajectories = agent_engine.interact_environment()
+    trajectories = agent_engine.generate_trajectories()
         
     torch.save(trajectories, os.path.join(output_dir, 'evaluate_trajectories.pt'))
 

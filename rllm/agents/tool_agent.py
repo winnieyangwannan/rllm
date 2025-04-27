@@ -195,7 +195,6 @@ class ToolAgent(BaseAgent):
 if __name__ == "__main__":
     # Create the environment (no batch_size parameter)
     envs = [ToolEnvironment(tools=["google_search"]), ToolEnvironment(tools=["google_search"])]
-    import pdb; pdb.set_trace()
     # Create the batch agent with the tool agent
     from transformers import AutoTokenizer
     
