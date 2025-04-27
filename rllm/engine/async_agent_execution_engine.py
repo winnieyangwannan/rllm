@@ -341,7 +341,7 @@ class AsyncAgentExecutionEngine(AgentExecutionEngine):
                 continue
         raise Exception(f"Trajectory {idx} cannot complete. Please check the log message")
 
-    async def interact_environment_generator(
+    async def trajectory_generator(
         self, reset_seed=0, timing_raw={}, mode="Text", **kwargs
     ):
         # Note: this function is not concurrecy safe due to the router.__enter__ and router.__exit__
