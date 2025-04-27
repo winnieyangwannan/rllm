@@ -205,7 +205,7 @@ algorithm:
     target_kl: 0.1
   # RLLM Arguments
   mask_truncated_samples: False # Zero gradient for truncated samples (by setting advantage=0)
-  clip_advantage: False
+  clip_advantages: False
 
 trainer:
   balance_batch: True
