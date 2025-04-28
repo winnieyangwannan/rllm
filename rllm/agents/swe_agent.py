@@ -99,6 +99,7 @@ class SWEAgent(BaseAgent):
         if self._trajectory.steps:
             observation = str(observation)
         else:
+            observation = str(observation)
             observation = self.user_prompt_template.format(problem_statement=observation)
 
         max_steps = info.get('max_steps', None)

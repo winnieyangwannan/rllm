@@ -74,7 +74,7 @@ def main():
     agent_engine = AgentExecutionEngine(rollout_engine=engine, engine_name="vllm", tokenizer=tokenizer, episode_len=episode_len, sampling_params=sampling_params, agents=agents, envs=envs)
     
     timing_raw = {}
-    evaluate_trajectories = agent_engine.interact_environment(timing_raw=timing_raw)
+    evaluate_trajectories = agent_engine.generate_trajectories(timing_raw=timing_raw)
 
     evaluate_metrics = {
         "evaluate_rollout.mean": np.mean([

@@ -135,6 +135,8 @@ class AgentExecutionEngine:
 
         # because of veRL's chunking. we need to pad number of prompts to be a multiple of worker group world size
         batch_padded, pad_size = pad_dataproto_to_divisor(batch, self.rollout_engine.world_size)
+        if 'max_tokens' in kwargs:
+            batch_padded.meta_info['max_tokens'] = kwargs['max_tokens']
         output_padded = self.rollout_engine.generate_sequences(batch_padded)
         
         output = unpad_dataproto(output_padded, pad_size=pad_size)
@@ -314,7 +316,7 @@ class AgentExecutionEngine:
             info['max_steps'] = self.max_steps
         return list(observations), list(infos)
 
-    def interact_environment(self, reset_seed=0, timing_raw=None, mode="Text", **kwargs):
+    def generate_trajectories(self, reset_seed=0, timing_raw=None, mode="Text", **kwargs):
         """
         Execute batched interactions with the environment and collect trajectories.
 
@@ -407,13 +409,15 @@ class AgentExecutionEngine:
 
                 if max_prompt_token_len > self.max_prompt_length:
                     self.reset_agents()
-                    raise Exception("Initial prompt length already exceeded max_prompt_length, retrying")
+                    raise Exception("Initial prompt length already exceeded max_prompt_length. Please set `max_prompt_length` to be larger.")
                     
                 # get model actions and responses
                 while not all(all_dones) and steps < self.max_steps:
                     steps += 1
                     with _timer("get_actions", timing_raw):
                         prompts = [self.agents[i].chat_completions for i in range(env_batch_size)]
+                        max_tokens = self.max_response_length - min([t for i, t in enumerate(all_response_token_lens) if all_dones[i] is False])
+                        kwargs['max_tokens'] = max_tokens
                         responses, seq_idxs = self.get_model_response_batched(
                             prompts, all_dones, **kwargs
                         )
@@ -469,7 +473,7 @@ class AgentExecutionEngine:
 
                         all_response_token_lens[idx] += len(assistant_msg_tokens) + len(env_msg_tokens)
                         # Reached maximum number of tokens for the trajectory
-                        if all_response_token_lens[idx] > self.max_response_length:
+                        if all_response_token_lens[idx] >= self.max_response_length:
                             # Truncation length
                             truncation_length = self.max_response_length - all_response_token_lens[idx]
                             # Truncate the response and masks

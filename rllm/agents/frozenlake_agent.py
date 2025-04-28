@@ -20,7 +20,7 @@ logger = logging.getLogger(__name__)
 
 class FrozenLakeAgent(BaseAgent):
 
-    SYSTEM_PROMPT = """You are walking on a frozen lake.
+    SYSTEM_PROMPT = """You are Qwen, created by Alibaba Cloud. You are a helpful assistant. You are walking on a frozen lake.
 
 FrozenLake Quick Guide
 Goal: Reach the goal (G). Player (P) and Goal (G) must overlap.
@@ -43,7 +43,6 @@ You will be provided the current observation, please decide on the next Action.
 You should show your thought process and then input the final action in ``` ```.
 You should only output the NEXT ACTION at each interation in the ``` ```. For example, if you want to move up, you should output ```Up```.
 You should plan ahead and try to achieve it in minimum number of steps.
-
 
 Below are examples for an interaction:
 Example1:
@@ -77,31 +76,30 @@ _   _   _   _   _
 You have not achieved the goal, P has not reached G yet. Please give the next action.
 
 Assistant: G is at the bottom right relative to P. I want to move closer so I should move right or down. But there is a hole at each position and I do not want to fall into holes. Up and left are both valid but left brings me closer. Action: ```Left```
+
+Example4:
+User: Current Observation:
+_   _   _   _
+_   _   _   O
+_   O   _   O
+O   G   P   _
+You have not achieved the goal, P has not reached G yet. Please give the next action.
+
+Assistant: P is now near G. But game has not finished. P is not at G and I should never output invalid action. I need to recheck my understanding. P is not actually on G yet because they are not overlapping, it needs reach G to its left. Action: ```Left```
+
+Example5:
+User: Current Observation:
+_   _   _   O   _
+O   _   P   _   _
+O   _   O   O   O
+O   _   O   G   _
+O   _   _   _   _
+You have not achieved the goal, P has not reached G yet. Please give the next action.
+
+Assistant: G is at the bottom right corner of P. I can move left, right, or up. Move right will initially bring me closer but I can't reach G that way. Move up and left means I can still reach G. Move up will result in 9 steps in total while left is 7 steps. I need to move left. Action: ```Left```
+
+Now it is your turn, please show your thinking process and put the final action in ``` ```. In every turn, the final action MUST be one of Up, Down, Left, Right.
 """
-
-# Example4:
-# User: Current Observation:
-# _   _   _   _
-# _   _   _   O
-# _   O   _   O
-# O   G   P   _
-# You have not achieved the goal, P has not reached G yet. Please give the next action.
-
-# Assistant: P is now near G. But game has not finished. P is not at G and I should never output invalid action. I need to recheck my understanding. P is not actually on G yet because they are not overlapping, it needs reach G to its left. Action: ```Left```
-
-# Example5:
-# User: Current Observation:
-# _   _   _   O   _
-# O   _   P   _   _
-# O   _   O   O   O
-# O   _   O   G   _
-# O   _   _   _   _
-# You have not achieved the goal, P has not reached G yet. Please give the next action.
-
-# Assistant: G is at the bottom right corner of P. I can move left, right, or up. Move right will initially bring me closer but I can't reach G that way. Move up and left means I can still reach G. Move up will result in 9 steps in total while left is 7 steps. I need to move left. Action: ```Left```
-
-# Now it is your turn, please show your thinking process and put the final action in ``` ```. In every turn, the final action MUST be one of Up, Down, Left, Right.
-# """
 
     def __init__(self):
         self._trajectory = Trajectory()
@@ -225,14 +223,13 @@ Assistant: G is at the bottom right relative to P. I want to move closer so I sh
         if not trajectory.steps:
             return 0
         
-        reward = trajectory.steps[-1].reward        
+        reward = trajectory.steps[-1].reward
+        reward_penalty = 0    
         for step in trajectory.steps:
             if not self.validate_step(step):
-                reward -= 0.2
+                reward_penalty = -0.5
                 break
-
-        reward = max(reward, 0.0)
-        return reward
+        return reward + reward_penalty
 
     def validate_step(self, trajectory_step: Step) -> bool:
         action_str = trajectory_step.action

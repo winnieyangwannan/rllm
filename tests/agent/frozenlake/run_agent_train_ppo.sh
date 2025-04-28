@@ -35,7 +35,7 @@ python3 -m verl.trainer.main_ppo_agent \
     trainer.logger=['console','wandb'] \
     trainer.project_name='rllm-agent' \
     trainer.experiment_name='1.5b-ppo-frozenlake_agent_ppo' \
-    +trainer.val_before_train=True \
+    trainer.val_before_train=True \
     trainer.default_hdfs_dir=null \
     trainer.n_gpus_per_node=2 \
     trainer.nnodes=1 \

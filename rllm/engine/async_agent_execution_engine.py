@@ -258,7 +258,7 @@ class AsyncAgentExecutionEngine(AgentExecutionEngine):
             # Update repsonse token length
             response_token_len += len(assistant_msg_tokens) + len(env_msg_tokens)
             # Reached maximum number of tokens for the trajectory
-            if response_token_len > self.max_response_length:
+            if response_token_len >= self.max_response_length:
                 # Truncation length
                 truncation_length = self.max_response_length - response_token_len
                 # Truncate the response and masks
@@ -341,7 +341,7 @@ class AsyncAgentExecutionEngine(AgentExecutionEngine):
                 continue
         raise Exception(f"Trajectory {idx} cannot complete. Please check the log message")
 
-    async def interact_environment_generator(
+    async def trajectory_generator(
         self, reset_seed=0, timing_raw={}, mode="Text", **kwargs
     ):
         # Note: this function is not concurrecy safe due to the router.__enter__ and router.__exit__

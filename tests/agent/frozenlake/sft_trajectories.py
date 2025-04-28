@@ -50,7 +50,7 @@ def main():
     agent_engine = AgentExecutionEngine(rollout_engine=engine, engine_name="vllm", tokenizer=tokenizer, episode_len=episode_len, sampling_params=sampling_params, model_path=teacher_model_path, envs=envs, agents=agents)
     
     timing_raw = {}
-    evaluate_trajectories = agent_engine.interact_environment(timing_raw=timing_raw, mode="Conversation")
+    evaluate_trajectories = agent_engine.generate_trajectories(timing_raw=timing_raw, mode="Conversation")
 
     with open(output_file_path, "w", encoding="utf-8") as f:
         json.dump(evaluate_trajectories, f, indent=4, ensure_ascii=False)
