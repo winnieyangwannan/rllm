@@ -43,40 +43,41 @@ You will be provided the current observation, please decide on the next Action.
 You should show your thought process and then input the final action in ``` ```.
 You should only output the NEXT ACTION at each interation in the ``` ```. For example, if you want to move up, you should output ```Up```.
 You should plan ahead and try to achieve it in minimum number of steps.
+
+
+Below are examples for an interaction:
+Example1:
+User: Current Observation:
+P   _   _   _   _
+O   _   _   O   _
+O   _   O   _   _
+O   _   _   G   _
+_   _   _   _   _
+You have not achieved the goal, P has not reached G yet. Please give the next action.
+
+Assistant: P is now at the top right corner. It should reach G at the bottom right corner. I should move it closer to it. I can move right or down but there is a hole in down position and I can not move diagonally. There is no hole in my next movement right so I can move to right. Action: ```Right```
+
+Example2:
+User: Current Observation:
+_   _   _   _
+_   _   _   O
+_   O   _   P
+O   _   _   G
+You have not achieved the goal, P has not reached G yet. Please give the next action.
+
+Assistant: P is now at the near G. It should reach G to its bottom. I should move to be on it. There is no hole in my next movement so I can move to down. Action: ```Down```
+
+Example3:
+User: Current Observation:
+_   _   _   O   _
+O   _   P   O   _
+O   _   O   _   _
+O   _   _   G   _
+_   _   _   _   _
+You have not achieved the goal, P has not reached G yet. Please give the next action.
+
+Assistant: G is at the bottom right relative to P. I want to move closer so I should move right or down. But there is a hole at each position and I do not want to fall into holes. Up and left are both valid but left brings me closer. Action: ```Left```
 """
-
-# Below are examples for an interaction:
-# Example1:
-# User: Current Observation:
-# P   _   _   _   _
-# O   _   _   O   _
-# O   _   O   _   _
-# O   _   _   G   _
-# _   _   _   _   _
-# You have not achieved the goal, P has not reached G yet. Please give the next action.
-
-# Assistant: P is now at the top right corner. It should reach G at the bottom right corner. I should move it closer to it. I can move right or down but there is a hole in down position and I can not move diagonally. There is no hole in my next movement right so I can move to right. Action: ```Right```
-
-# Example2:
-# User: Current Observation:
-# _   _   _   _
-# _   _   _   O
-# _   O   _   P
-# O   _   _   G
-# You have not achieved the goal, P has not reached G yet. Please give the next action.
-
-# Assistant: P is now at the near G. It should reach G to its bottom. I should move to be on it. There is no hole in my next movement so I can move to down. Action: ```Down```
-
-# Example3:
-# User: Current Observation:
-# _   _   _   O   _
-# O   _   P   O   _
-# O   _   O   _   _
-# O   _   _   G   _
-# _   _   _   _   _
-# You have not achieved the goal, P has not reached G yet. Please give the next action.
-
-# Assistant: G is at the bottom right relative to P. I want to move closer so I should move right or down. But there is a hole at each position and I do not want to fall into holes. Up and left are both valid but left brings me closer. Action: ```Left```
 
 # Example4:
 # User: Current Observation:
@@ -229,7 +230,8 @@ You should plan ahead and try to achieve it in minimum number of steps.
             if not self.validate_step(step):
                 reward -= 0.2
                 break
-            
+
+        reward = max(reward, 0.0)
         return reward
 
     def validate_step(self, trajectory_step: Step) -> bool:
