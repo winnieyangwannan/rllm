@@ -3,6 +3,7 @@ import io
 import logging
 import re
 import collections
+from typing import List, Dict, Any, Tuple
 
 import numpy as np
 from browsergym.core.action.highlevel import HighLevelActionSet
@@ -10,7 +11,7 @@ from browsergym.utils.obs import flatten_axtree_to_str, flatten_dom_to_str, prun
 from PIL import Image
 
 from rllm.agents.system_prompts import *
-from rllm.agents.agent import BaseAgent
+from rllm.agents.agent import BaseAgent, Step, Trajectory
 
 
 logger = logging.getLogger(__name__)
@@ -47,30 +48,99 @@ class WebAgent(BaseAgent):
 
         self.action_history = [] # all are in string
 
-    def _pre_get_action(self, trajectory):
-        obs = self._preproc_obs(trajectory[0]["next_observation"]) # initial state
+        # for interface compliance
+        self._trajectory = Trajectory()
+        self.messages = []
+        self.step = 0
+        self.reset()
 
-        system_msgs = self.get_system_msg(obs)
+    def update_from_env(self, observation: Any, reward: float, done: bool, info: Dict, **kwargs):
+        """
+        Updates the agent's internal state after an environment step.
+        Includes logic to check if the observation changed from the previous step.
+        """
+        obs = self._preproc_obs(observation)
+        # Base message for the user
+        user_prompt_content = self._format_msgs_as_str(self.get_user_msgs(obs))
 
-        messages = [
-            {"role": "system", "content": self._format_msgs_as_str(system_msgs)},
-            {"role": "user", "content": self._format_msgs_as_str(self.get_user_msg(obs))},
-        ]
-        for i, step in enumerate(trajectory[1:]):
-            response = step["response"]
-            next_observation = step["next_observation"]
+        # initial state
+        if not self.messages:
+            self.messages.append(
+                {
+                    "role": "system", 
+                    "content": self._format_msgs_as_str(self.get_system_msgs(obs))
+                },
+            )
 
-            # response
-            messages.append({"role": "assistant", "content": response})
+        # Update the last step in the trajectory with the outcome (next_observation, reward, done, info)
+        if self._trajectory.steps:
+            prior_step = self._trajectory.steps[-1]
+            # The observation received here is the 'next_observation' for the *previous* action/step
+            prior_step.next_observation = observation
+            prior_step.reward = reward
+            prior_step.done = done
+            prior_step.info = info
 
-            # next observation
-            obs = self._preproc_obs(next_observation)
-            usr_msg = self.get_user_msg(obs, append_action=False)
-            messages.append({"role": "user", "content": self._format_msgs_as_str(usr_msg)})
-           
-        return messages
-    
-    def get_system_msg(self, obs):
+        # Add the user message for the *next* interaction turn
+        self.messages.append({
+            "role": "user",
+            "content": user_prompt_content
+        })
+
+        # Create a new step for the current state (with the observation that resulted from the last action)
+        # This step's action, reward, etc., will be filled in by subsequent update_from_model and update_from_env calls
+        if done:
+            return
+        
+        cur_step = Step(
+            observation=observation, 
+            step=self.step
+        )
+        self._trajectory.steps.append(cur_step)
+        
+    def update_from_model(self, response: Any, **kwargs):
+        if isinstance(response, str):
+            content = response
+        else: # OpenAI response
+            try:
+                content = response.choices[0].message.content
+            except Exception as e:
+                logger.error(f"Failed to extract content from response: {response}. Error: {e}")
+                content = str(response)
+
+        assert self._trajectory.steps, "Trajectory should not be empty when update_from_model is called."
+
+        thought, action_str = self._parse_model_response(content)
+
+        cur_step = self._trajectory.steps[-1]
+        cur_step.thought = thought
+        cur_step.action = action_str
+        cur_step.model_response = content
+
+        self.messages.append({"role": "assistant", "content": content})
+
+        self.step += 1
+
+    @property
+    def chat_completions(self) -> List[Dict[str, str]]:
+        return self.messages
+
+    @property
+    def trajectory(self) -> Trajectory:
+        return self._trajectory
+
+    def reset(self):
+        self._trajectory = Trajectory()
+        self.messages = []
+        self.step = 0
+
+    def get_current_state(self) -> Step:
+        if not self._trajectory.steps:
+            raise ValueError("get_current_state called before the first observation was processed.")
+        return self._trajectory.steps[-1]
+
+
+    def get_system_msgs(self, obs):
         system_msgs = []
         system_msgs.append({
             "type": "text",
@@ -85,7 +155,7 @@ class WebAgent(BaseAgent):
         system_msgs.extend(obs["goal_object"])  
         return system_msgs
 
-    def get_user_msg(self, user_obs, append_action=True):
+    def get_user_msgs(self, user_obs):
         user_msgs = []
         # Add open tabs information
         user_msgs.extend(self._format_open_tabs(
@@ -123,19 +193,17 @@ class WebAgent(BaseAgent):
                 }
             )
 
-        if append_action:
-            # Add action space description
-            user_msgs.append({
-                "type": "text",
-                "text": self._get_action_space_description()
-            })
+        # Add action space description
+        user_msgs.append({
+            "type": "text",
+            "text": self._get_action_space_description()
+        })
 
-            # TODO: check whether this should be part of all observation or not
-            # Add next action prompt
-            user_msgs.append({
-                "type": "text",
-                "text": "# Next action\nYou will now think step by step and produce your next best action. Reflect on your past actions, any resulting error message, and the current state of the page before deciding on your next action. MAKE SURE TO WRAP YOU FINAL ACTION in ```action``` YOU MUST PUT IN THIS EXACT STYLE FOR THE ACTION TO BE VALID. The content must be in the same format as shown before in the Action Space. Only 1 action is needed."
-            })
+        # Add next action prompt
+        user_msgs.append({
+            "type": "text",
+            "text": "# Next action\nYou will now think step by step and produce your next best action. Reflect on your past actions, any resulting error message, and the current state of the page before deciding on your next action. MAKE SURE TO WRAP YOU FINAL ACTION in ```action``` YOU MUST PUT IN THIS EXACT STYLE FOR THE ACTION TO BE VALID. The content must be in the same format as shown before in the Action Space. Only 1 action is needed."
+        })
 
         return user_msgs
     
@@ -204,42 +272,6 @@ Thought: I found the information requested by the user, I will send it to the ch
 Action: ```send_msg_to_user("The price for a 15\\" laptop is 1499 USD.")```
 """
 
-
-    def _format_action_history(self, last_action_error):
-        msgs = []
-        msgs.append(
-                {
-                    "type": "text",
-                    "text": """\
-# History of past actions
-""",
-                }
-            )
-        msgs.extend(
-            [
-                {
-                    "type": "text",
-                    "text": f"""\
-{action}
-""",
-                }
-                for action in self.action_history
-            ]
-        )
-
-        if last_action_error:
-            msgs.append(
-                {
-                    "type": "text",
-                    "text": f"""\
-# Error message from last action
-{last_action_error}
-""",
-                }
-            )
-        return msgs
-
-
     def _format_msgs_as_str(self, msgs):
         prompt_text_strings = []
         for message in msgs:
@@ -263,7 +295,7 @@ Action: ```send_msg_to_user("The price for a 15\\" laptop is 1499 USD.")```
         return " ".join(prompt_text_strings)
 
 
-    def process_model_response(self, response):
+    def _parse_model_response(self, response):
         """
         Extracts the last content enclosed within triple backticks (``` ```) from the response.
 
@@ -285,70 +317,51 @@ Action: ```send_msg_to_user("The price for a 15\\" laptop is 1499 USD.")```
             return matches[-1], response 
         return response, response 
 
-
-    def update(self, action, observation, next_observation, reward, terminated, truncated, info):
-        self.action_history.append(action)
-
-
-    def reset(self):
-        self.action_history = []
-
-
-    def compute_training_reward(self, trajectory):
-        """
-        Computes the training reward signal based on the entire trajectory.
-        """
+    def compute_training_reward(self, trajectory: Trajectory) -> float:
         if not trajectory:
             return 0
+        print(trajectory.steps)
+        reward = trajectory.steps[-1].reward
+        reward_penalty = 0    
+        # for step in trajectory.steps:
+        #     if not self.validate_step(step):
+        #         reward_penalty = -0.5
+        #         break
+        return reward + reward_penalty
+
+    # def validate_step(self, trajectory_step):
+    #     """
+    #     Validates if the trajectory_step(dict) is valid or malformated.
+    #     """
+    #     thought = trajectory_step.thought
+    #     action = trajectory_step.action
+
+    #     pattern = r"```(.*?)```"
+    #     match = re.search(pattern, response, re.DOTALL)
+
+    #     # Response has no action wrapped in ``` ```
+    #     if not match:
+    #         return False
+
+    #     # Response has action that results in error
+    #     if trajectory_step["next_observation"]["last_action_error"]:
+    #         return False
+
+    #     # Response not in Thought, Action format
+    #     format_pattern = r"Thought:.*?Action:.*?"
+    #     if not re.search(format_pattern, response, re.DOTALL):
+    #         return False
+
+    #     # Response has repeated meaningless tokens
+    #     def contains_repeated_tokens(response, min_length=5):
+    #         for index in range(int(len(response)//2), min_length, -1):
+    #             if response[-index:] == response[-2*index:-index]:
+    #                 return True
+    #         return False
+
         
-        if trajectory[0]["trajectory_reward"] == 1:
-            return 1
-
-        for traj_step in trajectory:
-            if not self.validate_step(traj_step):
-                return -1
-            
-        return 0
-
-    def validate_step(self, trajectory_step):
-        """
-        Validates if the trajectory_step(dict) is valid or malformated.
-        """
-        response = trajectory_step["response"]
-
-        pattern = r"```(.*?)```"
-        match = re.search(pattern, response, re.DOTALL)
-
-        # Response has no action wrapped in ``` ```
-        if not match:
-            return False
-
-        # Response has action that results in error
-        if trajectory_step["next_observation"]["last_action_error"]:
-            return False
-
-        # Response not in Thought, Action format
-        format_pattern = r"Thought:.*?Action:.*?"
-        if not re.search(format_pattern, response, re.DOTALL):
-            return False
-
-        # Response has repeated meaningless tokens
-        def contains_repeated_tokens(response, min_length=5):
-            for index in range(int(len(response)//2), min_length, -1):
-                if response[-index:] == response[-2*index:-index]:
-                    return True
-            return False
-
+    #     if contains_repeated_tokens(response):
+    #         return False
         
-        if contains_repeated_tokens(response):
-            return False
-        
-        return True
+    #     return True
 
-    def format_observation_as_messages(self, obs, with_system_prompt=False):
-        messages = []
-        if with_system_prompt:
-            messages.extend(self.get_system_msg(obs))
-
-        messages.extend(self.get_user_msg(obs, append_action=with_system_prompt))
-        return messages

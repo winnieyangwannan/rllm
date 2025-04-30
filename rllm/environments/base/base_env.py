@@ -77,3 +77,7 @@ class BaseEnv(ABC):
         """
         # BaseEnv is abstract, subclasses must implement this factory method.
         raise NotImplementedError("Subclasses must implement the 'from_json' static method.")
+
+    @staticmethod
+    def is_multithread_safe() -> bool:
+        return True

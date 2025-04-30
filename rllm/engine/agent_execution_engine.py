@@ -275,14 +275,18 @@ class AgentExecutionEngine:
         def step_env_single(env, action):
             return env.step(action)
 
-        with ThreadPoolExecutor(max_workers=len(seq_idxs)) as executor:
-            futures = [
-                executor.submit(step_env_single, self.envs[seq_idxs[i]], actions[i])
-                for i in range(len(seq_idxs))
-            ]
+        if all(type(self.envs[seq_idxs[i]]).is_multithread_safe() for i in range(len(seq_idxs))):
+            with ThreadPoolExecutor(max_workers=len(seq_idxs)) as executor:
+                futures = [
+                    executor.submit(step_env_single, self.envs[seq_idxs[i]], actions[i])
+                    for i in range(len(seq_idxs))
+                ]
 
-            for i, fut in enumerate(futures):
-                results[i] = fut.result()
+                for i, fut in enumerate(futures):
+                    results[i] = fut.result()
+        else:
+            for i in range(len(seq_idxs)):
+                results[i] = self.envs[seq_idxs[i]].step(actions[i])
 
         next_observations, rewards, dones, infos = zip(*results)
         return list(next_observations), list(rewards), list(dones), list(infos)
@@ -300,15 +304,19 @@ class AgentExecutionEngine:
 
         def reset_env_single(env):
             return env.reset()
+        
+        if all(type(self.envs[seq_idxs[i]]).is_multithread_safe() for i in range(len(seq_idxs))):
+            with ThreadPoolExecutor(max_workers=len(seq_idxs)) as executor:
+                futures = [
+                    executor.submit(reset_env_single, self.envs[seq_idxs[i]])
+                    for i in range(len(seq_idxs))
+                ]
 
-        with ThreadPoolExecutor(max_workers=len(seq_idxs)) as executor:
-            futures = [
-                executor.submit(reset_env_single, self.envs[seq_idxs[i]])
-                for i in range(len(seq_idxs))
-            ]
-
-            for i, fut in enumerate(futures):
-                results[i] = fut.result()
+                for i, fut in enumerate(futures):
+                    results[i] = fut.result()
+        else:
+            for i in range(len(seq_idxs)):
+                results[i] = self.envs[seq_idxs[i]].reset()
 
         # Unpack all results
         observations, infos = zip(*results)
@@ -438,7 +446,7 @@ class AgentExecutionEngine:
                                 infos,
                             ) = self.step_environment_batched(actions, seq_idxs)
                     except Exception as e:
-                        print(e)
+                        print(f"Error in environment interation: {e}. Re-attempting...")
                         self.reset_agents()
                         raise e
 
