@@ -9,7 +9,7 @@ from rllm.tools.camel_tools.search_tools import SearchWikiCamel, SearchGoogleCam
 from rllm.tools.camel_tools.video_analysis_tools import AskQuestionAboutVideoCamel
 from rllm.tools.camel_tools.browser_tools import BrowseUrlCamel
 from rllm.tools.camel_tools.code_execution_tools import ExecuteCodeCamel
-from rllm.tools.camel_tools.document_toolkit import DocumentProcessingCamel
+# from rllm.tools.camel_tools.document_toolkit import DocumentProcessingCamel
 TOOL_REGISTRY = {
     'calculator': CalculatorTool,
     'e2b_python': E2BPythonInterpreter,
@@ -28,7 +28,7 @@ TOOL_REGISTRY = {
     'ask_video': AskQuestionAboutVideoCamel,
     'browse_url': BrowseUrlCamel,
     'execute_code': ExecuteCodeCamel,
-    'extract_document_content': DocumentProcessingCamel,
+    # 'extract_document_content': DocumentProcessingCamel,
 }
 
 __all__ = [

@@ -117,10 +117,11 @@ class ToolAgent(BaseAgent):
                     tool_calls_dict = parsed_action.to_dict() # Assuming parser returns an object with to_dict()
             except Exception as e:
                 logger.error(f"Failed to parse tool calls from string response: {e}")
-                tool_calls_dict = {} # Indicate no valid tool calls parsed
+                tool_calls_dict = [] # Indicate no valid tool calls parsed
         else: # Assuming OpenAI-like completion object
             completion = response
             assistant_content = completion.choices[0].message.content
+            print(f"assistant_content: {assistant_content}", flush=True)
             if completion.choices[0].message.tool_calls:
                 tool_calls_dict = [{
                     "id": tool_call.id,
@@ -130,19 +131,24 @@ class ToolAgent(BaseAgent):
                         "arguments": tool_call.function.arguments # Arguments are already string here
                     }
                 } for tool_call in completion.choices[0].message.tool_calls]
+            else:
+                tool_calls_dict = []
+
+        print(f"tool_calls_dict: {tool_calls_dict}", flush=True)
 
         # "Finishing tool call, calls the "finish" function, if no tools are found.
         if not tool_calls_dict:
-            tool_calls_dict = {
+            tool_calls_dict = [{
                 "id": str(uuid.uuid4()),
                 "type": "function",
                 "function": {
                     "name": "finish",
                     "arguments": {
-                        "response": response,
+                        "response": assistant_content,
                     }
                 }
-            }
+            }]
+
         # Append assistant message to chat history
         assistant_message = {"role": "assistant", "content": assistant_content}
         if tool_calls_dict:
@@ -189,61 +195,3 @@ class ToolAgent(BaseAgent):
         if not self._trajectory.steps:
             return None
         return self._trajectory.steps[-1]
-
-
-# Keep the __main__ block for testing if needed, update agent interaction if necessary
-if __name__ == "__main__":
-    # Create the environment (no batch_size parameter)
-    envs = [ToolEnvironment(tools=["google_search"]), ToolEnvironment(tools=["google_search"])]
-    # Create the batch agent with the tool agent
-    from transformers import AutoTokenizer
-    
-    tokenizer = AutoTokenizer.from_pretrained("Qwen/Qwen2.5-1.5B-Instruct")
-
-    # Note: The engine now likely interacts via update_from_env/update_from_model
-    # The sampling_params might need adjustment depending on the engine implementation
-    # Specifically, how 'tools' are passed might change if the engine handles it internally
-
-    sampling_params = {
-        # "model": "gpt-4o", # Model name should likely be consistent with agent init
-        "temperature": 0.6,
-        "max_tokens": 8192, # Adjusted to match example, consider reducing if too large
-        "top_p": 0.95,
-        # "stop": ["```\n\n"], # Stop tokens if needed
-        # The engine might need the tools directly, or get them from the agent/env
-        "tools": envs[0].tools.json, 
-    }
-
-    # Initialize agents using the refactored class
-    agents = [
-        ToolAgent(tools=envs[0].tools.tools, model_name="gpt-4o", parser_name='openai'), 
-        ToolAgent(tools=envs[1].tools.tools, model_name="gpt-4o", parser_name='openai')
-    ]
-    
-    # Assuming AsyncAgentExecutionEngine is adapted for the BaseAgent interface
-    from rllm.engine.async_agent_execution_engine import AsyncAgentExecutionEngine
-
-    async_agent_execution_engine = AsyncAgentExecutionEngine(
-        agents=agents,
-        engine_name="openai", 
-        envs=envs,
-        tokenizer=tokenizer,  # Using transformers tokenizer if needed by engine
-        # rollout_engine=None, # Pass if required
-        sampling_params=sampling_params
-    )
-
-    tasks = [
-        "Who won the 2024 Super Bowl and what was the final score?",
-        "What is the current population of Tokyo in 2024?",
-        "When is the next solar eclipse visible from North America?",
-        "Who is the current CEO of OpenAI and when did they take the position?",
-        "What was the highest grossing movie of 2023?",
-        "What is the latest breakthrough in fusion energy research?",
-    ]
-
-    # Adapt task format if needed by the engine or agent's initial observation handling
-    # Assuming the engine passes the dict directly as the first observation
-    tasks_formatted = [{"question": task} for task in tasks] 
-
-    # Run the environment interaction
-    asyncio.run(async_agent_execution_engine.execute_tasks(tasks_formatted))

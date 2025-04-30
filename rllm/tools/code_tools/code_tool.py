@@ -12,6 +12,22 @@ class CodeToolOutput(ToolOutput):
     stdout: str = None # Standard output
     stderr: str = None # Standard error
     output: str = None # Result of the code execution (i.e. last line of code)
+    
+    def to_string(self) -> str:
+        """
+        Convert the code tool output to a string representation.
+        
+        Returns:
+            str: A string representation of the output, prioritizing output, then stdout, then stderr.
+        """
+        if self.output is not None:
+            return str(self.output)
+        elif self.stdout:
+            return str(self.stdout)
+        elif self.stderr:
+            return str(self.stderr)
+        else:
+            return ""
 
 class CodeTool(Tool):
     """Base class for Python code execution tools.

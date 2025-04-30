@@ -28,6 +28,28 @@ class ToolOutput:
     name: str
     output: Union[str, list, dict] = None
     error: Optional[str] = None
+    
+    def __str__(self) -> str:
+        """Convert the tool output to a string representation."""
+        if self.error:
+            return f"Error: {self.error}"
+        elif self.output is None:
+            return ""
+        elif isinstance(self.output, (list, dict)):
+            import json
+            return json.dumps(self.output)
+        else:
+            return str(self.output)
+    
+    def to_string(self) -> str:
+        """
+        Convert the tool output to a string representation.
+        
+        Example usage:
+            tool_output = ToolOutput(name="calculator", output=42)
+            result_string = tool_output.to_string()
+        """
+        return str(self)
 
 @dataclass
 class ToolOutputs:
