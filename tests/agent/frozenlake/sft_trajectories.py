@@ -36,7 +36,7 @@ def init_vllm_engine(model_name):
 def main():
     number_of_tasks = 500
     episode_len = 20
-    dataset_file_path = "/home/colin/data/rllm-frozenlake/train.parquet"
+    dataset_file_path = "$HOME/data/rllm-frozenlake/train.parquet"
     output_file_path = "./sft_trajectory.json"
 
     teacher_model_path = "Qwen/Qwen2.5-72B-Instruct"
