@@ -8,7 +8,7 @@ python3 -m verl.trainer.main_ppo_agent \
     data.train_files=$HOME/data/rllm-miniwob/train.parquet \
     data.val_files=$HOME/data/rllm-miniwob/test.parquet \
     data.train_batch_size=64 \
-    data.max_prompt_length=23000 \
+    data.max_prompt_length=8000 \
     data.max_response_length=1024 \
     actor_rollout_ref.model.path=/home/colin/code/rllm/tests/rllm/agent/miniwob/sft_model_output_qwen2.5_7b \
     actor_rollout_ref.model.use_remove_padding=True \
@@ -34,7 +34,7 @@ python3 -m verl.trainer.main_ppo_agent \
     trainer.logger=['console','wandb'] \
     trainer.project_name='rllm-agent' \
     trainer.experiment_name='7b-ppo-miniwob_agent' \
-    +trainer.val_before_train=True \
+    trainer.val_before_train=True \
     trainer.default_hdfs_dir=null \
     trainer.n_gpus_per_node=8 \
     trainer.nnodes=1 \
@@ -45,5 +45,4 @@ python3 -m verl.trainer.main_ppo_agent \
     env.subtask=miniwob \
     env.miniwob_url="$MINIWOB_URL" \
     agent.name=webagent \
-    agent.max_trajectory_length=8000 \
-    agent.trajectory_episode_len=20 > output_grpo.log 2>&1
+    agent.max_steps=20 > output_grpo.log 2>&1

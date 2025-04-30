@@ -177,8 +177,6 @@ written correctly.\
                       "```python\n" + extracted_code + "\n```" + \
                       model_output[last_block_end:]
 
-    import pdb; pdb.set_trace()
-
     return model_output
 
 

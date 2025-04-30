@@ -47,14 +47,13 @@ def make_map_fn(split: str):
         if instruction is None:
             instruction = "Let's think step by step and output the final answer within \\boxed{}."
         
-        question = f"{question} {instruction}"
         answer = example.pop('answer')
 
         data = {
             "data_source": "",
             "prompt": [{
                 "role": "user",
-                "content": question
+                "content": f"{question} {instruction}"
             }],
             "ability": "math",
             "reward_model": {
@@ -63,8 +62,11 @@ def make_map_fn(split: str):
             },
             "extra_info": {
                 'split': split,
-                'index': idx
-            }
+                'index': idx,
+                "task": {"question": question, "answer": answer},
+            },
+            "task": {"question": question, "answer": answer},
+            "uid": idx
         }
         return data
     return process_fn

@@ -1,0 +1,79 @@
+from abc import ABC, abstractmethod
+from typing import Any, List, Tuple, Dict, Union
+
+class BaseEnv(ABC):
+        
+    @property
+    def idx(self) -> Any:
+        """The index or identifier of the environment, often used within a batch.
+        
+        Returns:
+            The assigned index or identifier, or None if not set.
+        """
+        # Return the stored _idx value if it exists, otherwise return None.
+        return getattr(self, "_idx", None)
+    
+    @idx.setter 
+    def idx(self, value: Any):
+        """Set the environment index or identifier.
+
+        This allows assigning an index or identifier (e.g., its position in a batch) 
+        to the environment instance after it has been created.
+
+        Example:
+            env = MyEnvSubclass()  # Assuming MyEnvSubclass inherits from BaseEnv
+            env.idx = 5            # Set the index externally
+
+        Args:
+            value: The index or identifier to set for this environment.
+        """
+        self._idx = value
+
+    @abstractmethod
+    def reset(self, seed: int = 0, **kwargs) -> Tuple[List, List]:
+        """Standard Gym reset method. Resets the environment to an initial state.
+        
+        Args:
+            seed: The random seed for environment initialization.
+            **kwargs: Additional arguments specific to the environment's reset logic.
+
+        Returns:
+            A tuple typically containing the initial observation and auxiliary info.
+        """
+        pass
+
+    @abstractmethod
+    def step(self, action: Any) -> Tuple[Any, float, bool, bool, Dict]:
+        """Standard Gym step method. Executes one time step within the environment.
+        
+        Args:
+            action: An action provided by the agent.
+
+        Returns:
+            A tuple containing (observation, reward, terminated, truncated, info).
+        """
+        pass
+
+    def close(self):
+        """Standard Gym close method. Performs any necessary cleanup."""
+        pass
+
+    @staticmethod
+    @abstractmethod
+    def from_json(info: Dict) -> "BaseEnv":
+        """Creates an environment instance from a JSON-like dictionary.
+        
+        This method should be implemented by concrete subclasses to handle
+        environment-specific initialization from serialized data.
+
+        Args:
+            info: A dictionary containing the necessary information to initialize the environment.
+
+        Returns:
+            An instance of the specific BaseEnv subclass.
+            
+        Raises:
+            NotImplementedError: If the subclass does not implement this method.
+        """
+        # BaseEnv is abstract, subclasses must implement this factory method.
+        raise NotImplementedError("Subclasses must implement the 'from_json' static method.")

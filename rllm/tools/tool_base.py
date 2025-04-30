@@ -10,9 +10,18 @@ class ToolCall:
     name: str
     parameters: Dict[str, Any]
 
+    def to_dict(self):
+        return {
+            "name": self.name,
+            "parameters": self.parameters
+        }
+
 @dataclass
 class ToolInputs:
     inputs: List[ToolCall]
+
+    def to_dict(self):
+        return [tool_call.to_dict() for tool_call in self.inputs]
     
 @dataclass
 class ToolOutput:

@@ -1,0 +1,94 @@
+from abc import ABC, abstractmethod
+from typing import Any, Tuple, Dict, List
+from dataclasses import dataclass, field
+
+
+@dataclass
+class Step:
+    observation: Any = None
+    thought: str = ""
+    action: Any = None
+    reward: float = 0.0
+    next_observation: Any = None
+    done: bool = False
+    # Store additional information from the environment or anything else.
+    info: Dict = field(default_factory=dict)
+    step: int = 0
+    model_response: str = ""
+    mc_return: float = 0.0 # Monte Carlo estimate of returns.
+
+@dataclass
+class Trajectory:
+    steps: List[Step] = field(default_factory=list)
+    reward: float = 0.0
+
+class BaseAgent(ABC):
+    
+    @property
+    def chat_completions(self) -> List[Dict[str, str]]:
+        """Converts agent's internal state into a list of OAI chat completions."""
+        return []
+
+    @property
+    def trajectory(self) -> Trajectory:
+        """Converts agent's internal state into a Trajectory object."""
+        return Trajectory()
+
+    @abstractmethod
+    def update_from_env(self, observation: Any, action: Any, reward: float, done: bool, info: Dict, **kwargs):
+        """
+        Updates the agent's internal state after an environment step.
+
+        This function is called during environment interaction to incorporate the latest action's
+        outcome into the agent's learning process.
+
+        Args:
+            observation (Any): The observation after stepping through environment.
+            action (Any): The action taken by the agent.
+            reward (float): The reward received after taking the action.
+            done (bool): Whether the episode has ended due to termination.
+            info (dict): Additional metadata from the environment.
+        """
+        raise NotImplementedError("Subclasses must implement this method")
+
+    @abstractmethod
+    def update_from_model(self, response: Any, **kwargs):
+        """
+        Updates the agent's internal state after an environment step.
+
+        This function is called during environment interaction to incorporate the latest action's
+        outcome into the agent's learning process.
+
+        Args:
+            response (str): The response from the model.
+
+        Returns:
+            None
+        """
+        raise NotImplementedError("Subclasses must implement this method")
+
+    @abstractmethod
+    def reset(self):
+        """
+        Resets the agent's internal state, typically called at the beginning of a new episode.
+
+        This function should clear any stored history or state information necessary 
+        for a fresh interaction.
+
+        Returns:
+            None
+        """
+        return 
+    
+    @abstractmethod
+    def get_current_state(self) -> Step:
+        """
+        Returns the agent's current state as a dictionary.
+        
+        This method provides access to the agent's internal state at the current step,
+        which can be useful for debugging, logging, or state management.
+        
+        Returns:
+            Dict: A dictionary containing the agent's current state information.
+        """
+        return Step()

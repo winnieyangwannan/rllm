@@ -14,9 +14,9 @@ from typing import List, Optional, Tuple, Any, Dict
 import hashlib
 import numpy as np
 import copy
-from ..batch_env import BatchedEnv
+from rllm.environments.base.base_env import BaseEnv
 
-
+MAX_STEPS = 5
 # DFS to check that it's a valid path.
 def is_valid(board: List[List[str]], max_size: int) -> bool:
     frontier, discovered = [], set()
@@ -26,7 +26,7 @@ def is_valid(board: List[List[str]], max_size: int) -> bool:
     # dfs to check if there is a path from start to goal
     while frontier:
         r, c, steps = frontier.pop()
-        if steps > 20:
+        if steps > MAX_STEPS:
             continue
 
         if not (r, c) in discovered:
@@ -82,12 +82,16 @@ def generate_random_map(
         board[goal_r][goal_c] = "G"
         
         valid = is_valid(board, size)
-    return ["".join(x) for x in board]
+    return ["".join(x) for x in board], (goal_r, goal_c)
+
+def get_goal_position(random_map):
+    positions = np.argwhere(random_map == b'G')
+    if positions.size == 0:
+        return None  # G not found
+    return tuple(positions[0])  # returns (row, col)
 
 
-
-
-class FrozenLakeEnv(GymFrozenLakeEnv):
+class FrozenLakeEnv(GymFrozenLakeEnv, BaseEnv):
     """
     Inherits from gymnasium.envs.toy_text.frozen_lake.FrozenLakeEnv
 
@@ -165,10 +169,17 @@ class FrozenLakeEnv(GymFrozenLakeEnv):
         size = kwargs.pop('size', 8)
         p = kwargs.pop('p', 0.8)
         seed = kwargs.pop('seed', None)
+        self.seed = seed
+        self.size = size
+        self.p = p
+
         if desc is None:
-            random_map = generate_random_map(size=size, p=p, seed=seed)
+            random_map, goal_position = generate_random_map(size=size, p=p, seed=seed)
         else:
             random_map = np.asarray(copy.deepcopy(desc), dtype="c")
+            goal_position = get_goal_position(random_map)
+
+        self.goal_postion = goal_position
 
         GymFrozenLakeEnv.__init__(
             self,
@@ -222,7 +233,7 @@ class FrozenLakeEnv(GymFrozenLakeEnv):
                 is_slippery=self.env_kwargs["is_slippery"],
             )
         GymFrozenLakeEnv.reset(self, seed=seed)
-        return self.render(mode)
+        return self.render(mode), {}
     
     def finished(self):
         player_pos = self._get_player_position()
@@ -259,7 +270,6 @@ class FrozenLakeEnv(GymFrozenLakeEnv):
         obs = self.render()
         return obs, reward, done, {"action_is_effective": prev_player_position != int(player_pos)}
     
-
      
     def render(self, mode='tiny_rgb_array'):
         assert mode in ['tiny_rgb_array', 'list', 'state', 'rgb_array', 'ansi']
@@ -297,81 +307,10 @@ class FrozenLakeEnv(GymFrozenLakeEnv):
         
         if mode == 'tiny_rgb_array':
             lookup = lambda cell: self.GRID_LOOKUP.get(cell, "?")
-            return "\n".join("".join(lookup(cell) for cell in row) for row in room_state)
-
-
-class BatchFrozenLakeEnv(BatchedEnv):
-    def __init__(
-        self,
-        batch_size,
-        seeds, 
-        sizes,
-        ps,
-    ):
-        self.envs = []
-        self._env_id = []
-        for i in range(batch_size):
-            seed = seeds[i]
-            size = sizes[i]
-            p = ps[i]
-            self.envs.append(FrozenLakeEnv(size=size, seed=seed, p=p))
-            self._env_id.append(f"{seed}-{size}-{p}")
-
-        self._batch_size = batch_size
-
-    @property
-    def env_id(self) -> List[str]:
-        return self._env_id
-
-    @property
-    def batch_size(self) -> int:
-        return self._batch_size
+            result = "\n".join("".join(lookup(cell) for cell in row) for row in room_state)
+            # result += f"Player Position is at ({position_P[0]}, {position_P[1]}), Goal Position is at ({self.goal_postion[0]}, {self.goal_postion[1]})"
+            return result
     
-    def reset(self, seed=0) -> Tuple[List, List]:
-        observations = []
-        for i, env in enumerate(self.envs):
-            obs = env.reset(reset_map=False)
-            observations.append(obs)
-        return observations, [{}] * self.batch_size
-
-
-    def step(self, actions: List[Any], env_idxs: List[int]=[]) -> Tuple[List, List, List, List, List]:
-
-        if not env_idxs:
-            assert len(actions) == self.batch_size, "Number of actions must match batch size"
-            env_idxs = list(range(len(actions)))
-
-        assert len(actions) == len(env_idxs), f"Number of actions ({len(actions)}) must match the env used {len(env_idxs)}"
-
-        observations, rewards, terminateds, truncateds, infos = [], [], [], [], []
-        # Send step command with actions
-        for i, env_idx in enumerate(env_idxs):
-            obs, reward, done, info = self.envs[env_idx].step(actions[i])
-            observations.append(obs),
-            rewards.append(reward)
-            terminateds.append(done)
-            truncateds.append(False)
-            infos.append(info)
-
-
-        return (observations, rewards, terminateds, 
-                truncateds, infos)
-
-
-    def close(self):
-        return
-
     @staticmethod
-    def from_json(extra_infos: List[Dict]) -> "BatchFrozenLakeEnv":
-        seeds = [
-            i["seed"] for i in extra_infos
-        ]
-        sizes = [
-            i["size"] for i in extra_infos
-        ]
-        ps = [
-            i["p"] for i in extra_infos
-        ]
-
-        return BatchFrozenLakeEnv(batch_size=len(seeds), seeds=seeds, sizes=sizes, ps=ps)
-
+    def from_json(extra_info) -> "FrozenLakeEnv":
+        return FrozenLakeEnv(size=extra_info["size"], seed=extra_info["seed"], p=extra_info["p"])

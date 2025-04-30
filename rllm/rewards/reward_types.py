@@ -41,6 +41,7 @@ class RewardType(Enum):
     """
     MATH = 'MATH'
     CODE = 'CODE'
+    WEB = 'WEB'
     UNK = 'UNK'
 
 @dataclass(slots=True, kw_only=True)

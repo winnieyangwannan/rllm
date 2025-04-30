@@ -46,7 +46,7 @@ if __name__ == '__main__':
                 "extra_info": {
                     "split": split,
                     "index": idx,
-                    "environment_id": env_id, # field for env based data
+                    "env_id": env_id, # field for env based data
                 },
             }
 
