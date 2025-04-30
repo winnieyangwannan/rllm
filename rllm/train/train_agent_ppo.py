@@ -1,16 +1,4 @@
-# Copyright 2024 Bytedance Ltd. and/or its affiliates
-#
-# Licensed under the Apache License, Version 2.0 (the "License");
-# you may not use this file except in compliance with the License.
-# You may obtain a copy of the License at
-#
-#     http://www.apache.org/licenses/LICENSE-2.0
-#
-# Unless required by applicable law or agreed to in writing, software
-# distributed under the License is distributed on an "AS IS" BASIS,
-# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-# See the License for the specific language governing permissions and
-# limitations under the License.
+# Copyright under Agentica Project.
 """
 Note that we don't combine the main with ray_trainer as ray_trainer is used by other main.
 """
@@ -69,12 +57,11 @@ def main_task(config, compute_score=None):
     }
     resource_pool_manager = ResourcePoolManager(resource_pool_spec=resource_pool_spec, mapping=mapping)
 
-
     reward_fn = NaiveRewardManager(tokenizer=tokenizer, num_examine=0, compute_score=compute_score)
     val_reward_fn = NaiveRewardManager(tokenizer=tokenizer, num_examine=1, compute_score=compute_score)
 
     role_worker_mapping = {
-        Role.ActorRollout: ray.remote(ActorRolloutRefWorker),
+        Role.ActorRollout: ray.remote(ActorRolloutRefWorker) if not config.agent.async_engine else ray.remote(max_concurrency=512)(ActorRolloutRefWorker),
         Role.Critic: ray.remote(CriticWorker),
         Role.RefPolicy: ray.remote(ActorRolloutRefWorker)
     }

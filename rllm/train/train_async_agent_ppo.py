@@ -95,7 +95,7 @@ def main_task(config, compute_score=None):
                             agent_class=agent_class)
     
     trainer.init_workers()
-    trainer.fit_agent()    
+    trainer.fit_agent()
 
 if __name__ == '__main__':
     main()

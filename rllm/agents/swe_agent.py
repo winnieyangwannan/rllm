@@ -1,164 +1,181 @@
 import logging
 import re
+import json
 from typing import Tuple
 
 import numpy as np
 
-from rllm.agents.system_prompts import *
-from rllm.agents.agent import BaseAgent
+from r2egym.agenthub.action import Action
+from rllm.agents.system_prompts import SWE_SYSTEM_PROMPT, SWE_USER_PROMPT, \
+    SWE_SYSTEM_PROMPT_FN_CALL, SWE_USER_PROMPT_FN_CALL
+from rllm.agents.agent import BaseAgent, Step, Trajectory
 
-# from r2egym.agenthub.action import Action
 
-# def parse_response(response_text: str) -> Tuple[str, Action]:
-#     """
-#     Extracts:
-#     - thought: everything before the first <function=...> block
-#     - action: the entire first <function=...></function> block
-#     Returns (thought, action).
-#     """
-#     # Regex to match (non-greedily) from `<function=` up to the first `</function>`
-#     pattern = re.compile(r"(?s)(<function=.*?</function>)")
-#     match = pattern.search(response_text)
+def parse_oai_response(response):
+    thought = response.choices[0].message.content
+    if not thought:
+        thought = ""
+    try:
+        function_name = response.choices[0].message.tool_calls[0].function.name
+        parameters = json.loads(
+            response.choices[0].message.tool_calls[0].function.arguments
+        )
+        action = Action(function_name, parameters)
+    except:
+        action = Action(function_name="", parameters={})
+    return thought, action
 
-#     if match:
-#         action = match.group(1)  # The entire <function=...></function> block
-#         thought = response_text[: match.start()]  # Everything before the block
-#     else:
-#         # If no match, treat entire text as "thought"
-#         thought = response_text
-#         action = ""
 
-#     # Strip leading/trailing whitespace
-#     thought = thought.strip()
-#     action = action.strip()
+def parse_xml_response(response_text: str) -> Tuple[str, Action]:
+    """
+    Extracts:
+    - thought: everything before the first <function=...> block
+    - action: the entire first <function=...></function> block
+    Returns (thought, action).
+    """
+    # Regex to match (non-greedily) from `<function=` up to the first `</function>`
+    pattern = re.compile(r"(?s)(<function=.*?</function>)")
+    match = pattern.search(response_text)
 
-#     # convert action to Action object
-#     action = Action.from_string(action)
+    if match:
+        action = match.group(1)  # The entire <function=...></function> block
+        thought = response_text[: match.start()]  # Everything before the block
+    else:
+        # If no match, treat entire text as "thought"
+        thought = response_text
+        action = ""
 
-#     return thought, action
+    # Strip leading/trailing whitespace
+    thought = thought.strip()
+    action = action.strip()
+
+    # convert action to Action object
+    action = Action.from_string(action)
+
+    return thought, action
 
 logger = logging.getLogger(__name__)
 
 class SWEAgent(BaseAgent):
-    pass
-#     def __init__(self):
-#         self.action_history = [] # all are in string
 
-#     def _pre_get_action(self, trajectory):
-#         obs = trajectory[0]["next_observation"] # initial state
-
-#         system_msgs = self.get_system_msg()
-
-#         messages = [
-#             {"role": "system", "content": self._format_msgs_as_str(system_msgs)},
-#             {"role": "user", "content": self._format_msgs_as_str(self.get_user_msg(obs))},
-#         ]
-#         for i, step in enumerate(trajectory[1:]):
-#             response = step["response"]
-#             next_observation = step["next_observation"]
-
-#             # response
-#             messages.append({"role": "assistant", "content": response})
-
-#             # next observation
-#             obs = next_observation
-#             usr_msg = self.get_user_msg(obs, first_obs=False)
-#             messages.append({"role": "user", "content": self._format_msgs_as_str(usr_msg)})
-           
-#         return messages
-    
-#     def get_system_msg(self):
-#         system_msgs = []
-#         system_msgs.append({
-#             "type": "text",
-#             "text": self._get_system_prompt()
-#         })
-#         return system_msgs
-
-#     def get_user_msg(self, user_obs, first_obs=True):
-#         if not first_obs:
-#             return [{"type": "text", "text": user_obs}]
-#         user_msgs = []
-#         user_msgs.append({
-#             "type": "text",
-#             "text": """
-# Consider the following github issue:
-# <github_issue>
-# {problem_statement}
-# </github_issue>
-
-# Can you help me implement the necessary changes to the repository to fix the <github_issue>?
-# I've already taken care of all changes to any of the test files described in the <github_issue>. This means you DON'T have to modify the testing logic or any of the tests in any way!
-# Your task is to make the minimal changes to non-tests files in the /testbed directory to ensure the <github_issue> is satisfied.
-
-# IMPORTANT TIP:
-# Follow these steps to resolve the issue:
-# 1. As a first step, it might be a good idea to explore the repo to familiarize yourself with its structure.
-# 2. Create a script ('reproduce_issue.py') to reproduce the error and execute it to confirm the error
-# 3. Edit the sourcecode of the repo to resolve the issue
-# 4. Rerun your reproduce script and confirm that the error is fixed!
-# 5. Think about edgecases and make sure your fix handles them as well
-# 6. When viewing large files, use specific line-ranges, usually within 50 to 100 lines) as required
-# 7. NOTE: The repository is at '/testbed' and the current working directory is already '/testbed', so DO NOT include 'testbed/' or 'testbed.' in relative paths in bash commands or reproduction python files. 
-# """.format(problem_statement=user_obs)
-#         })
-#         return user_msgs
-
-#     def _get_system_prompt(self):
-#         return SYSTEM_SWE_PROMPT
-
-#     def _format_msgs_as_str(self, msgs):
-#         prompt_text_strings = []
-#         for message in msgs:
-#             prompt_text_strings.append(message["text"])
-#         return " ".join(prompt_text_strings)
-
-#     # def _post_get_action(self, response):
-#     #     """
-#     #     Extracts the last content enclosed within triple backticks (``` ```) from the response.
-
-#     #     If the response contains multiple segments wrapped in triple backticks, 
-#     #     this function returns the content of the **last** occurrence. 
-#     #     If no such formatting is found, it returns the entire response unmodified.
-
-#     #     Args:
-#     #         response (str): The raw text response to be processed.
-
-#     #     Returns:
-#     #         str: The extracted content from the last occurrence of triple backticks, 
-#     #             or the full response if no match is found.
-#     #     """
-#     #     # TODO: FIXME: Tianjun: we need to re-implement this function
-#     #     thought, action = parse_response(response)
-#     #     return action.to_xml_string()
-
-#     def update(self, action, observation, next_observation, reward, terminated, truncated, info):
-#         self.action_history.append(action)
-
-#     def reset(self):
-#         self.action_history = []
-
-#     def compute_training_reward(self, trajectory):
-#         """
-#         Computes the training reward signal based on the entire trajectory.
-#         """
-#         if not trajectory:
-#             return 0
+    def __init__(self, use_fn_calling: bool = False, format_model_response: bool = False):
+        self.use_fn_calling = use_fn_calling
+        self.format_model_response = format_model_response
         
-#         if trajectory[0]["trajectory_reward"] == 1:
-#             return 1
+        self.system_prompt = SWE_SYSTEM_PROMPT_FN_CALL if use_fn_calling else SWE_SYSTEM_PROMPT
+        self.user_prompt_template = SWE_USER_PROMPT_FN_CALL if use_fn_calling else SWE_USER_PROMPT
 
-#         # for traj_step in trajectory:
-#         #     if not self.validate_step(traj_step):
-#         #         return -1
+        self._trajectory = Trajectory()
+        self.reset()
+
+    def process_model_response(self, response: str) -> Tuple[str, str]:
+        """
+        Processes the model's response to extract thought and action components.
+        
+        Parses the response using either function calling or XML parsing based on agent configuration.
+        
+        Args:
+            response (str): The raw text response from the model.
             
-#         return 0
+        Returns:
+            Tuple[str, str]: A tuple containing:
+                - The action string in XML format
+                - The processed response (may be reformatted if self.format_model_response is True)
+        """
+        if self.use_fn_calling:
+            thought, action = parse_oai_response(response)
+        else:
+            thought, action = parse_xml_response(response)
+        
+        action_str = action.to_xml_string()
+        if self.format_model_response:
+            response = f"{thought}\n\n{action_str}"
+        return action.to_xml_string(), {
+            'thought': thought,
+        }
+    
+    def update_from_env(self, observation, reward, done, info):
+        # If the first step in environment, we need to update the state from the environment
+        if self._trajectory.steps:
+            observation = str(observation)
+        else:
+            observation = str(observation)
+            observation = self.user_prompt_template.format(problem_statement=observation)
 
-#     def convert_observation_to_string(self, obs, with_system_prompt=False):
-#         messages = []
-#         if with_system_prompt:
-#             messages.extend(self.get_system_msg())
+        max_steps = info.get('max_steps', None)
+        if max_steps:
+            remaining_steps = max_steps - self.step
+            if remaining_steps > 0:
+                observation += f"\nSteps Remaining: {remaining_steps}"
+            else:
+                observation += "\nYou have reached the maximum number of steps. Please submit your answer NOW."
 
-#         messages.extend(self.get_user_msg(obs, first_obs=with_system_prompt))
+        if self._trajectory.steps:
+            prior_step = self._trajectory.steps[-1]
+            prior_step.next_observation = observation
+            prior_step.reward = reward
+            prior_step.done = done
+            prior_step.info = info
 
-#         return self._format_msgs_as_str(messages)
+        self.messages.append({
+            "role": "user",
+            "content": observation
+        })
+        cur_step = Step(
+            observation=observation,
+            step=self.step
+        )
+        self._trajectory.steps.append(cur_step)
+
+    def update_from_model(self, response: str, **kwargs):
+        """
+        Updates the agent's internal state after an environment step.
+
+        This function is called during environment interaction to incorporate the latest action's
+        outcome into the agent's learning process.
+
+        Args:
+            response (str): The response from the model.
+
+        Returns:
+            None
+        """
+        if self.use_fn_calling:
+            thought, action = parse_oai_response(response)
+        else:
+            thought, action = parse_xml_response(response)
+        action_str = action.to_xml_string()
+        assert self._trajectory.steps, "Trajectory should not be empty when update_from_model is called."
+        
+        # Update Trajectory
+        cur_step = self._trajectory.steps[-1]
+        cur_step.thought = thought
+        cur_step.action = action_str
+        cur_step.model_response = response
+        
+        # Update Chat Completions
+        if self.format_model_response:
+            self.messages.append({"role": "assistant", "content": f"{thought}\n\n{action_str}"}) 
+        else:
+            self.messages.append({"role": "assistant", "content": response})
+        self.step+=1
+    
+    def get_current_state(self) -> Step:
+        assert self._trajectory.steps, "Trajectory should not be empty when get_current_state is called."
+        return self._trajectory.steps[-1]
+
+    def reset(self):
+        self._trajectory = Trajectory()
+        self.messages = [{
+            'role': 'system',
+            'content': self.system_prompt,
+        }]
+        self.step = 0
+
+    @property
+    def trajectory(self) -> Trajectory:
+        return self._trajectory
+
+    @property
+    def chat_completions(self):
+        return self.messages

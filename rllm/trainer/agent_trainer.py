@@ -1,4 +1,7 @@
 import concurrent.futures
+import asyncio
+from threading import Thread
+from queue import Queue
 from typing import Type, Dict, List
 import numpy as np
 import torch
@@ -26,6 +29,7 @@ from verl.trainer.ppo.ray_trainer import (
 from verl.single_controller.ray import RayResourcePool, RayWorkerGroup, RayClassWithInitArgs
 
 from rllm.engine.agent_execution_engine import AgentExecutionEngine
+from rllm.engine.async_agent_execution_engine import AsyncAgentExecutionEngine
 
 class AgentPPOTrainer(RayPPOTrainer):
 
@@ -50,8 +54,6 @@ class AgentPPOTrainer(RayPPOTrainer):
     def init_workers(self):
         super().init_workers()
 
-        assert not self.config.actor_rollout_ref.rollout.async_engine, "Must use synchronous engine for agent training"
-
         # Initialize additional agent class 
         # Number of agents is set to be 0 initially
         if self.hybrid_engine: 
@@ -59,26 +61,38 @@ class AgentPPOTrainer(RayPPOTrainer):
         else:
             agent_rollout_wg = self.rollout_wg
         
-        self.agent_execution_engine = AgentExecutionEngine(
-            rollout_engine=agent_rollout_wg,
-            engine_name="verl",
-            tokenizer=self.tokenizer,
-            model_path=self.config.actor_rollout_ref.model.path,
-            max_episodes=self.config.agent.max_episodes,
-            max_trajectory_length=self.config.data.max_response_length,
-            max_prompt_length=self.config.data.max_prompt_length,
-        )
+        if self.config.agent.async_engine:
+            self.agent_execution_engine = AsyncAgentExecutionEngine(
+                rollout_engine=agent_rollout_wg,
+                engine_name="verl",
+                tokenizer=self.tokenizer,
+                model_path=self.config.actor_rollout_ref.model.path,
+                max_steps=self.config.agent.max_steps,
+                max_response_length=self.config.data.max_response_length,
+                max_prompt_length=self.config.data.max_prompt_length,
+                agent_class=self.agent_class,
+                agent_args=self.config.agent.get("agent_args", {}),
+                env_class=self.env_class,
+                env_args=self.config.env.get("env_args", {}),
+            )
+        else:
+            self.agent_execution_engine = AgentExecutionEngine(
+                rollout_engine=agent_rollout_wg,
+                engine_name="verl",
+                tokenizer=self.tokenizer,
+                model_path=self.config.actor_rollout_ref.model.path,
+                max_steps=self.config.agent.max_steps,
+                max_response_length=self.config.data.max_response_length,
+                max_prompt_length=self.config.data.max_prompt_length,
+            )
 
     def init_envs_and_agents(self, batch):
         """
         Initialize environment depending on env_class with the necessary extra_info, also set uid of the batch.
         """
         env_args = batch.non_tensor_batch["extra_info"].tolist()
-        envs = [self.env_class.from_extra_info(env_args[i]) for i in range(len(env_args))]
+        envs = [self.env_class.from_json(env_args[i]) for i in range(len(env_args))]
         agents = [self.agent_class(**self.config.agent.get("agent_args", {})) for _ in range(len(envs))]
-
-        batch.non_tensor_batch["uid"] = np.array([env.env_id for env in envs], dtype=object)
-
         self.agent_execution_engine.update_envs_and_agents(envs, agents)
 
         return envs
@@ -119,6 +133,7 @@ class AgentPPOTrainer(RayPPOTrainer):
             pprint(f"epoch {epoch}, step {self.global_steps} started")
             for batch_dict in self.train_dataloader:
                 batch: DataProto = DataProto.from_single_dict(batch_dict)
+                batch.non_tensor_batch['uid'] = np.array([str(uuid.uuid4()) for _ in range(len(batch.batch))], dtype=object)
                 batch = batch.repeat(
                     repeat_times=self.config.actor_rollout_ref.rollout.n,
                     interleave=True,
@@ -127,23 +142,16 @@ class AgentPPOTrainer(RayPPOTrainer):
                 metrics = {}
                 timing_raw = {}
 
-                ####################
-                ####################
-                # must pop those keys for generation so they no longer exist
                 batch.pop(batch_keys=["input_ids", "attention_mask", "position_ids"])
                 batch.meta_info = {
                     "agent_rollout": True,  # no need to generate multiple ones since environment is repeated already
                 }
 
-                self.init_envs_and_agents(batch)
-
                 with _timer("step", timing_raw):
+                    self.init_envs_and_agents(batch)
                     final_gen_batch_output = self.generate_agent_trajectory(timing_raw=timing_raw, meta_info=batch.meta_info)
 
                     batch = batch.union(final_gen_batch_output)
-                    ####################
-                    ####################
-
                     # compute values
                     if self.use_critic:
                         with _timer("values", timing_raw):
@@ -247,6 +255,8 @@ class AgentPPOTrainer(RayPPOTrainer):
                             adv_estimator=self.config.algorithm.adv_estimator,
                             gamma=self.config.algorithm.gamma,
                             lam=self.config.algorithm.lam,
+                            mask_truncated_samples=self.config.algorithm.mask_truncated_samples,
+                            clip_advantages=self.config.algorithm.clip_advantages,
                         )
 
                     # balance the number of valid tokens on each dp rank.
@@ -333,7 +343,6 @@ class AgentPPOTrainer(RayPPOTrainer):
                 "recompute_log_prob": False,
                 "do_sample": False,
                 "validate": True,
-                "val_temperature": self.config.actor_rollout_ref.rollout.val_kwargs.temperature,
                 "agent_rollout": True
             }
 
@@ -342,7 +351,6 @@ class AgentPPOTrainer(RayPPOTrainer):
             test_output_gen_batch = self.generate_agent_trajectory(
                 meta_info=test_batch.meta_info
             )
-
             test_batch = test_batch.union(test_output_gen_batch)
 
             # use environment score to report validation reward
@@ -376,7 +384,7 @@ class AgentPPOTrainer(RayPPOTrainer):
 
         metric_dict = {}
         for data_source, rewards in data_source_reward.items():
-            metric_dict[f"val/train_score/{data_source}"] = np.mean(rewards)
+            metric_dict[f"val/test_score/{data_source}"] = np.mean(rewards)
 
         for data_source, env_rewards in data_source_env_reward.items():
             metric_dict[f"val/env_score/{data_source}"] = np.mean(env_rewards)
@@ -397,10 +405,18 @@ class AgentPPOTrainer(RayPPOTrainer):
             DataProto: Representation of the agent's trajectories.
         """
         with _timer("collect_trajectory", timing_raw):
-            # Interact_environment returns list of trajectories.
-            trajectories = self.agent_execution_engine.interact_environment(
-                timing_raw=timing_raw, mode="Token", meta_info=meta_info
-            )
+            trajectories = []
+            if self.config.agent.async_engine:
+                gen_seq_generator = self.generate_agent_trajectories_async(timing_raw=timing_raw, meta_info=meta_info)
+                for _, trajectory in enumerate(gen_seq_generator):
+                    trajectories.append(trajectory)
+            else:
+                # generate_trajectories returns list of trajectories.
+                trajectories = self.agent_execution_engine.generate_trajectories(
+                    timing_raw=timing_raw, mode="Token", meta_info=meta_info
+                )
+        # Sort trajectories by their idx, to ensure they are in order.
+        trajectories.sort(key=lambda x: x["idx"])
 
         with _timer("transform_trajectory", timing_raw):
             # Transform the raw trajectories into DataProto format.
@@ -428,7 +444,7 @@ class AgentPPOTrainer(RayPPOTrainer):
         all_masks_list = []
         traj_scores = []
         environment_scores = []
-        batch = None
+
         for traj in trajectories:
             prompt_tokens = traj["prompt_tokens"]
             response_tokens = traj["response_tokens"]
@@ -465,8 +481,7 @@ class AgentPPOTrainer(RayPPOTrainer):
 
         trajectory_batch = torch.concat([prompts_batch, response_batch], dim=1)
 
-        prompt_mask = torch.where(prompts_batch != self.tokenizer.pad_token_id, 1, 0)
-        attention_mask = torch.cat((prompt_mask, traj_mask), dim=-1)
+        attention_mask = torch.where(trajectory_batch != self.tokenizer.pad_token_id, 1, 0)
 
         # Compute position_ids
         position_ids = (torch.cumsum(attention_mask, dim=1) - 1) * attention_mask
@@ -495,5 +510,121 @@ class AgentPPOTrainer(RayPPOTrainer):
             "environment_scores": environment_score_batch,
         }
 
+        self.visualize_trajectory(DataProto.from_dict(tensors=tensor_batch))
+
         return DataProto.from_dict(tensors=tensor_batch)
+    
+
+
+    def visualize_trajectory(self, tensor_batch, sample_idx=0, max_samples=1):
+        """
+        Visualize the trajectory from tensor_batch by detokenizing prompts and responses,
+        and highlighting the masked parts with color.
+        
+        Args:
+            tensor_batch: The tensor batch containing trajectory data
+            sample_idx: Starting index of samples to visualize
+            max_samples: Maximum number of samples to visualize
+        """
+        from rllm.misc import colorful_print
+
+        # Get the relevant tensors
+        prompts = tensor_batch.batch["prompts"]
+        responses = tensor_batch.batch["responses"]
+        traj_mask = tensor_batch.batch["traj_mask"]
+        token_level_scores = tensor_batch.batch["token_level_scores"]
+        environment_scores = tensor_batch.batch["environment_scores"]
+        
+        batch_size = prompts.shape[0]
+        end_idx = min(sample_idx + max_samples, batch_size)
+        
+        for i in range(sample_idx, end_idx):
+            colorful_print(f"\n===== Sample {i} =====", fg="cyan", bold=True)
+            
+            # Detokenize prompt
+            prompt_tokens = prompts[i]
+            prompt_mask = prompt_tokens != self.tokenizer.pad_token_id
+            valid_prompt_tokens = prompt_tokens[prompt_mask]
+            prompt_text = self.tokenizer.decode(valid_prompt_tokens)
+            
+            colorful_print("Prompt:", fg="green", bold=True)
+            colorful_print(f"{prompt_text}\n", fg="green")
+            
+            # Detokenize response with color highlighting for masked tokens
+            response_tokens = responses[i]
+            response_mask = traj_mask[i]
+            
+            # Get non-padding tokens
+            valid_indices = response_tokens != self.tokenizer.pad_token_id
+            valid_response_tokens = response_tokens[valid_indices]
+            valid_response_mask = response_mask[valid_indices]
+            
+            # Then show token-by-token with masking
+            colorful_print("Response with masking:", fg="yellow", bold=True)
+            
+            for j, (token, mask) in enumerate(zip(valid_response_tokens, valid_response_mask)):
+                token_text = self.tokenizer.decode(token)
+                
+                # Check if this token has a reward
+                has_reward = token_level_scores[i, j] != 0
+                has_env_reward = environment_scores[i, j] != 0
+                
+                # Apply different colors based on mask and rewards
+                if mask == 0:
+                    # Masked token (not used in training)
+                    colorful_print(token_text, fg="red", end="")
+                elif has_reward or has_env_reward:
+                    # Token with reward
+                    colorful_print(token_text, bg="green", end="")
+                    
+                    reward_info = ""
+                    if has_reward:
+                        reward_info += f" R:{token_level_scores[i, j].item():.2f}"
+                    if has_env_reward:
+                        reward_info += f" ER:{environment_scores[i, j].item():.2f}"
+                    
+                    colorful_print(reward_info, fg="magenta", end="")
+                else:
+                    # Normal token used in training
+                    colorful_print(token_text, fg="blue", end="")
+            
+            print()  # New line after all tokens
+            
+            # Print reward summary
+            total_reward = token_level_scores[i].sum().item()
+            total_env_reward = environment_scores[i].sum().item()
+            colorful_print("Rewards:", fg="green", bold=True)
+            print(f" Training={total_reward:.2f}, Environment={total_env_reward:.2f}")
+
+
+    def generate_agent_trajectories_async(self, timing_raw={}, meta_info=None):
+        """
+        Generates agent trajectories asynchronously using the agent execution engine.
+
+        This method runs the asynchronous `trajectory_generator` in a
+        separate thread and yields the results synchronously through a queue.
+        This allows the main training loop (which might be synchronous) to consume
+        asynchronously generated trajectories.
+
+        Args:
+            timing_raw (dict, optional): Dictionary to store timing information. Defaults to {}.
+            meta_info (dict, optional): Additional metadata for the generation process. Defaults to None.
+
+        Yields:
+            Any: Items generated by the `trajectory_generator`, typically
+                 representing parts or results of agent trajectories in token format.
+        """
+        queue = Queue()
+        def runner():
+            async def consume():
+                async for item in self.agent_execution_engine.trajectory_generator(timing_raw=timing_raw, mode="Token", meta_info=meta_info):
+                    queue.put(item)
+                queue.put(None)  # sentinel to signal done
+            asyncio.run(consume())
+        Thread(target=runner, daemon=True).start()
+        while True:
+            item = queue.get()
+            if item is None:
+                break
+            yield item
     

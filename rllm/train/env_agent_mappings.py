@@ -1,13 +1,14 @@
-from rllm.environments import BrowserGym, FrozenLakeEnv, ToolEnvironment, SingleTurnEnvironment
+from rllm.environments import BrowserGym, FrozenLakeEnv, ToolEnvironment, SingleTurnEnvironment, SWEEnv
 
 from rllm.agents import WebAgent, FrozenLakeAgent, ToolAgent, SWEAgent, MathAgent
-
 
 ENV_CLASS_MAPPING = {
     'browsergym': BrowserGym,
     'frozenlake': FrozenLakeEnv,
     'tool': ToolEnvironment,
     'math': SingleTurnEnvironment,
+    'code': SingleTurnEnvironment,
+    'swe': SWEEnv,
 }
 
 AGENT_CLASS_MAPPING = {
@@ -27,13 +28,6 @@ def setup_environment(config):
             importlib.reload(browsergym.miniwob)
             os.environ["MINIWOB_URL"] = config.env.miniwob_url
             return
-    elif config.env.name == 'frozenlake':
+    elif config.env.name in ['frozenlake', 'swe', 'math', 'code', 'tool']:
         return
-    elif config.env.name == "sweenv":
-        return
-    elif config.env.name == 'tool':
-        return
-    elif config.env.name == 'math':
-        return
-
     raise ValueError(f"Environment subtask not supported, env: {config.env.name}, subtask: {config.env.subtask == 'miniwob'}")

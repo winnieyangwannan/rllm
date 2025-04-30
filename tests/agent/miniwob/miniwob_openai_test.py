@@ -60,7 +60,7 @@ def main():
     # Init agent
     agent_engine = AgentExecutionEngine(rollout_engine=None, engine_name="openai", tokenizer=tokenizer, agents=agents, envs=envs)
     timing_raw = {}
-    evaluate_trajectories = agent_engine.interact_environment(atiming_raw=timing_raw)
+    evaluate_trajectories = agent_engine.generate_trajectories(atiming_raw=timing_raw)
 
     evaluate_metrics = {
         "evaluate_rollout.mean": np.mean([

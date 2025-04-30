@@ -52,14 +52,10 @@ def batch_swe_env():
 def test_initialization(batch_swe_env: BatchSWEEnv):
     """Test BatchSWEEnv initialization."""
     assert batch_swe_env.batch_size == TEST_BATCH_SIZE
-    assert len(batch_swe_env.env_id) == TEST_BATCH_SIZE
     assert len(batch_swe_env.envs) == TEST_BATCH_SIZE
     assert batch_swe_env.dataset_name == TEST_DATASET
     assert batch_swe_env.split == TEST_SPLIT
     assert batch_swe_env.seeds == list(range(TEST_BATCH_SIZE))
-    for env_id in batch_swe_env.env_id:
-        assert isinstance(env_id, str)
-        assert "SWE:" in env_id
     for env in batch_swe_env.envs:
         assert isinstance(env, SWEEnv)
         # Check if dataset was truncated

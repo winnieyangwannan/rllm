@@ -7,7 +7,7 @@ class  MultiTool(Tool):
     def __init__(self, tools: List[str]):
         # Check if all tools are in the registry
         assert all(tool in TOOL_REGISTRY for tool in tools), "All tools must be in the registry TOOL_REGISTRY"
-
+        self.tools = tools
         # Initialize the tool map
         self.tool_map = {tool: TOOL_REGISTRY[tool]() for tool in tools}
 

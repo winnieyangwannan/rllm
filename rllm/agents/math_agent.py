@@ -1,74 +1,103 @@
 import json
 import logging
-from typing import Dict, List
+from typing import Dict, List, Any, Tuple
 
-from rllm.agents.agent import BaseAgent
+from rllm.agents.agent import BaseAgent, Step, Trajectory
 from rllm.rewards.math_reward import rllm_reward_fn_math
 
 logger = logging.getLogger(__name__)
 
 class MathAgent(BaseAgent):
     """
-    A math agent that solves mathematical problems step by step.
+    A math agent that solves mathematical problems step by step, following the BaseAgent interface.
     """
     def __init__(self):
         """
         Initialize the MathAgent.
-        
-        Args:
-            model_name: The name of the model to use
         """
         self.instruction = "Let's think step by step and put the final answer within \\boxed{}."
-        
-        self.trajectory = []
-        # no system prompt
+        self._trajectory = Trajectory()
         self.messages = []
+        self.step = 0
         
-    def _pre_get_action(self, trajectory: List[Dict]):
-        self.messages.extend(self.format_observation_as_messages(trajectory[-1]['next_observation']))
+    def update_from_env(self, observation: Any, reward: float, done: bool, info: Dict, **kwargs):
+        """
+        Updates the agent's internal state after an environment step.
+        """
+        # Format observation based on whether it's the initial problem or subsequent feedback
+        if not self._trajectory.steps:
+            # Initial problem statement
+            assert isinstance(observation, dict) and 'question' in observation, "Initial observation must be a dict with a 'question' key."
+            question = observation['question']
+            formatted_observation = f'{question} {self.instruction}'
+        else:
+            # Subsequent observations are typically strings or simpler structures
+            formatted_observation = str(observation) 
+
+        # If there are previous steps, update the last step's outcome
+        if self._trajectory.steps:
+            prior_step = self._trajectory.steps[-1]
+            prior_step.next_observation = formatted_observation
+            prior_step.reward = reward
+            prior_step.done = done
+            prior_step.info = info
+        else:
+            # Add the current observation as a user message
+            self.messages.append({
+                "role": "user",
+                "content": formatted_observation
+            })
+             # Create a new step for the current state
+            cur_step = Step(
+                observation=formatted_observation,
+                step=self.step
+            )
+            self._trajectory.steps.append(cur_step)
+
+    def update_from_model(self, response: Any, **kwargs):
+        """
+        Updates the agent's internal state based on the model's response.
+        """
+        # Extract content from the response
+        if isinstance(response, str):
+            content = response
+        else:
+            # Assuming response object similar to OAI completion
+            content = response.choices[0].message.content
+        
+        assert self._trajectory.steps, "Trajectory should not be empty when update_from_model is called."
+        
+        # Update the current step in the trajectory
+        cur_step = self._trajectory.steps[-1]
+        # For MathAgent, the model response represents both the thought and action.
+        cur_step.thought = content 
+        cur_step.action = content  # Or potentially parse out the boxed answer? For now, use full content.
+        cur_step.model_response = content
+
+        # Add the assistant's response to the messages
+        self.messages.append({"role": "assistant", "content": content})
+        
+        self.step += 1
+
+    def reset(self):
+        """
+        Resets the agent's internal state for a new episode.
+        """
+        self._trajectory = Trajectory()
+        self.messages = []
+        self.step = 0
+
+    @property
+    def chat_completions(self) -> List[Dict[str, str]]:
+        """Returns the history of messages for chat completion."""
         return self.messages
     
-    def _post_get_action(self, response):
-        if isinstance(response, str):
-            self.messages.append({"role": "assistant", "content": response})
-            return response
-        else:
-            completion = response
-            content = completion.choices[0].message.content
-            self.messages.append({"role": "assistant", "content": content})
-            return content
-    
-    def update(self, action, observation, next_observation, reward, terminated, truncated, info):
-        # Store the step information in the trajectory
-        step = {
-            "observation": observation,
-            "next_observation": next_observation,
-            "reward": reward,
-            "action": action,
-            "response": action,  # In this agent, the action is the response
-            "terminated": terminated,
-            "truncated": truncated,
-            "info": info
-        }
-        self.trajectory.append(step)
-    
-    def reset(self):
-        # Reset the agent's state
-        self.trajectory = []
-        self.messages = []
-    
-    def compute_training_reward(self, trajectory):
-        return rllm_reward_fn_math('', trajectory[-1]['response'], trajectory[-1]['info']['answer'])
-    
-    def convert_observation_to_string(self, obs, with_system_prompt=False):
-        if 'question' in obs:
-            self.messages.append({"role": "user", "content": obs['question']})
-        
-        return obs
-    
-    def format_observation_as_messages(self, obs, **kwargs):
-        messages = []
-        if 'question' in obs:
-            messages.append({"role": "user", "content": obs['question'] + self.instruction})
-        
-        return messages
+    @property
+    def trajectory(self) -> Trajectory:
+        """Returns the trajectory object."""
+        return self._trajectory
+
+    def get_current_state(self) -> Step:
+        """Returns the current step/state of the agent."""
+        assert self._trajectory.steps, "Trajectory should not be empty when get_current_state is called."
+        return self._trajectory.steps[-1]

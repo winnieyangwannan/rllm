@@ -3,11 +3,14 @@ import os
 import pandas as pd
 from verl.utils.hdfs_io import copy, makedirs
 import argparse
+import rllm
 
+# Get the directory for rLLM repo (rllm.__file__)
+RLLM_DIR = os.path.dirname(os.path.dirname(os.path.abspath(rllm.__file__)))
 
 def main():
     parser = argparse.ArgumentParser(description="Generate trajectories using specified environment and policy.")
-    parser.add_argument('--local_dir', default='~/data/rllm-frozenlake')
+    parser.add_argument('--local_dir', default=os.path.join(RLLM_DIR, 'data/rllm-frozenlake'))
     parser.add_argument('--hdfs_dir', default=None)
     parser.add_argument("--train_size", type=int, default=3000, help="Number of trajectories to generate (default: 3000).")
     parser.add_argument("--test_size", type=int, default=100, help="Number of trajectories to generate (default: 100).")

@@ -16,7 +16,7 @@ import numpy as np
 import copy
 from rllm.environments.base.base_env import BaseEnv
 
-
+MAX_STEPS = 5
 # DFS to check that it's a valid path.
 def is_valid(board: List[List[str]], max_size: int) -> bool:
     frontier, discovered = [], set()
@@ -26,7 +26,7 @@ def is_valid(board: List[List[str]], max_size: int) -> bool:
     # dfs to check if there is a path from start to goal
     while frontier:
         r, c, steps = frontier.pop()
-        if steps > 20:
+        if steps > MAX_STEPS:
             continue
 
         if not (r, c) in discovered:
@@ -82,9 +82,13 @@ def generate_random_map(
         board[goal_r][goal_c] = "G"
         
         valid = is_valid(board, size)
-    return ["".join(x) for x in board]
+    return ["".join(x) for x in board], (goal_r, goal_c)
 
-
+def get_goal_position(random_map):
+    positions = np.argwhere(random_map == b'G')
+    if positions.size == 0:
+        return None  # G not found
+    return tuple(positions[0])  # returns (row, col)
 
 
 class FrozenLakeEnv(GymFrozenLakeEnv, BaseEnv):
@@ -169,12 +173,13 @@ class FrozenLakeEnv(GymFrozenLakeEnv, BaseEnv):
         self.size = size
         self.p = p
 
-        self._env_id = f"{seed}_{size}_{p}"
-
         if desc is None:
-            random_map = generate_random_map(size=size, p=p, seed=seed)
+            random_map, goal_position = generate_random_map(size=size, p=p, seed=seed)
         else:
             random_map = np.asarray(copy.deepcopy(desc), dtype="c")
+            goal_position = get_goal_position(random_map)
+
+        self.goal_postion = goal_position
 
         GymFrozenLakeEnv.__init__(
             self,
@@ -247,7 +252,7 @@ class FrozenLakeEnv(GymFrozenLakeEnv, BaseEnv):
         - Check if the action is effective (whether player moves in the env).
         """
         if self.success():
-            return self.render(), 0, True, False,  {"action_is_effective": False}
+            return self.render(), 0, True, {"action_is_effective": False}
         
         if not action:
             action = self.INVALID_ACTION
@@ -256,14 +261,14 @@ class FrozenLakeEnv(GymFrozenLakeEnv, BaseEnv):
         assert not self.success(), "Agent has already reached the goal or hole"
 
         if action == self.INVALID_ACTION: # no penalty for invalid action
-            return self.render(), 0, False, False, {"action_is_effective": False}
+            return self.render(), 0, False, {"action_is_effective": False}
         
         prev_player_position = int(self.s)
 
         player_pos, reward, done, _, prob = GymFrozenLakeEnv.step(self, self.action_map[action])
 
         obs = self.render()
-        return obs, reward, done, False, {"action_is_effective": prev_player_position != int(player_pos)}
+        return obs, reward, done, {"action_is_effective": prev_player_position != int(player_pos)}
     
      
     def render(self, mode='tiny_rgb_array'):
@@ -302,11 +307,9 @@ class FrozenLakeEnv(GymFrozenLakeEnv, BaseEnv):
         
         if mode == 'tiny_rgb_array':
             lookup = lambda cell: self.GRID_LOOKUP.get(cell, "?")
-            return "\n".join("".join(lookup(cell) for cell in row) for row in room_state)
-
-    # @property
-    # def env_id(self):
-    #     return f"{self.seed}-{self.size}-{self.p}"
+            result = "\n".join("".join(lookup(cell) for cell in row) for row in room_state)
+            # result += f"Player Position is at ({position_P[0]}, {position_P[1]}), Goal Position is at ({self.goal_postion[0]}, {self.goal_postion[1]})"
+            return result
     
     @staticmethod
     def from_json(extra_info) -> "FrozenLakeEnv":

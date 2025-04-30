@@ -1,12 +1,15 @@
 set -x
 
 export VLLM_ATTENTION_BACKEND=FLASH_ATTN
-export PYTORCH_CUDA_ALLOC_CONF="expandable_segments:True"
+export PYTORCH_CUDA_ALLOC_CONF="expandable_segments:False"
+
+# Find the directory where rllm package is located
+RLLM_DIR=$(python3 -c "import rllm; import os; print(os.path.dirname(os.path.dirname(rllm.__file__)))")
 
 python3 -m rllm.train.train_async_agent_ppo \
     algorithm.adv_estimator=grpo \
-    data.train_files=$HOME/rllm/data/math_train.parquet \
-    data.val_files=$HOME/rllm/data/math.parquet \
+    data.train_files=${RLLM_DIR}/data/math_train.parquet \
+    data.val_files=${RLLM_DIR}/data/math.parquet \
     data.train_batch_size=64 \
     data.val_batch_size=512 \
     data.max_prompt_length=2048 \
@@ -40,17 +43,16 @@ python3 -m rllm.train.train_async_agent_ppo \
     algorithm.kl_ctrl.kl_coef=0.001 \
     trainer.critic_warmup=0 \
     trainer.logger=['console','wandb'] \
-    trainer.project_name='deepscaler' \
-    trainer.experiment_name='deepscaler-math-async-test' \
+    trainer.project_name='deepscaler-agent' \
+    trainer.experiment_name='deepscaler-math-debug' \
     trainer.val_before_train=True \
-    trainer.n_training_gpus_per_node=2 \
-    trainer.n_gpus_per_node=4 \
+    trainer.n_gpus_per_node=8 \
+    trainer.n_training_gpus_per_node=4 \
     trainer.nnodes=1 \
     trainer.save_freq=2000 \
     trainer.test_freq=10 \
     trainer.default_hdfs_dir=null \
     env.name=math \
     agent.name=math_agent \
-    agent.max_episodes=1 \
+    agent.max_steps=1 \
     trainer.total_epochs=30 "${@:1}" \
-

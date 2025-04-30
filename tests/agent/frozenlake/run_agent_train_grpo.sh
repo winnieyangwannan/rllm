@@ -35,7 +35,7 @@ python3 -m verl.trainer.main_ppo_agent \
     trainer.logger=['console','wandb'] \
     trainer.project_name='rllm-agent' \
     trainer.experiment_name='7b-ppo-frozenlake_agent' \
-    +trainer.val_before_train=True \
+    trainer.val_before_train=True \
     trainer.default_hdfs_dir=null \
     trainer.n_gpus_per_node=2 \
     trainer.nnodes=1 \
@@ -44,4 +44,4 @@ python3 -m verl.trainer.main_ppo_agent \
     trainer.total_epochs=100 \
     env.name=frozenlake \
     agent.name=frozenlakeagent \
-    agent.max_episodes=20 > output_grpo.log 2>&1
+    agent.max_steps=20 > output_grpo.log 2>&1
