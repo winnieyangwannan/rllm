@@ -69,6 +69,7 @@ class AsyncAgentExecutionEngine(AgentExecutionEngine):
             self.agents = agents
             self.envs = envs
 
+        assert all(type(env).is_multithread_safe() for env in self.envs), "All environments must be multithread safe for async engine"
         # rollout engine args
         self.rollout_engine_args = rollout_engine_args
         self.sampling_params = kwargs.get("sampling_params", None)
@@ -352,6 +353,7 @@ class AsyncAgentExecutionEngine(AgentExecutionEngine):
     async def trajectory_generator(
         self, reset_seed=0, timing_raw={}, mode="Text", **kwargs
     ):
+        assert all(type(env).is_multithread_safe() for env in self.envs), "All environments must be multithread safe for async engine"
         # Note: this function is not concurrecy safe due to the router.__enter__ and router.__exit__
         if self.engine_name == "verl":
             self.router.__enter__()

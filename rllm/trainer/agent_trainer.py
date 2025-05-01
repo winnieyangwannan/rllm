@@ -125,7 +125,7 @@ class AgentPPOTrainer(RayPPOTrainer):
             logger.log(data=val_metrics, step=self.global_steps)
             if self.config.trainer.get("val_only", False):
                 return
-
+        import pdb; pdb.set_trace()
         # we start from step 1
         self.global_steps += 1
 

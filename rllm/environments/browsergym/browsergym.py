@@ -28,13 +28,18 @@ class BrowserGym(BaseEnv):
             worker_kwargs["task_kwargs"] = task
         self.env = gym.make(env_id, **worker_kwargs)
     
-    def reset(self, seed=0):
-        return self.env.reset(seed)
+    def reset(self):
+        return self.env.reset()
 
 
     def step(self, action):
-        return self.env.step(action)
+        obs, reward, terminated, truncated, extra_info = self.env.step(action)
+        return obs, reward, terminated or truncated, extra_info
 
     @staticmethod
     def from_json(extra_info) -> "BrowserGym":
-        return BrowserGym(env_id=extra_info["environment_id"])
+        return BrowserGym(env_id=extra_info["env_id"])
+
+    @staticmethod
+    def is_multithread_safe() -> bool:
+        return False

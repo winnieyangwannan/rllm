@@ -33,10 +33,11 @@ class SWEEnv(BaseEnv):
 
     def __init__(
         self,
+        entry: Optional[Dict] = None,
         dataset: Optional[Dataset] = None,
         idx: Optional[int] = None,
         timeout: int = 90,
-        delete_image: bool = True
+        delete_image: bool = False
     ):
         """Initialize the SWE environment.
 
@@ -46,15 +47,20 @@ class SWEEnv(BaseEnv):
             timeout: Timeout for each step in seconds.
             delete_image: Whether to delete the Docker image after closing.
         """
-        if dataset is None:
-            dataset = load_dataset(DEFAULT_R2E_ENV_ID, split="test")
-        self.dataset = dataset
-        
-        if idx is None:
-            idx = np.random.randint(0, len(self.dataset))
-        assert 0 <= idx < len(self.dataset), "Selected index out of range"
-        
-        self.idx = idx
+        if entry is not None:
+            self.entry = entry
+            self.dataset = None
+            self.idx = None
+        else:
+            if dataset is None:
+                dataset = load_dataset(DEFAULT_R2E_ENV_ID, split="test")
+            self.dataset = dataset
+            
+            if idx is None:
+                idx = np.random.randint(0, len(self.dataset))
+            assert 0 <= idx < len(self.dataset), "Selected index out of range"
+            self.idx = idx
+            self.entry = self.dataset[idx]
         self.timeout = timeout
         self.total_steps = 0
         self.delete_image = delete_image
@@ -69,7 +75,7 @@ class SWEEnv(BaseEnv):
         # Reset environment and docker runtime.
         if not self.env:
             # Initialize environment if not created yet.
-            env_args = EnvArgs(ds=self.dataset[self.idx])
+            env_args = EnvArgs(ds=self.entry)
             self.env = RepoEnv(env_args)
             
         self.env.reset()
@@ -140,14 +146,13 @@ class SWEEnv(BaseEnv):
         Returns:
             Initialized SWEEnv instance
         """
-        assert "dataset" in extra_info, "Dataset must be provided in extra_info"
-        idx = extra_info.get("idx", {}).get("idx", None)
-        return SWEEnv(dataset=extra_info["dataset"], idx=idx)
+        return SWEEnv(entry=extra_info)
 
 
 if __name__ == "__main__":
     dataset = load_dataset("R2E-Gym/SWE-Bench-Lite", split="test")
+    
     env = SWEEnv(dataset=dataset, idx=0)
-    init_obs = env.reset()
+    init_obs, _ = env.reset()
     print(init_obs)
     env.close()
