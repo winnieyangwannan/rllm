@@ -38,6 +38,7 @@ class AgentExecutionEngine:
         max_prompt_length=8192,  # Max prompt length for agent is only applied to first request
         max_response_length=8000,
         rollout_engine_args=None,
+        max_workers=64,
         **kwargs,
     ):
         """Initialize the agent execution engine.
@@ -70,7 +71,7 @@ class AgentExecutionEngine:
         self.max_steps = max_steps
         self.max_response_length = max_response_length
         self.max_prompt_length = max_prompt_length
-
+        self.max_workers = max_workers
         agents = agents or []
         envs = envs or []
         self.n_parallel_agents = len(envs)
@@ -160,8 +161,7 @@ class AgentExecutionEngine:
 
             text = self.tokenizer.decode(trimmed, skip_special_tokens=False)
             pad_token = self.tokenizer.pad_token
-            eos_token = self.tokenizer.eos_token
-            text = text.replace(pad_token, "").replace(eos_token, "")
+            text = text.replace(pad_token, "")
             responses.append(text)
         return responses, seq_idxs
 
@@ -276,7 +276,7 @@ class AgentExecutionEngine:
             return env.step(action)
 
         if all(type(self.envs[seq_idxs[i]]).is_multithread_safe() for i in range(len(seq_idxs))):
-            with ThreadPoolExecutor(max_workers=len(seq_idxs)) as executor:
+            with ThreadPoolExecutor(max_workers=self.max_workers) as executor:
                 futures = [
                     executor.submit(step_env_single, self.envs[seq_idxs[i]], actions[i])
                     for i in range(len(seq_idxs))
@@ -306,7 +306,7 @@ class AgentExecutionEngine:
             return env.reset()
         
         if all(type(self.envs[seq_idxs[i]]).is_multithread_safe() for i in range(len(seq_idxs))):
-            with ThreadPoolExecutor(max_workers=len(seq_idxs)) as executor:
+            with ThreadPoolExecutor(max_workers=self.max_workers) as executor:
                 futures = [
                     executor.submit(reset_env_single, self.envs[seq_idxs[i]])
                     for i in range(len(seq_idxs))
@@ -323,6 +323,21 @@ class AgentExecutionEngine:
         for info in infos:
             info['max_steps'] = self.max_steps
         return list(observations), list(infos)
+
+    def close_environment_batched(self):
+        """Close multiple environments in parallel."""
+        def close_env_single(env):
+            return env.close()
+        
+
+        with ThreadPoolExecutor(max_workers=self.max_workers) as executor:
+            futures = [
+                executor.submit(close_env_single, self.envs[i])
+                for i in range(self.envs)
+            ]
+            # Wait for all futures to complete
+            for fut in futures:
+                fut.result() 
 
     def generate_trajectories(self, reset_seed=0, timing_raw=None, mode="Text", **kwargs):
         """
@@ -501,7 +516,6 @@ class AgentExecutionEngine:
                                 f"Reward is {rewards[i]}. \n",
                                 "yellow",
                             )
-                            self.envs[idx].close()
                             continue
                         
                         # Update the token version of trajectory
@@ -515,13 +529,11 @@ class AgentExecutionEngine:
                                 f"Trajectory {idx} completed. Reward is {rewards[i]}. \n",
                                 "green",
                             )
-                            self.envs[idx].close()
                             continue
 
                         # Insert env tokens to the results (only for non-finished trajectories)
                         all_response_tokens[idx].extend(env_msg_tokens)
                         all_response_masks[idx].extend(env_msg_masks)
-
                 break
 
             except Exception as e:
@@ -530,6 +542,9 @@ class AgentExecutionEngine:
                 print(e)
                 continue
         
+        # Close all environments
+        self.close_environment_batched()
+
         # Trajectory post-processing.
         trajectories = [a.trajectory for a in self.agents]
         for i, trajectory in enumerate(trajectories):
@@ -558,7 +573,7 @@ class AgentExecutionEngine:
 
     def reset_agents(self):
         """Reset all agents in parallel."""
-        with ThreadPoolExecutor(max_workers=len(self.agents)) as executor:
+        with ThreadPoolExecutor(max_workers=self.max_workers) as executor:
             futures = [
                 executor.submit(agent.reset)
                 for agent in self.agents

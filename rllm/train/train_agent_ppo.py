@@ -64,8 +64,8 @@ def main_task(config, compute_score=None):
         Role.ActorRollout: ray.remote(ActorRolloutRefWorker) if not config.agent.async_engine else ray.remote(max_concurrency=512)(ActorRolloutRefWorker),
         Role.Critic: ray.remote(CriticWorker),
         Role.RefPolicy: ray.remote(ActorRolloutRefWorker),
-        Role.Actor: ray.remote(ActorRolloutRefWorker),
-        Role.Rollout: ray.remote(ActorRolloutRefWorker) if not config.agent.async_engine else ray.remote(max_concurrency=512)(ActorRolloutRefWorker),
+        #Role.Actor: ray.remote(ActorRolloutRefWorker),
+        #Role.Rollout: ray.remote(ActorRolloutRefWorker) if not config.agent.async_engine else ray.remote(max_concurrency=512)(ActorRolloutRefWorker),
     }
     
     # Below are agent specific initialization
