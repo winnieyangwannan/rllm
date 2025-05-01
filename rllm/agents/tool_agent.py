@@ -112,9 +112,14 @@ class ToolAgent(BaseAgent):
             assistant_content = response
             # Attempt to parse tool calls from string response
             try:
-                parsed_action = self.tool_parser.parse_input(response)
-                if parsed_action:
-                    tool_calls_dict = parsed_action.to_dict() # Assuming parser returns an object with to_dict()
+                tool_inputs = self.tool_parser.parse_input(response)
+                if tool_inputs:
+                    tool_calls_dict = [{
+                        "id": str(uuid.uuid4()),
+                        "type": "function",
+                        "function": tool_input.to_dict()
+                    } for tool_input in tool_inputs.inputs]
+
             except Exception as e:
                 logger.error(f"Failed to parse tool calls from string response: {e}")
                 tool_calls_dict = [] # Indicate no valid tool calls parsed
