@@ -8,26 +8,45 @@ from rllm.tools.utils import function_to_dict
 @dataclass
 class ToolCall:
     name: str
-    parameters: Dict[str, Any]
+    arguments: Dict[str, Any]
 
     def to_dict(self):
         return {
             "name": self.name,
-            "parameters": self.parameters
+            "arguments": self.arguments
         }
 
 @dataclass
 class ToolInputs:
     inputs: List[ToolCall]
-
-    def to_dict(self):
-        return [tool_call.to_dict() for tool_call in self.inputs]
     
 @dataclass
 class ToolOutput:
     name: str
     output: Union[str, list, dict] = None
     error: Optional[str] = None
+    
+    def __str__(self) -> str:
+        """Convert the tool output to a string representation."""
+        if self.error:
+            return f"Error: {self.error}"
+        elif self.output is None:
+            return ""
+        elif isinstance(self.output, (list, dict)):
+            import json
+            return json.dumps(self.output)
+        else:
+            return str(self.output)
+    
+    def to_string(self) -> str:
+        """
+        Convert the tool output to a string representation.
+        
+        Example usage:
+            tool_output = ToolOutput(name="calculator", output=42)
+            result_string = tool_output.to_string()
+        """
+        return str(self)
 
 @dataclass
 class ToolOutputs:

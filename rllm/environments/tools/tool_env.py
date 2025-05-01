@@ -21,7 +21,9 @@ class ToolEnvironment(BaseEnv):
         self.task = task
         self.reward_fn = rllm_reward_fn
         self.current_data = None
-        self.data_source = self.task.get("data_source", "")
+        self.data_source = ""
+        if self.task:
+            self.data_source = self.task.get("data_source", "")
     
     def reset(self, task=None, seed=None):
         """Reset the environment and return initial observations."""
@@ -73,8 +75,9 @@ class ToolEnvironment(BaseEnv):
                         finish_action = tool_call
                         break
                 arguments = finish_action.get('function', {}).get('arguments', {})
-                llm_solution = json.loads(arguments).get('response', '')
-            reward = self.reward_fn(data_source=self.data_source, llm_solution=llm_solution, ground_truth=self.task["answer"])
+                llm_solution = arguments.get('response', '')
+                # llm_solution = json.loads(arguments).get('response', '')
+            reward = self.reward_fn(data_source=self.data_source, llm_solution=llm_solution, ground_truth=self.task["ground_truth"])
             return {}, reward, done, {"response": action}
 
         tool_calls = action
@@ -98,11 +101,8 @@ class ToolEnvironment(BaseEnv):
             tool_name = tool_call['function']['name']
             tool_args = json.loads(tool_call['function']['arguments'])
             tool_output = self.tools(tool_name=tool_name, **tool_args)
-            tool_output_str = tool_output.output
-            if isinstance(tool_output_str, (dict, list)):
-                tool_output_str = json.dumps(tool_output_str)
+            tool_output_str = tool_output.to_string()
 
-            # tool_output_str = self.tool_parser.parse_output(tool_output)
             output_queue.put((tool_call['id'], tool_output_str))
 
         # Create and start a thread for each tool call
@@ -123,8 +123,8 @@ class ToolEnvironment(BaseEnv):
         return tool_outputs
     
     @staticmethod
-    def from_json(extra_info: Dict) -> "ToolEnvironment":
-        return ToolEnvironment(task=extra_info['task'])
+    def from_json(json_dict: Dict) -> "ToolEnvironment":
+        return ToolEnvironment(task=json_dict['task'], tools=json_dict['tools'])
 
 if __name__ == "__main__":
     env = ToolEnvironment(task={"question": "What is the 1+2?", "answer": "3"}, tools=["google_search"])

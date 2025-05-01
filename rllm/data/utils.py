@@ -44,7 +44,7 @@ def load_dataset(dataset_enum: Union[TrainDataset.Math, TrainDataset.Code,
     category_dir = dataset_enum.__class__.__name__.lower()
     
     # Determine if dataset is for training or testing
-    if dataset_enum.__class__ in [TrainDataset.Math, TrainDataset.Code]:
+    if dataset_enum.__class__ in [TrainDataset.Math, TrainDataset.Code, TrainDataset.Web]:
         data_dir = 'train'
     else:
         data_dir = 'test'
