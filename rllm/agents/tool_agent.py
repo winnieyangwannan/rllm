@@ -104,7 +104,7 @@ class ToolAgent(BaseAgent):
         Updates the agent's state based on the model's response.
         Parses the response, updates messages, and the current step in the trajectory.
         """
-        tool_calls_dict = {}
+        tool_calls_dict = []
         assistant_content = ''
 
         # Process response (either string or OpenAI completion object)
@@ -141,8 +141,15 @@ class ToolAgent(BaseAgent):
 
         print(f"tool_calls_dict: {tool_calls_dict}", flush=True)
 
-        # "Finishing tool call, calls the "finish" function, if no tools are found.
-        if not tool_calls_dict:
+        # Append assistant message to chat history
+        assistant_message = {"role": "assistant", "content": assistant_content}
+        if len(tool_calls_dict) > 0:
+             # Ensure arguments within tool_calls_dict are strings if needed by downstream processing
+            for call in tool_calls_dict:
+                if isinstance(call.get("function", {}).get("arguments"), dict):
+                    call["function"]["arguments"] = json.dumps(call["function"]["arguments"])
+            assistant_message["tool_calls"] = tool_calls_dict
+        else:
             tool_calls_dict = [{
                 "id": str(uuid.uuid4()),
                 "type": "function",
@@ -153,15 +160,7 @@ class ToolAgent(BaseAgent):
                     }
                 }
             }]
-
-        # Append assistant message to chat history
-        assistant_message = {"role": "assistant", "content": assistant_content}
-        if tool_calls_dict:
-             # Ensure arguments within tool_calls_dict are strings if needed by downstream processing
-            for call in tool_calls_dict:
-                if isinstance(call.get("function", {}).get("arguments"), dict):
-                    call["function"]["arguments"] = json.dumps(call["function"]["arguments"])
-            assistant_message["tool_calls"] = tool_calls_dict
+        
         self.messages.append(assistant_message)
 
         # Update the current step in the trajectory

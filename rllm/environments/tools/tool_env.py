@@ -75,7 +75,8 @@ class ToolEnvironment(BaseEnv):
                         finish_action = tool_call
                         break
                 arguments = finish_action.get('function', {}).get('arguments', {})
-                llm_solution = json.loads(arguments).get('response', '')
+                llm_solution = arguments.get('response', '')
+                # llm_solution = json.loads(arguments).get('response', '')
             reward = self.reward_fn(data_source=self.data_source, llm_solution=llm_solution, ground_truth=self.task["ground_truth"])
             return {}, reward, done, {"response": action}
 
@@ -122,8 +123,8 @@ class ToolEnvironment(BaseEnv):
         return tool_outputs
     
     @staticmethod
-    def from_json(extra_info: Dict) -> "ToolEnvironment":
-        return ToolEnvironment(task=extra_info['task'])
+    def from_json(json_dict: Dict) -> "ToolEnvironment":
+        return ToolEnvironment(task=json_dict['task'], tools=json_dict['tools'])
 
 if __name__ == "__main__":
     env = ToolEnvironment(task={"question": "What is the 1+2?", "answer": "3"}, tools=["google_search"])
