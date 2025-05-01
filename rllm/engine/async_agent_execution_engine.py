@@ -240,7 +240,6 @@ class AsyncAgentExecutionEngine(AgentExecutionEngine):
             action = cur_state.action
             # Take step in environment
             next_observation, reward, done, info = env.step(action)
-            colorful_print(f"next_observation: {next_observation}", "blue")
             info['max_steps'] = self.max_steps
             # Update agent internal state.
             agent.update_from_env(
