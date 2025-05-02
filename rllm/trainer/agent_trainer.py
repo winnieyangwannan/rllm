@@ -94,7 +94,6 @@ class AgentPPOTrainer(RayPPOTrainer):
         envs = [self.env_class.from_json({**env_args[i], **self.config.env.get("env_args", {})}) for i in range(len(env_args))]
         agents = [self.agent_class(**self.config.agent.get("agent_args", {})) for _ in range(len(envs))]
         self.agent_execution_engine.update_envs_and_agents(envs, agents)
-
         return envs
 
     def fit_agent(self):
@@ -125,7 +124,6 @@ class AgentPPOTrainer(RayPPOTrainer):
             logger.log(data=val_metrics, step=self.global_steps)
             if self.config.trainer.get("val_only", False):
                 return
-        import pdb; pdb.set_trace()
         # we start from step 1
         self.global_steps += 1
 
@@ -423,7 +421,6 @@ class AgentPPOTrainer(RayPPOTrainer):
             final_gen_batch_output = self._transform_agent_trajectories(
                 trajectories
             )
-
         return final_gen_batch_output
 
 

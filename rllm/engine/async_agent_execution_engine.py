@@ -61,15 +61,19 @@ class AsyncAgentExecutionEngine(AgentExecutionEngine):
         self.max_response_length = max_response_length
         self.max_prompt_length = max_prompt_length
 
+        self.agent_class = agent_class
+        self.agent_args = agent_args
         self.agents = agents
+        self.env_class = env_class
+        self.env_args = env_args
         self.envs = envs
 
-        if agent_class is not None and env_class is not None:
-            self.agents = [agent_class(**agent_args) for _ in range(n_parallel_agents)]
-            self.envs = [env_class(**env_args) for _ in range(n_parallel_agents)]
-        else:
-            self.agents = agents
-            self.envs = envs
+        # if agent_class is not None and env_class is not None:
+        #     self.agents = [agent_class(**agent_args) for _ in range(n_parallel_agents)]
+        #     self.envs = [env_class(**env_args) for _ in range(n_parallel_agents)]
+        # else:
+        #     self.agents = agents
+        #     self.envs = envs
 
         assert all(type(env).is_multithread_safe() for env in self.envs), "All environments must be multithread safe for async engine"
         # rollout engine args

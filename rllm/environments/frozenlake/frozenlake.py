@@ -224,7 +224,8 @@ class FrozenLakeEnv(GymFrozenLakeEnv, BaseEnv):
         Both can reset the seed
         NOTE if seed is the same, the map will be the same
         """
-        
+        if not seed:
+            seed = self.seed
         if reset_map:
             self.__init__(
                 size=self.map_kwargs["size"],
