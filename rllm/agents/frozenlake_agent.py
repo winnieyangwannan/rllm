@@ -227,8 +227,7 @@ Now it is your turn, please show your thinking process and put the final action 
         reward_penalty = 0    
         for step in trajectory.steps:
             if not self.validate_step(step):
-                reward_penalty = -0.5
-                break
+                reward_penalty -= 0.2
         return reward + reward_penalty
 
     def validate_step(self, trajectory_step: Step) -> bool:

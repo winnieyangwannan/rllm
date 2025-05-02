@@ -35,10 +35,10 @@ class AgentExecutionEngine:
         api_retries=3,
         retry_limit=1,
         max_steps=5,
-        max_prompt_length=8192,  # Max prompt length for agent is only applied to first request
-        max_response_length=8000,
+        max_prompt_length=2048,  # Max prompt length for agent is only applied to first request
+        max_response_length=16384,
         rollout_engine_args=None,
-        max_workers=64,
+        max_workers=16,
         **kwargs,
     ):
         """Initialize the agent execution engine.
@@ -161,7 +161,8 @@ class AgentExecutionEngine:
 
             text = self.tokenizer.decode(trimmed, skip_special_tokens=False)
             pad_token = self.tokenizer.pad_token
-            text = text.replace(pad_token, "")
+            eos_token = self.tokenizer.eos_token
+            text = text.replace(pad_token, "").replace(eos_token, "")
             responses.append(text)
         return responses, seq_idxs
 
@@ -333,7 +334,7 @@ class AgentExecutionEngine:
         with ThreadPoolExecutor(max_workers=self.max_workers) as executor:
             futures = [
                 executor.submit(close_env_single, self.envs[i])
-                for i in range(self.envs)
+                for i in range(len(self.envs))
             ]
             # Wait for all futures to complete
             for fut in futures:
@@ -408,7 +409,7 @@ class AgentExecutionEngine:
                 all_prompt_tokens = [[] for _ in range(env_batch_size)]
                 all_response_tokens = [[] for _ in range(env_batch_size)]
                 all_response_masks = [[] for _ in range(env_batch_size)]
-
+                
                 observations, infos = self.reset_environment_batched(list(range(env_batch_size))) 
 
                 # put initial observation into the sequence
@@ -431,8 +432,9 @@ class AgentExecutionEngine:
                     all_prompt_tokens[i] = prompt_tokens
 
                 if max_prompt_token_len > self.max_prompt_length:
-                    self.reset_agents()
-                    raise Exception("Initial prompt length already exceeded max_prompt_length. Please set `max_prompt_length` to be larger.")
+                    self.reset_agents_batched()
+                    self.close_environment_batched()
+                    raise Exception(f"Initial prompt length already exceeded max_prompt_length. Please set `max_prompt_length` to be larger. Current max_prompt_length is {max_prompt_token_len} and max_prompt_length is {self.max_prompt_length}.")
                     
                 # get model actions and responses
                 while not all(all_dones) and steps < self.max_steps:
@@ -571,7 +573,7 @@ class AgentExecutionEngine:
         elif mode == "Conversation":
             return [a.chat_completions for a in self.agents]
 
-    def reset_agents(self):
+    def reset_agents_batched(self):
         """Reset all agents in parallel."""
         with ThreadPoolExecutor(max_workers=self.max_workers) as executor:
             futures = [

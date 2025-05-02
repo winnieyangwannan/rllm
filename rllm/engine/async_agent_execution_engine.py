@@ -1,5 +1,6 @@
 import asyncio
 import uuid
+import concurrent.futures
 
 import openai
 import torch
@@ -42,6 +43,7 @@ class AsyncAgentExecutionEngine(AgentExecutionEngine):
         agent_args={},
         rollout_engine_args={},
         env_args={},
+        num_workers=64,
         **kwargs,
     ):
         self.rollout_engine = rollout_engine
@@ -74,6 +76,8 @@ class AsyncAgentExecutionEngine(AgentExecutionEngine):
             self.router = Router(rollout_engine=rollout_engine)
 
         self.chat_template_parser = ChatTemplateParser.get_parser(self.tokenizer)
+        # Create a thread pool executor for environment interactions (i.e. step, reset, close)
+        self.executor = concurrent.futures.ThreadPoolExecutor(max_workers=num_workers)
 
     async def get_model_response(self, prompt, application_id, **kwargs):
         """
@@ -136,8 +140,7 @@ class AsyncAgentExecutionEngine(AgentExecutionEngine):
 
         pad_token = self.tokenizer.pad_token
         eos_token = self.tokenizer.eos_token
-        response = response.replace(pad_token, "")
-        response = response.replace(eos_token, "")
+        response = response.replace(pad_token, "").replace(eos_token, "")
         return response
 
     async def _get_openai_async(self, prompt, _, **kwargs):
@@ -180,6 +183,8 @@ class AsyncAgentExecutionEngine(AgentExecutionEngine):
         """Run a single agent's trajectory asynchronously"""
         agent = self.agents[idx]
         env = self.envs[idx]
+        loop = asyncio.get_running_loop()  # Get the current event loop
+
         # Initialize trajectory for this task.
         trajectory = []
         termination_reason = None
@@ -189,8 +194,8 @@ class AsyncAgentExecutionEngine(AgentExecutionEngine):
         response_tokens = []
         response_masks = []
 
-        # Reset environment with the task
-        observation, info = env.reset()
+        # Reset environment with the task using the executor
+        observation, info = await loop.run_in_executor(self.executor, env.reset)
         info['max_steps'] = self.max_steps
 
         # Reset agent
@@ -230,13 +235,12 @@ class AsyncAgentExecutionEngine(AgentExecutionEngine):
             # Fetch action from agent's internal state.
             cur_state = agent.get_current_state()
             action = cur_state.action
-            # Take step in environment
-            next_observation, reward, done, info = env.step(action)
+            # Take step in environment using the executor
+            next_observation, reward, done, info = await loop.run_in_executor(self.executor, env.step, action)
             info['max_steps'] = self.max_steps
             # Update agent internal state.
             agent.update_from_env(
                 observation=next_observation,
-                action=action,
                 reward=reward,
                 done=done,
                 info=info,
@@ -305,8 +309,8 @@ class AsyncAgentExecutionEngine(AgentExecutionEngine):
                 color,
             )
 
-        # Closing environment.
-        env.close()
+        # Closing environment using the executor.
+        await loop.run_in_executor(self.executor, env.close)
         trajectory = agent.trajectory
         
         # Aggregate final trajectory statistics
