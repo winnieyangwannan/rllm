@@ -18,6 +18,8 @@ class Router:
 
 
     def _get_worker_idx(self, application_id):
+        # "Autellix" load balancer
+        # (Round Robin instead of Load Balance) + (Data locality policy w.r.t Program ID)
         if application_id not in self.cache_map:
             self.cache_map[application_id] = self.next_placement
             self.next_placement = (self.next_placement + self.tp_size) % self.world_size
