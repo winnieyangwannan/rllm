@@ -25,7 +25,7 @@ from verl.workers.fsdp_workers import ActorRolloutRefWorker
 from verl.workers.reward_manager import NaiveRewardManager
 
 
-from rllm.trainer.async_agent_trainer import AsyncAgentPPOTrainer
+from rllm.trainer.agent_trainer_pipeline import PipelineAgentPPOTrainer
 from rllm.train.env_agent_mappings import ENV_CLASS_MAPPING, AGENT_CLASS_MAPPING, setup_environment
 
 
@@ -84,7 +84,7 @@ def main_task(config, compute_score=None):
     agent_class = AGENT_CLASS_MAPPING[config.agent.name]
     setup_environment(config)      
 
-    trainer = AsyncAgentPPOTrainer(config=config,
+    trainer = PipelineAgentPPOTrainer(config=config,
                             tokenizer=tokenizer,
                             role_worker_mapping=role_worker_mapping,
                             resource_pool_manager=resource_pool_manager,

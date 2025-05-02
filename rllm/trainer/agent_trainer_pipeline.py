@@ -30,7 +30,7 @@ from verl.trainer.ppo.ray_trainer_pipeline import (
 )
 
 
-class AsyncAgentPPOTrainer(AgentPPOTrainer):
+class PipelineAgentPPOTrainer(AgentPPOTrainer):
 
     def init_workers(self):
        
