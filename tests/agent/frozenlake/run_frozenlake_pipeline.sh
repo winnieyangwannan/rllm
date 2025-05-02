@@ -23,6 +23,7 @@ python3 -m rllm.train.train_agent_ppo_pipeline \
     actor_rollout_ref.actor.ppo_mini_batch_size=32 \
     actor_rollout_ref.actor.use_dynamic_bsz=True \
     actor_rollout_ref.actor.ppo_max_token_len_per_gpu=24000 \
+    actor_rollout_ref.actor.ppo_micro_batch_size_per_gpu=1 \
     actor_rollout_ref.actor.use_kl_loss=False \
     actor_rollout_ref.actor.clip_ratio_high=0.28 \
     actor_rollout_ref.actor.kl_loss_coef=0.001 \
