@@ -16,7 +16,8 @@ class  MultiTool(Tool):
         return [tool.json for tool in self.tool_map.values()]
     
     def forward(self, *args, tool_name: str, **kwargs) -> ToolOutput:
-        assert tool_name in self.tool_map, f"Tool {tool_name} not found in tool map"
+        if tool_name not in self.tool_map:
+            return ToolOutput(name=tool_name, output=f"Tool {tool_name} not found in tool map")
         tool = self.tool_map[tool_name]
         return tool(*args,**kwargs)
 

@@ -21,8 +21,6 @@ import torch
 import uuid
 from typing import List, Dict
 
-import openai
-
 
 class AsyncAgentExecutionEngine(AgentExecutionEngine):
     def __init__(
@@ -30,8 +28,8 @@ class AsyncAgentExecutionEngine(AgentExecutionEngine):
         rollout_engine,
         engine_name,
         tokenizer,
-        agent_class,
-        env_class,
+        agents=[],
+        envs=[],
         model_path="",
         n_parallel_agents=1,
         gamma=1.0,
@@ -40,6 +38,8 @@ class AsyncAgentExecutionEngine(AgentExecutionEngine):
         max_steps=5,
         max_response_length=8192,
         max_prompt_length=1024,
+        agent_class=None,
+        env_class=None,
         agent_args={},
         rollout_engine_args={},
         env_args={},
@@ -49,7 +49,6 @@ class AsyncAgentExecutionEngine(AgentExecutionEngine):
         self.rollout_engine = rollout_engine
         self.tokenizer = tokenizer
         self.engine_name = engine_name
-        self.agent_class = agent_class
         self.n_parallel_agents = n_parallel_agents
         self.model_path = model_path
 
@@ -61,8 +60,17 @@ class AsyncAgentExecutionEngine(AgentExecutionEngine):
         self.agent_args = agent_args
         self.max_response_length = max_response_length
         self.max_prompt_length = max_prompt_length
-        self.agents = [agent_class(**agent_args) for _ in range(self.n_parallel_agents)]
-        self.envs = [env_class(**env_args) for _ in range(self.n_parallel_agents)]
+
+        self.agents = agents
+        self.envs = envs
+
+        if agent_class is not None and env_class is not None:
+            self.agents = [agent_class(**agent_args) for _ in range(n_parallel_agents)]
+            self.envs = [env_class(**env_args) for _ in range(n_parallel_agents)]
+        else:
+            self.agents = agents
+            self.envs = envs
+
         assert all(type(env).is_multithread_safe() for env in self.envs), "All environments must be multithread safe for async engine"
         # rollout engine args
         self.rollout_engine_args = rollout_engine_args
@@ -172,6 +180,7 @@ class AsyncAgentExecutionEngine(AgentExecutionEngine):
                     print("Sleep for 5 seconds for API limit.")
                     await asyncio.sleep(5)
                 except Exception as e:
+                    print("Error: ", e)
                     return f"Error processing content: {e}"
 
         response = await get_response(prompt)
@@ -372,6 +381,49 @@ class AsyncAgentExecutionEngine(AgentExecutionEngine):
                 yield result
             except Exception as e:
                 raise e
+
+    async def execute_tasks(self, tasks):
+        """
+        Run asynchronous interactions between the agent and environment where each agent
+        has its own environment instance and can proceed independently.
+        
+        Args:
+            tasks: List of tasks to process
+            max_concurrent: Maximum number of concurrent tasks to process (defaults to self.n_parallel_agents)
             
-        if self.engine_name == "verl":
-            self.router.__exit__()
+        Returns:
+            A list of trajectories, one for each task.
+        """
+
+        max_concurrent = self.n_parallel_agents
+        
+        # Initialize results list to store trajectories for all tasks
+        all_trajectories = {}
+        
+        # Create a queue of tasks to process
+        task_queue = list(enumerate(tasks))
+        semaphore = asyncio.Semaphore(max_concurrent)
+        index_queue = asyncio.Queue(maxsize=max_concurrent)
+        for i in range(max_concurrent):
+            index_queue.put_nowait(i)
+
+        async def sem_wrapper(task_id, task):
+            async with semaphore:
+                # Get an available index
+                index = await index_queue.get()
+                try:
+                    self.envs[index].reset(task=task)
+                    res = await self.run_agent_trajectory(index, task_id)
+                    return task_id, res
+                finally:
+                    # Put the index back in the queue when done
+                    await index_queue.put(index)
+        
+        # Create a queue of tasks to process
+        task_queue = list(enumerate(tasks))
+        # Run all tasks concurrently
+        results = await asyncio.gather(*[sem_wrapper(task_id, task) for task_id, task in task_queue])
+        
+        all_trajectories = {task_id: trajectory for task_id, trajectory in results}
+        ordered_trajectories = [all_trajectories[i] for i in range(len(all_trajectories))]
+        return ordered_trajectories

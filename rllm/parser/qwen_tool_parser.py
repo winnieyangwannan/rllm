@@ -31,7 +31,7 @@ class QwenToolParser(ToolParser):
         tool_calls_dicts = self.parse_qwen_tool_calls(model_output)
         
         # Convert dictionaries to ToolCall objects
-        tool_calls = [ToolCall(name=tc["name"], parameters=tc["parameters"]) for tc in tool_calls_dicts]
+        tool_calls = [ToolCall(name=tc["name"], arguments=tc["arguments"]) for tc in tool_calls_dicts]
         return ToolInputs(inputs=tool_calls)
 
     def parse_output(self, tool_outputs: Union[ToolOutput, ToolOutputs]) -> str:
@@ -90,7 +90,7 @@ class QwenToolParser(ToolParser):
                 # Convert to common format matching parse_tool_calls output
                 tool_calls.append({
                     "name": call_data["name"],
-                    "parameters": call_data["arguments"]
+                    "arguments": call_data["arguments"]
                 })
             except json.JSONDecodeError:
                 print(f"Error parsing tool call: {json_content}")
