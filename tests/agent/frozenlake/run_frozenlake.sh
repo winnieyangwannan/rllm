@@ -21,7 +21,6 @@ python3 -m rllm.train.train_agent_ppo \
     actor_rollout_ref.model.use_remove_padding=True \
     actor_rollout_ref.actor.loss_agg_mode=seq-mean-token-sum \
     actor_rollout_ref.actor.ppo_mini_batch_size=32 \
-    actor_rollout_ref.actor.ppo_micro_batch_size_per_gpu=4 \
     actor_rollout_ref.actor.use_dynamic_bsz=True \
     actor_rollout_ref.actor.ppo_max_token_len_per_gpu=24000 \
     actor_rollout_ref.actor.use_kl_loss=False \
@@ -55,7 +54,7 @@ python3 -m rllm.train.train_agent_ppo \
     trainer.logger=['console','wandb'] \
     trainer.project_name='deepscaler-agent' \
     trainer.experiment_name='7b-loop-drgrpo-frozenlake_agent' \
-    trainer.val_before_train=True \
+    trainer.val_before_train=False \
     trainer.n_gpus_per_node=8 \
     trainer.nnodes=1 \
     trainer.save_freq=40 \

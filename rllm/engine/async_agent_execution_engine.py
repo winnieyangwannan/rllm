@@ -385,6 +385,9 @@ class AsyncAgentExecutionEngine(AgentExecutionEngine):
                 yield result
             except Exception as e:
                 raise e
+        
+        if self.engine_name == "verl":
+            self.router.__exit__()
 
     async def execute_tasks(self, tasks):
         """
