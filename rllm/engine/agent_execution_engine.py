@@ -510,7 +510,8 @@ class AgentExecutionEngine:
                             all_dones[idx] = True
 
                             cur_step = self.agents[idx].get_current_state()
-                            cur_step.reward = 0.0
+                            if all_response_token_lens[idx] - len(env_msg_tokens) > self.max_response_length:
+                                cur_step.reward = 0.0
                             cur_step.done = True
 
                             colorful_print(

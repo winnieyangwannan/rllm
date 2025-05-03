@@ -290,7 +290,8 @@ class AsyncAgentExecutionEngine(AgentExecutionEngine):
                 response_masks.extend(truncated_response_masks)
                 
                 cur_step = agent.get_current_state()
-                cur_step.reward = 0.0
+                if response_token_len - len(env_msg_tokens) > self.max_response_length:
+                    cur_step.reward = 0.0
                 cur_step.done = True
                 termination_reason = "TRUNCATION"
                 # handle returning
