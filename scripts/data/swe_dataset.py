@@ -6,6 +6,10 @@ import argparse
 import rllm
 from datasets import load_dataset
 
+from rllm.agents.system_prompts import SWE_SYSTEM_PROMPT, SWE_USER_PROMPT, \
+    SWE_SYSTEM_PROMPT_FN_CALL, SWE_USER_PROMPT_FN_CALL
+
+
 # Get the directory for rLLM repo (rllm.__file__)
 RLLM_DIR = os.path.dirname(os.path.dirname(os.path.abspath(rllm.__file__)))
 
@@ -32,9 +36,10 @@ def main():
     def make_map_fn():
         def process_fn(row):
             row_dict = dict(row)
+            problem_statement = row_dict.get("problem_statement", "")
             return {
                 "data_source": "swe",
-                "prompt": [{"role": "user", "content": row_dict.get("problem_statement", "")}],
+                "prompt": [{"role": "system", "content": SWE_SYSTEM_PROMPT}, {"role": "user", "content": SWE_USER_PROMPT.format(problem_statement=problem_statement)}],
                 "ability": "swe",
                 "reward_model": {"style": "rule", "ground_truth": ""},
                 "extra_info": row_dict,

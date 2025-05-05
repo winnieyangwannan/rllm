@@ -60,10 +60,11 @@ class AgentPPOTrainer(RayPPOTrainer):
             agent_rollout_wg = self.actor_rollout_wg
         else:
             agent_rollout_wg = self.rollout_wg
-        
+
         if self.config.agent.async_engine:
             self.agent_execution_engine = AsyncAgentExecutionEngine(
                 rollout_engine=agent_rollout_wg,
+                config=self.config,
                 engine_name="verl",
                 tokenizer=self.tokenizer,
                 model_path=self.config.actor_rollout_ref.model.path,
@@ -78,6 +79,7 @@ class AgentPPOTrainer(RayPPOTrainer):
         else:
             self.agent_execution_engine = AgentExecutionEngine(
                 rollout_engine=agent_rollout_wg,
+                config=self.config,
                 engine_name="verl",
                 tokenizer=self.tokenizer,
                 model_path=self.config.actor_rollout_ref.model.path,
@@ -343,7 +345,6 @@ class AgentPPOTrainer(RayPPOTrainer):
                 "validate": True,
                 "agent_rollout": True
             }
-
             self.init_envs_and_agents(test_batch)
 
             test_output_gen_batch = self.generate_agent_trajectory(

@@ -28,6 +28,7 @@ class AgentExecutionEngine:
         rollout_engine,
         engine_name,
         tokenizer,
+        config,
         agents=None,  # List of agents
         envs=None,  # List of environments
         model_path="",
@@ -59,6 +60,7 @@ class AgentExecutionEngine:
             rollout_engine_args: Arguments for the rollout engine
             **kwargs: Additional arguments
         """
+        self.config = config
         self.rollout_engine = rollout_engine
         self.tokenizer = tokenizer
         self.engine_name = engine_name
