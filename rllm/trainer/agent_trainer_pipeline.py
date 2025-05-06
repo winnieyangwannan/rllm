@@ -33,7 +33,7 @@ from verl.trainer.ppo.ray_trainer_pipeline import (
 class PipelineAgentPPOTrainer(AgentPPOTrainer):
 
     def init_workers(self):
-       
+        assert self.config.agent.async_engine, "PPO pipeline trainer must use async engine"
         assert not self.hybrid_engine, "PPO pipeline trainer does not support hybrid engine, assumes Rollout and Actor are not in the different worker group"
         """Init resource pool and worker group"""
         self.resource_pool_manager.create_resource_pool()
@@ -155,6 +155,8 @@ class PipelineAgentPPOTrainer(AgentPPOTrainer):
                                     del uid_to_trajectories[uid] # so even if there is replicas it's still grouped correctly
 
                     # Get the generator function which will yield results as they complete
+                    if self.config.agent.step_advantage_broadcast:
+                        raise Exception("Stepwise advantage broadcasting not supported on pipelined trainer yet")
                     gen_seq_generator = self.generate_agent_trajectories_async(timing_raw=timing_raw, meta_info=batch.meta_info)
                     thread = threading.Thread(target=create_replay_queue, args=(gen_seq_generator, replay_queue))
                     thread.start()

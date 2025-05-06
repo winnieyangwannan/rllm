@@ -43,7 +43,8 @@ class AsyncAgentExecutionEngine(AgentExecutionEngine):
         agent_args={},
         rollout_engine_args={},
         env_args={},
-        num_workers=64,
+        max_workers=64,
+        enforce_max_prompt_length=False, # If enabled, applies max_prompt check per step
         **kwargs,
     ):
         self.rollout_engine = rollout_engine
@@ -60,6 +61,7 @@ class AsyncAgentExecutionEngine(AgentExecutionEngine):
         self.agent_args = agent_args
         self.max_response_length = max_response_length
         self.max_prompt_length = max_prompt_length
+        self.enforce_max_prompt_length = enforce_max_prompt_length
 
         self.agent_class = agent_class
         self.agent_args = agent_args
@@ -89,7 +91,7 @@ class AsyncAgentExecutionEngine(AgentExecutionEngine):
 
         self.chat_template_parser = ChatTemplateParser.get_parser(self.tokenizer)
         # Create a thread pool executor for environment interactions (i.e. step, reset, close)
-        self.executor = concurrent.futures.ThreadPoolExecutor(max_workers=num_workers)
+        self.executor = concurrent.futures.ThreadPoolExecutor(max_workers=max_workers)
 
     async def get_model_response(self, prompt, application_id, **kwargs):
         """
@@ -207,6 +209,9 @@ class AsyncAgentExecutionEngine(AgentExecutionEngine):
         response_tokens = []
         response_masks = []
 
+        # for step return
+        episode_steps = []
+
         # Reset environment with the task using the executor
         observation, info = await loop.run_in_executor(self.executor, env.reset)
         info['max_steps'] = self.max_steps
@@ -236,15 +241,30 @@ class AsyncAgentExecutionEngine(AgentExecutionEngine):
 
         for step_idx in range(self.max_steps):
             # Get action from agent
-            chat_completions_messages = agent.chat_completions
+            chat_completions_messages = agent.chat_completions.copy()
             # Max remaining tokens left for the response
-            kwargs['max_tokens'] = self.max_response_length - response_token_len
+            # For enforced max prompt at each step, no need to deduct here
+            if not self.enforce_max_prompt_length:
+                max_tokens = self.max_response_length - response_token_len
+            else:
+                max_tokens = self.max_response_length
+            kwargs['max_tokens'] = max_tokens
             response = await self.get_model_response(
                 chat_completions_messages,
                 application_id,
                 **kwargs
             )
+
+            # Update steps
+            prompt_response_pair = {
+                "prompt": self.chat_template_parser.parse(chat_completions_messages, add_generation_prompt=True, is_first_msg=True),
+                "response": response,
+            }
+            episode_steps.append(prompt_response_pair)
+
+            # Update agent with model response
             agent.update_from_model(response)
+
             # Fetch action from agent's internal state.
             cur_state = agent.get_current_state()
             action = cur_state.action
@@ -275,7 +295,7 @@ class AsyncAgentExecutionEngine(AgentExecutionEngine):
             # Update repsonse token length
             response_token_len += len(assistant_msg_tokens) + len(env_msg_tokens)
             # Reached maximum number of tokens for the trajectory
-            if response_token_len >= self.max_response_length:
+            if not self.enforce_max_prompt_length and response_token_len >= self.max_response_length:
                 # Truncation length
                 truncation_length = self.max_response_length - response_token_len
                 # Truncate the response and masks
@@ -345,6 +365,15 @@ class AsyncAgentExecutionEngine(AgentExecutionEngine):
             return token_result
         elif mode == "Conversation":
             return agent.chat_completions
+        elif mode == "Step":
+            steps_result = {
+                "steps": episode_steps,
+                "training_reward": agent.compute_training_reward(trajectory) if hasattr(agent, "compute_training_reward") else trajectory.steps[-1].reward,
+                "environment_reward": trajectory.reward,
+                "idx": env.idx,
+            }
+            return steps_result
+
 
     async def run_agent_trajectory_with_retry(
         self, idx, application_id, seed=0, mode="Text", **kwargs
@@ -363,6 +392,7 @@ class AsyncAgentExecutionEngine(AgentExecutionEngine):
         self, reset_seed=0, timing_raw={}, mode="Text", **kwargs
     ):
         assert all(type(env).is_multithread_safe() for env in self.envs), "All environments must be multithread safe for async engine"
+        assert mode in ["Text", "Token", "Conversation", "Step"], f"Return mode {mode} not supported"
         # Note: this function is not concurrecy safe due to the router.__enter__ and router.__exit__
         if self.engine_name == "verl":
             self.router.__enter__()

@@ -39,6 +39,7 @@ class AgentExecutionEngine:
         max_response_length=16384,
         rollout_engine_args=None,
         max_workers=16,
+        enforce_max_prompt_length=False, # If enabled, applies max_prompt check per step
         **kwargs,
     ):
         """Initialize the agent execution engine.
@@ -71,6 +72,7 @@ class AgentExecutionEngine:
         self.max_steps = max_steps
         self.max_response_length = max_response_length
         self.max_prompt_length = max_prompt_length
+        self.enforce_max_prompt_length = enforce_max_prompt_length
         self.max_workers = max_workers
         agents = agents or []
         envs = envs or []
@@ -201,6 +203,11 @@ class AgentExecutionEngine:
 
         input_ids = inputs["input_ids"]
         attention_mask = inputs["attention_mask"]
+
+        # TODO: check what should be the behavior, truncate or error or directly return?
+        if input_ids.shape[-1] >= self.max_prompt_length and self.enforce_max_prompt_length:
+            raise Exception(f"Prompt length {input_ids.shape[-1]} exceeds limit {self.max_prompt_length}")
+        
         # pad to max sizes
         input_ids = pad_sequence_to_length(
             input_ids,
@@ -395,7 +402,7 @@ class AgentExecutionEngine:
         assert (
             env_batch_size == self.n_parallel_agents
         ), "Number of parallel environments should match number of parallel agents."
-        assert mode in ["Text", "Token", "Conversation"], f"Return mode {mode} not supported"
+        assert mode in ["Text", "Token", "Conversation", "Step"], f"Return mode {mode} not supported"
 
         timing_raw = timing_raw or {}
 
@@ -410,6 +417,10 @@ class AgentExecutionEngine:
                 all_response_tokens = [[] for _ in range(env_batch_size)]
                 all_response_masks = [[] for _ in range(env_batch_size)]
                 
+                 # For each episode, accumulate the prompt and response pair for each step in a list. 
+                 # Each step is a dict with keys "prompt" and "response" to String
+                all_steps = [[] for _ in range(env_batch_size)]
+
                 observations, infos = self.reset_environment_batched(list(range(env_batch_size))) 
 
                 # put initial observation into the sequence
@@ -430,7 +441,7 @@ class AgentExecutionEngine:
                     )
                     max_prompt_token_len = max(max_prompt_token_len, len(prompt_tokens))
                     all_prompt_tokens[i] = prompt_tokens
-
+                    
                 if max_prompt_token_len > self.max_prompt_length:
                     self.reset_agents_batched()
                     self.close_environment_batched()
@@ -439,9 +450,14 @@ class AgentExecutionEngine:
                 # get model actions and responses
                 while not all(all_dones) and steps < self.max_steps:
                     steps += 1
+                    prompt_response_pair = {}
                     with _timer("get_actions", timing_raw):
-                        prompts = [self.agents[i].chat_completions for i in range(env_batch_size)]
-                        max_tokens = self.max_response_length - min([t for i, t in enumerate(all_response_token_lens) if all_dones[i] is False])
+                        prompts = [self.agents[i].chat_completions.copy() for i in range(env_batch_size)]
+                        # for enforced max prompt, no need to deduct here
+                        if not self.enforce_max_prompt_length:
+                            max_tokens = self.max_response_length - min([t for i, t in enumerate(all_response_token_lens) if all_dones[i] is False])
+                        else:
+                            max_tokens = self.max_response_length
                         kwargs['max_tokens'] = max_tokens
                         responses, seq_idxs = self.get_model_response_batched(
                             prompts, all_dones, **kwargs
@@ -452,6 +468,12 @@ class AgentExecutionEngine:
                         self.agents[seq_idxs[i]].update_from_model(response)
                         cur_state = self.agents[seq_idxs[i]].get_current_state()
                         actions.append(cur_state.action)
+
+                        prompt_response_pair = {
+                            "prompt": self.chat_template_parser.parse(prompts[seq_idxs[i]], add_generation_prompt=True, is_first_msg=True),
+                            "response": response,
+                        }
+                        all_steps[seq_idxs[i]].append(prompt_response_pair)
 
                     # environment step
                     try:
@@ -498,7 +520,8 @@ class AgentExecutionEngine:
 
                         all_response_token_lens[idx] += len(assistant_msg_tokens) + len(env_msg_tokens)
                         # Reached maximum number of tokens for the trajectory
-                        if all_response_token_lens[idx] >= self.max_response_length:
+                        # If max prompt is enforced at each round, no need to enforce all response token length.
+                        if not self.enforce_max_prompt_length and all_response_token_lens[idx] >= self.max_response_length:
                             # Truncation length
                             truncation_length = self.max_response_length - all_response_token_lens[idx]
                             # Truncate the response and masks
@@ -533,7 +556,7 @@ class AgentExecutionEngine:
                                 "green",
                             )
                             continue
-
+                        
                         # Insert env tokens to the results (only for non-finished trajectories)
                         all_response_tokens[idx].extend(env_msg_tokens)
                         all_response_masks[idx].extend(env_msg_masks)
@@ -573,6 +596,19 @@ class AgentExecutionEngine:
             return token_result
         elif mode == "Conversation":
             return [a.chat_completions for a in self.agents]
+        elif mode == "Step":
+            steps_result = []
+            for i, episode in enumerate(all_steps):
+                trajectory = trajectories[i]
+                environment_reward = trajectory.reward
+                training_reward =  self.agents[i].compute_training_reward(trajectory) if hasattr(self.agents[i], "compute_training_reward") else trajectory.steps[-1].reward
+                steps_result.append({
+                    "steps": episode,
+                    "training_reward": training_reward,
+                    "environment_reward": environment_reward,
+                    "idx": self.envs[i].idx
+                })
+            return steps_result
 
     def reset_agents_batched(self):
         """Reset all agents in parallel."""

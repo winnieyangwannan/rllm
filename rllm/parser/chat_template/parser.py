@@ -85,19 +85,22 @@ class QwenChatTemplateParser(ChatTemplateParser):
         super().__init__(tokenizer)
         self.bos_token = tokenizer.bos_token
         self.eos_token = tokenizer.eos_token
+        self.eot_token = '<|im_end|>\n'
         self.system_token = '<|im_start|>system\n'
         self.user_token = '<|im_start|>user\n'
         self.assistant_token = '<|im_start|>assistant\n'
-        if enable_thinking:
-            self.assistant_token += '<think>\n\n</think>\n\n'
-        self.eot_token = '<|im_end|>\n'
         self.generation_prompt = self.assistant_token
+        if enable_thinking:
+            self.generation_prompt += '<think>\n'
         
         self.tool_start_token = "\n<tool_call>\n"
         self.tool_end_token = "\n</tool_call>"
         
         self.tool_response_start_token = '<tool_response>\n'
         self.tool_response_end_token = '\n</tool_response>'
+        # enable_thinking only adds thinking for generation, not when transforming assistant messages
+        if enable_thinking:
+            print(f"Thinking is enabled, the required context will be larger") 
 
     def parse(self, messages, add_generation_prompt=False, is_first_msg=False):
         result = ''
