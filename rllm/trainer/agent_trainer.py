@@ -71,6 +71,7 @@ class AgentPPOTrainer(RayPPOTrainer):
                 max_steps=self.config.agent.max_steps,
                 max_response_length=self.config.data.max_response_length,
                 max_prompt_length=self.config.data.max_prompt_length,
+                n_parallel_agents=self.config.agent.n_parallel_agents,
                 agent_class=self.agent_class,
                 agent_args=self.config.agent.get("agent_args", {}),
                 env_class=self.env_class,

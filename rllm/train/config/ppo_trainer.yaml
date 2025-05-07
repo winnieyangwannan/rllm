@@ -245,3 +245,4 @@ agent:
   name: webagent
   max_steps: 20
   async_engine: True
+  n_parallel_agents: null

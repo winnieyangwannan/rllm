@@ -32,7 +32,7 @@ class AsyncAgentExecutionEngine(AgentExecutionEngine):
         agents=[],
         envs=[],
         model_path="",
-        n_parallel_agents=1,
+        n_parallel_agents=None,
         gamma=1.0,
         api_retries=3,
         retry_limit=1,
@@ -362,33 +362,70 @@ class AsyncAgentExecutionEngine(AgentExecutionEngine):
         raise Exception(f"Trajectory {idx} cannot complete. Please check the log message")
 
     async def trajectory_generator(
-        self, reset_seed=0, timing_raw={}, mode="Text", **kwargs
+        self,
+        reset_seed=0,
+        timing_raw={},
+        mode="Text",
+        **kwargs
     ):
         assert all(type(env).is_multithread_safe() for env in self.envs), "All environments must be multithread safe for async engine"
-        # Note: this function is not concurrecy safe due to the router.__enter__ and router.__exit__
+        if self.n_parallel_agents > len(self.envs) or self.n_parallel_agents > len(self.agents):
+            raise ValueError(
+                f"n_parallel_agents ({self.n_parallel_agents}) cannot exceed the number of available environments/agents."
+            )
+
         if self.engine_name == "verl":
             self.router.__enter__()
 
-        application_ids = [str(uuid.uuid4()) for _ in range(self.n_parallel_agents)]
+        semaphore = asyncio.Semaphore(self.n_parallel_agents)
+        # This queue will hold the indices of available agent/environment pairs
+        agent_env_index_queue = asyncio.Queue()
+        for i in range(len(self.envs)):
+            agent_env_index_queue.put_nowait(i)
 
-        tasks = [
-            self.run_agent_trajectory_with_retry(
-                i,
-                application_id=application_ids[i],
-                seed=reset_seed,
-                mode=mode,
-                **kwargs,
-            )
-            for i in range(self.n_parallel_agents)
+        async def launch_one_trajectory_task(trajectory_number_overall: int):
+            agent_env_idx = -1  # Placeholder for the acquired agent/env index
+            try:
+                await semaphore.acquire()
+                agent_env_idx = await agent_env_index_queue.get()
+                
+                application_id = str(uuid.uuid4())
+                # Each trajectory gets a unique seed if desired, or uses the global reset_seed.
+                # For now, using the global reset_seed for all, consistent with original behavior
+                # if it were called multiple times.
+                # If per-trajectory seed is needed: current_seed = reset_seed + trajectory_number_overall
+                
+                result = await self.run_agent_trajectory_with_retry(
+                    idx=agent_env_idx,
+                    application_id=application_id,
+                    seed=reset_seed, # or current_seed
+                    mode=mode,
+                    **kwargs,
+                )
+                return result
+            finally:
+                if agent_env_idx != -1: # Ensure index was acquired before trying to put it back
+                    await agent_env_index_queue.put(agent_env_idx)
+                semaphore.release()
+
+
+
+        # Create all N conceptual tasks. Their execution will be throttled by the semaphore
+        # and the availability of agent/env indices.
+        tasks_to_run = [
+            launch_one_trajectory_task(i) for i in range(len(self.envs))
         ]
 
-        for coro in asyncio.as_completed(tasks):
+        tasks_completed = 0
+        for coro in asyncio.as_completed(tasks_to_run):
             try:
                 result = await coro
+                tasks_completed += 1
+                colorful_print(f"Number of Trajectories {tasks_completed}/{len(self.envs)} completed", "cyan")
                 yield result
             except Exception as e:
-                traceback.print_exc()
                 raise e
+        
         if self.engine_name == "verl":
             self.router.__exit__()
 
@@ -422,7 +459,6 @@ class AsyncAgentExecutionEngine(AgentExecutionEngine):
                 # Get an available index
                 index = await index_queue.get()
                 try:
-                    self.envs[index].reset(task=task)
                     res = await self.run_agent_trajectory(index, task_id)
                     return task_id, res
                 finally:

@@ -65,5 +65,6 @@ python3 -m rllm.train.train_agent_ppo \
     env.name=swe \
     agent.name=sweagent \
     agent.max_steps=50 \
+    agent.n_parallel_agents=100 \
     agent.async_engine=True \
     trainer.total_epochs=1000
