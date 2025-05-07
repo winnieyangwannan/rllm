@@ -71,6 +71,7 @@ class PipelineAgentPPOTrainer(AgentPPOTrainer):
 
         self.agent_execution_engine = AsyncAgentExecutionEngine(
             rollout_engine=self.rollout_wg,
+            config=self.config,
             engine_name="verl",
             tokenizer=self.tokenizer,
             model_path=self.config.actor_rollout_ref.model.path,

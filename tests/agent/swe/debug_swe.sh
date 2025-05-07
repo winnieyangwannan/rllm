@@ -4,6 +4,7 @@ export VLLM_ATTENTION_BACKEND=FLASH_ATTN
 export PYTORCH_CUDA_ALLOC_CONF="expandable_segments:False"
 export VLLM_USE_V1=0
 export VLLM_ALLOW_LONG_MAX_MODEL_LEN=1
+export VLLM_ENGINE_ITERATION_TIMEOUT_S=100000000000
 # #/data/swe/R2E_Gym_V1.parquet \
 # Find the directory where rllm package is located
 RLLM_DIR=$(python3 -c "import rllm; import os; print(os.path.dirname(os.path.dirname(rllm.__file__)))")
@@ -12,10 +13,12 @@ python3 -m rllm.train.train_agent_ppo \
     algorithm.adv_estimator=loop \
     data.train_files=${RLLM_DIR}/data/swe/SWE_Bench_Verified.parquet \
     data.val_files=${RLLM_DIR}/data/swe/SWE_Bench_Verified.parquet \
-    data.train_batch_size=64 \
+    data.train_batch_size=128 \
     data.val_batch_size=512 \
     data.max_prompt_length=8192 \
     data.max_response_length=32768 \
+    data.filter_overlong_prompts=True \
+    data.filter_overlong_prompts_workers=32 \
     actor_rollout_ref.model.path=R2E-Gym/R2EGym-14B-Agent \
     actor_rollout_ref.hybrid_engine=True \
     actor_rollout_ref.actor.optim.lr=1e-6 \
@@ -33,14 +36,14 @@ python3 -m rllm.train.train_agent_ppo \
     actor_rollout_ref.model.enable_gradient_checkpointing=True \
     actor_rollout_ref.actor.fsdp_config.param_offload=True \
     actor_rollout_ref.actor.fsdp_config.optimizer_offload=True \
-    actor_rollout_ref.rollout.tensor_model_parallel_size=2 \
+    actor_rollout_ref.rollout.tensor_model_parallel_size=1 \
     actor_rollout_ref.rollout.name=vllm \
     actor_rollout_ref.rollout.async_engine=True \
-    actor_rollout_ref.rollout.enforce_eager=False \
+    actor_rollout_ref.rollout.enforce_eager=True \
     actor_rollout_ref.rollout.enable_log_prob=False \
     actor_rollout_ref.rollout.temperature=0.6 \
     actor_rollout_ref.rollout.gpu_memory_utilization=0.65 \
-    actor_rollout_ref.rollout.n=8 \
+    actor_rollout_ref.rollout.n=4 \
     actor_rollout_ref.rollout.val_kwargs.n=1 \
     actor_rollout_ref.rollout.val_kwargs.temperature=0 \
     actor_rollout_ref.ref.fsdp_config.param_offload=True \
@@ -63,5 +66,5 @@ python3 -m rllm.train.train_agent_ppo \
     env.name=swe \
     agent.name=sweagent \
     agent.max_steps=40 \
-    agent.async_engine=False \
+    agent.async_engine=True \
     trainer.total_epochs=100

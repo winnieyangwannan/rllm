@@ -28,6 +28,7 @@ class AsyncAgentExecutionEngine(AgentExecutionEngine):
         rollout_engine,
         engine_name,
         tokenizer,
+        config,
         agents=[],
         envs=[],
         model_path="",
@@ -47,6 +48,7 @@ class AsyncAgentExecutionEngine(AgentExecutionEngine):
         enforce_max_prompt_length=False, # If enabled, applies max_prompt check per step
         **kwargs,
     ):
+        self.config = config
         self.rollout_engine = rollout_engine
         self.tokenizer = tokenizer
         self.engine_name = engine_name
@@ -87,7 +89,7 @@ class AsyncAgentExecutionEngine(AgentExecutionEngine):
             self.client = AsyncOpenAI(**self.rollout_engine_args) 
         elif self.engine_name == "verl":
             # All generation is done via scheduler. Currently only works for verl
-            self.router = Router(rollout_engine=rollout_engine)
+            self.router = Router(rollout_engine=rollout_engine, tensor_parallel_size=self.config.actor_rollout_ref.rollout.get('tensor_model_parallel_size', 1))
 
         self.chat_template_parser = ChatTemplateParser.get_parser(self.tokenizer)
         # Create a thread pool executor for environment interactions (i.e. step, reset, close)
@@ -213,7 +215,7 @@ class AsyncAgentExecutionEngine(AgentExecutionEngine):
         episode_steps = []
 
         # Reset environment with the task using the executor
-        observation, info = await loop.run_in_executor(self.executor, env.reset)
+        observation, info = await asyncio.to_thread(env.reset)
         info['max_steps'] = self.max_steps
 
         # Reset agent
@@ -240,6 +242,7 @@ class AsyncAgentExecutionEngine(AgentExecutionEngine):
             )
 
         for step_idx in range(self.max_steps):
+            print(f"Trajectory {idx}, Step {step_idx}/{self.max_steps}")
             # Get action from agent
             chat_completions_messages = agent.chat_completions.copy()
             # Max remaining tokens left for the response
@@ -269,7 +272,7 @@ class AsyncAgentExecutionEngine(AgentExecutionEngine):
             cur_state = agent.get_current_state()
             action = cur_state.action
             # Take step in environment using the executor
-            next_observation, reward, done, info = await loop.run_in_executor(self.executor, env.step, action)
+            next_observation, reward, done, info = await asyncio.to_thread(env.step, action)
             info['max_steps'] = self.max_steps
             # Update agent internal state.
             agent.update_from_env(
@@ -344,7 +347,7 @@ class AsyncAgentExecutionEngine(AgentExecutionEngine):
             )
 
         # Closing environment using the executor.
-        await loop.run_in_executor(self.executor, env.close)
+        await asyncio.to_thread(env.close)
         trajectory = agent.trajectory
         
         # Aggregate final trajectory statistics

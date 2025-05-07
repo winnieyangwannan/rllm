@@ -37,7 +37,8 @@ class SWEEnv(BaseEnv):
         dataset: Optional[Dataset] = None,
         idx: Optional[int] = None,
         timeout: int = 90,
-        delete_image: bool = False
+        backend: str = "kubernetes",
+        delete_image: bool = False,
     ):
         """Initialize the SWE environment.
 
@@ -64,6 +65,7 @@ class SWEEnv(BaseEnv):
         self.timeout = timeout
         self.total_steps = 0
         self.delete_image = delete_image
+        self.backend = backend
         self.env = None
 
     def reset(self) -> Tuple[str, Dict]:
@@ -72,15 +74,17 @@ class SWEEnv(BaseEnv):
         Returns:
             Tuple containing task instruction and additional info including ground truth patch.
         """
+        first_time = not self.env
         # Reset environment and docker runtime.
-        if not self.env:
+        if first_time:
             # Initialize environment if not created yet.
             env_args = EnvArgs(ds=self.entry)
-            self.env = RepoEnv(env_args)
-            
+            self.env = RepoEnv(env_args, backend=self.backend)
+
         self.env.reset()
-        self.env.runtime.reset()
-        self.env.runtime.setup_env()
+        if not first_time:
+            self.env.runtime.reset()
+            self.env.runtime.setup_env()
         self.env.add_commands(R2EGYM_COMMAND_FILES)
         self.total_steps = 0
 
@@ -152,7 +156,7 @@ class SWEEnv(BaseEnv):
 if __name__ == "__main__":
     dataset = load_dataset("R2E-Gym/SWE-Bench-Lite", split="test")
     
-    env = SWEEnv(dataset=dataset, idx=0)
+    env = SWEEnv(dataset=dataset, idx=1, backend="kubernetes")
     init_obs, _ = env.reset()
     print(init_obs)
     env.close()

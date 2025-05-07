@@ -71,6 +71,7 @@ class AgentPPOTrainer(RayPPOTrainer):
         if self.config.agent.async_engine:
             self.agent_execution_engine = AsyncAgentExecutionEngine(
                 rollout_engine=self.agent_rollout_wg,
+                config=self.config,
                 engine_name="verl",
                 tokenizer=self.tokenizer,
                 model_path=self.config.actor_rollout_ref.model.path,
@@ -381,7 +382,6 @@ class AgentPPOTrainer(RayPPOTrainer):
                 "validate": True,
                 "agent_rollout": True
             }
-
             self.init_envs_and_agents(test_batch)
 
             if not self.config.agent.step_advantage_broadcast:
