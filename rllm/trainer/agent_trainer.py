@@ -89,7 +89,7 @@ class AgentPPOTrainer(RayPPOTrainer):
                 rollout_engine=agent_rollout_wg,
                 engine_name="verl",
                 tokenizer=self.tokenizer,
-                config=self.config
+                config=self.config,
                 model_path=self.config.actor_rollout_ref.model.path,
                 max_steps=self.config.agent.max_steps,
                 max_response_length=self.config.data.max_response_length,

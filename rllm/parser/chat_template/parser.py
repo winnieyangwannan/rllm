@@ -8,12 +8,13 @@ class ChatTemplateParser:
         return self.tokenizer.apply_chat_template(messages, tokenize=False, add_generation_prompt=add_generation_prompt)
 
     @classmethod
-    def get_parser(cls, tokenizer):
+    def get_parser(cls, tokenizer, enable_thinking=False):
         """Factory method to get the appropriate parser based on a string identifier.
         
         Args:
             parser_type (str): String identifier for the parser type
             tokenizer: The tokenizer to use with the parser
+            enable_thinking: Whether generation prompt will enable thinking.
             
         Returns:
             ChatTemplateParser: An instance of the requested parser
@@ -29,7 +30,7 @@ class ChatTemplateParser:
                 print(f"Using DeepseekQwenChatTemplateParser for {tokenizer.name_or_path}")
                 return parser
             elif "qwen" in model_name:
-                enable_thinking = '3' in model_name
+                enable_thinking = enable_thinking
                 parser = QwenChatTemplateParser(tokenizer, enable_thinking=enable_thinking)
                 print(f"Using QwenChatTemplateParser for {tokenizer.name_or_path}")
                 return parser

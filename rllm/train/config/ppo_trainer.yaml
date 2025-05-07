@@ -246,3 +246,4 @@ agent:
   max_steps: 20
   async_engine: True
   step_advantage_broadcast: False
+  enable_thinking: False # whether to enable thinking in generation, works for supported parser and model

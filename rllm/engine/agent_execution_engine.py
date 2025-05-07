@@ -95,7 +95,7 @@ class AgentExecutionEngine:
             from openai import OpenAI 
             self.client = OpenAI(**self.rollout_engine_args)
 
-        self.chat_template_parser = ChatTemplateParser.get_parser(self.tokenizer)
+        self.chat_template_parser = ChatTemplateParser.get_parser(self.tokenizer, enable_thinking=self.config.agent.enable_thinking)
     
     def get_model_response(self, prompts, seq_idxs, **kwargs):
         """
@@ -208,7 +208,7 @@ class AgentExecutionEngine:
 
         # TODO: check what should be the behavior, truncate or error or directly return?
         if input_ids.shape[-1] >= self.max_prompt_length and self.enforce_max_prompt_length:
-            raise Exception(f"Prompt length {input_ids.shape[-1]} exceeds limit {self.max_prompt_length}")
+            raise Exception(f"Error: prompt length {input_ids.shape[-1]} exceeds limit {self.max_prompt_length}")
         
         # pad to max sizes
         input_ids = pad_sequence_to_length(

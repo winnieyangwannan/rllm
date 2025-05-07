@@ -91,7 +91,7 @@ class AsyncAgentExecutionEngine(AgentExecutionEngine):
             # All generation is done via scheduler. Currently only works for verl
             self.router = Router(rollout_engine=rollout_engine, tensor_parallel_size=self.config.actor_rollout_ref.rollout.get('tensor_model_parallel_size', 1))
 
-        self.chat_template_parser = ChatTemplateParser.get_parser(self.tokenizer)
+        self.chat_template_parser = ChatTemplateParser.get_parser(self.tokenizer, enable_thinking=self.config.agent.enable_thinking)
         # Create a thread pool executor for environment interactions (i.e. step, reset, close)
         self.executor = concurrent.futures.ThreadPoolExecutor(max_workers=max_workers)
 

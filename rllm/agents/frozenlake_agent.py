@@ -134,7 +134,7 @@ Now it is your turn, please show your thinking process and put the final action 
         self.messages: List[Dict[str, str]] = []
         self.step = 0
         self.accumulate_thinking = False # controlls whether to accumulate the thinking portion of the response
-        self.multistep_prompt = False
+        self.multistep_prompt = True
         self.reset()
 
     def update_from_env(self, observation: Any, reward: float, done: bool, info: Dict, **kwargs):
