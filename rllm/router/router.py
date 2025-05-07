@@ -44,8 +44,6 @@ class Router:
 
     def __exit__(self): # Corrected signature
         self.rollout_engine.generate_async_sharding_manager_exit()
-        # Shutdown the dedicated executor
-        self._ray_get_executor.shutdown(wait=True)
 
     async def _get_result_verl_async(self, batch, application_id, **kwargs):
         """
