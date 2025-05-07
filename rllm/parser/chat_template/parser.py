@@ -28,7 +28,7 @@ class ChatTemplateParser:
                 parser = DeepseekQwenChatTemplateParser(tokenizer)
                 print(f"Using DeepseekQwenChatTemplateParser for {tokenizer.name_or_path}")
                 return parser
-            elif "qwen" in model_name:
+            elif "qwen" in model_name or 'r2egym' in model_name:
                 enable_thinking = '3' in model_name
                 parser = QwenChatTemplateParser(tokenizer, enable_thinking=enable_thinking)
                 print(f"Using QwenChatTemplateParser for {tokenizer.name_or_path}")

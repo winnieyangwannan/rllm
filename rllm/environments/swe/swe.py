@@ -36,7 +36,8 @@ class SWEEnv(BaseEnv):
         entry: Optional[Dict] = None,
         dataset: Optional[Dataset] = None,
         idx: Optional[int] = None,
-        timeout: int = 90,
+        step_timeout: int = 90,
+        reward_timeout: int = 300,
         backend: str = "kubernetes",
         delete_image: bool = False,
     ):
@@ -62,7 +63,8 @@ class SWEEnv(BaseEnv):
             assert 0 <= idx < len(self.dataset), "Selected index out of range"
             self.idx = idx
             self.entry = self.dataset[idx]
-        self.timeout = timeout
+        self.step_timeout = step_timeout
+        self.reward_timeout = reward_timeout
         self.total_steps = 0
         self.delete_image = delete_image
         self.backend = backend
@@ -79,7 +81,10 @@ class SWEEnv(BaseEnv):
         if first_time:
             # Initialize environment if not created yet.
             env_args = EnvArgs(ds=self.entry)
-            self.env = RepoEnv(env_args, backend=self.backend)
+            self.env = RepoEnv(env_args,
+                               backend=self.backend,
+                               step_timeout=self.step_timeout,
+                               reward_timeout=self.reward_timeout)
 
         self.env.reset()
         if not first_time:
@@ -96,15 +101,6 @@ class SWEEnv(BaseEnv):
         return self.env.get_task_instruction(), {
             'gt_patch': gt_patch,
         }
-
-    def compute_reward(self) -> float:
-        """Compute the reward for the current state.
-        
-        Returns:
-            Float value representing the reward.
-        """
-        reward, _ = self.env.runtime._calculate_reward(get_test_output=True)
-        return reward
         
     def step(self, action: Union[str, Action]) -> Tuple[str, float, bool, bool, Dict]:
         """Take a step in the environment.
@@ -124,9 +120,9 @@ class SWEEnv(BaseEnv):
             return "", 0, False, {}
 
         # RepoEnv always returns 0 reward, must be evaluated by DockerRuntime.
-        obs, reward, done, info = self.env.step(action_obj, timeout=self.timeout)
+        obs, reward, done, info = self.env.step(action_obj)
         if done:
-            reward = self.compute_reward()
+            reward = self.env.compute_reward()
 
         self.total_steps += 1
         return str(obs), reward, done, info
