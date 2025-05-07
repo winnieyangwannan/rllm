@@ -1,9 +1,9 @@
 import asyncio
 import uuid
-import concurrent.futures
 
 import openai
 import torch
+import traceback
 
 from rllm.agents.agent import Step, Trajectory
 from rllm.engine.agent_execution_engine import AgentExecutionEngine
@@ -311,6 +311,13 @@ class AsyncAgentExecutionEngine(AgentExecutionEngine):
             if step_idx == self.max_steps - 1:
                 termination_reason = "MAX_STEPS"
 
+        if hasattr(env, 'compute_final_reward'):
+            cur_step = agent.get_current_state()
+            reward = await asyncio.to_thread(env.compute_final_reward)
+            cur_step.reward = reward
+        # Closing environment using the executor.
+        await asyncio.to_thread(env.close)
+        
         if termination_reason:
             if reward > 0:
                 color = "green"
@@ -320,11 +327,7 @@ class AsyncAgentExecutionEngine(AgentExecutionEngine):
                 f"Trajectory {idx} completed due to: {termination_reason}. Reward is {reward}. \n",
                 color,
             )
-
-        # Closing environment using the executor.
-        await asyncio.to_thread(env.close)
-        trajectory = agent.trajectory
-        
+        trajectory = agent.trajectory 
         # Aggregate final trajectory statistics
         compute_trajectory_reward(trajectory)
         compute_mc_return(trajectory, gamma=self.gamma)
@@ -352,9 +355,10 @@ class AsyncAgentExecutionEngine(AgentExecutionEngine):
                 return await self.run_agent_trajectory(
                     idx, application_id=application_id, seed=seed, mode=mode, **kwargs
                 )
-            except Exception as e:
-                print(e)
+            except Exception:
+                traceback.print_exc()
                 continue
+        traceback.print_exc()
         raise Exception(f"Trajectory {idx} cannot complete. Please check the log message")
 
     async def trajectory_generator(
@@ -383,8 +387,8 @@ class AsyncAgentExecutionEngine(AgentExecutionEngine):
                 result = await coro
                 yield result
             except Exception as e:
+                traceback.print_exc()
                 raise e
-        
         if self.engine_name == "verl":
             self.router.__exit__()
 

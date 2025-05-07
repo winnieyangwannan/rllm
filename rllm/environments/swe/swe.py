@@ -40,6 +40,7 @@ class SWEEnv(BaseEnv):
         reward_timeout: int = 300,
         backend: str = "kubernetes",
         delete_image: bool = False,
+        verbose: bool = True,
     ):
         """Initialize the SWE environment.
 
@@ -69,6 +70,7 @@ class SWEEnv(BaseEnv):
         self.delete_image = delete_image
         self.backend = backend
         self.env = None
+        self.verbose = verbose
 
     def reset(self) -> Tuple[str, Dict]:
         """Reset the environment to initial state.
@@ -84,7 +86,8 @@ class SWEEnv(BaseEnv):
             self.env = RepoEnv(env_args,
                                backend=self.backend,
                                step_timeout=self.step_timeout,
-                               reward_timeout=self.reward_timeout)
+                               reward_timeout=self.reward_timeout,
+                               verbose=self.verbose)
 
         self.env.reset()
         if not first_time:
@@ -101,6 +104,9 @@ class SWEEnv(BaseEnv):
         return self.env.get_task_instruction(), {
             'gt_patch': gt_patch,
         }
+    
+    def compute_final_reward(self):
+        return self.env.compute_reward()
         
     def step(self, action: Union[str, Action]) -> Tuple[str, float, bool, bool, Dict]:
         """Take a step in the environment.
@@ -121,8 +127,8 @@ class SWEEnv(BaseEnv):
 
         # RepoEnv always returns 0 reward, must be evaluated by DockerRuntime.
         obs, reward, done, info = self.env.step(action_obj)
-        if done:
-            reward = self.env.compute_reward()
+        # if done:
+        #     reward = self.env.compute_reward()
 
         self.total_steps += 1
         return str(obs), reward, done, info
