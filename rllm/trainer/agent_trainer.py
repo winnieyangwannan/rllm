@@ -64,13 +64,13 @@ class AgentPPOTrainer(RayPPOTrainer):
         # Initialize additional agent class 
         # Number of agents is set to be 0 initially
         if self.hybrid_engine: 
-            self.agent_rollout_wg = self.actor_rollout_wg
+            agent_rollout_wg = self.actor_rollout_wg
         else:
-            self.agent_rollout_wg = self.rollout_wg
+            agent_rollout_wg = self.rollout_wg
         
         if self.config.agent.async_engine:
             self.agent_execution_engine = AsyncAgentExecutionEngine(
-                rollout_engine=self.agent_rollout_wg,
+                rollout_engine=agent_rollout_wg,
                 config=self.config,
                 engine_name="verl",
                 tokenizer=self.tokenizer,
@@ -86,9 +86,10 @@ class AgentPPOTrainer(RayPPOTrainer):
             )
         else:
             self.agent_execution_engine = AgentExecutionEngine(
-                rollout_engine=self.agent_rollout_wg,
+                rollout_engine=agent_rollout_wg,
                 engine_name="verl",
                 tokenizer=self.tokenizer,
+                config=self.config
                 model_path=self.config.actor_rollout_ref.model.path,
                 max_steps=self.config.agent.max_steps,
                 max_response_length=self.config.data.max_response_length,
