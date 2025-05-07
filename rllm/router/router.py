@@ -19,7 +19,7 @@ class Router:
         self._lock = asyncio.Lock()
         # Initialize a dedicated ThreadPoolExecutor for ray.get calls
         self._ray_get_executor = ThreadPoolExecutor(
-            max_workers=1,
+            max_workers=1024,
             thread_name_prefix='RayGetExecutor'
         )
 

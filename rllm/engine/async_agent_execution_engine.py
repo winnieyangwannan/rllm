@@ -87,7 +87,6 @@ class AsyncAgentExecutionEngine(AgentExecutionEngine):
         elif self.engine_name == "verl":
             # All generation is done via scheduler. Currently only works for verl
             self.router = Router(rollout_engine=rollout_engine, tensor_parallel_size=self.config.actor_rollout_ref.rollout.get('tensor_model_parallel_size', 1))
-
         self.chat_template_parser = ChatTemplateParser.get_parser(self.tokenizer)
 
     async def get_model_response(self, prompt, application_id, **kwargs):
@@ -195,7 +194,6 @@ class AsyncAgentExecutionEngine(AgentExecutionEngine):
         """Run a single agent's trajectory asynchronously"""
         agent = self.agents[idx]
         env = self.envs[idx]
-        loop = asyncio.get_running_loop()  # Get the current event loop
 
         # Initialize trajectory for this task.
         trajectory = []
