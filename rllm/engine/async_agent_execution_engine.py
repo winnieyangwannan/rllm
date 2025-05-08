@@ -384,15 +384,15 @@ class AsyncAgentExecutionEngine(AgentExecutionEngine):
         **kwargs
     ):
         assert all(type(env).is_multithread_safe() for env in self.envs), "All environments must be multithread safe for async engine"
-        if self.n_parallel_agents > len(self.envs) or self.n_parallel_agents > len(self.agents):
-            raise ValueError(
-                f"n_parallel_agents ({self.n_parallel_agents}) cannot exceed the number of available environments/agents."
-            )
+        
+        max_concurrency = self.n_parallel_agents
+        if self.n_parallel_agents > len(self.envs):
+            max_concurrency = len(self.envs)
 
         if self.engine_name == "verl":
             self.router.__enter__()
 
-        semaphore = asyncio.Semaphore(self.n_parallel_agents)
+        semaphore = asyncio.Semaphore(max_concurrency)
         # This queue will hold the indices of available agent/environment pairs
         agent_env_index_queue = asyncio.Queue()
         for i in range(len(self.envs)):
@@ -422,9 +422,6 @@ class AsyncAgentExecutionEngine(AgentExecutionEngine):
                 if agent_env_idx != -1: # Ensure index was acquired before trying to put it back
                     await agent_env_index_queue.put(agent_env_idx)
                 semaphore.release()
-
-
-
         # Create all N conceptual tasks. Their execution will be throttled by the semaphore
         # and the availability of agent/env indices.
         tasks_to_run = [

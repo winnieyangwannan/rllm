@@ -598,11 +598,11 @@ class AgentExecutionEngine:
             f"Number of agents must equal to number of environments but received, "
             f"{len(agents)} and {len(envs)}"
         )
-        if not self.n_parallel_agents:
-            self.n_parallel_agents = len(envs)
         self.envs = envs
         # For keeping track of the environment index in the batch.
         for idx, env in enumerate(envs):
             env.idx = idx
         self.agents = agents
+        if not self.n_parallel_agents:
+            self.n_parallel_agents = len(envs)
         
