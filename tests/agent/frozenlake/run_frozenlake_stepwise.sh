@@ -15,7 +15,7 @@ python3 -m rllm.train.train_agent_ppo \
     data.val_batch_size=128 \
     data.max_prompt_length=12288 \
     data.max_response_length=2048 \
-    actor_rollout_ref.model.path=Qwen/Qwen3-1.7B \
+    actor_rollout_ref.model.path=Qwen/Qwen3-4B \
     actor_rollout_ref.hybrid_engine=True \
     actor_rollout_ref.actor.optim.lr=1e-6 \
     actor_rollout_ref.model.use_remove_padding=True \
