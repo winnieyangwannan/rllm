@@ -76,6 +76,7 @@ class AgentPPOTrainer(RayPPOTrainer):
                 agent_args=self.config.agent.get("agent_args", {}),
                 env_class=self.env_class,
                 env_args=self.config.env.get("env_args", {}),
+                trajectory_timeout=self.config.agent.trajectory_timeout,
             )
         else:
             self.agent_execution_engine = AgentExecutionEngine(

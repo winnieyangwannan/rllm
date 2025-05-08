@@ -1,5 +1,6 @@
 import asyncio
 import uuid
+import time
 
 import openai
 import torch
@@ -33,6 +34,7 @@ class AsyncAgentExecutionEngine(AgentExecutionEngine):
         envs=[],
         model_path="",
         n_parallel_agents=None,
+        trajectory_timeout=None,
         gamma=1.0,
         api_retries=3,
         retry_limit=1,
@@ -68,13 +70,11 @@ class AsyncAgentExecutionEngine(AgentExecutionEngine):
         self.env_class = env_class
         self.env_args = env_args
         self.envs = envs
+        
+        self.trajectory_timeout = trajectory_timeout
+        if not trajectory_timeout:
+            self.trajectory_timeout = int(1e9)
 
-        # if agent_class is not None and env_class is not None:
-        #     self.agents = [agent_class(**agent_args) for _ in range(n_parallel_agents)]
-        #     self.envs = [env_class(**env_args) for _ in range(n_parallel_agents)]
-        # else:
-        #     self.agents = agents
-        #     self.envs = envs
 
         assert all(type(env).is_multithread_safe() for env in self.envs), "All environments must be multithread safe for async engine"
         # rollout engine args
@@ -194,6 +194,7 @@ class AsyncAgentExecutionEngine(AgentExecutionEngine):
         """Run a single agent's trajectory asynchronously"""
         agent = self.agents[idx]
         env = self.envs[idx]
+        
 
         # Initialize trajectory for this task.
         trajectory = []
@@ -203,6 +204,7 @@ class AsyncAgentExecutionEngine(AgentExecutionEngine):
         response_token_len = 0
         response_tokens = []
         response_masks = []
+        total_time = 0
 
         # Reset environment with the task using the executor
         observation, info = await asyncio.to_thread(env.reset)
@@ -237,17 +239,22 @@ class AsyncAgentExecutionEngine(AgentExecutionEngine):
             chat_completions_messages = agent.chat_completions
             # Max remaining tokens left for the response
             kwargs['max_tokens'] = self.max_response_length - response_token_len
+            
+            start_time = time.time()
             response = await self.get_model_response(
                 chat_completions_messages,
                 application_id,
                 **kwargs
             )
+            total_time += time.time() - start_time
             agent.update_from_model(response)
             # Fetch action from agent's internal state.
             cur_state = agent.get_current_state()
             action = cur_state.action
             # Take step in environment using the executor
+            start_time = time.time()
             next_observation, reward, done, info = await asyncio.to_thread(env.step, action)
+            total_time += time.time() - start_time
             info['max_steps'] = self.max_steps
             # Update agent internal state.
             agent.update_from_env(
@@ -288,7 +295,7 @@ class AsyncAgentExecutionEngine(AgentExecutionEngine):
                 response_masks.extend(truncated_response_masks)
                 
                 cur_step = agent.get_current_state()
-                if response_token_len - len(env_msg_tokens) > self.max_response_length:
+                if response_token_len - len(env_msg_tokens) > self.max_response_length and not hasattr(env, 'compute_final_reward'):
                     cur_step.reward = 0.0
                 cur_step.done = True
                 termination_reason = "TRUNCATION"
@@ -299,6 +306,14 @@ class AsyncAgentExecutionEngine(AgentExecutionEngine):
             response_tokens.extend(assistant_msg_tokens)
             response_masks.extend(assistant_msg_masks)
             observation = next_observation
+
+            if total_time >= self.trajectory_timeout:
+                termination_reason = "TIMEOUT"
+                cur_step = agent.get_current_state()
+                done = True
+                cur_step.done = done
+                break
+
 
             # Check if episode is done
             if done:
