@@ -54,6 +54,9 @@ class WebAgent(BaseAgent):
         self.step = 0
         self.reset()
 
+        self.accumulate_thinking = False
+        self.cot_prompt = False
+
     def update_from_env(self, observation: Any, reward: float, done: bool, info: Dict, **kwargs):
         """
         Updates the agent's internal state after an environment step.
@@ -108,6 +111,11 @@ class WebAgent(BaseAgent):
                 logger.error(f"Failed to extract content from response: {response}. Error: {e}")
                 content = str(response)
 
+        if not self.accumulate_thinking:
+            _, sep, after = content.partition("</think>")
+            if sep:
+                content = after
+
         assert self._trajectory.steps, "Trajectory should not be empty when update_from_model is called."
 
         thought, action_str = self._parse_model_response(content)
@@ -150,7 +158,7 @@ class WebAgent(BaseAgent):
         # Add goal information
         system_msgs.append({
             "type": "text",
-            "text": "# Goal (Below is the goal you want to accomplish)\n"
+            "text": "\n # Goal (Below is the goal you want to accomplish)\n"
         })
         system_msgs.extend(obs["goal_object"])  
         return system_msgs
@@ -262,7 +270,8 @@ class WebAgent(BaseAgent):
 
 
     def _get_action_space_description(self):
-        return f"""\
+        if self.cot_prompt:
+            return f"""\
 # Action Space (This is the list of valid actions you are allowed to output after your chain-of-thought reasoning, YOU MUST OUTPUT EXACTLY IN THIS FORMAT FOR ACTION TO BE VALID)
 {self.action_set.describe(with_long_description=False, with_examples=False)}
 Here are examples of actions with chain-of-thought reasoning:
@@ -270,6 +279,11 @@ Thought: I now need to click on the Submit button to send the form. I will use t
 Action: ```click("12")```
 Thought: I found the information requested by the user, I will send it to the chat.
 Action: ```send_msg_to_user("The price for a 15\\" laptop is 1499 USD.")```
+"""
+        else:
+            return f"""\
+# Action Space (This is the list of valid actions you are allowed to output, YOU MUST OUTPUT EXACTLY IN THIS FORMAT FOR ACTION TO BE VALID)
+{self.action_set.describe(with_long_description=False, with_examples=False)}
 """
 
     def _format_msgs_as_str(self, msgs):
