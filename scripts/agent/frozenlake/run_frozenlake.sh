@@ -2,7 +2,7 @@ set -x
 
 export VLLM_ATTENTION_BACKEND=FLASH_ATTN
 export PYTORCH_CUDA_ALLOC_CONF="expandable_segments:False"
-export VLLM_USE_V1=0
+export VLLM_USE_V1=1
 
 # Find the directory where rllm package is located
 RLLM_DIR=$(python3 -c "import rllm; import os; print(os.path.dirname(os.path.dirname(rllm.__file__)))")
@@ -33,11 +33,13 @@ python3 -m rllm.train.train_agent_ppo \
     actor_rollout_ref.actor.fsdp_config.optimizer_offload=True \
     actor_rollout_ref.rollout.tensor_model_parallel_size=1 \
     actor_rollout_ref.rollout.name=vllm \
-    actor_rollout_ref.rollout.async_engine=True \
+    actor_rollout_ref.rollout.async_engine=False \
+    actor_rollout_ref.rollout.mode="async" \
+    actor_rollout_ref.rollout.chat_scheduler=examples.schedulers.completions_scheduler.CompletionsScheduler \
     actor_rollout_ref.rollout.enforce_eager=False \
     actor_rollout_ref.rollout.enable_log_prob=False \
     actor_rollout_ref.rollout.temperature=0.7 \
-    actor_rollout_ref.rollout.gpu_memory_utilization=0.65 \
+    actor_rollout_ref.rollout.gpu_memory_utilization=0.85 \
     actor_rollout_ref.rollout.n=8 \
     actor_rollout_ref.rollout.val_kwargs.n=1 \
     actor_rollout_ref.rollout.val_kwargs.temperature=0.7 \
