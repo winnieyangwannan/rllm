@@ -7,14 +7,12 @@ import ray
 import hydra
 
 # Local application imports
-from verl.single_controller.ray import RayWorkerGroup
-from verl.trainer.ppo.ray_trainer import ResourcePoolManager, Role
-from verl.workers.fsdp_workers import ActorRolloutRefWorker, CriticWorker
-from verl.workers.reward_manager import NaiveRewardManager
 
 from rllm.trainer.agent_trainer import AgentPPOTrainer
 
 from rllm.train.env_agent_mappings import ENV_CLASS_MAPPING, AGENT_CLASS_MAPPING, setup_environment
+
+from verl.trainer.ppo.reward import load_reward_manager
 
 
 @hydra.main(config_path='config', config_name='ppo_trainer', version_base=None)
@@ -43,31 +41,47 @@ def main_task(config, compute_score=None):
     local_path = copy_local_path_from_hdfs(config.actor_rollout_ref.model.path)
 
     # instantiate tokenizer
-    from verl.utils import hf_tokenizer
-    tokenizer = hf_tokenizer(local_path)
+    from verl.utils import hf_processor, hf_tokenizer
 
-    global_pool_id = 'global_pool'
+    trust_remote_code = config.data.get("trust_remote_code", False)
+    tokenizer = hf_tokenizer(local_path, trust_remote_code=trust_remote_code)
+    #processor = hf_processor(local_path, use_fast=True)  # used for multimodal LLM, could be none
+
+
+    if config.actor_rollout_ref.actor.strategy in ["fsdp", "fsdp2"]:
+        assert config.critic.strategy in ["fsdp", "fsdp2"]
+        from verl.single_controller.ray import RayWorkerGroup
+        from verl.workers.fsdp_workers import ActorRolloutRefWorker, AsyncActorRolloutRefWorker, CriticWorker
+
+        actor_rollout_cls = AsyncActorRolloutRefWorker if config.actor_rollout_ref.rollout.mode == "async" else ActorRolloutRefWorker
+        ray_worker_group_cls = RayWorkerGroup
+    else:
+        raise NotImplementedError
+
+    from verl.trainer.ppo.ray_trainer import ResourcePoolManager, Role
+
+    role_worker_mapping = {
+        Role.ActorRollout: ray.remote(actor_rollout_cls),
+        Role.Critic: ray.remote(CriticWorker),
+    }
+
+    global_pool_id = "global_pool"
     resource_pool_spec = {
         global_pool_id: [config.trainer.n_gpus_per_node] * config.trainer.nnodes,
     }
     mapping = {
         Role.ActorRollout: global_pool_id,
         Role.Critic: global_pool_id,
-        Role.RefPolicy: global_pool_id,
     }
+
+    if config.algorithm.use_kl_in_reward or config.actor_rollout_ref.actor.use_kl_loss:
+        role_worker_mapping[Role.RefPolicy] = ray.remote(ActorRolloutRefWorker)
+        mapping[Role.RefPolicy] = global_pool_id
+
+    reward_fn = load_reward_manager(config, tokenizer, num_examine=0, **config.reward_model.get("reward_kwargs", {}))
+    val_reward_fn = load_reward_manager(config, tokenizer, num_examine=1)
     resource_pool_manager = ResourcePoolManager(resource_pool_spec=resource_pool_spec, mapping=mapping)
-
-    reward_fn = NaiveRewardManager(tokenizer=tokenizer, num_examine=0, compute_score=compute_score)
-    val_reward_fn = NaiveRewardManager(tokenizer=tokenizer, num_examine=1, compute_score=compute_score)
-
-    role_worker_mapping = {
-        Role.ActorRollout: ray.remote(ActorRolloutRefWorker) if not config.agent.async_engine else ray.remote(max_concurrency=512)(ActorRolloutRefWorker),
-        Role.Critic: ray.remote(CriticWorker),
-        Role.RefPolicy: ray.remote(ActorRolloutRefWorker),
-        #Role.Actor: ray.remote(ActorRolloutRefWorker),
-        #Role.Rollout: ray.remote(ActorRolloutRefWorker) if not config.agent.async_engine else ray.remote(max_concurrency=512)(ActorRolloutRefWorker),
-    }
-    
+        
     # Below are agent specific initialization
     env_class = ENV_CLASS_MAPPING[config.env.name]
     agent_class = AGENT_CLASS_MAPPING[config.agent.name]
@@ -77,7 +91,7 @@ def main_task(config, compute_score=None):
                             tokenizer=tokenizer,
                             role_worker_mapping=role_worker_mapping,
                             resource_pool_manager=resource_pool_manager,
-                            ray_worker_group_cls=RayWorkerGroup,
+                            ray_worker_group_cls=ray_worker_group_cls,
                             reward_fn=reward_fn,
                             val_reward_fn=val_reward_fn,
                             env_class=env_class,

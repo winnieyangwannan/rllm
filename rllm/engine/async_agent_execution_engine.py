@@ -115,26 +115,16 @@ class AsyncAgentExecutionEngine(AgentExecutionEngine):
             raise NotImplementedError(f"Engine type '{self.engine_name}' not supported")
 
     async def _get_verl_async(self, prompt, application_id, **kwargs):
-        """
-        Get action from VERL asynchronously using Ray worker groups.
-        
-        Args:
-            prompt: The input prompt to send to the model
-            application_id: Unique identifier for the application
-            **kwargs: Additional arguments to pass to the model
-            
-        Returns:
-            The processed response text with padding tokens removed
-        """
         batch = self._convert_prompt_verl([prompt], **kwargs)
-        
+    
         if 'max_tokens' in kwargs:
             batch.meta_info['max_tokens'] = kwargs['max_tokens']
 
-        output = await self.router._get_result_verl_async(
-            batch, application_id, **kwargs
-        )
-
+        if self.config.actor_rollout_ref.rollout.mode == "async":
+            output = await self.rollout_engine.generate_sequences_async(batch, **kwargs)
+        else:
+            output = await self.router._get_result_verl_async(batch, application_id, **kwargs)
+        
         attn = output.batch["attention_mask"][0, self.max_prompt_length:]
         tokens = output.batch["responses"][0]
 
@@ -188,7 +178,7 @@ class AsyncAgentExecutionEngine(AgentExecutionEngine):
         response = await get_response(prompt)
         return response
 
-    async def run_agent_trajectory(
+    async def run_agent_trajectory_async(
         self, idx, application_id, seed=0, mode="Text", **kwargs
     ):
         """Run a single agent's trajectory asynchronously"""
@@ -367,7 +357,7 @@ class AsyncAgentExecutionEngine(AgentExecutionEngine):
     ):
         for _ in range(self.retry_limit):
             try:
-                return await self.run_agent_trajectory(
+                return await self.run_agent_trajectory_async(
                     idx, application_id=application_id, seed=seed, mode=mode, **kwargs
                 )
             except Exception:
@@ -390,7 +380,10 @@ class AsyncAgentExecutionEngine(AgentExecutionEngine):
             max_concurrency = len(self.envs)
 
         if self.engine_name == "verl":
-            self.router.__enter__()
+            if self.config.actor_rollout_ref.rollout.mode == "async":
+                self.rollout_engine.wake_up()
+            else:
+                self.router.__enter__()
 
         semaphore = asyncio.Semaphore(max_concurrency)
         # This queue will hold the indices of available agent/environment pairs
@@ -439,7 +432,10 @@ class AsyncAgentExecutionEngine(AgentExecutionEngine):
                 raise e
         
         if self.engine_name == "verl":
-            self.router.__exit__()
+            if self.config.actor_rollout_ref.rollout.mode == "async":
+                self.rollout_engine.sleep()
+            else:
+                self.router.__exit__()
 
     async def execute_tasks(self, tasks):
         """
