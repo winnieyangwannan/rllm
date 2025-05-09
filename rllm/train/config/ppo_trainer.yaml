@@ -37,8 +37,6 @@ actor_rollout_ref:
     use_dynamic_bsz: False
     ppo_max_token_len_per_gpu: 16384 # n * ${data.max_prompt_length} + ${data.max_response_length}
     grad_clip: 1.0
-    # Max grad norm to skip gradient update.
-    grad_norm_threshold: 1e5
     # pg_losses2 = -advantages * torch.clamp(ratio, 1 - cliprange_low, 1 + cliprange_high)
     clip_ratio: 0.2 # default value if clip_ratio_low and clip_ratio_high are not specified
     clip_ratio_low: 0.2
@@ -72,6 +70,8 @@ actor_rollout_ref:
       offload_policy: False # only for fsdp2, offload param\grad\optimizer during train
       reshard_after_forward: True # only for fsdp2, [True, False, int between 1 and fsdp_size]
       fsdp_size: -1
+    # RLLM Arguments
+    grad_norm_threshold: 1e5 # Max grad norm to skip gradient update.
   ref:
     strategy: fsdp
     fsdp_config:
@@ -89,7 +89,7 @@ actor_rollout_ref:
   rollout:
     name: vllm
     mode: sync # sync: LLM, async: AsyncLLM
-    chat_scheduler: null # async chat scheduler, e.g examples.ppo_trainer.naive_chat_scheduler.NaiveChatCompletionScheduler
+    chat_scheduler: null # async chat scheduler, e.g examples.schedulers.naive_chat_scheduler.NaiveChatCompletionScheduler
     temperature: 1.0
     top_k: -1 # 0 for hf rollout, -1 for vllm rollout
     top_p: 1
@@ -135,6 +135,7 @@ actor_rollout_ref:
     compute_reward: False # Samplers trajectories and compute rewards on rollout worker (not main).
     enable_log_prob: False # Append log_prob from vllm rollout, disables FSDP log_prob.
     async_engine: False # Enable async engine for vllm rollout. Must be False for non-pipelined agent training.
+    disable_logging: True # Disable logging for vLLM async rollout.
     # Tool Config for vLLM Rollout!
     #==============================================
     enable_tools: False # Enable tools for rollout.
@@ -262,6 +263,7 @@ trainer:
 ray_init:
   num_cpus: null # `None` means using all CPUs, which might cause hang if limited in systems like SLURM. Please set to a number allowed then.
 
+# RLLM Agent Config
 env:
   name: browsergym
   subtask: miniwob
@@ -271,5 +273,7 @@ agent:
   name: webagent
   max_steps: 20
   async_engine: True
+  n_parallel_agents: null
+  trajectory_timeout: null
   step_advantage_broadcast: False
   enable_thinking: False # whether to enable thinking in generation, works for supported parser and model
