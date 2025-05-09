@@ -230,6 +230,7 @@ class AgentExecutionEngine:
             "position_ids": position_ids,
         }
         data = DataProto.from_dict(batch_dict)
+        data.non_tensor_batch["formatted_prompts"] = formatted_prompts
 
         # original_batch contains the extra info needed for generation
         if "meta_info" in kwargs and kwargs["meta_info"]:
@@ -634,10 +635,11 @@ class AgentExecutionEngine:
             f"Number of agents must equal to number of environments but received, "
             f"{len(agents)} and {len(envs)}"
         )
-        self.n_parallel_agents = len(envs)
         self.envs = envs
         # For keeping track of the environment index in the batch.
         for idx, env in enumerate(envs):
             env.idx = idx
         self.agents = agents
+        if not self.n_parallel_agents:
+            self.n_parallel_agents = len(envs)
         

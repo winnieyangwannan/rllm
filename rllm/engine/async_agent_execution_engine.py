@@ -1,25 +1,25 @@
 import asyncio
-import uuid
 import concurrent.futures
+import time
+import traceback
+import uuid
+from typing import Dict, List
 
 import openai
 import torch
 
-from rllm.agents.agent import Step, Trajectory
+from rllm.agents.utils import (
+    convert_messages_to_tokens_and_masks,
+    get_recent_assistant_user_messages,
+)
 from rllm.engine.agent_execution_engine import AgentExecutionEngine
 from rllm.environments.env_utils import (
-    compute_trajectory_reward,
     compute_mc_return,
+    compute_trajectory_reward,
 )
-
 from rllm.misc import colorful_print
 from rllm.parser.chat_template.parser import ChatTemplateParser
 from rllm.router.router import Router
-from rllm.agents.utils import get_recent_assistant_user_messages, convert_messages_to_tokens_and_masks
-from rllm.router.router import Router
-import torch
-import uuid
-from typing import List, Dict
 
 
 class AsyncAgentExecutionEngine(AgentExecutionEngine):
@@ -32,7 +32,8 @@ class AsyncAgentExecutionEngine(AgentExecutionEngine):
         agents=[],
         envs=[],
         model_path="",
-        n_parallel_agents=1,
+        n_parallel_agents=None,
+        trajectory_timeout=None,
         gamma=1.0,
         api_retries=3,
         retry_limit=1,
@@ -71,13 +72,11 @@ class AsyncAgentExecutionEngine(AgentExecutionEngine):
         self.env_class = env_class
         self.env_args = env_args
         self.envs = envs
+        
+        self.trajectory_timeout = trajectory_timeout
+        if not trajectory_timeout:
+            self.trajectory_timeout = int(1e9)
 
-        # if agent_class is not None and env_class is not None:
-        #     self.agents = [agent_class(**agent_args) for _ in range(n_parallel_agents)]
-        #     self.envs = [env_class(**env_args) for _ in range(n_parallel_agents)]
-        # else:
-        #     self.agents = agents
-        #     self.envs = envs
 
         assert all(type(env).is_multithread_safe() for env in self.envs), "All environments must be multithread safe for async engine"
         # rollout engine args
@@ -91,9 +90,9 @@ class AsyncAgentExecutionEngine(AgentExecutionEngine):
             # All generation is done via scheduler. Currently only works for verl
             self.router = Router(rollout_engine=rollout_engine, tensor_parallel_size=self.config.actor_rollout_ref.rollout.get('tensor_model_parallel_size', 1))
 
-        self.chat_template_parser = ChatTemplateParser.get_parser(self.tokenizer, enable_thinking=self.config.agent.enable_thinking)
         # Create a thread pool executor for environment interactions (i.e. step, reset, close)
         self.executor = concurrent.futures.ThreadPoolExecutor(max_workers=max_workers)
+        self.chat_template_parser = ChatTemplateParser.get_parser(self.tokenizer, enable_thinking=self.config.agent.enable_thinking)
 
     async def get_model_response(self, prompt, application_id, **kwargs):
         """
@@ -121,26 +120,16 @@ class AsyncAgentExecutionEngine(AgentExecutionEngine):
             raise NotImplementedError(f"Engine type '{self.engine_name}' not supported")
 
     async def _get_verl_async(self, prompt, application_id, **kwargs):
-        """
-        Get action from VERL asynchronously using Ray worker groups.
-        
-        Args:
-            prompt: The input prompt to send to the model
-            application_id: Unique identifier for the application
-            **kwargs: Additional arguments to pass to the model
-            
-        Returns:
-            The processed response text with padding tokens removed
-        """
         batch = self._convert_prompt_verl([prompt], **kwargs)
-        
+    
         if 'max_tokens' in kwargs:
             batch.meta_info['max_tokens'] = kwargs['max_tokens']
 
-        output = await self.router._get_result_verl_async(
-            batch, application_id, **kwargs
-        )
-
+        if self.config.actor_rollout_ref.rollout.mode == "async":
+            output = await self.rollout_engine.generate_sequences_async(batch, **kwargs)
+        else:
+            output = await self.router._get_result_verl_async(batch, application_id, **kwargs)
+        
         attn = output.batch["attention_mask"][0, self.max_prompt_length:]
         tokens = output.batch["responses"][0]
 
@@ -194,13 +183,13 @@ class AsyncAgentExecutionEngine(AgentExecutionEngine):
         response = await get_response(prompt)
         return response
 
-    async def run_agent_trajectory(
+    async def run_agent_trajectory_async(
         self, idx, application_id, seed=0, mode="Text", **kwargs
     ):
         """Run a single agent's trajectory asynchronously"""
         agent = self.agents[idx]
         env = self.envs[idx]
-        loop = asyncio.get_running_loop()  # Get the current event loop
+        
 
         # Initialize trajectory for this task.
         trajectory = []
@@ -210,6 +199,7 @@ class AsyncAgentExecutionEngine(AgentExecutionEngine):
         response_token_len = 0
         response_tokens = []
         response_masks = []
+        total_time = 0
 
         # for step return
         episode_steps = []
@@ -252,6 +242,8 @@ class AsyncAgentExecutionEngine(AgentExecutionEngine):
             else:
                 max_tokens = self.max_response_length
             kwargs['max_tokens'] = max_tokens
+            
+            start_time = time.time()
             response = await self.get_model_response(
                 chat_completions_messages,
                 application_id,
@@ -266,13 +258,16 @@ class AsyncAgentExecutionEngine(AgentExecutionEngine):
             episode_steps.append(prompt_response_pair)
 
             # Update agent with model response
+            total_time += time.time() - start_time
             agent.update_from_model(response)
 
             # Fetch action from agent's internal state.
             cur_state = agent.get_current_state()
             action = cur_state.action
             # Take step in environment using the executor
+            start_time = time.time()
             next_observation, reward, done, info = await asyncio.to_thread(env.step, action)
+            total_time += time.time() - start_time
             info['max_steps'] = self.max_steps
             # Update agent internal state.
             agent.update_from_env(
@@ -313,7 +308,7 @@ class AsyncAgentExecutionEngine(AgentExecutionEngine):
                 response_masks.extend(truncated_response_masks)
                 
                 cur_step = agent.get_current_state()
-                if response_token_len - len(env_msg_tokens) > self.max_response_length:
+                if response_token_len - len(env_msg_tokens) > self.max_response_length and not hasattr(env, 'compute_final_reward'):
                     cur_step.reward = 0.0
                 cur_step.done = True
                 termination_reason = "TRUNCATION"
@@ -324,6 +319,14 @@ class AsyncAgentExecutionEngine(AgentExecutionEngine):
             response_tokens.extend(assistant_msg_tokens)
             response_masks.extend(assistant_msg_masks)
             observation = next_observation
+
+            if total_time >= self.trajectory_timeout:
+                termination_reason = "TIMEOUT"
+                cur_step = agent.get_current_state()
+                done = True
+                cur_step.done = done
+                break
+
 
             # Check if episode is done
             if done:
@@ -336,6 +339,13 @@ class AsyncAgentExecutionEngine(AgentExecutionEngine):
             if step_idx == self.max_steps - 1:
                 termination_reason = "MAX_STEPS"
 
+        if hasattr(env, 'compute_final_reward'):
+            cur_step = agent.get_current_state()
+            reward = await asyncio.to_thread(env.compute_final_reward)
+            cur_step.reward = reward
+        # Closing environment using the executor.
+        await asyncio.to_thread(env.close)
+        
         if termination_reason:
             if reward > 0:
                 color = "green"
@@ -345,11 +355,7 @@ class AsyncAgentExecutionEngine(AgentExecutionEngine):
                 f"Trajectory {idx} completed due to: {termination_reason}. Reward is {reward}. \n",
                 color,
             )
-
-        # Closing environment using the executor.
-        await asyncio.to_thread(env.close)
-        trajectory = agent.trajectory
-        
+        trajectory = agent.trajectory 
         # Aggregate final trajectory statistics
         compute_trajectory_reward(trajectory)
         compute_mc_return(trajectory, gamma=self.gamma)
@@ -383,45 +389,85 @@ class AsyncAgentExecutionEngine(AgentExecutionEngine):
     ):
         for _ in range(self.retry_limit):
             try:
-                return await self.run_agent_trajectory(
+                return await self.run_agent_trajectory_async(
                     idx, application_id=application_id, seed=seed, mode=mode, **kwargs
                 )
-            except Exception as e:
-                print(e)
+            except Exception:
+                traceback.print_exc()
                 continue
+        traceback.print_exc()
         raise Exception(f"Trajectory {idx} cannot complete. Please check the log message")
 
     async def trajectory_generator(
-        self, reset_seed=0, timing_raw={}, mode="Text", **kwargs
+        self,
+        reset_seed=0,
+        timing_raw={},
+        mode="Text",
+        **kwargs
     ):
         assert all(type(env).is_multithread_safe() for env in self.envs), "All environments must be multithread safe for async engine"
-        assert mode in ["Text", "Token", "Conversation", "Step"], f"Return mode {mode} not supported"
-        # Note: this function is not concurrecy safe due to the router.__enter__ and router.__exit__
+        
+        max_concurrency = self.n_parallel_agents
+        if self.n_parallel_agents > len(self.envs):
+            max_concurrency = len(self.envs)
+
         if self.engine_name == "verl":
-            self.router.__enter__()
+            if self.config.actor_rollout_ref.rollout.mode == "async":
+                self.rollout_engine.wake_up()
+            else:
+                self.router.__enter__()
 
-        application_ids = [str(uuid.uuid4()) for _ in range(self.n_parallel_agents)]
+        semaphore = asyncio.Semaphore(max_concurrency)
+        # This queue will hold the indices of available agent/environment pairs
+        agent_env_index_queue = asyncio.Queue()
+        for i in range(len(self.envs)):
+            agent_env_index_queue.put_nowait(i)
 
-        tasks = [
-            self.run_agent_trajectory_with_retry(
-                i,
-                application_id=application_ids[i],
-                seed=reset_seed,
-                mode=mode,
-                **kwargs,
-            )
-            for i in range(self.n_parallel_agents)
+        async def launch_one_trajectory_task(trajectory_number_overall: int):
+            agent_env_idx = -1  # Placeholder for the acquired agent/env index
+            try:
+                await semaphore.acquire()
+                agent_env_idx = await agent_env_index_queue.get()
+                
+                application_id = str(uuid.uuid4())
+                # Each trajectory gets a unique seed if desired, or uses the global reset_seed.
+                # For now, using the global reset_seed for all, consistent with original behavior
+                # if it were called multiple times.
+                # If per-trajectory seed is needed: current_seed = reset_seed + trajectory_number_overall
+                
+                result = await self.run_agent_trajectory_with_retry(
+                    idx=agent_env_idx,
+                    application_id=application_id,
+                    seed=reset_seed, # or current_seed
+                    mode=mode,
+                    **kwargs,
+                )
+                return result
+            finally:
+                if agent_env_idx != -1: # Ensure index was acquired before trying to put it back
+                    await agent_env_index_queue.put(agent_env_idx)
+                semaphore.release()
+        # Create all N conceptual tasks. Their execution will be throttled by the semaphore
+        # and the availability of agent/env indices.
+        tasks_to_run = [
+            launch_one_trajectory_task(i) for i in range(len(self.envs))
         ]
 
-        for coro in asyncio.as_completed(tasks):
+        tasks_completed = 0
+        for coro in asyncio.as_completed(tasks_to_run):
             try:
                 result = await coro
+                tasks_completed += 1
+                colorful_print(f"Number of Trajectories {tasks_completed}/{len(self.envs)} completed", "cyan")
                 yield result
             except Exception as e:
                 raise e
         
         if self.engine_name == "verl":
-            self.router.__exit__()
+            if self.config.actor_rollout_ref.rollout.mode == "async":
+                self.rollout_engine.sleep()
+            else:
+                self.router.__exit__()
 
     async def execute_tasks(self, tasks):
         """
@@ -453,7 +499,6 @@ class AsyncAgentExecutionEngine(AgentExecutionEngine):
                 # Get an available index
                 index = await index_queue.get()
                 try:
-                    self.envs[index].reset(task=task)
                     res = await self.run_agent_trajectory(index, task_id)
                     return task_id, res
                 finally:
