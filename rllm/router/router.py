@@ -11,7 +11,7 @@ class Router:
     ):
         self.rollout_engine = rollout_engine
 
-        self.world_size = self.rollout_engine.world_size
+        self.world_size = self.rollout_engine.world_size if hasattr(self.rollout_engine, 'world_size') else 1
         self.tp_size = tensor_parallel_size
 
         self.next_placement = 0
@@ -40,7 +40,8 @@ class Router:
             return engine_idx
 
     def __enter__(self):
-        self.rollout_engine.generate_async_sharding_manager_enter()
+        if hasattr(self.rollout_engine, 'generate_async_sharding_manager_enter'):
+            self.rollout_engine.generate_async_sharding_manager_enter()
         # Create ray.get executor
         self._ray_get_executor = ThreadPoolExecutor(
             max_workers=1024,
@@ -48,7 +49,8 @@ class Router:
         )
 
     def __exit__(self): # Corrected signature
-        self.rollout_engine.generate_async_sharding_manager_exit()
+        if hasattr(self.rollout_engine, 'generate_async_sharding_manager_exit'):
+            self.rollout_engine.generate_async_sharding_manager_exit()
         # Kill ray.get executor
         self._ray_get_executor.shutdown(wait=False)  # Fixed typo
 
