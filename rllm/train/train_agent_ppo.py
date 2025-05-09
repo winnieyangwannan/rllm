@@ -9,7 +9,7 @@ import hydra
 # Local application imports
 from verl.single_controller.ray import RayWorkerGroup
 from verl.trainer.ppo.ray_trainer import ResourcePoolManager, Role
-from verl.workers.fsdp_workers import ActorRolloutRefWorker, CriticWorker
+from verl.workers.fsdp_workers import ActorRolloutRefWorker, CriticWorker, AsyncActorRolloutRefWorker
 from verl.workers.reward_manager import NaiveRewardManager
 
 from rllm.trainer.agent_trainer import AgentPPOTrainer
@@ -60,14 +60,19 @@ def main_task(config, compute_score=None):
     reward_fn = NaiveRewardManager(tokenizer=tokenizer, num_examine=0, compute_score=compute_score)
     val_reward_fn = NaiveRewardManager(tokenizer=tokenizer, num_examine=1, compute_score=compute_score)
 
-    role_worker_mapping = {
-        Role.ActorRollout: ray.remote(ActorRolloutRefWorker) if not config.agent.async_engine else ray.remote(max_concurrency=512)(ActorRolloutRefWorker),
-        Role.Critic: ray.remote(CriticWorker),
-        Role.RefPolicy: ray.remote(ActorRolloutRefWorker),
-        #Role.Actor: ray.remote(ActorRolloutRefWorker),
-        #Role.Rollout: ray.remote(ActorRolloutRefWorker) if not config.agent.async_engine else ray.remote(max_concurrency=512)(ActorRolloutRefWorker),
-    }
-    
+    if config.actor_rollout_ref.rollout.mode == "async":
+        role_worker_mapping = {
+            Role.ActorRollout: ray.remote(AsyncActorRolloutRefWorker),
+            Role.Critic: ray.remote(CriticWorker),
+            Role.RefPolicy: ray.remote(AsyncActorRolloutRefWorker),
+        }
+    else:
+        role_worker_mapping = {
+            Role.ActorRollout: ray.remote(ActorRolloutRefWorker) if not config.agent.async_engine else ray.remote(max_concurrency=512)(ActorRolloutRefWorker),
+            Role.Critic: ray.remote(CriticWorker),
+            Role.RefPolicy: ray.remote(ActorRolloutRefWorker),
+        }
+        
     # Below are agent specific initialization
     env_class = ENV_CLASS_MAPPING[config.env.name]
     agent_class = AGENT_CLASS_MAPPING[config.agent.name]

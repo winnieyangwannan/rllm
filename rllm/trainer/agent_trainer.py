@@ -62,8 +62,13 @@ class AgentPPOTrainer(RayPPOTrainer):
             agent_rollout_wg = self.rollout_wg
 
         if self.config.agent.async_engine:
+            if self.config.actor_rollout_ref.rollout.mode == "async":
+                rollout_engine = self.async_rollout_manager
+            else:
+                rollout_engine = agent_rollout_wg
+
             self.agent_execution_engine = AsyncAgentExecutionEngine(
-                rollout_engine=agent_rollout_wg,
+                rollout_engine=rollout_engine,
                 config=self.config,
                 engine_name="verl",
                 tokenizer=self.tokenizer,

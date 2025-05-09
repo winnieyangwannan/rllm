@@ -110,11 +110,11 @@ class AsyncAgentExecutionEngine(AgentExecutionEngine):
         if self.engine_name == "openai":
             return await self._get_openai_async(prompt, application_id, **kwargs)
         elif self.engine_name == "verl":
-            return await self._get_verl_async(prompt, application_id, **kwargs)
+            return await self._get_verl_async_v1(prompt, application_id, **kwargs)
         else:
             raise NotImplementedError(f"Engine type '{self.engine_name}' not supported")
 
-    async def _get_verl_async(self, prompt, application_id, **kwargs):
+    async def _get_verl_async_v0(self, prompt, application_id, **kwargs):
         """
         Get action from VERL asynchronously using Ray worker groups.
         
@@ -135,6 +135,28 @@ class AsyncAgentExecutionEngine(AgentExecutionEngine):
             batch, application_id, **kwargs
         )
 
+        attn = output.batch["attention_mask"][0, self.max_prompt_length:]
+        tokens = output.batch["responses"][0]
+
+        # Find last index where attention == 1
+        non_pad_indices = (attn == 1).nonzero(as_tuple=True)[0]
+        if len(non_pad_indices) == 0:
+            trimmed = tokens[:0]  # empty
+        else:
+            last_valid_idx = non_pad_indices[-1].item()
+            trimmed = tokens[:last_valid_idx + 1]  # include the last valid token
+
+        response = self.tokenizer.decode(trimmed, skip_special_tokens=False)
+
+        pad_token = self.tokenizer.pad_token
+        eos_token = self.tokenizer.eos_token
+        response = response.replace(pad_token, "").replace(eos_token, "")
+        return response
+
+    async def _get_verl_async_v1(self, prompt, application_id, **kwargs):
+        batch = self._convert_prompt_verl([prompt], **kwargs)
+        output = await self.rollout_engine.generate_sequences_async(batch, **kwargs)
+        
         attn = output.batch["attention_mask"][0, self.max_prompt_length:]
         tokens = output.batch["responses"][0]
 
