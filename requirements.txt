@@ -2,6 +2,8 @@ deepspeed
 dm-tree
 gdown
 google-cloud-aiplatform
+kubernetes
+polars
 latex2sympy2
 pybind11
 pylatexenc

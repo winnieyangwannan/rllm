@@ -11,7 +11,7 @@ RLLM_DIR=$(python3 -c "import rllm; import os; print(os.path.dirname(os.path.dir
 
 python3 -m rllm.train.train_agent_ppo \
     algorithm.adv_estimator=loop \
-    data.train_files=${RLLM_DIR}/data/swe/SWE_Bench_Verified.parquet \
+    data.train_files=${RLLM_DIR}/data/swe/R2E_Gym_V1.parquet \
     data.val_files=${RLLM_DIR}/data/swe/SWE_Bench_Verified.parquet \
     data.train_batch_size=128 \
     data.val_batch_size=512 \
@@ -65,6 +65,6 @@ python3 -m rllm.train.train_agent_ppo \
     env.name=swe \
     agent.name=sweagent \
     agent.max_steps=50 \
-    agent.n_parallel_agents=100 \
+    agent.trajectory_timeout=3600 \
     agent.async_engine=True \
     trainer.total_epochs=1000

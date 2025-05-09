@@ -37,7 +37,7 @@ class SWEEnv(BaseEnv):
         dataset: Optional[Dataset] = None,
         idx: Optional[int] = None,
         step_timeout: int = 120,
-        reward_timeout: int = 1200,
+        reward_timeout: int = 300,
         backend: str = "kubernetes",
         delete_image: bool = False,
         verbose: bool = True,
