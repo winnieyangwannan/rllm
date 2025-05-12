@@ -61,7 +61,7 @@ def main_task(config, compute_score=None):
     from verl.trainer.ppo.ray_trainer import ResourcePoolManager, Role
 
     role_worker_mapping = {
-        Role.ActorRollout: ray.remote(actor_rollout_cls),
+        Role.ActorRollout: ray.remote(max_concurrency=2048)(actor_rollout_cls),
         Role.Critic: ray.remote(CriticWorker),
     }
 
