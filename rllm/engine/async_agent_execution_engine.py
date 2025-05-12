@@ -3,7 +3,8 @@ import concurrent.futures
 import time
 import traceback
 import uuid
-from typing import Dict, List
+import time
+from concurrent.futures import ThreadPoolExecutor
 
 import openai
 import torch
@@ -82,17 +83,15 @@ class AsyncAgentExecutionEngine(AgentExecutionEngine):
         # rollout engine args
         self.rollout_engine_args = rollout_engine_args
         self.sampling_params = kwargs.get("sampling_params", None)
-
+        self.server_addresses = self.rollout_engine.server_addresses
+        print(self.server_addresses)
         if self.engine_name == "openai":
             from openai import AsyncOpenAI
             self.client = AsyncOpenAI(**self.rollout_engine_args) 
         elif self.engine_name == "verl":
             # All generation is done via scheduler. Currently only works for verl
-            self.router = Router(rollout_engine=rollout_engine, tensor_parallel_size=self.config.actor_rollout_ref.rollout.get('tensor_model_parallel_size', 1))
-
-        # Create a thread pool executor for environment interactions (i.e. step, reset, close)
-        self.executor = concurrent.futures.ThreadPoolExecutor(max_workers=max_workers)
-        self.chat_template_parser = ChatTemplateParser.get_parser(self.tokenizer, enable_thinking=self.config.agent.enable_thinking)
+            self.router = Router(config=self.config, tokenizer=self.tokenizer, addresses=self.server_addresses)
+        self.chat_template_parser = ChatTemplateParser.get_parser(self.tokenizer)
 
     async def get_model_response(self, prompt, application_id, **kwargs):
         """
@@ -125,10 +124,7 @@ class AsyncAgentExecutionEngine(AgentExecutionEngine):
         if 'max_tokens' in kwargs:
             batch.meta_info['max_tokens'] = kwargs['max_tokens']
 
-        if self.config.actor_rollout_ref.rollout.mode == "async":
-            output = await self.rollout_engine.generate_sequences_async(batch, **kwargs)
-        else:
-            output = await self.router._get_result_verl_async(batch, application_id, **kwargs)
+        output = await self.router.generate_sequences(batch, **kwargs)
         
         attn = output.batch["attention_mask"][0, self.max_prompt_length:]
         tokens = output.batch["responses"][0]
@@ -205,7 +201,8 @@ class AsyncAgentExecutionEngine(AgentExecutionEngine):
         episode_steps = []
 
         # Reset environment with the task using the executor
-        observation, info = await asyncio.to_thread(env.reset)
+        loop = asyncio.get_event_loop()
+        observation, info = await loop.run_in_executor(self.executor, env.reset)
         info['max_steps'] = self.max_steps
 
         # Reset agent
@@ -266,7 +263,7 @@ class AsyncAgentExecutionEngine(AgentExecutionEngine):
             action = cur_state.action
             # Take step in environment using the executor
             start_time = time.time()
-            next_observation, reward, done, info = await asyncio.to_thread(env.step, action)
+            next_observation, reward, done, info = await loop.run_in_executor(self.executor, env.step, action)
             total_time += time.time() - start_time
             info['max_steps'] = self.max_steps
             # Update agent internal state.
@@ -341,10 +338,10 @@ class AsyncAgentExecutionEngine(AgentExecutionEngine):
 
         if hasattr(env, 'compute_final_reward'):
             cur_step = agent.get_current_state()
-            reward = await asyncio.to_thread(env.compute_final_reward)
+            reward = await loop.run_in_executor(self.executor, env.compute_final_reward)
             cur_step.reward = reward
         # Closing environment using the executor.
-        await asyncio.to_thread(env.close)
+        await loop.run_in_executor(self.executor, env.close)
         
         if termination_reason:
             if reward > 0:
@@ -408,8 +405,7 @@ class AsyncAgentExecutionEngine(AgentExecutionEngine):
         assert all(type(env).is_multithread_safe() for env in self.envs), "All environments must be multithread safe for async engine"
         
         max_concurrency = self.n_parallel_agents
-        if self.n_parallel_agents > len(self.envs):
-            max_concurrency = len(self.envs)
+        self.executor = ThreadPoolExecutor(max_workers=max_concurrency)
 
         if self.engine_name == "verl":
             if self.config.actor_rollout_ref.rollout.mode == "async":
@@ -468,6 +464,8 @@ class AsyncAgentExecutionEngine(AgentExecutionEngine):
                 self.rollout_engine.sleep()
             else:
                 self.router.__exit__()
+        
+        self.executor.shutdown(wait=False)
 
     async def execute_tasks(self, tasks):
         """

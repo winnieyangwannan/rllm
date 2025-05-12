@@ -641,6 +641,5 @@ class AgentExecutionEngine:
         for idx, env in enumerate(envs):
             env.idx = idx
         self.agents = agents
-        if not self.n_parallel_agents:
-            self.n_parallel_agents = len(envs)
+        self.n_parallel_agents = len(envs)
         
