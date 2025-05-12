@@ -9,8 +9,8 @@ RLLM_DIR=$(python3 -c "import rllm; import os; print(os.path.dirname(os.path.dir
 
 python3 -m rllm.train.train_agent_ppo \
     algorithm.adv_estimator=loop \
-    data.train_files=${RLLM_DIR}/data/rllm-frozenlake/train.parquet \
-    data.val_files=${RLLM_DIR}/data/rllm-frozenlake/test.parquet \
+    data.train_files=/home/sijun/data/rllm-miniwob/train.parquet \
+    data.val_files=/home/sijun/data/rllm-miniwob/test.parquet \
     data.train_batch_size=32 \
     data.val_batch_size=128 \
     data.max_prompt_length=4096 \
@@ -62,10 +62,12 @@ python3 -m rllm.train.train_agent_ppo \
     trainer.save_freq=400 \
     trainer.test_freq=5 \
     trainer.default_hdfs_dir=null \
-    env.name=frozenlake \
-    agent.name=frozenlakeagent \
+    env.name=browsergym \
+    env.subtask=miniwob \
+    env.miniwob_url="file:///data/sijun/colin/code/miniwob-plusplus/miniwob/html/miniwob/" \
+    agent.name=webagent \
     agent.max_steps=5 \
-    agent.async_engine=True \
+    agent.async_engine=False \
     agent.step_advantage_broadcast=False \
     agent.enable_thinking=False \
     trainer.total_epochs=100

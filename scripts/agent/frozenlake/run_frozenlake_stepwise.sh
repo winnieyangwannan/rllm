@@ -2,15 +2,15 @@ set -x
 
 export VLLM_ATTENTION_BACKEND=FLASH_ATTN
 export PYTORCH_CUDA_ALLOC_CONF="expandable_segments:False"
-export VLLM_USE_V1=0
+export VLLM_USE_V1=1
 export CUDA_VISIBLE_DEVICES=0,1,2,3
 # Find the directory where rllm package is located
 RLLM_DIR=$(python3 -c "import rllm; import os; print(os.path.dirname(os.path.dirname(rllm.__file__)))")
 
 python3 -m rllm.train.train_agent_ppo \
     algorithm.adv_estimator=loop \
-    data.train_files=/home/sijun/data/rllm-miniwob/train.parquet \
-    data.val_files=/home/sijun/data/rllm-miniwob/test.parquet \
+    data.train_files=${RLLM_DIR}/data/rllm-frozenlake/train.parquet \
+    data.val_files=${RLLM_DIR}/data/rllm-frozenlake/test.parquet \
     data.train_batch_size=32 \
     data.val_batch_size=128 \
     data.max_prompt_length=10240 \
@@ -34,6 +34,8 @@ python3 -m rllm.train.train_agent_ppo \
     actor_rollout_ref.rollout.tensor_model_parallel_size=1 \
     actor_rollout_ref.rollout.name=vllm \
     actor_rollout_ref.rollout.async_engine=False \
+    actor_rollout_ref.rollout.mode="async" \
+    actor_rollout_ref.rollout.chat_scheduler=examples.schedulers.completions_scheduler.CompletionsScheduler \
     actor_rollout_ref.rollout.enforce_eager=False \
     actor_rollout_ref.rollout.enable_log_prob=False \
     actor_rollout_ref.rollout.temperature=0.7 \
@@ -60,12 +62,10 @@ python3 -m rllm.train.train_agent_ppo \
     trainer.save_freq=400 \
     trainer.test_freq=5 \
     trainer.default_hdfs_dir=null \
-    env.name=browsergym \
-    env.subtask=miniwob \
-    env.miniwob_url="file:///data/sijun/colin/code/miniwob-plusplus/miniwob/html/miniwob/" \
-    agent.name=webagent \
+    env.name=frozenlake \
+    agent.name=frozenlakeagent \
     agent.max_steps=5 \
-    agent.async_engine=False \
+    agent.async_engine=True \
     agent.step_advantage_broadcast=True \
     agent.enable_thinking=True \
     trainer.total_epochs=100
