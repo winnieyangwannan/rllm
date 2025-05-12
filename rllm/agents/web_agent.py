@@ -334,7 +334,7 @@ Action: ```send_msg_to_user("The price for a 15\\" laptop is 1499 USD.")```
     def compute_training_reward(self, trajectory: Trajectory) -> float:
         if not trajectory:
             return 0
-        print(trajectory.steps)
+
         reward = trajectory.steps[-1].reward
         reward_penalty = 0    
         # for step in trajectory.steps:

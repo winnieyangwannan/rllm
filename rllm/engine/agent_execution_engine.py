@@ -231,7 +231,7 @@ class AgentExecutionEngine:
             "position_ids": position_ids,
         }
         data = DataProto.from_dict(batch_dict)
-        data.non_tensor_batch["formatted_prompts"] = formatted_prompts
+        data.non_tensor_batch["formatted_prompts"] = np.array(formatted_prompts)
 
         # original_batch contains the extra info needed for generation
         if "meta_info" in kwargs and kwargs["meta_info"]:
