@@ -91,6 +91,7 @@ class AsyncAgentExecutionEngine(AgentExecutionEngine):
         elif self.engine_name == "verl":
             # All generation is done via scheduler. Currently only works for verl
             self.router = Router(config=self.config, tokenizer=self.tokenizer, addresses=self.server_addresses)
+
         self.chat_template_parser = ChatTemplateParser.get_parser(self.tokenizer)
 
     async def get_model_response(self, prompt, application_id, **kwargs):
@@ -413,36 +414,24 @@ class AsyncAgentExecutionEngine(AgentExecutionEngine):
             else:
                 self.router.__enter__()
 
-        semaphore = asyncio.Semaphore(max_concurrency)
-        # This queue will hold the indices of available agent/environment pairs
-        agent_env_index_queue = asyncio.Queue()
-        for i in range(len(self.envs)):
-            agent_env_index_queue.put_nowait(i)
-
-        async def launch_one_trajectory_task(trajectory_number_overall: int):
-            agent_env_idx = -1  # Placeholder for the acquired agent/env index
+        #semaphore = asyncio.Semaphore(max_concurrency)
+        async def launch_one_trajectory_task(env_idx: int):
             try:
-                await semaphore.acquire()
-                agent_env_idx = await agent_env_index_queue.get()
-                
-                application_id = str(uuid.uuid4())
-                # Each trajectory gets a unique seed if desired, or uses the global reset_seed.
-                # For now, using the global reset_seed for all, consistent with original behavior
-                # if it were called multiple times.
-                # If per-trajectory seed is needed: current_seed = reset_seed + trajectory_number_overall
-                
+                #await semaphore.acquire()
+                application_id = str(uuid.uuid4())                
                 result = await self.run_agent_trajectory_with_retry(
-                    idx=agent_env_idx,
+                    idx=env_idx,
                     application_id=application_id,
                     seed=reset_seed, # or current_seed
                     mode=mode,
                     **kwargs,
                 )
-                return result
-            finally:
-                if agent_env_idx != -1: # Ensure index was acquired before trying to put it back
-                    await agent_env_index_queue.put(agent_env_idx)
-                semaphore.release()
+                #semaphore.release()
+            except Exception as e:
+                import traceback
+                traceback.print_exc()
+                raise e
+            return result
         # Create all N conceptual tasks. Their execution will be throttled by the semaphore
         # and the availability of agent/env indices.
         tasks_to_run = [
@@ -467,47 +456,47 @@ class AsyncAgentExecutionEngine(AgentExecutionEngine):
         
         self.executor.shutdown(wait=False)
 
-    async def execute_tasks(self, tasks):
-        """
-        Run asynchronous interactions between the agent and environment where each agent
-        has its own environment instance and can proceed independently.
+    # async def execute_tasks(self, tasks):
+    #     """
+    #     Run asynchronous interactions between the agent and environment where each agent
+    #     has its own environment instance and can proceed independently.
         
-        Args:
-            tasks: List of tasks to process
-            max_concurrent: Maximum number of concurrent tasks to process (defaults to self.n_parallel_agents)
+    #     Args:
+    #         tasks: List of tasks to process
+    #         max_concurrent: Maximum number of concurrent tasks to process (defaults to self.n_parallel_agents)
             
-        Returns:
-            A list of trajectories, one for each task.
-        """
+    #     Returns:
+    #         A list of trajectories, one for each task.
+    #     """
 
-        max_concurrent = self.n_parallel_agents
+    #     max_concurrent = self.n_parallel_agents
         
-        # Initialize results list to store trajectories for all tasks
-        all_trajectories = {}
+    #     # Initialize results list to store trajectories for all tasks
+    #     all_trajectories = {}
         
-        # Create a queue of tasks to process
-        task_queue = list(enumerate(tasks))
-        semaphore = asyncio.Semaphore(max_concurrent)
-        index_queue = asyncio.Queue(maxsize=max_concurrent)
-        for i in range(max_concurrent):
-            index_queue.put_nowait(i)
+    #     # Create a queue of tasks to process
+    #     task_queue = list(enumerate(tasks))
+    #     semaphore = asyncio.Semaphore(max_concurrent)
+    #     index_queue = asyncio.Queue(maxsize=max_concurrent)
+    #     for i in range(max_concurrent):
+    #         index_queue.put_nowait(i)
 
-        async def sem_wrapper(task_id, task):
-            async with semaphore:
-                # Get an available index
-                index = await index_queue.get()
-                try:
-                    res = await self.run_agent_trajectory(index, task_id)
-                    return task_id, res
-                finally:
-                    # Put the index back in the queue when done
-                    await index_queue.put(index)
+    #     async def sem_wrapper(task_id, task):
+    #         async with semaphore:
+    #             # Get an available index
+    #             index = await index_queue.get()
+    #             try:
+    #                 res = await self.run_agent_trajectory(index, task_id)
+    #                 return task_id, res
+    #             finally:
+    #                 # Put the index back in the queue when done
+    #                 await index_queue.put(index)
         
-        # Create a queue of tasks to process
-        task_queue = list(enumerate(tasks))
-        # Run all tasks concurrently
-        results = await asyncio.gather(*[sem_wrapper(task_id, task) for task_id, task in task_queue])
+    #     # Create a queue of tasks to process
+    #     task_queue = list(enumerate(tasks))
+    #     # Run all tasks concurrently
+    #     results = await asyncio.gather(*[sem_wrapper(task_id, task) for task_id, task in task_queue])
         
-        all_trajectories = {task_id: trajectory for task_id, trajectory in results}
-        ordered_trajectories = [all_trajectories[i] for i in range(len(all_trajectories))]
-        return ordered_trajectories
+    #     all_trajectories = {task_id: trajectory for task_id, trajectory in results}
+    #     ordered_trajectories = [all_trajectories[i] for i in range(len(all_trajectories))]
+    #     return ordered_trajectories

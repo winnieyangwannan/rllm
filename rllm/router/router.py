@@ -1,9 +1,7 @@
-from multiprocessing import Manager
-from contextlib import contextmanager
 from typing import List
-from openai import AsyncOpenAI
 
 import asyncio
+import aiohttp
 from copy import deepcopy
 from typing import Any, Dict, List, Union
 
@@ -23,27 +21,35 @@ def _repeat_interleave(value: Union[torch.Tensor, np.ndarray], repeats: int) -> 
         return np.repeat(value, repeats, axis=0)
 
 async def poll_completions_openai(address: str, **completions_request) -> Completion:
-    client = AsyncOpenAI(
-        base_url=f"http://{address}/v1",
-        api_key="token-abc123",
-        timeout=int(1e9),
-    )
+    # Use aiohttp directly instead of AsyncOpenAI to avoid potential blocking
+    base_url = f"http://{address}/v1/completions"
+    headers = {
+        "Content-Type": "application/json",
+    }
 
-    if "extra_headers" not in completions_request:
-            completions_request["extra_headers"] = {}
-
-    extra_headers = completions_request["extra_headers"]
-    request_id = extra_headers.get("x-request-id", None)
-    if request_id:
-        if request_id.startswith("cmpl-"):
-            request_id = request_id[len("cmpl-"):]
-            extra_headers["x-request-id"] = request_id
-
+    # Remove meta_info if present
     if "meta_info" in completions_request:
-        completions_request.pop("meta_info")   
+        completions_request.pop("meta_info")
+    # Remove extra_headers from the payload
+    if "extra_headers" in completions_request:
+        completions_request.pop("extra_headers")
 
     try:
-        return await client.completions.create(**completions_request)
+        # Create a new session for each request to avoid blocking
+        async with aiohttp.ClientSession() as session:
+            async with session.post(
+                base_url,
+                json=completions_request,
+                headers=headers,
+                timeout=aiohttp.ClientTimeout(total=1000000)
+            ) as response:
+                if response.status != 200:
+                    error_text = await response.text()
+                    raise Exception(f"API request failed with status {response.status}: {error_text}")
+                
+                result = await response.json()
+                # Convert the raw JSON response to an OpenAI Completion object
+                return result
     except Exception as e:
         print("Exception: ", e)
         raise e
@@ -63,7 +69,7 @@ class Router:
         for addr in self.addresses:
             if addr not in self._usage:
                 self._usage[addr] = 0
-        
+
         self.config = config
         self.tokenizer = tokenizer
         self.pad_token_id = tokenizer.pad_token_id
@@ -142,8 +148,8 @@ class Router:
         
         for batch_index, completions in enumerate(completions_list):
             comps = []
-            for choice in completions.choices:
-                token_ids= choice.logprobs.tokens
+            for choice in completions.get("choices", []):
+                token_ids= choice.get("logprobs", {}).get("tokens", [])
                 token_ids = [int(t.split(":")[1]) for t in token_ids]
                 comps.append(token_ids)
             batch_response_ids[batch_index] = comps
