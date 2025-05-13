@@ -125,6 +125,8 @@ class AgentPPOTrainer(RayPPOTrainer):
         self._load_checkpoint()
 
         # perform validation before training
+        import time
+        start_time = time.time()
         if self.val_reward_fn is not None and self.config.trainer.get(
             "val_before_train", True
         ):
@@ -133,6 +135,7 @@ class AgentPPOTrainer(RayPPOTrainer):
             logger.log(data=val_metrics, step=self.global_steps)
             if self.config.trainer.get("val_only", False):
                 return
+        print(f"Time taken to validate agent: {time.time() - start_time}")
         # we start from step 1
         self.global_steps += 1
 

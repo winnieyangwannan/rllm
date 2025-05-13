@@ -41,17 +41,17 @@ async def poll_completions_openai(address: str, **completions_request) -> Comple
                 base_url,
                 json=completions_request,
                 headers=headers,
-                timeout=aiohttp.ClientTimeout(total=1000000)
+                timeout=aiohttp.ClientTimeout(total=3600)
             ) as response:
                 if response.status != 200:
                     error_text = await response.text()
                     raise Exception(f"API request failed with status {response.status}: {error_text}")
-                
                 result = await response.json()
                 # Convert the raw JSON response to an OpenAI Completion object
                 return result
     except Exception as e:
-        print("Exception: ", e)
+        import traceback
+        traceback.print_exc()
         raise e
 
 class Router:
@@ -69,7 +69,7 @@ class Router:
         for addr in self.addresses:
             if addr not in self._usage:
                 self._usage[addr] = 0
-
+        self.counter = 0
         self.config = config
         self.tokenizer = tokenizer
         self.pad_token_id = tokenizer.pad_token_id
@@ -133,6 +133,7 @@ class Router:
         
         for batch_index, formatted_prompt in enumerate(batch.non_tensor_batch["formatted_prompts"]):
             # For Completion API, we need to convert the conversation to a prompt string
+            self.counter += 1
             tasks.append(
                 self.submit_completions(  # Changed from submit_chat_completions
                     address=address,
@@ -143,6 +144,7 @@ class Router:
             ) 
         
         # Potential blocking: asyncio.gather can block if any task takes too long
+        print('Sending total requests: ', self.counter)
         completions_list = await asyncio.gather(*tasks)
         await self.release_address(address)  # Release the address when done
         

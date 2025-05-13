@@ -36,11 +36,11 @@ class SWEEnv(BaseEnv):
         entry: Optional[Dict] = None,
         dataset: Optional[Dataset] = None,
         idx: Optional[int] = None,
-        step_timeout: int = 120,
+        step_timeout: int = 90,
         reward_timeout: int = 300,
         backend: str = "kubernetes",
         delete_image: bool = False,
-        verbose: bool = True,
+        verbose: bool = False,
     ):
         """Initialize the SWE environment.
 
@@ -156,9 +156,37 @@ class SWEEnv(BaseEnv):
 
 
 if __name__ == "__main__":
-    dataset = load_dataset("R2E-Gym/SWE-Bench-Lite", split="test")
+    import concurrent.futures
+    from datasets import load_dataset
+    import threading
     
-    env = SWEEnv(dataset=dataset, idx=1, backend="kubernetes")
-    init_obs, _ = env.reset()
-    print(init_obs)
-    env.close()
+    # Use a thread-safe counter
+    counter_lock = threading.Lock()
+    total_envs = 0
+    
+    def process_env(idx):
+        global total_envs
+        try:
+            dataset_entry = dataset[idx]
+            env = SWEEnv(entry=dataset_entry, backend="kubernetes")
+            env.reset()
+            env.close()
+            
+            # Thread-safe increment of the counter
+            with counter_lock:
+                total_envs += 1
+                current_total = total_envs
+            
+            print(f"Successfully processed {current_total} out of {len(dataset)} environments")
+            return True
+        except Exception as e:
+            print(f"Error processing idx {idx}: {e}")
+            return False
+    
+    dataset = load_dataset("R2E-Gym/R2E-Gym-V1", split="train")
+    
+    # Process all elements using a threadpool with 512 workers
+    with concurrent.futures.ThreadPoolExecutor(max_workers=128) as executor:
+        results = list(executor.map(process_env, range(len(dataset))))
+    
+    print(f"Successfully processed {sum(results)} out of {len(dataset)} environments")
