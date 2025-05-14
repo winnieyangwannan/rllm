@@ -123,7 +123,7 @@ class AsyncAgentExecutionEngine(AgentExecutionEngine):
         if 'max_tokens' in kwargs:
             batch.meta_info['max_tokens'] = kwargs['max_tokens']
 
-        output = await self.router.generate_sequences(batch, **kwargs)
+        output = await self.router.generate_sequences(batch, application_id=application_id, **kwargs)
         
         attn = output.batch["attention_mask"][0, self.max_prompt_length:]
         tokens = output.batch["responses"][0]
@@ -389,6 +389,8 @@ class AsyncAgentExecutionEngine(AgentExecutionEngine):
         async def launch_one_trajectory_task(env_idx: int):
             try:
                 #await semaphore.acquire()
+                await asyncio.sleep(0.15 * env_idx)
+
                 application_id = str(uuid.uuid4())                
                 result = await self.run_agent_trajectory_with_retry(
                     idx=env_idx,
