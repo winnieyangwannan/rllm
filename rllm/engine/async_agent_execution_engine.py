@@ -222,8 +222,6 @@ class AsyncAgentExecutionEngine(AgentExecutionEngine):
         if isinstance(prompt, list) and all(isinstance(msg, dict) for msg in prompt):
             prompt_text = self.chat_template_parser.parse(prompt, add_generation_prompt=True, is_first_msg=True)
 
-        colorful_print(f"Prompt: {prompt_text}", "cyan") 
-
         response = await get_response(prompt_text)
         if isinstance(response, Completion):
             response = response.choices[0].text
@@ -406,9 +404,6 @@ class AsyncAgentExecutionEngine(AgentExecutionEngine):
         # Aggregate final trajectory statistics
         compute_trajectory_reward(trajectory)
         compute_mc_return(trajectory, gamma=self.gamma)
-
-        import json
-        print("chat_completions", json.dumps(agent.chat_completions, indent=2))
 
         if mode == "Text":
             return trajectory
