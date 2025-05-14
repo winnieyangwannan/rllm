@@ -109,7 +109,7 @@ if __name__ == "__main__":
     tokenizer = AutoTokenizer.from_pretrained(model_name)
 
     envs = [
-        CompetitionCodingEnv(max_turns=1) for _ in range(n_parallel_agents)
+        CompetitionCodingEnv(max_turns=2) for _ in range(n_parallel_agents)
     ]
 
     agents = [
