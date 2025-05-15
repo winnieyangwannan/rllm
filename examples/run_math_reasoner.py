@@ -1,10 +1,10 @@
 import asyncio
 import json
-from rllm.agents.code_agent import CodeAgent
-from rllm.environments.code.competition_coding import CompetitionCodingEnv
+from rllm.agents.math_agent import MathAgent
+from rllm.environments.base.single_turn_env import SingleTurnEnvironment
 
 
-from rllm.data.dataset_types import TestDataset, TrainDataset
+from rllm.data.dataset_types import TestDataset
 from rllm.data.utils import load_dataset
 from copy import deepcopy
 from transformers import AutoTokenizer
@@ -102,24 +102,23 @@ if __name__ == "__main__":
     os.environ["TOKENIZERS_PARALLELISM"] = "true"
 
     # Create the environment (no batch_size parameter)
-    n_parallel_agents = 128
+    n_parallel_agents = 256
 
-    model_name = "Qwen/Qwen3-14B"
+    model_name = "Qwen/Qwen3-4B"
     
     tokenizer = AutoTokenizer.from_pretrained(model_name)
 
     envs = [
-        CompetitionCodingEnv(max_turns=2) for _ in range(n_parallel_agents)
+        SingleTurnEnvironment() for _ in range(n_parallel_agents)
     ]
 
     agents = [
-        CodeAgent() for i in range(n_parallel_agents)
+        MathAgent() for i in range(n_parallel_agents)
     ]
 
     sampling_params = {
         "temperature": 0.6,
         "top_p": 0.95,
-        # "tools": envs[0].tools.json, 
         "model": model_name
     }
     
@@ -141,11 +140,7 @@ if __name__ == "__main__":
     )
     # engine.update_envs_and_agents(envs, agents)
 
-
-    train_datasets = [TrainDataset.Code.PRIMEINTELLECT, TrainDataset.Code.TACO, TrainDataset.Code.LIVECODEBENCH]
-    train_dataset_data = [load_dataset(d) for d in train_datasets]
-
-    tasks = load_data(n=1, dataset_enum=TestDataset.Code.LIVECODEBENCH)
+    tasks = load_data(n=1, dataset_enum=TestDataset.Math.AIME)[:1]
 
     results = asyncio.run(engine.execute_tasks(tasks))
     evaluate_results(results)
