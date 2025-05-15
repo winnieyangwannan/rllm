@@ -140,7 +140,7 @@ if __name__ == "__main__":
     )
     # engine.update_envs_and_agents(envs, agents)
 
-    tasks = load_data(n=1, dataset_enum=TestDataset.Math.AIME)[:1]
+    tasks = load_data(n=32, dataset_enum=TestDataset.Math.AIME)
 
     results = asyncio.run(engine.execute_tasks(tasks))
     evaluate_results(results)
