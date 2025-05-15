@@ -144,7 +144,7 @@ Now it is your turn, please show your thinking process and put the final action 
         """
         current_obs_str = str(observation)
         # Base message for the user
-        user_prompt_content = "Current Observation: \n" + current_obs_str + "\n" + "You have not achieved the goal, P has not reached G yet. Please give the next action."
+        user_prompt_content = f"Current Observation ({self.step}): \n" + current_obs_str + "\n" + "You have not achieved the goal, P has not reached G yet. Please give the next action."
 
         # Check if the observation is the same as the previous step's observation
         # This check only makes sense if we have completed at least one step (i.e., received a model response and acted)
