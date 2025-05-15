@@ -51,7 +51,7 @@ class SingleTurnEnvironment(BaseEnv):
         """
         # In a single turn environment, any action leads to termination
         self.done = True
-        reward = self.reward_fn(data_source="", llm_solution=action, ground_truth=self.task["answer"])
+        reward = self.reward_fn(data_source=self.task["data_source"], llm_solution=action, ground_truth=self.task["ground_truth"])
         # Return results
         return {}, reward, self.done, self.task
 

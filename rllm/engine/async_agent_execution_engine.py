@@ -22,6 +22,7 @@ from rllm.misc import colorful_print
 from rllm.parser.chat_template.parser import ChatTemplateParser
 from rllm.router.router import Router
 
+from openai.types import Completion
 
 class AsyncAgentExecutionEngine(AgentExecutionEngine):
     def __init__(
@@ -92,7 +93,9 @@ class AsyncAgentExecutionEngine(AgentExecutionEngine):
             # All generation is done via scheduler. Currently only works for verl
             self.router = Router(config=self.config, tokenizer=self.tokenizer, addresses=self.server_addresses)
 
-        self.chat_template_parser = ChatTemplateParser.get_parser(self.tokenizer)
+        # Create a thread pool executor for environment interactions (i.e. step, reset, close)
+        self.executor = concurrent.futures.ThreadPoolExecutor(max_workers=max_workers)
+        self.chat_template_parser = ChatTemplateParser.get_parser(self.tokenizer, enable_thinking=kwargs.get("enable_thinking", False))
 
     async def get_model_response(self, prompt, application_id, **kwargs):
         """
@@ -145,24 +148,60 @@ class AsyncAgentExecutionEngine(AgentExecutionEngine):
         response = response.replace(pad_token, "").replace(eos_token, "")
         return response
 
+    # async def _get_openai_async(self, prompt, _, **kwargs):
+    #     """
+    #     Get action from OpenAI API asynchronously with retry logic.
+        
+    #     Args:
+    #         prompt: The input prompt in chat completions format
+    #         application_id: Unique identifier for the application (unused for OpenAI)
+    #         **kwargs: Additional arguments to pass to the OpenAI API
+            
+    #     Returns:
+    #         The response from OpenAI API
+    #     """
+    #     async def get_response(prompt: List[Dict[str, str]]):
+    #         retries = self.api_retries
+    #         while retries > 0:
+    #             try:
+    #                 response = await self.client.chat.completions.create(
+    #                     messages=prompt,
+    #                     **self.sampling_params,
+    #                     **kwargs,
+    #                 )
+    #                 return response
+    #             except openai.RateLimitError:
+    #                 retries -= 1
+    #                 if retries == 0:
+    #                     return "Error: Rate limit reached and retries exhausted."
+    #                 print("Sleep for 5 seconds for API limit.")
+    #                 await asyncio.sleep(5)
+    #             except Exception as e:
+    #                 print("Error: ", e)
+    #                 return f"Error processing content: {e}"
+
+    #     response = await get_response(prompt)
+    #     return response
+
     async def _get_openai_async(self, prompt, _, **kwargs):
         """
         Get action from OpenAI API asynchronously with retry logic.
         
         Args:
-            prompt: The input prompt in chat completions format
+            prompt: The input prompt in text format for completions API
             application_id: Unique identifier for the application (unused for OpenAI)
             **kwargs: Additional arguments to pass to the OpenAI API
             
         Returns:
             The response from OpenAI API
         """
-        async def get_response(prompt: List[Dict[str, str]]):
+        async def get_response(prompt_text: str):
             retries = self.api_retries
             while retries > 0:
                 try:
-                    response = await self.client.chat.completions.create(
-                        messages=prompt,
+                    response = await self.client.completions.create(
+                        prompt=prompt_text,
+                        timeout=3600,
                         **self.sampling_params,
                         **kwargs,
                     )
@@ -177,11 +216,19 @@ class AsyncAgentExecutionEngine(AgentExecutionEngine):
                     print("Error: ", e)
                     return f"Error processing content: {e}"
 
-        response = await get_response(prompt)
+        # If prompt is in chat format, convert it to text format
+        prompt_text = prompt
+        if isinstance(prompt, list) and all(isinstance(msg, dict) for msg in prompt):
+            prompt_text = self.chat_template_parser.parse(prompt, add_generation_prompt=True, is_first_msg=True)
+
+        response = await get_response(prompt_text)
+        if isinstance(response, Completion):
+            response = response.choices[0].text
         return response
 
+
     async def run_agent_trajectory_async(
-        self, idx, application_id, seed=0, mode="Text", **kwargs
+        self, idx, application_id, task=None, seed=0, mode="Text", **kwargs
     ):
         """Run a single agent's trajectory asynchronously"""
         agent = self.agents[idx]
@@ -202,8 +249,7 @@ class AsyncAgentExecutionEngine(AgentExecutionEngine):
         episode_steps = []
 
         # Reset environment with the task using the executor
-        loop = asyncio.get_event_loop()
-        observation, info = await loop.run_in_executor(self.executor, env.reset)
+        observation, info = await asyncio.to_thread(env.reset, task)
         info['max_steps'] = self.max_steps
 
         # Reset agent
@@ -481,16 +527,16 @@ class AsyncAgentExecutionEngine(AgentExecutionEngine):
     #     for i in range(max_concurrent):
     #         index_queue.put_nowait(i)
 
-    #     async def sem_wrapper(task_id, task):
-    #         async with semaphore:
-    #             # Get an available index
-    #             index = await index_queue.get()
-    #             try:
-    #                 res = await self.run_agent_trajectory(index, task_id)
-    #                 return task_id, res
-    #             finally:
-    #                 # Put the index back in the queue when done
-    #                 await index_queue.put(index)
+        async def sem_wrapper(task_id, task):
+            async with semaphore:
+                # Get an available index
+                index = await index_queue.get()
+                try:
+                    res = await self.run_agent_trajectory_async(index, task_id, task)
+                    return task_id, res
+                finally:
+                    # Put the index back in the queue when done
+                    await index_queue.put(index)
         
     #     # Create a queue of tasks to process
     #     task_queue = list(enumerate(tasks))

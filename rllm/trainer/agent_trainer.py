@@ -798,6 +798,7 @@ class AgentPPOTrainer(RayPPOTrainer):
         non_tensor_batch = {
             "idxs": np.array(all_steps_idx_list),
             "is_last_step": np.array(all_steps_is_last_step_list),
+            "is_pad_step": np.array([False for _ in range(len(all_steps_idx_list))]),
         }
 
         meta_info = {
@@ -876,5 +877,6 @@ class AgentPPOTrainer(RayPPOTrainer):
             idx = original_batch_size + i
             batch.batch["traj_mask"][idx] = torch.zeros_like(batch.batch["traj_mask"][idx])
             batch.non_tensor_batch["is_last_step"][idx] = False
+            batch.non_tensor_batch["is_pad_step"][idx] = True
 
         return batch
