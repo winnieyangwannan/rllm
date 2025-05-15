@@ -3,6 +3,7 @@ import json
 class ChatTemplateParser:
     def __init__(self, tokenizer):
         self.tokenizer = tokenizer
+        self.assistant_token = ""
 
     def parse(self, messages, add_generation_prompt=False, **kwargs):
         return self.tokenizer.apply_chat_template(messages, tokenize=False, add_generation_prompt=add_generation_prompt)

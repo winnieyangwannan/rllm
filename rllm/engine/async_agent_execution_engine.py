@@ -84,8 +84,9 @@ class AsyncAgentExecutionEngine(AgentExecutionEngine):
         # rollout engine args
         self.rollout_engine_args = rollout_engine_args
         self.sampling_params = kwargs.get("sampling_params", None)
-        self.server_addresses = self.rollout_engine.server_addresses
-        print(self.server_addresses)
+
+        self.server_addresses = getattr(self.rollout_engine, "server_addresses", None)
+
         if self.engine_name == "openai":
             from openai import AsyncOpenAI
             self.client = AsyncOpenAI(**self.rollout_engine_args) 
@@ -249,7 +250,8 @@ class AsyncAgentExecutionEngine(AgentExecutionEngine):
         episode_steps = []
 
         # Reset environment with the task using the executor
-        observation, info = await asyncio.to_thread(env.reset, task)
+        loop = asyncio.get_event_loop()
+        observation, info = await loop.run_in_executor(self.executor, lambda: env.reset(task))
         info['max_steps'] = self.max_steps
 
         # Reset agent
@@ -502,30 +504,30 @@ class AsyncAgentExecutionEngine(AgentExecutionEngine):
         
         self.executor.shutdown(wait=False)
 
-    # async def execute_tasks(self, tasks):
-    #     """
-    #     Run asynchronous interactions between the agent and environment where each agent
-    #     has its own environment instance and can proceed independently.
+    async def execute_tasks(self, tasks):
+        """
+        Run asynchronous interactions between the agent and environment where each agent
+        has its own environment instance and can proceed independently.
         
-    #     Args:
-    #         tasks: List of tasks to process
-    #         max_concurrent: Maximum number of concurrent tasks to process (defaults to self.n_parallel_agents)
+        Args:
+            tasks: List of tasks to process
+            max_concurrent: Maximum number of concurrent tasks to process (defaults to self.n_parallel_agents)
             
-    #     Returns:
-    #         A list of trajectories, one for each task.
-    #     """
+        Returns:
+            A list of trajectories, one for each task.
+        """
 
-    #     max_concurrent = self.n_parallel_agents
+        max_concurrent = self.n_parallel_agents
         
-    #     # Initialize results list to store trajectories for all tasks
-    #     all_trajectories = {}
+        # Initialize results list to store trajectories for all tasks
+        all_trajectories = {}
         
-    #     # Create a queue of tasks to process
-    #     task_queue = list(enumerate(tasks))
-    #     semaphore = asyncio.Semaphore(max_concurrent)
-    #     index_queue = asyncio.Queue(maxsize=max_concurrent)
-    #     for i in range(max_concurrent):
-    #         index_queue.put_nowait(i)
+        # Create a queue of tasks to process
+        task_queue = list(enumerate(tasks))
+        semaphore = asyncio.Semaphore(max_concurrent)
+        index_queue = asyncio.Queue(maxsize=max_concurrent)
+        for i in range(max_concurrent):
+            index_queue.put_nowait(i)
 
         async def sem_wrapper(task_id, task):
             async with semaphore:
@@ -538,11 +540,11 @@ class AsyncAgentExecutionEngine(AgentExecutionEngine):
                     # Put the index back in the queue when done
                     await index_queue.put(index)
         
-    #     # Create a queue of tasks to process
-    #     task_queue = list(enumerate(tasks))
-    #     # Run all tasks concurrently
-    #     results = await asyncio.gather(*[sem_wrapper(task_id, task) for task_id, task in task_queue])
+        # Create a queue of tasks to process
+        task_queue = list(enumerate(tasks))
+        # Run all tasks concurrently
+        results = await asyncio.gather(*[sem_wrapper(task_id, task) for task_id, task in task_queue])
         
-    #     all_trajectories = {task_id: trajectory for task_id, trajectory in results}
-    #     ordered_trajectories = [all_trajectories[i] for i in range(len(all_trajectories))]
-    #     return ordered_trajectories
+        all_trajectories = {task_id: trajectory for task_id, trajectory in results}
+        ordered_trajectories = [all_trajectories[i] for i in range(len(all_trajectories))]
+        return ordered_trajectories
