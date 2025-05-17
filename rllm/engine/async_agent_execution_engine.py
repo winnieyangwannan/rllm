@@ -251,7 +251,7 @@ class AsyncAgentExecutionEngine(AgentExecutionEngine):
 
         # Reset environment with the task using the executor
         loop = asyncio.get_event_loop()
-        observation, info = await loop.run_in_executor(self.executor, lambda: env.reset(task))
+        observation, info = await loop.run_in_executor(self.executor, lambda: env.reset(task=task) if task else env.reset())
         info['max_steps'] = self.max_steps
 
         # Reset agent

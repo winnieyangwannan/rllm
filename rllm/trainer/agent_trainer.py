@@ -224,8 +224,7 @@ class AgentPPOTrainer(RayPPOTrainer):
                         metrics["batch/solve_all"] = solve_all
 
                         if self.config.trainer.rejection_sample:
-                            if self.config.agent.step_advantage_broadcast:
-                                raise Exception("Rejection sampling not supported on stepwise advantage broadcasting yet")
+                            
                             # If no valid samples remain, skip this batch and get a new one
                             if not valid_mask.any():
                                 continue
@@ -249,6 +248,10 @@ class AgentPPOTrainer(RayPPOTrainer):
                             size_mask[:max_batch_size] = True
                             batch = batch[size_mask]
                             batch = dataprotoitem_to_dataproto(batch)
+
+                            if self.config.agent.step_advantage_broadcast:
+                                # pad again
+                                batch = self._masked_pad_to_update_world_size(batch=batch)
 
                         # recompute old_log_probs
                         with _timer("old_log_prob", timing_raw):

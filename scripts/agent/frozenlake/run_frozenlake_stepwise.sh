@@ -45,7 +45,7 @@ python3 -m rllm.train.train_agent_ppo \
     actor_rollout_ref.rollout.gpu_memory_utilization=0.6 \
     actor_rollout_ref.rollout.n=8 \
     actor_rollout_ref.rollout.val_kwargs.n=1 \
-    actor_rollout_ref.rollout.val_kwargs.temperature=0.7 \
+    actor_rollout_ref.rollout.val_kwargs.temperature=0 \
     actor_rollout_ref.rollout.val_kwargs.top_p=0.8 \
     actor_rollout_ref.rollout.val_kwargs.top_k=20 \
     actor_rollout_ref.ref.fsdp_config.param_offload=True \
@@ -65,6 +65,7 @@ python3 -m rllm.train.train_agent_ppo \
     trainer.save_freq=400 \
     trainer.test_freq=5 \
     trainer.default_hdfs_dir=null \
+    trainer.rejection_sample=True \
     env.name=frozenlake \
     agent.name=frozenlakeagent \
     agent.max_steps=5 \
