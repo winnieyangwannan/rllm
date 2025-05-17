@@ -232,27 +232,26 @@ class AgentPPOTrainer(RayPPOTrainer):
                             # Filter batch to keep only valid samples
                             batch = batch[valid_mask]
                             batch = dataprotoitem_to_dataproto(batch)
-                            if self.config.agent.step_advantage_broadcast:
-                                # pad again, cannot around done because each step is not complete trajectory
-                                batch = self._masked_pad_to_update_world_size(batch=batch)
-                                
-                            else:
-                                # Round down to the nearest multiple of world size
-                                num_trainer_replicas = self.actor_rollout_wg.world_size
-                                max_batch_size = (
-                                    batch.batch["input_ids"].shape[0]
-                                    // num_trainer_replicas
-                                ) * num_trainer_replicas
-                                if not max_batch_size:
-                                    # give up, you got everything either all wrong or right.
-                                    continue
 
-                                size_mask = torch.zeros(
-                                    batch.batch["input_ids"].shape[0], dtype=torch.bool
-                                )
-                                size_mask[:max_batch_size] = True
-                                batch = batch[size_mask]
-                                batch = dataprotoitem_to_dataproto(batch)
+                            if self.config.agent.step_advantage_broadcast:
+                                # To support it, need to figure out an efficient way to make sure both number of last steps and number of total steps in the batch is multiple of worldsize
+                                raise Exception("Rejection sampling for step advantage not supported yet")
+                            # Round down to the nearest multiple of world size
+                            num_trainer_replicas = self.actor_rollout_wg.world_size
+                            max_batch_size = (
+                                batch.batch["input_ids"].shape[0]
+                                // num_trainer_replicas
+                            ) * num_trainer_replicas
+                            if not max_batch_size:
+                                # give up, you got everything either all wrong or right.
+                                continue
+
+                            size_mask = torch.zeros(
+                                batch.batch["input_ids"].shape[0], dtype=torch.bool
+                            )
+                            size_mask[:max_batch_size] = True
+                            batch = batch[size_mask]
+                            batch = dataprotoitem_to_dataproto(batch)
 
                             
 
@@ -305,6 +304,7 @@ class AgentPPOTrainer(RayPPOTrainer):
                         )
 
                         if self.config.agent.step_advantage_broadcast:
+                            # remove the padded last steps
                             # Merging the separated out steps using the advantage from last steps
                             self._stepwise_advantage_broadcast(batch, other_step_batch=other_step_batch)
                             # batch = batch.merge(other_step_batch)

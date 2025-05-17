@@ -21,7 +21,7 @@ python3 -m rllm.train.train_agent_ppo \
     actor_rollout_ref.hybrid_engine=True \
     actor_rollout_ref.actor.optim.lr=1e-6 \
     actor_rollout_ref.model.use_remove_padding=True \
-    actor_rollout_ref.actor.loss_agg_mode=seq-mean-token-mean \
+    actor_rollout_ref.actor.loss_agg_mode=seq-mean-token-sum \
     actor_rollout_ref.actor.ppo_mini_batch_size=16 \
     actor_rollout_ref.actor.use_dynamic_bsz=True \
     actor_rollout_ref.actor.ppo_max_token_len_per_gpu=24000 \
@@ -43,7 +43,7 @@ python3 -m rllm.train.train_agent_ppo \
     actor_rollout_ref.rollout.enable_log_prob=False \
     actor_rollout_ref.rollout.temperature=0.7 \
     actor_rollout_ref.rollout.gpu_memory_utilization=0.6 \
-    actor_rollout_ref.rollout.n=8 \
+    actor_rollout_ref.rollout.n=4 \
     actor_rollout_ref.rollout.val_kwargs.n=1 \
     actor_rollout_ref.rollout.val_kwargs.temperature=0 \
     actor_rollout_ref.rollout.val_kwargs.top_p=0.8 \
@@ -58,14 +58,14 @@ python3 -m rllm.train.train_agent_ppo \
     trainer.critic_warmup=0 \
     trainer.logger=['console','wandb'] \
     trainer.project_name='stepwise-agent' \
-    trainer.experiment_name='14b-loop-drgrpo-frozenlake_agent_stepwise-seq-mean-token-mean' \
-    trainer.val_before_train=True \
+    trainer.experiment_name='14b-loop-drgrpo-frozenlake_agent_stepwise-seq-mean-token-sum' \
+    trainer.val_before_train=False \
     trainer.n_gpus_per_node=8 \
     trainer.nnodes=1 \
     trainer.save_freq=400 \
     trainer.test_freq=5 \
     trainer.default_hdfs_dir=null \
-    trainer.rejection_sample=True \
+    trainer.rejection_sample=False \
     env.name=frozenlake \
     agent.name=frozenlakeagent \
     agent.max_steps=5 \
