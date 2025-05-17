@@ -231,27 +231,30 @@ class AgentPPOTrainer(RayPPOTrainer):
 
                             # Filter batch to keep only valid samples
                             batch = batch[valid_mask]
-                            batch = dataprotoitem_to_dataproto(batch)
-                            # Round down to the nearest multiple of world size
-                            num_trainer_replicas = self.actor_rollout_wg.world_size
-                            max_batch_size = (
-                                batch.batch["input_ids"].shape[0]
-                                // num_trainer_replicas
-                            ) * num_trainer_replicas
-                            if not max_batch_size:
-                                # give up, you got everything either all wrong or right.
-                                continue
-
-                            size_mask = torch.zeros(
-                                batch.batch["input_ids"].shape[0], dtype=torch.bool
-                            )
-                            size_mask[:max_batch_size] = True
-                            batch = batch[size_mask]
-                            batch = dataprotoitem_to_dataproto(batch)
-
                             if self.config.agent.step_advantage_broadcast:
-                                # pad again
+                                # pad again, cannot around done because each step is not complete trajectory
                                 batch = self._masked_pad_to_update_world_size(batch=batch)
+                            else:
+                                batch = dataprotoitem_to_dataproto(batch)
+                                
+                                # Round down to the nearest multiple of world size
+                                num_trainer_replicas = self.actor_rollout_wg.world_size
+                                max_batch_size = (
+                                    batch.batch["input_ids"].shape[0]
+                                    // num_trainer_replicas
+                                ) * num_trainer_replicas
+                                if not max_batch_size:
+                                    # give up, you got everything either all wrong or right.
+                                    continue
+
+                                size_mask = torch.zeros(
+                                    batch.batch["input_ids"].shape[0], dtype=torch.bool
+                                )
+                                size_mask[:max_batch_size] = True
+                                batch = batch[size_mask]
+                                batch = dataprotoitem_to_dataproto(batch)
+
+                            
 
                         # recompute old_log_probs
                         with _timer("old_log_prob", timing_raw):
