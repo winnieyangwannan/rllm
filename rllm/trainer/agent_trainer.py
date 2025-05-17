@@ -231,11 +231,12 @@ class AgentPPOTrainer(RayPPOTrainer):
 
                             # Filter batch to keep only valid samples
                             batch = batch[valid_mask]
+                            batch = dataprotoitem_to_dataproto(batch)
                             if self.config.agent.step_advantage_broadcast:
                                 # pad again, cannot around done because each step is not complete trajectory
                                 batch = self._masked_pad_to_update_world_size(batch=batch)
                             else:
-                                batch = dataprotoitem_to_dataproto(batch)
+
                                 
                                 # Round down to the nearest multiple of world size
                                 num_trainer_replicas = self.actor_rollout_wg.world_size
