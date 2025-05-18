@@ -17,7 +17,7 @@ python3 -m rllm.train.train_agent_ppo \
     data.val_batch_size=128 \
     data.max_prompt_length=12288 \
     data.max_response_length=2048 \
-    actor_rollout_ref.model.path=Qwen/Qwen3-8B \
+    actor_rollout_ref.model.path=Qwen/Qwen3-4B \
     actor_rollout_ref.hybrid_engine=True \
     actor_rollout_ref.actor.optim.lr=1e-6 \
     actor_rollout_ref.model.use_remove_padding=True \
@@ -58,7 +58,7 @@ python3 -m rllm.train.train_agent_ppo \
     trainer.critic_warmup=0 \
     trainer.logger=['console','wandb'] \
     trainer.project_name='stepwise-agent' \
-    trainer.experiment_name='8b-loop-drgrpo-frozenlake_agent_stepwise-seq-mean-token-sum-norm' \
+    trainer.experiment_name='4b-loop-drgrpo-frozenlake_agent_stepwise-seq-mean-token-sum-norm' \
     trainer.val_before_train=False \
     trainer.n_gpus_per_node=8 \
     trainer.nnodes=1 \

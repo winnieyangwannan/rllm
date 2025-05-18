@@ -410,7 +410,7 @@ class AgentExecutionEngine:
 
         timing_raw = timing_raw or {}
 
-        for _ in range(self.retry_limit):
+        for i in range(self.retry_limit):
             try:
                 steps = 0
                 
@@ -570,6 +570,8 @@ class AgentExecutionEngine:
                 print(f"Error in environment interaction")
                 print(traceback.format_exc())
                 print(e)
+                if i == self.retry_limit - 1:
+                    raise e # all retry trials are done
                 continue
         
         # Close all environments
