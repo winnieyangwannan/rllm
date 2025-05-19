@@ -34,7 +34,7 @@ class AgentExecutionEngine:
         model_path="",
         gamma=0.95,
         api_retries=3,
-        retry_limit=3,
+        retry_limit=1,
         max_steps=5,
         max_prompt_length=2048,  # Max prompt length for agent is only applied to first request
         max_response_length=16384,

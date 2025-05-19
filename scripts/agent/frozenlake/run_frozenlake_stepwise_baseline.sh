@@ -13,15 +13,15 @@ python3 -m rllm.train.train_agent_ppo \
     algorithm.adv_estimator=loop \
     data.train_files=${RLLM_DIR}/data/rllm-frozenlake/train.parquet \
     data.val_files=${RLLM_DIR}/data/rllm-frozenlake/test.parquet \
-    data.train_batch_size=64 \
+    data.train_batch_size=32 \
     data.val_batch_size=128 \
     data.max_prompt_length=4096 \
     data.max_response_length=10240 \
-    actor_rollout_ref.model.path=Qwen/Qwen3-14B \
+    actor_rollout_ref.model.path=Qwen/Qwen3-1.7B \
     actor_rollout_ref.hybrid_engine=True \
     actor_rollout_ref.actor.optim.lr=1e-6 \
     actor_rollout_ref.model.use_remove_padding=True \
-    actor_rollout_ref.actor.loss_agg_mode=token-mean \
+    actor_rollout_ref.actor.loss_agg_mode=seq-mean-token-sum-norm \
     actor_rollout_ref.actor.ppo_mini_batch_size=16 \
     actor_rollout_ref.actor.use_dynamic_bsz=True \
     actor_rollout_ref.actor.ppo_max_token_len_per_gpu=24000 \
@@ -30,7 +30,7 @@ python3 -m rllm.train.train_agent_ppo \
     actor_rollout_ref.actor.kl_loss_coef=0.001 \
     actor_rollout_ref.actor.kl_loss_type=low_var_kl \
     actor_rollout_ref.actor.ulysses_sequence_parallel_size=1 \
-    actor_rollout_ref.actor.grad_norm_threshold=100 \
+    actor_rollout_ref.actor.grad_norm_threshold=10 \
     actor_rollout_ref.model.enable_gradient_checkpointing=True \
     actor_rollout_ref.actor.fsdp_config.param_offload=True \
     actor_rollout_ref.actor.fsdp_config.optimizer_offload=True \
@@ -45,7 +45,7 @@ python3 -m rllm.train.train_agent_ppo \
     actor_rollout_ref.rollout.gpu_memory_utilization=0.6 \
     actor_rollout_ref.rollout.n=4 \
     actor_rollout_ref.rollout.val_kwargs.n=1 \
-    actor_rollout_ref.rollout.val_kwargs.temperature=0.7 \
+    actor_rollout_ref.rollout.val_kwargs.temperature=0 \
     actor_rollout_ref.rollout.val_kwargs.top_p=0.8 \
     actor_rollout_ref.rollout.val_kwargs.top_k=20 \
     actor_rollout_ref.ref.fsdp_config.param_offload=True \
@@ -58,7 +58,7 @@ python3 -m rllm.train.train_agent_ppo \
     trainer.critic_warmup=0 \
     trainer.logger=['console','wandb'] \
     trainer.project_name='stepwise-agent' \
-    trainer.experiment_name='14b-loop-drgrpo-frozenlake_agent_baseline' \
+    trainer.experiment_name='1.7b-loop-drgrpo-frozenlake_agent_baseline' \
     trainer.val_before_train=True \
     trainer.n_gpus_per_node=4 \
     trainer.nnodes=1 \

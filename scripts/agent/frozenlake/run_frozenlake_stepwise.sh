@@ -5,7 +5,7 @@ export PYTORCH_CUDA_ALLOC_CONF="expandable_segments:False"
 export VLLM_USE_V1=1
 export VLLM_ALLOW_LONG_MAX_MODEL_LEN=1
 export VLLM_ENGINE_ITERATION_TIMEOUT_S=100000000000
-export CUDA_VISIBLE_DEVICES=4,5,6,7,0,1,2,3
+export CUDA_VISIBLE_DEVICES=4,5,6,7
 # Find the directory where rllm package is located
 RLLM_DIR=$(python3 -c "import rllm; import os; print(os.path.dirname(os.path.dirname(rllm.__file__)))")
 
@@ -17,7 +17,7 @@ python3 -m rllm.train.train_agent_ppo \
     data.val_batch_size=128 \
     data.max_prompt_length=12288 \
     data.max_response_length=2048 \
-    actor_rollout_ref.model.path=Qwen/Qwen3-4B \
+    actor_rollout_ref.model.path=Qwen/Qwen3-1.7B \
     actor_rollout_ref.hybrid_engine=True \
     actor_rollout_ref.actor.optim.lr=1e-6 \
     actor_rollout_ref.model.use_remove_padding=True \
@@ -58,9 +58,9 @@ python3 -m rllm.train.train_agent_ppo \
     trainer.critic_warmup=0 \
     trainer.logger=['console','wandb'] \
     trainer.project_name='stepwise-agent' \
-    trainer.experiment_name='4b-loop-drgrpo-frozenlake_agent_stepwise-seq-mean-token-sum-norm' \
-    trainer.val_before_train=False \
-    trainer.n_gpus_per_node=8 \
+    trainer.experiment_name='1.7b-loop-drgrpo-frozenlake_agent_stepwise-seq-mean-token-sum-norm' \
+    trainer.val_before_train=True \
+    trainer.n_gpus_per_node=4 \
     trainer.nnodes=1 \
     trainer.save_freq=400 \
     trainer.test_freq=5 \
