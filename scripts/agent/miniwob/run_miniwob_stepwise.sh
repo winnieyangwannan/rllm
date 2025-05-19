@@ -15,7 +15,7 @@ python3 -m rllm.train.train_agent_ppo \
     data.val_files=/home/sijun/data/rllm-miniwob/test.parquet \
     data.train_batch_size=32 \
     data.val_batch_size=128 \
-    data.max_prompt_length=15360 \
+    data.max_prompt_length=10240 \
     data.max_response_length=4096 \
     actor_rollout_ref.model.path=Qwen/Qwen3-4B \
     actor_rollout_ref.hybrid_engine=True \
@@ -58,7 +58,7 @@ python3 -m rllm.train.train_agent_ppo \
     trainer.logger=['console','wandb'] \
     trainer.project_name='stepwise-agent' \
     trainer.experiment_name='4b-loop-drgrpo-miniwob_agent_stepwise-seq-mean-token-sum-norm' \
-    trainer.val_before_train=True \
+    trainer.val_before_train=False \
     trainer.n_gpus_per_node=8 \
     trainer.nnodes=1 \
     trainer.save_freq=400 \

@@ -34,7 +34,7 @@ class AgentExecutionEngine:
         model_path="",
         gamma=0.95,
         api_retries=3,
-        retry_limit=1,
+        retry_limit=3,
         max_steps=5,
         max_prompt_length=2048,  # Max prompt length for agent is only applied to first request
         max_response_length=16384,
@@ -456,7 +456,7 @@ class AgentExecutionEngine:
                     steps += 1
                     prompt_response_pair = {}
                     with _timer("get_actions", timing_raw):
-                        prompts = [self.agents[i].chat_completions.copy() for i in range(env_batch_size)]
+                        prompts = [self.agents[i].prompt.copy() for i in range(env_batch_size)]
                         # for enforced max prompt, no need to deduct here
                         if not self.enforce_max_prompt_length:
                             max_tokens = self.max_response_length - min([t for i, t in enumerate(all_response_token_lens) if all_dones[i] is False])
@@ -490,7 +490,7 @@ class AgentExecutionEngine:
                             ) = self.step_environment_batched(actions, seq_idxs)
                     except Exception as e:
                         print(f"Error in environment interation: {e}. Re-attempting...")
-                        self.reset_agents()
+                        self.reset_agents_batched()
                         raise e
 
                     for i, idx in enumerate(seq_idxs):

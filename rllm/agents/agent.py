@@ -33,6 +33,11 @@ class BaseAgent(ABC):
     def trajectory(self) -> Trajectory:
         """Converts agent's internal state into a Trajectory object."""
         return Trajectory()
+    
+    @property
+    def prompt(self) -> List[Dict[str, str]]:
+        """Converts agent's internal state to list of OAI chat completions used for next prompt"""
+        return self.chat_completions
 
     @abstractmethod
     def update_from_env(self, observation: Any, action: Any, reward: float, done: bool, info: Dict, **kwargs):
