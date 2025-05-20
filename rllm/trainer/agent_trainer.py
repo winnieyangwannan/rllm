@@ -425,7 +425,7 @@ class AgentPPOTrainer(RayPPOTrainer):
         data_source_lst = []
         for test_data in self.val_dataloader:
             test_batch = DataProto.from_single_dict(test_data)
-
+            test_batch.non_tensor_batch['uid'] = np.array([str(uuid.uuid4()) for _ in range(len(test_batch.batch))], dtype=object)
             n_val_samples = self.config.actor_rollout_ref.rollout.val_kwargs.n
             test_batch = test_batch.repeat(repeat_times=n_val_samples, interleave=True)
             test_batch.pop(["input_ids", "attention_mask", "position_ids"])  # these are not needed for environment based interaction
@@ -489,7 +489,8 @@ class AgentPPOTrainer(RayPPOTrainer):
             # pass@k
             if data_source not in data_source_uid_pass_rates:
                 data_source_uid_pass_rates[data_source] = {}
-            uid = uid_tensor[i].item()
+
+            uid = uid_tensor[i]
             if uid not in data_source_uid_pass_rates[data_source]:
                 data_source_uid_pass_rates[data_source][uid] = 0 # default to not pass
             # take highest score
