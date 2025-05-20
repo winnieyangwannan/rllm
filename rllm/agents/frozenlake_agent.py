@@ -41,7 +41,7 @@ Reach goal: +1.0
 You will be provided the current observation, please decide on the next Action.
 You should show your thought process and then input the final action in ``` ```.
 You should only output the NEXT ACTION at each interation in the ``` ```. For example, if you want to move up, you should output ```Up```.
-You should plan ahead and try to achieve it in minimum number of steps. 
+You should plan ahead and need to achieve it in minimum number of steps.
 You should be aware that frozen tiles can be slippery, but the chance is small and you should not overthink it.
 
 Please show your thinking process and put the final action in ``` ```. In every turn, the final action MUST be one of Up, Down, Left, Right.
@@ -69,7 +69,7 @@ Reach goal: +1.0
 You will be provided the current observation, please decide on the next Action.
 You should show your thought process and then input the final action in ``` ```.
 You should only output the NEXT ACTION at each interation in the ``` ```. For example, if you want to move up, you should output ```Up```.
-You should plan ahead and try to achieve it in minimum number of steps. 
+You should plan ahead and need to achieve it in minimum number of steps.
 You should be aware that frozen tiles can be slippery, but the chance is small and you should not overthink it.
 
 Below are examples for an interaction:

@@ -15,9 +15,9 @@ python3 -m rllm.train.train_agent_ppo \
     data.val_files=${RLLM_DIR}/data/rllm-frozenlake/test.parquet \
     data.train_batch_size=32 \
     data.val_batch_size=128 \
-    data.max_prompt_length=12288 \
+    data.max_prompt_length=18432 \
     data.max_response_length=2048 \
-    actor_rollout_ref.model.path=Qwen/Qwen3-1.7B \
+    actor_rollout_ref.model.path=Qwen/Qwen3-4B \
     actor_rollout_ref.hybrid_engine=True \
     actor_rollout_ref.actor.optim.lr=1e-6 \
     actor_rollout_ref.model.use_remove_padding=True \
@@ -58,7 +58,7 @@ python3 -m rllm.train.train_agent_ppo \
     trainer.critic_warmup=0 \
     trainer.logger=['console','wandb'] \
     trainer.project_name='stepwise-agent' \
-    trainer.experiment_name='1.7b-loop-drgrpo-frozenlake_agent_stepwise-seq-mean-token-sum-norm' \
+    trainer.experiment_name='4b-loop-drgrpo-frozenlake_agent_stepwise-seq-mean-token-sum-norm-normalized' \
     trainer.val_before_train=True \
     trainer.n_gpus_per_node=8 \
     trainer.nnodes=1 \
@@ -66,13 +66,13 @@ python3 -m rllm.train.train_agent_ppo \
     trainer.test_freq=5 \
     trainer.default_hdfs_dir=null \
     trainer.rejection_sample=True \
-    trainer.rejection_sample_multiplier=2 \
+    trainer.rejection_sample_multiplier=3 \
     env.name=frozenlake \
     agent.name=frozenlakeagent \
-    agent.max_steps=5 \
+    agent.max_steps=8 \
     agent.async_engine=True \
     agent.step_advantage_broadcast=True \
-    agent.normalize_step_advantage=False \
+    agent.normalize_step_advantage=True \
     agent.enable_thinking=True \
     trainer.total_epochs=100
 
