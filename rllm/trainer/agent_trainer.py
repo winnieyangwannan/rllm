@@ -470,6 +470,11 @@ class AgentPPOTrainer(RayPPOTrainer):
         # evaluate test_score based on data source
         data_source_reward = {}
         data_source_env_reward = {}
+
+        # to group for pass@k
+        uid_tensor = test_batch.non_tensor_batch["uid"] 
+        data_source_uid_pass_rates = {} # data source to {uid: pass or not}
+
         for i in range(reward_tensor.shape[0]):
             data_source = data_sources[i]
 
@@ -481,12 +486,28 @@ class AgentPPOTrainer(RayPPOTrainer):
                 data_source_env_reward[data_source] = []
             data_source_env_reward[data_source].append(env_reward_tensor[i].item())
 
+            # pass@k
+            if data_source not in data_source_uid_pass_rates:
+                data_source_uid_pass_rates[data_source] = {}
+            uid = uid_tensor[i].item()
+            if uid not in data_source_uid_pass_rates[data_source]:
+                data_source_uid_pass_rates[data_source][uid] = 0 # default to not pass
+            # take highest score
+            data_source_uid_pass_rates[data_source][uid] = max(data_source_uid_pass_rates[data_source][uid], reward_tensor[i].item())
+
+            
         metric_dict = {}
         for data_source, rewards in data_source_reward.items():
             metric_dict[f"val/test_score/{data_source}"] = np.mean(rewards)
 
         for data_source, env_rewards in data_source_env_reward.items():
             metric_dict[f"val/env_score/{data_source}"] = np.mean(env_rewards)
+
+        for data_source, pass_rates in data_source_uid_pass_rates.items():
+            pass_k_lst = []
+            for uid, pass_score in pass_rates.items():
+                pass_k_lst.append(pass_score >= 1) # assuming 1 means passed
+            metric_dict[f"val/test_score/pass@k/{data_source}"] = np.mean(pass_k_lst)
 
         return metric_dict
 
