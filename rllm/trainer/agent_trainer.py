@@ -222,10 +222,10 @@ class AgentPPOTrainer(RayPPOTrainer):
                         # Log to metrics
                         metrics["batch/solve_none"] = solve_none
                         metrics["batch/solve_all"] = solve_all
+                        metrics["batch/solve_partial"] = len(unique_uids) - solve_none - solve_all
 
                         if self.config.trainer.rejection_sample:
-                            if self.config.agent.step_advantage_broadcast:
-                                raise Exception("Rejection sampling not supported on stepwise advantage broadcasting yet")
+                            
                             # If no valid samples remain, skip this batch and get a new one
                             if not valid_mask.any():
                                 continue
@@ -233,22 +233,68 @@ class AgentPPOTrainer(RayPPOTrainer):
                             # Filter batch to keep only valid samples
                             batch = batch[valid_mask]
                             batch = dataprotoitem_to_dataproto(batch)
-                            # Round down to the nearest multiple of world size
-                            num_trainer_replicas = self.actor_rollout_wg.world_size
-                            max_batch_size = (
-                                batch.batch["input_ids"].shape[0]
-                                // num_trainer_replicas
-                            ) * num_trainer_replicas
-                            if not max_batch_size:
-                                # give up, you got everything either all wrong or right.
-                                continue
 
-                            size_mask = torch.zeros(
-                                batch.batch["input_ids"].shape[0], dtype=torch.bool
-                            )
-                            size_mask[:max_batch_size] = True
-                            batch = batch[size_mask]
-                            batch = dataprotoitem_to_dataproto(batch)
+                            if self.config.agent.step_advantage_broadcast:
+                                # batch now only contains steps with valid uids
+                                # filter out padding steps
+                                is_pad_step = batch.non_tensor_batch["is_pad_step"]
+                                non_pad_step_indices = np.where(~is_pad_step)[0]  
+                                batch = batch.select_idxs(non_pad_step_indices) # This batch only has non_pad steps
+
+                                # need to make sure both number of last steps (number of uids) and number of total steps in the batch (batch size after processing) are all multiples of world size
+                                # separate out last step and intermediate steps
+                                is_last_step = batch.non_tensor_batch["is_last_step"]
+                                valid_last_step_indices = np.where(is_last_step)[0]  
+                                not_last_step_indices = np.where(~is_last_step)[0]  
+                                last_step_batch = batch.select_idxs(valid_last_step_indices) # This batch only has valid last steps
+                                non_last_step_batch = batch.select_idxs(not_last_step_indices)
+
+                                # filter last_step_batch to make sure its multiple of world size
+                                num_trainer_replicas = self.actor_rollout_wg.world_size
+                                max_batch_size = (
+                                    last_step_batch.batch["input_ids"].shape[0] # 1 per trajectory
+                                    // num_trainer_replicas
+                                ) * num_trainer_replicas
+                                if not max_batch_size:
+                                    # give up, you got everything either all wrong or right.
+                                    continue
+
+                                size_mask = torch.zeros(
+                                    last_step_batch.batch["input_ids"].shape[0], dtype=torch.bool
+                                )
+                                size_mask[:max_batch_size] = True
+                                last_step_batch = last_step_batch[size_mask]
+                                last_step_batch = dataprotoitem_to_dataproto(last_step_batch) # filtered last steps
+
+                                # now we go through all the non_last_step_batch and keep everything that has same idxs that exists in the filtered last steps
+                                valid_last_step_idxs = last_step_batch.non_tensor_batch["idxs"]
+                                non_last_step_idxs = non_last_step_batch.non_tensor_batch["idxs"]
+                                non_last_step_mask = np.isin(non_last_step_idxs, valid_last_step_idxs)
+                                non_last_step_batch = non_last_step_batch[non_last_step_mask]
+                                non_last_step_batch = dataprotoitem_to_dataproto(non_last_step_batch)
+
+                                # concatenate then pad
+                                batch = DataProto.concat([last_step_batch, non_last_step_batch])
+                                batch = self._masked_pad_to_update_world_size(batch)
+                            else:
+                                # Round down to the nearest multiple of world size
+                                num_trainer_replicas = self.actor_rollout_wg.world_size
+                                max_batch_size = (
+                                    batch.batch["input_ids"].shape[0]
+                                    // num_trainer_replicas
+                                ) * num_trainer_replicas
+                                if not max_batch_size:
+                                    # give up, you got everything either all wrong or right.
+                                    continue
+
+                                size_mask = torch.zeros(
+                                    batch.batch["input_ids"].shape[0], dtype=torch.bool
+                                )
+                                size_mask[:max_batch_size] = True
+                                batch = batch[size_mask]
+                                batch = dataprotoitem_to_dataproto(batch)
+
+                                
 
                         # recompute old_log_probs
                         with _timer("old_log_prob", timing_raw):
@@ -299,6 +345,7 @@ class AgentPPOTrainer(RayPPOTrainer):
                         )
 
                         if self.config.agent.step_advantage_broadcast:
+                            # remove the padded last steps
                             # Merging the separated out steps using the advantage from last steps
                             self._stepwise_advantage_broadcast(batch, other_step_batch=other_step_batch)
                             # batch = batch.merge(other_step_batch)
@@ -378,7 +425,7 @@ class AgentPPOTrainer(RayPPOTrainer):
         data_source_lst = []
         for test_data in self.val_dataloader:
             test_batch = DataProto.from_single_dict(test_data)
-
+            test_batch.non_tensor_batch['uid'] = np.array([str(uuid.uuid4()) for _ in range(len(test_batch.batch))], dtype=object)
             n_val_samples = self.config.actor_rollout_ref.rollout.val_kwargs.n
             test_batch = test_batch.repeat(repeat_times=n_val_samples, interleave=True)
             test_batch.pop(["input_ids", "attention_mask", "position_ids"])  # these are not needed for environment based interaction
@@ -423,6 +470,11 @@ class AgentPPOTrainer(RayPPOTrainer):
         # evaluate test_score based on data source
         data_source_reward = {}
         data_source_env_reward = {}
+
+        # to group for pass@k
+        uid_tensor = test_batch.non_tensor_batch["uid"] 
+        data_source_uid_pass_rates = {} # data source to {uid: pass or not}
+
         for i in range(reward_tensor.shape[0]):
             data_source = data_sources[i]
 
@@ -434,12 +486,29 @@ class AgentPPOTrainer(RayPPOTrainer):
                 data_source_env_reward[data_source] = []
             data_source_env_reward[data_source].append(env_reward_tensor[i].item())
 
+            # pass@k
+            if data_source not in data_source_uid_pass_rates:
+                data_source_uid_pass_rates[data_source] = {}
+
+            uid = uid_tensor[i]
+            if uid not in data_source_uid_pass_rates[data_source]:
+                data_source_uid_pass_rates[data_source][uid] = 0 # default to not pass
+            # take highest score
+            data_source_uid_pass_rates[data_source][uid] = max(data_source_uid_pass_rates[data_source][uid], reward_tensor[i].item())
+
+            
         metric_dict = {}
         for data_source, rewards in data_source_reward.items():
             metric_dict[f"val/test_score/{data_source}"] = np.mean(rewards)
 
         for data_source, env_rewards in data_source_env_reward.items():
             metric_dict[f"val/env_score/{data_source}"] = np.mean(env_rewards)
+
+        for data_source, pass_rates in data_source_uid_pass_rates.items():
+            pass_k_lst = []
+            for uid, pass_score in pass_rates.items():
+                pass_k_lst.append(pass_score >= 1) # assuming 1 means passed
+            metric_dict[f"val/test_score/pass@k/{data_source}"] = np.mean(pass_k_lst)
 
         return metric_dict
 
@@ -717,6 +786,7 @@ class AgentPPOTrainer(RayPPOTrainer):
         step_numbers = [] # number of steps of each episode, 0 indexed
         all_steps_idx_list = []
         all_steps_is_last_step_list = []
+        all_steps_step_num = [] # total number of steps the trajectory this step belongs to have
         training_rewards = []
         environment_rewards = []
         # the last step will have reward assigned and be used for advantage calculation
@@ -737,6 +807,8 @@ class AgentPPOTrainer(RayPPOTrainer):
             all_steps_idx_list.extend([idx for _ in range(len(episode_steps))])
             all_steps_is_last_step_list.extend([False for _ in range(len(episode_steps))])
             all_steps_is_last_step_list[-1] = True
+
+            all_steps_step_num.extend([len(episode_steps) for _ in range(len(episode_steps))])
 
         
         # Convert all steps into token tensors
@@ -795,10 +867,13 @@ class AgentPPOTrainer(RayPPOTrainer):
             "traj_mask": traj_mask, 
         }
 
+        batch_id = str(uuid.uuid4())
         non_tensor_batch = {
             "idxs": np.array(all_steps_idx_list),
+            "step_nums": np.array(all_steps_step_num),
             "is_last_step": np.array(all_steps_is_last_step_list),
             "is_pad_step": np.array([False for _ in range(len(all_steps_idx_list))]),
+            "batch_id": np.array([batch_id for _ in range(len(all_steps_idx_list))]), # in case need to differentiate which iteration the step is coming from
         }
 
         meta_info = {
@@ -822,7 +897,8 @@ class AgentPPOTrainer(RayPPOTrainer):
             other_step_batch.batch['response_mask'] = compute_response_mask(other_step_batch)
         if "response_mask" not in last_step_batch.batch.keys():
             last_step_batch.batch['response_mask'] = compute_response_mask(last_step_batch)
-        src_indices = last_step_batch.non_tensor_batch["idxs"]             
+        src_indices = last_step_batch.non_tensor_batch["idxs"]   
+        src_total_steps = last_step_batch.non_tensor_batch["step_nums"]             
         tgt_indices = other_step_batch.non_tensor_batch["idxs"]
         src_advantages = last_step_batch.batch["advantages"]                
         src_mask = last_step_batch.batch["response_mask"]             
@@ -833,6 +909,13 @@ class AgentPPOTrainer(RayPPOTrainer):
         for i, idx in enumerate(src_indices):
             mask = src_mask[i].bool()
             scalar = src_advantages[i][mask].mean() 
+
+            if self.config.agent.normalize_step_advantage:
+                # normalize the advantage against number of steps
+                scalar = scalar / src_total_steps[i]
+                # reassign the normalized advantage to last_step_batch as well
+                last_step_batch.batch["advantages"][i][mask] = scalar
+
             idx_to_scalar_adv[int(idx)] = scalar
 
         # Create new tensor for other_step_batch with per-token assignment

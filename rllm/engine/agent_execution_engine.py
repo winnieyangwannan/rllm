@@ -351,15 +351,18 @@ class AgentExecutionEngine:
         def close_env_single(env):
             return env.close()
         
-
-        with ThreadPoolExecutor(max_workers=self.max_workers) as executor:
-            futures = [
-                executor.submit(close_env_single, self.envs[i])
-                for i in range(len(self.envs))
-            ]
-            # Wait for all futures to complete
-            for fut in futures:
-                fut.result() 
+        if all(type(self.envs[i]).is_multithread_safe() for i in range(len(self.envs))):
+            with ThreadPoolExecutor(max_workers=self.max_workers) as executor:
+                futures = [
+                    executor.submit(close_env_single, self.envs[i])
+                    for i in range(len(self.envs))
+                ]
+                # Wait for all futures to complete
+                for fut in futures:
+                    fut.result() 
+        else:
+            for env in self.envs:
+                env.close()
 
     def generate_trajectories(self, reset_seed=0, timing_raw=None, mode="Text", **kwargs):
         """
@@ -420,7 +423,7 @@ class AgentExecutionEngine:
 
         timing_raw = timing_raw or {}
 
-        for _ in range(self.retry_limit):
+        for i in range(self.retry_limit):
             try:
                 steps = 0
                 
@@ -466,7 +469,7 @@ class AgentExecutionEngine:
                     steps += 1
                     prompt_response_pair = {}
                     with _timer("get_actions", timing_raw):
-                        prompts = [self.agents[i].chat_completions.copy() for i in range(env_batch_size)]
+                        prompts = [self.agents[i].prompt.copy() for i in range(env_batch_size)]
                         # for enforced max prompt, no need to deduct here
                         if not self.enforce_max_prompt_length:
                             max_tokens = self.max_response_length - min([t for i, t in enumerate(all_response_token_lens) if all_dones[i] is False])
@@ -500,7 +503,7 @@ class AgentExecutionEngine:
                             ) = self.step_environment_batched(actions, seq_idxs)
                     except Exception as e:
                         print(f"Error in environment interation: {e}. Re-attempting...")
-                        self.reset_agents()
+                        self.reset_agents_batched()
                         raise e
 
                     for i, idx in enumerate(seq_idxs):
@@ -580,6 +583,8 @@ class AgentExecutionEngine:
                 print(f"Error in environment interaction")
                 print(traceback.format_exc())
                 print(e)
+                if i == self.retry_limit - 1:
+                    raise e # all retry trials are done
                 continue
         
         # Close all environments

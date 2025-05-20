@@ -251,7 +251,7 @@ class AsyncAgentExecutionEngine(AgentExecutionEngine):
 
         # Reset environment with the task using the executor
         loop = asyncio.get_event_loop()
-        observation, info = await loop.run_in_executor(self.executor, lambda: env.reset(task))
+        observation, info = await loop.run_in_executor(self.executor, lambda: env.reset(task=task) if task else env.reset())
         info['max_steps'] = self.max_steps
 
         # Reset agent
@@ -280,7 +280,7 @@ class AsyncAgentExecutionEngine(AgentExecutionEngine):
         for step_idx in range(self.max_steps):
             print(f"Trajectory {idx}, Step {step_idx}/{self.max_steps}")
             # Get action from agent
-            chat_completions_messages = agent.chat_completions.copy()
+            prompt_messages = agent.prompt.copy()
             # Max remaining tokens left for the response
             # For enforced max prompt at each step, no need to deduct here
             if not self.enforce_max_prompt_length:
@@ -291,14 +291,14 @@ class AsyncAgentExecutionEngine(AgentExecutionEngine):
             
             start_time = time.time()
             response = await self.get_model_response(
-                chat_completions_messages,
+                prompt_messages,
                 application_id,
                 **kwargs
             )
 
             # Update steps
             prompt_response_pair = {
-                "prompt": self.chat_template_parser.parse(chat_completions_messages, add_generation_prompt=True, is_first_msg=True),
+                "prompt": self.chat_template_parser.parse(prompt_messages, add_generation_prompt=True, is_first_msg=True),
                 "response": response,
             }
             episode_steps.append(prompt_response_pair)

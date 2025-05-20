@@ -56,6 +56,7 @@ class WebAgent(BaseAgent):
 
         self.accumulate_thinking = False
         self.cot_prompt = False
+        self.full_conversation = False
 
     def update_from_env(self, observation: Any, reward: float, done: bool, info: Dict, **kwargs):
         """
@@ -132,6 +133,22 @@ class WebAgent(BaseAgent):
     @property
     def chat_completions(self) -> List[Dict[str, str]]:
         return self.messages
+    
+    @property
+    def prompt(self) -> List[Dict[str, str]]:
+        if self.full_conversation:
+            return self.messages
+
+        latest_msgs = [self.messages[0]] # system message
+        has_assistant_msg = False
+        for i in range(len(self.messages) - 1, -1, -1):
+            if self.messages[i].get("role") == "assistant":
+                latest_msgs += self.messages[i + 1:] 
+                has_assistant_msg = True
+                break
+        if not has_assistant_msg:
+            latest_msgs += self.messages[1:]
+        return latest_msgs
 
     @property
     def trajectory(self) -> Trajectory:
