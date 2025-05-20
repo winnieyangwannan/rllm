@@ -66,11 +66,13 @@ python3 -m rllm.train.train_agent_ppo \
     trainer.test_freq=5 \
     trainer.default_hdfs_dir=null \
     trainer.rejection_sample=True \
+    trainer.rejection_sample_multiplier=2 \
     env.name=frozenlake \
     agent.name=frozenlakeagent \
     agent.max_steps=5 \
     agent.async_engine=True \
     agent.step_advantage_broadcast=True \
+    agent.normalize_step_advantage=False \
     agent.enable_thinking=True \
     trainer.total_epochs=100
 

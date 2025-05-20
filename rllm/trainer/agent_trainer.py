@@ -764,6 +764,7 @@ class AgentPPOTrainer(RayPPOTrainer):
         step_numbers = [] # number of steps of each episode, 0 indexed
         all_steps_idx_list = []
         all_steps_is_last_step_list = []
+        all_steps_step_num = [] # total number of steps the trajectory this step belongs to have
         training_rewards = []
         environment_rewards = []
         # the last step will have reward assigned and be used for advantage calculation
@@ -784,6 +785,8 @@ class AgentPPOTrainer(RayPPOTrainer):
             all_steps_idx_list.extend([idx for _ in range(len(episode_steps))])
             all_steps_is_last_step_list.extend([False for _ in range(len(episode_steps))])
             all_steps_is_last_step_list[-1] = True
+
+            all_steps_step_num.extend([len(episode_steps) for _ in range(len(episode_steps))])
 
         
         # Convert all steps into token tensors
@@ -842,10 +845,13 @@ class AgentPPOTrainer(RayPPOTrainer):
             "traj_mask": traj_mask, 
         }
 
+        batch_id = str(uuid.uuid4())
         non_tensor_batch = {
             "idxs": np.array(all_steps_idx_list),
+            "step_nums": np.array(all_steps_step_num),
             "is_last_step": np.array(all_steps_is_last_step_list),
             "is_pad_step": np.array([False for _ in range(len(all_steps_idx_list))]),
+            "batch_id": np.array([batch_id for _ in range(len(all_steps_idx_list))]), # in case need to differentiate which iteration the step is coming from
         }
 
         meta_info = {
@@ -869,7 +875,8 @@ class AgentPPOTrainer(RayPPOTrainer):
             other_step_batch.batch['response_mask'] = compute_response_mask(other_step_batch)
         if "response_mask" not in last_step_batch.batch.keys():
             last_step_batch.batch['response_mask'] = compute_response_mask(last_step_batch)
-        src_indices = last_step_batch.non_tensor_batch["idxs"]             
+        src_indices = last_step_batch.non_tensor_batch["idxs"]   
+        src_total_steps = last_step_batch.non_tensor_batch["step_nums"]             
         tgt_indices = other_step_batch.non_tensor_batch["idxs"]
         src_advantages = last_step_batch.batch["advantages"]                
         src_mask = last_step_batch.batch["response_mask"]             
@@ -880,6 +887,13 @@ class AgentPPOTrainer(RayPPOTrainer):
         for i, idx in enumerate(src_indices):
             mask = src_mask[i].bool()
             scalar = src_advantages[i][mask].mean() 
+
+            if self.config.agent.normalize_step_advantage:
+                # normalize the advantage against number of steps
+                scalar = scalar / src_total_steps[i]
+                # reassign the normalized advantage to last_step_batch as well
+                last_step_batch.batch["advantages"][i][mask] = scalar
+
             idx_to_scalar_adv[int(idx)] = scalar
 
         # Create new tensor for other_step_batch with per-token assignment
