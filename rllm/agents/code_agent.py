@@ -3,11 +3,10 @@ import logging
 from typing import Dict, List, Any, Tuple
 
 from rllm.agents.agent import BaseAgent, Step, Trajectory
-from rllm.rewards.math_reward import rllm_reward_fn_math
 
 logger = logging.getLogger(__name__)
 
-class CodeAgent(BaseAgent):    
+class CompetitionCodingAgent(BaseAgent):    
     """
     A code agent that iteratively writes code to solve a problem.
     """
@@ -19,27 +18,31 @@ class CodeAgent(BaseAgent):
         self._trajectory = Trajectory()
         self.messages = []
         self.step = 0
-        self.max_tests = 4
+        self.max_tests = 2
 
     def format_test_results(self, test_results: List[Dict]) -> str:
         all_passed = True
         formatted_test_results = "Here are the results on the public test cases:\n"
-        for i, test in enumerate(test_results[:self.max_tests]):
-            if test["passed"]:
-                formatted_test_results += f"### Test {i} passed\n"
-            else:
+        n_failed = 0
+        for i, test in enumerate(test_results):
+            if not test['passed']:
+                n_failed += 1
                 formatted_test_results += f"### Test {i+1} failed\n"
                 all_passed = False
-            
-            # Add the input, expected, and passed fields
-            formatted_test_results += f"  Input: {test['input']}\n"
-            formatted_test_results += f"  Expected: {test['expected']}\n"
-            # formatted_test_results += f"  Actual: {test['actual']}\n\n"
+
+                # Add the input, expected, and passed fields
+                formatted_test_results += f"  Input: {test['input']}\n" if len(test['input']) < 200 else ""
+                formatted_test_results += f"  Expected: {test['expected']}\n" if len(test['expected']) < 200 else ""
+                formatted_test_results += f"  Actual: {test['output']}\n\n" if 'output' in test and test['output'] is not None and len(test['output']) < 200 else ""
+                formatted_test_results += f"  Error message: {test['error_message']}\n" if 'error_message' in test and test['error_message'] is not None and len(test['error_message']) < 200 else ""
+
+                if n_failed > self.max_tests:
+                    break
 
         if all_passed:
             formatted_test_results += "Congratulations! You've successfully passed all the public test cases. Please review your solution once more for correctness and efficiency, then output your final code if you're confident it's optimal."
         else:
-            formatted_test_results += "Some test cases are still failing. Please carefully analyze the error patterns, revise your code to address these issues, and ensure your solution handles all the test cases correctly."
+            formatted_test_results += "Some test cases are still failing. Please carefully analyze the error patterns, revise your code to address these issues, and ensure your solution handles all the test cases correctly. Then, output your final code."
 
         return formatted_test_results
         
@@ -60,20 +63,26 @@ class CodeAgent(BaseAgent):
                 test_results = observation["test_results"]
                 formatted_observation = self.format_test_results(test_results)
 
+        # Update reward on the latest step
+        if self.trajectory.steps:
+            cur_step = self.trajectory.steps[-1]
+            cur_step.reward = reward
+            cur_step.step = self.step
+            cur_step.done = done
+            cur_step.info = info
+
+        # If next observation is not None, then intialize a new step and append to trajectory
         if formatted_observation is not None:
             self.messages.append({
                 "role": "user",
                 "content": formatted_observation
             })
                 # Create a new step for the current state
-            cur_step = Step(
+            new_step = Step(
                 observation=formatted_observation,
-                step=self.step,
-                reward=reward,
-                done=done,
-                info=info
+                step=self.step
             )
-            self._trajectory.steps.append(cur_step)
+            self._trajectory.steps.append(new_step)
 
     def update_from_model(self, response: Any, **kwargs):
         """
@@ -90,10 +99,18 @@ class CodeAgent(BaseAgent):
         
         # Update the current step in the trajectory
         cur_step = self._trajectory.steps[-1]
-        # For MathAgent, the model response represents both the thought and action.
         cur_step.thought = content 
-        cur_step.action = content  # Or potentially parse out the boxed answer? For now, use full content.
+        cur_step.action = content  
         cur_step.model_response = content
+
+        # Remove <think></think> blocks from assistant messages
+        if "</think>" in content:
+            think_start = content.find("<think>")
+            think_end = content.find("</think>") + len("</think>")
+            if think_start != -1:
+                content = content[:think_start] + content[think_end:]
+            else:
+                content = content[think_end:]
 
         # Add the assistant's response to the messages
         self.messages.append({"role": "assistant", "content": content})
