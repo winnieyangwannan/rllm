@@ -341,15 +341,18 @@ class AgentExecutionEngine:
         def close_env_single(env):
             return env.close()
         
-
-        with ThreadPoolExecutor(max_workers=self.max_workers) as executor:
-            futures = [
-                executor.submit(close_env_single, self.envs[i])
-                for i in range(len(self.envs))
-            ]
-            # Wait for all futures to complete
-            for fut in futures:
-                fut.result() 
+        if all(type(self.envs[i]).is_multithread_safe() for i in range(len(self.envs))):
+            with ThreadPoolExecutor(max_workers=self.max_workers) as executor:
+                futures = [
+                    executor.submit(close_env_single, self.envs[i])
+                    for i in range(len(self.envs))
+                ]
+                # Wait for all futures to complete
+                for fut in futures:
+                    fut.result() 
+        else:
+            for env in self.envs:
+                env.close()
 
     def generate_trajectories(self, reset_seed=0, timing_raw=None, mode="Text", **kwargs):
         """

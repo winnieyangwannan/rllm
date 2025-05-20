@@ -222,6 +222,7 @@ class AgentPPOTrainer(RayPPOTrainer):
                         # Log to metrics
                         metrics["batch/solve_none"] = solve_none
                         metrics["batch/solve_all"] = solve_all
+                        metrics["batch/solve_partial"] = len(unique_uids) - solve_none - solve_all
 
                         if self.config.trainer.rejection_sample:
                             
@@ -234,26 +235,66 @@ class AgentPPOTrainer(RayPPOTrainer):
                             batch = dataprotoitem_to_dataproto(batch)
 
                             if self.config.agent.step_advantage_broadcast:
-                                # To support it, need to figure out an efficient way to make sure both number of last steps and number of total steps in the batch is multiple of worldsize
-                                raise Exception("Rejection sampling for step advantage not supported yet")
-                            # Round down to the nearest multiple of world size
-                            num_trainer_replicas = self.actor_rollout_wg.world_size
-                            max_batch_size = (
-                                batch.batch["input_ids"].shape[0]
-                                // num_trainer_replicas
-                            ) * num_trainer_replicas
-                            if not max_batch_size:
-                                # give up, you got everything either all wrong or right.
-                                continue
+                                # batch now only contains steps with valid uids
+                                # filter out padding steps
+                                is_pad_step = batch.non_tensor_batch["is_pad_step"]
+                                non_pad_step_indices = np.where(~is_pad_step)[0]  
+                                batch = batch.select_idxs(non_pad_step_indices) # This batch only has non_pad steps
 
-                            size_mask = torch.zeros(
-                                batch.batch["input_ids"].shape[0], dtype=torch.bool
-                            )
-                            size_mask[:max_batch_size] = True
-                            batch = batch[size_mask]
-                            batch = dataprotoitem_to_dataproto(batch)
+                                # need to make sure both number of last steps (number of uids) and number of total steps in the batch (batch size after processing) are all multiples of world size
+                                # separate out last step and intermediate steps
+                                is_last_step = batch.non_tensor_batch["is_last_step"]
+                                valid_last_step_indices = np.where(is_last_step)[0]  
+                                not_last_step_indices = np.where(~is_last_step)[0]  
+                                last_step_batch = batch.select_idxs(valid_last_step_indices) # This batch only has valid last steps
+                                non_last_step_batch = batch.select_idxs(not_last_step_indices)
 
-                            
+                                # filter last_step_batch to make sure its multiple of world size
+                                num_trainer_replicas = self.actor_rollout_wg.world_size
+                                max_batch_size = (
+                                    last_step_batch.batch["input_ids"].shape[0] # 1 per trajectory
+                                    // num_trainer_replicas
+                                ) * num_trainer_replicas
+                                if not max_batch_size:
+                                    # give up, you got everything either all wrong or right.
+                                    continue
+
+                                size_mask = torch.zeros(
+                                    last_step_batch.batch["input_ids"].shape[0], dtype=torch.bool
+                                )
+                                size_mask[:max_batch_size] = True
+                                last_step_batch = last_step_batch[size_mask]
+                                last_step_batch = dataprotoitem_to_dataproto(last_step_batch) # filtered last steps
+
+                                # now we go through all the non_last_step_batch and keep everything that has same idxs that exists in the filtered last steps
+                                valid_last_step_idxs = last_step_batch.non_tensor_batch["idxs"]
+                                non_last_step_idxs = non_last_step_batch.non_tensor_batch["idxs"]
+                                non_last_step_mask = np.isin(non_last_step_idxs, valid_last_step_idxs)
+                                non_last_step_batch = non_last_step_batch[non_last_step_mask]
+                                non_last_step_batch = dataprotoitem_to_dataproto(non_last_step_batch)
+
+                                # concatenate then pad
+                                batch = DataProto.concat([last_step_batch, non_last_step_batch])
+                                batch = self._masked_pad_to_update_world_size(batch)
+                            else:
+                                # Round down to the nearest multiple of world size
+                                num_trainer_replicas = self.actor_rollout_wg.world_size
+                                max_batch_size = (
+                                    batch.batch["input_ids"].shape[0]
+                                    // num_trainer_replicas
+                                ) * num_trainer_replicas
+                                if not max_batch_size:
+                                    # give up, you got everything either all wrong or right.
+                                    continue
+
+                                size_mask = torch.zeros(
+                                    batch.batch["input_ids"].shape[0], dtype=torch.bool
+                                )
+                                size_mask[:max_batch_size] = True
+                                batch = batch[size_mask]
+                                batch = dataprotoitem_to_dataproto(batch)
+
+                                
 
                         # recompute old_log_probs
                         with _timer("old_log_prob", timing_raw):
