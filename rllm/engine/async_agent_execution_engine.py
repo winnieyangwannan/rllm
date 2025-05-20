@@ -38,7 +38,7 @@ class AsyncAgentExecutionEngine(AgentExecutionEngine):
         trajectory_timeout=None,
         gamma=1.0,
         api_retries=3,
-        retry_limit=1,
+        retry_limit=3,
         max_steps=5,
         max_response_length=8192,
         max_prompt_length=1024,
@@ -123,7 +123,7 @@ class AsyncAgentExecutionEngine(AgentExecutionEngine):
         if 'max_tokens' in kwargs:
             batch.meta_info['max_tokens'] = kwargs['max_tokens']
 
-        output = await self.router.generate_sequences(batch, **kwargs)
+        output = await self.router.generate_sequences(batch, application_id=application_id, **kwargs)
         
         attn = output.batch["attention_mask"][0, self.max_prompt_length:]
         tokens = output.batch["responses"][0]
@@ -298,7 +298,7 @@ class AsyncAgentExecutionEngine(AgentExecutionEngine):
             response_masks.extend(assistant_msg_masks)
             observation = next_observation
 
-            if total_time >= self.trajectory_timeout:
+            if total_time >= self.trajectory_timeout or self.is_last_trajectory:
                 termination_reason = "TIMEOUT"
                 cur_step = agent.get_current_state()
                 done = True
@@ -323,7 +323,7 @@ class AsyncAgentExecutionEngine(AgentExecutionEngine):
             cur_step.reward = reward
         # Closing environment using the executor.
         await loop.run_in_executor(self.executor, env.close)
-        
+        print(f"Environment closed for trajectory {idx}.")
         if termination_reason:
             if reward > 0:
                 color = "green"
@@ -375,7 +375,7 @@ class AsyncAgentExecutionEngine(AgentExecutionEngine):
         **kwargs
     ):
         assert all(type(env).is_multithread_safe() for env in self.envs), "All environments must be multithread safe for async engine"
-        
+        self.is_last_trajectory = False
         max_concurrency = self.n_parallel_agents
         self.executor = ThreadPoolExecutor(max_workers=max_concurrency)
 
@@ -389,6 +389,8 @@ class AsyncAgentExecutionEngine(AgentExecutionEngine):
         async def launch_one_trajectory_task(env_idx: int):
             try:
                 #await semaphore.acquire()
+                await asyncio.sleep(0.15 * env_idx)
+
                 application_id = str(uuid.uuid4())                
                 result = await self.run_agent_trajectory_with_retry(
                     idx=env_idx,
@@ -415,6 +417,8 @@ class AsyncAgentExecutionEngine(AgentExecutionEngine):
                 result = await coro
                 tasks_completed += 1
                 colorful_print(f"Number of Trajectories {tasks_completed}/{len(self.envs)} completed", "cyan")
+                if tasks_completed == len(self.envs)-2:
+                    self.is_last_trajectory = True
                 yield result
             except Exception as e:
                 raise e

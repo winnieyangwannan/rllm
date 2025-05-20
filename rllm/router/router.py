@@ -34,25 +34,35 @@ async def poll_completions_openai(address: str, **completions_request) -> Comple
     if "extra_headers" in completions_request:
         completions_request.pop("extra_headers")
 
-    try:
-        # Create a new session for each request to avoid blocking
-        async with aiohttp.ClientSession() as session:
-            async with session.post(
-                base_url,
-                json=completions_request,
-                headers=headers,
-                timeout=aiohttp.ClientTimeout(total=1000000)
-            ) as response:
-                if response.status != 200:
-                    error_text = await response.text()
-                    raise Exception(f"API request failed with status {response.status}: {error_text}")
-                
-                result = await response.json()
-                # Convert the raw JSON response to an OpenAI Completion object
-                return result
-    except Exception as e:
-        print("Exception: ", e)
-        raise e
+
+    max_retries = 3
+    retry_delay = 1  # Initial delay in seconds
+    
+    for retry in range(max_retries):
+        try:
+            # Create a new session for each request to avoid blocking
+            async with aiohttp.ClientSession() as session:
+                async with session.post(
+                    base_url,
+                    json=completions_request,
+                    headers=headers,
+                    timeout=aiohttp.ClientTimeout(total=10800)
+                ) as response:
+                    if response.status != 200:
+                        error_text = await response.text()
+                        raise Exception(f"API request failed with status {response.status}: {error_text}")
+                    result = await response.json()
+                    # Convert the raw JSON response to an OpenAI Completion object
+                    return result
+        except Exception as e:
+            import traceback
+            traceback.print_exc()
+            # If this is the last retry, raise the exception
+            if retry == max_retries - 1:
+                raise e
+            # Exponential backoff
+            await asyncio.sleep(retry_delay)
+            retry_delay *= 2
 
 class Router:
     """
@@ -65,11 +75,12 @@ class Router:
         self.tensor_parallel_size = config.actor_rollout_ref.rollout.get("tensor_model_parallel_size", 1)
         self._lock = asyncio.Lock()
         self._usage= {}
+        self._application_id_to_address = {}
         # Initialize usage counts for any new addresses
         for addr in self.addresses:
             if addr not in self._usage:
                 self._usage[addr] = 0
-
+        self.counter = 0
         self.config = config
         self.tokenizer = tokenizer
         self.pad_token_id = tokenizer.pad_token_id
@@ -77,23 +88,35 @@ class Router:
         model_path = config.actor_rollout_ref.model.path
         self.model_name = "/".join(model_path.split("/")[-2:])
 
-    async def get_address(self) -> str:
+    async def get_address(self, application_id: str) -> str:
         """
         Pick the server address with the smallest usage count and increment its counter.
         """
         async with self._lock:
-            chosen = min(self.addresses, key=lambda a: self._usage.get(a, 0))
-            self._usage[chosen] = self._usage.get(chosen, 0) + 1
-        return chosen
+            min_address, min_usage = min(self._usage.items(), key=lambda x: x[1])
+            if application_id not in self._application_id_to_address:
+                self._application_id_to_address[application_id] = min_address
+                self._usage[min_address] += 1
+            else:
+                # Data locality
+                cur_address = self._application_id_to_address[application_id]
+                cur_usage = self._usage[cur_address]
+                # Load balance if there is skew
+                if (min_usage == 0 or cur_usage - min_usage >= 4) and cur_usage > 0:
+                    self._application_id_to_address[application_id] = min_address
+                    self._usage[min_address] += 1
+                else:
+                    self._usage[cur_address] += 1
+        return self._application_id_to_address[application_id]
 
-    async def release_address(self, addr: str) -> None:
+    async def release_address(self, addr: str, application_id: str) -> None:
         """
         Decrement the usage count for a server address when done.
         """
         async with self._lock:
             self._usage[addr] = max(0, self._usage.get(addr, 0) - 1)
     
-    async def generate_sequences(self, batch: DataProto, **sampling_params):
+    async def generate_sequences(self, batch: DataProto, application_id: str, **sampling_params):
         kwargs = dict(
             n=self.config.actor_rollout_ref.rollout.n,
             max_tokens=self.config.actor_rollout_ref.rollout.response_length,  # Changed from max_completion_tokens
@@ -124,7 +147,7 @@ class Router:
         
         kwargs.update(sampling_params)
         
-        address = await self.get_address()
+        address = await self.get_address(application_id)
         
         tasks = []
         # Bug: len(batch) is used later but batch might not have a __len__ method
@@ -133,6 +156,7 @@ class Router:
         
         for batch_index, formatted_prompt in enumerate(batch.non_tensor_batch["formatted_prompts"]):
             # For Completion API, we need to convert the conversation to a prompt string
+            self.counter += 1
             tasks.append(
                 self.submit_completions(  # Changed from submit_chat_completions
                     address=address,
@@ -143,8 +167,9 @@ class Router:
             ) 
         
         # Potential blocking: asyncio.gather can block if any task takes too long
+        print('Sending total requests: ', self.counter)
         completions_list = await asyncio.gather(*tasks)
-        await self.release_address(address)  # Release the address when done
+        await self.release_address(address, application_id)  # Release the address when done
         
         for batch_index, completions in enumerate(completions_list):
             comps = []
