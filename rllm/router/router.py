@@ -46,7 +46,7 @@ async def poll_completions_openai(address: str, **completions_request) -> Comple
                     base_url,
                     json=completions_request,
                     headers=headers,
-                    timeout=aiohttp.ClientTimeout(total=600)
+                    timeout=aiohttp.ClientTimeout(total=10800)
                 ) as response:
                     if response.status != 200:
                         error_text = await response.text()
