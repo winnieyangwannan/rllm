@@ -206,11 +206,21 @@ class AgentExecutionEngine:
         input_ids = inputs["input_ids"]
         attention_mask = inputs["attention_mask"]
 
-        # TODO: check what should be the behavior, truncate or error or directly return?
-        if input_ids.shape[-1] >= self.max_prompt_length and self.enforce_max_prompt_length:
-            print(f"Warning: : prompt length {input_ids.shape[-1]} exceeds limit {self.max_prompt_length}, it will be truncated")
-            raise Exception(f"Error: prompt length {input_ids.shape[-1]} exceeds limit {self.max_prompt_length}")
-        
+        # TODO: this is only a temporary solution, need to figure out the ideal behavior later.
+        if input_ids.shape[-1] > self.max_prompt_length and self.enforce_max_prompt_length:
+            print(f"Warning: prompt length {input_ids.shape[-1]} exceeds limit {self.max_prompt_length}, truncating to max length")
+            
+            # Truncate input_ids and attention_mask
+            input_ids = input_ids[:, -self.max_prompt_length:]
+            attention_mask = attention_mask[:, -self.max_prompt_length:]
+            
+            # Also truncate the formatted_prompts by re-tokenizing the truncated input_ids
+            truncated_formatted_prompts = []
+            for i in range(len(formatted_prompts)):
+                truncated_text = self.tokenizer.decode(input_ids[i], skip_special_tokens=False)
+                truncated_formatted_prompts.append(truncated_text)
+            formatted_prompts = truncated_formatted_prompts
+
         # pad to max sizes
         input_ids = pad_sequence_to_length(
             input_ids,

@@ -3,6 +3,7 @@ from rllm.environments.tools.tool_env import ToolEnvironment
 from rllm.environments.browsergym.browsergym import BrowserGym
 from rllm.environments.frozenlake.frozenlake import FrozenLakeEnv
 from rllm.environments.swe.swe import SWEEnv
+from rllm.environments.code.competition_coding import CompetitionCodingEnv
 
 __all__ = [
     "SingleTurnEnvironment",
@@ -10,4 +11,5 @@ __all__ = [
     "BrowserGym",
     "FrozenLakeEnv",
     "SWEEnv",
+    "CompetitionCodingEnv",
 ]
