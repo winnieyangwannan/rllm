@@ -107,10 +107,15 @@ class CompetitionCodingAgent(BaseAgent):
         if "</think>" in content:
             think_start = content.find("<think>")
             think_end = content.find("</think>") + len("</think>")
-            if think_start != -1:
+            if think_start != -1 and think_end != -1 and think_end > think_start:
+                # Remove full <think>...</think> block
+                think_end += len("</think>")
                 content = content[:think_start] + content[think_end:]
-            else:
+            elif think_end != -1:
+                # Remove everything before and including </think>
+                think_end += len("</think>")
                 content = content[think_end:]
+
 
         # Add the assistant's response to the messages
         self.messages.append({"role": "assistant", "content": content})
