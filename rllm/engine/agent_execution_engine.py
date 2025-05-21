@@ -206,21 +206,6 @@ class AgentExecutionEngine:
         input_ids = inputs["input_ids"]
         attention_mask = inputs["attention_mask"]
 
-        # TODO: this is only a temporary solution, need to figure out the ideal behavior later.
-        if input_ids.shape[-1] > self.max_prompt_length and self.enforce_max_prompt_length:
-            print(f"Warning: prompt length {input_ids.shape[-1]} exceeds limit {self.max_prompt_length}, truncating to max length")
-            
-            # Truncate input_ids and attention_mask
-            input_ids = input_ids[:, -self.max_prompt_length:]
-            attention_mask = attention_mask[:, -self.max_prompt_length:]
-            
-            # Also truncate the formatted_prompts by re-tokenizing the truncated input_ids
-            truncated_formatted_prompts = []
-            for i in range(len(formatted_prompts)):
-                truncated_text = self.tokenizer.decode(input_ids[i], skip_special_tokens=False)
-                truncated_formatted_prompts.append(truncated_text)
-            formatted_prompts = truncated_formatted_prompts
-
         # pad to max sizes
         input_ids = pad_sequence_to_length(
             input_ids,
@@ -475,6 +460,22 @@ class AgentExecutionEngine:
                             max_tokens = self.max_response_length - min([t for i, t in enumerate(all_response_token_lens) if all_dones[i] is False])
                         else:
                             max_tokens = self.max_response_length
+                            # since max prompt is enforced, we filter out too long prompts.
+                            for i, done in enumerate(all_dones):
+                                if not done:
+                                    prompt_str = self.chat_template_parser.parse(prompts[i], add_generation_prompt=True, is_first_msg=True)
+                                    prompt_len = len(self.tokenizer.encode(prompt_str, add_special_tokens=False))
+                                    if prompt_len > self.max_prompt_length:
+                                        # early terminate the trajectory
+                                        all_dones[i] = True
+                                        finished_traj = self.agents[i].trajectory
+                                        colorful_print(
+                                            f"Trajectory {i} completed due to maximum prompt length reached. "
+                                            f"Reward is {finished_traj.steps[-1].reward if finished_traj and finished_traj.steps else 0}. \n",
+                                            "yellow",
+                                        )
+                                        
+                            
                         kwargs['max_tokens'] = max_tokens
                         responses, seq_idxs = self.get_model_response_batched(
                             prompts, all_dones, **kwargs

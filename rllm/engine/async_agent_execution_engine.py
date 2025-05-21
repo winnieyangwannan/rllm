@@ -287,6 +287,14 @@ class AsyncAgentExecutionEngine(AgentExecutionEngine):
                 max_tokens = self.max_response_length - response_token_len
             else:
                 max_tokens = self.max_response_length
+
+                # since max prompt is enforced, we filter out too long prompts.
+                prompt_str = self.chat_template_parser.parse(prompt_messages, add_generation_prompt=True, is_first_msg=True)
+                prompt_len = len(self.tokenizer.encode(prompt_str, add_special_tokens=False))
+                if prompt_len > self.max_prompt_length:
+                    termination_reason = "PROMPT TRUNCATION"
+                    break
+                
             kwargs['max_tokens'] = max_tokens
             
             start_time = time.time()
