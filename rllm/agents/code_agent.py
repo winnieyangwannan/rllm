@@ -1,10 +1,21 @@
 import json
 import logging
-from typing import Dict, List, Any, Tuple
+from typing import Dict, List, Any, Tuple, Union
 
 from rllm.agents.agent import BaseAgent, Step, Trajectory
 
 logger = logging.getLogger(__name__)
+
+def truncatefn(s, length=300):
+    if isinstance(s, str):
+        pass
+    else:
+        s = str(s)
+    if len(s) <= length:
+        return s
+
+    return s[: length // 2] + "...(truncated) ..." + s[-length // 2 :]
+
 
 class CompetitionCodingAgent(BaseAgent):    
     """
@@ -19,32 +30,46 @@ class CompetitionCodingAgent(BaseAgent):
         self.messages = []
         self.step = 0
         self.max_tests = 2
-
+    
     def format_test_results(self, test_results: List[Dict]) -> str:
-        all_passed = True
-        formatted_test_results = "Here are the results on the public test cases:\n"
-        n_failed = 0
+
+        public_tests = []
         for i, test in enumerate(test_results):
-            if not test['passed']:
-                n_failed += 1
-                formatted_test_results += f"### Test {i+1} failed\n"
-                all_passed = False
+            if "input" in test and isinstance(test["input"], str):
+                strings_to_match = test["input"].split("\n")
+            elif "input" in test and isinstance(test["input"], list):
+                strings_to_match = test["input"]
+            else:
+                continue
+            
+            question = self.trajectory.steps[0].observation
+            if all(s in question for s in strings_to_match):
+                public_tests.append(test)
 
-                # Add the input, expected, and passed fields
-                formatted_test_results += f"  Input: {test['input']}\n" if len(test['input']) < 200 else ""
-                formatted_test_results += f"  Expected: {test['expected']}\n" if len(test['expected']) < 200 else ""
-                formatted_test_results += f"  Actual: {test['output']}\n\n" if 'output' in test and test['output'] is not None and len(test['output']) < 200 else ""
-                formatted_test_results += f"  Error message: {test['error_message']}\n" if 'error_message' in test and test['error_message'] is not None and len(test['error_message']) < 200 else ""
-
-                if n_failed > self.max_tests:
-                    break
-
-        if all_passed:
-            formatted_test_results += "Congratulations! You've successfully passed all the public test cases. Please review your solution once more for correctness and efficiency, then output your final code if you're confident it's optimal."
+        if len(public_tests) == 0:
+            print("Warning: No public tests found")
         else:
-            formatted_test_results += "Some test cases are still failing. Please carefully analyze the error patterns, revise your code to address these issues, and ensure your solution handles all the test cases correctly. Then, output your final code."
+            print(f"Warning: Found {len(public_tests)} public tests")
+        
+        if len(public_tests) == 0 or all(test["passed"] for test in public_tests):
+            return "Congratulations! You've successfully passed all the public test cases. Please review your solution once more for correctness and efficiency, then output your final code if you're confident it's optimal."
+        
+        else:
+            formatted_test_results = ""
+            n_failed = 0
+            for i, test in enumerate(public_tests):
+                if not test["passed"]:
+                    formatted_test_results += f"### Test {i+1} failed\n"
+                    formatted_test_results += f"  Input: {truncatefn(test['input'])}\n"
+                    formatted_test_results += f"  Expected: {truncatefn(test['expected'])}\n"
+                    formatted_test_results += f"  Actual: {truncatefn(test['output'])}\n\n" if 'output' in test and test['output'] is not None else ""
+                    formatted_test_results += f"  Error message: {truncatefn(test['error_message'])}\n" if 'error_message' in test and test['error_message'] is not None else ""
 
-        return formatted_test_results
+                    n_failed += 1
+                    if n_failed >= self.max_tests:
+                        break
+
+            return f"Here are the results on the public test cases:\n{formatted_test_results}\nSome test cases are still failing. Please carefully analyze the error patterns, revise your code to address these issues, and ensure your solution handles all the test cases correctly. Then, output your final code."
         
     def update_from_env(self, observation: Any, reward: float, done: bool, info: Dict, **kwargs):
         """
@@ -107,17 +132,17 @@ class CompetitionCodingAgent(BaseAgent):
         cur_step.model_response = content
 
         # Remove <think></think> blocks from assistant messages
-        if "</think>" in content:
-            think_start = content.find("<think>")
-            think_end = content.find("</think>") + len("</think>")
-            if think_start != -1 and think_end != -1 and think_end > think_start:
-                # Remove full <think>...</think> block
-                think_end += len("</think>")
-                content = content[:think_start] + content[think_end:]
-            elif think_end != -1:
-                # Remove everything before and including </think>
-                think_end += len("</think>")
-                content = content[think_end:]
+        # if "</think>" in content:
+        #     think_start = content.find("<think>")
+        #     think_end = content.find("</think>") + len("</think>")
+        #     if think_start != -1 and think_end != -1 and think_end > think_start:
+        #         # Remove full <think>...</think> block
+        #         think_end += len("</think>")
+        #         content = content[:think_start] + content[think_end:]
+        #     elif think_end != -1:
+        #         # Remove everything before and including </think>
+        #         think_end += len("</think>")
+        #         content = content[think_end:]
 
 
         # Add the assistant's response to the messages
