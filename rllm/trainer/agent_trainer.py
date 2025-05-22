@@ -952,10 +952,6 @@ class AgentPPOTrainer(RayPPOTrainer):
         other_step_batch.batch["advantages"] = final_advantage
         other_step_batch.batch["returns"] = final_advantage
 
-        # Assign 0 advantage to those padding
-        is_pad = torch.from_numpy(np.asarray(other_step_batch.non_tensor_batch["is_pad_step"], dtype=bool))
-        other_step_batch.batch["advantages"][is_pad] = 0.0
-        other_step_batch.batch["returns"][is_pad] = 0.0
 
     def _masked_pad_to_update_world_size(self, batch):
         world_sizes = []
