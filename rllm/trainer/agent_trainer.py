@@ -869,11 +869,11 @@ class AgentPPOTrainer(RayPPOTrainer):
 
         batch_id = str(uuid.uuid4())
         non_tensor_batch = {
-            "idxs": np.array(all_steps_idx_list),
-            "step_nums": np.array(all_steps_step_num),
-            "is_last_step": np.array(all_steps_is_last_step_list),
-            "is_pad_step": np.array([False for _ in range(len(all_steps_idx_list))]),
-            "batch_id": np.array([batch_id for _ in range(len(all_steps_idx_list))]), # in case need to differentiate which iteration the step is coming from
+            "idxs": np.array(all_steps_idx_list, dtype=int),
+            "step_nums": np.array(all_steps_step_num, dtype=int),
+            "is_last_step": np.array(all_steps_is_last_step_list, dtype=bool),
+            "is_pad_step": np.array([False for _ in range(len(all_steps_idx_list))], dtype=bool),
+            "batch_id": np.array([batch_id for _ in range(len(all_steps_idx_list))], dtype=str), # in case need to differentiate which iteration the step is coming from
         }
 
         meta_info = {
