@@ -244,7 +244,7 @@ class AgentPPOTrainer(RayPPOTrainer):
                                 # need to make sure both number of last steps (number of uids) and number of total steps in the batch (batch size after processing) are all multiples of world size
                                 # separate out last step and intermediate steps
                                 is_last_step = batch.non_tensor_batch["is_last_step"]
-                                valid_last_step_indices = np.where(is_last_step)[0]  
+                                valid_last_step_indices = np.where(is_last_step == True)[0]  
                                 not_last_step_indices = np.where(is_last_step == False)[0]  
                                 last_step_batch = batch.select_idxs(valid_last_step_indices) # This batch only has valid last steps
                                 non_last_step_batch = batch.select_idxs(not_last_step_indices)
@@ -336,7 +336,7 @@ class AgentPPOTrainer(RayPPOTrainer):
                             elif self.config.agent.stepwise_advantage_mode == "broadcast":
                                 # In case of step-wise advantage broadcast, we would split out the final steps, then merge again
                                 is_last_step = batch.non_tensor_batch["is_last_step"]
-                                last_step_indices = np.where(is_last_step)[0]  
+                                last_step_indices = np.where(is_last_step == True)[0]  
                                 other_step_indices = np.where(is_last_step == False)[0]  
                                 other_step_batch = batch.select_idxs(other_step_indices)
                                 batch = batch.select_idxs(last_step_indices) # This batch only has last steps
@@ -454,7 +454,7 @@ class AgentPPOTrainer(RayPPOTrainer):
                 test_output_gen_batch = self.generate_agent_steps(meta_info=test_batch.meta_info, uids=test_batch.non_tensor_batch["uid"])
                 # for validation, we only need the last step
                 is_last_step = test_output_gen_batch.non_tensor_batch["is_last_step"]
-                last_step_indices = np.where(is_last_step)[0]  
+                last_step_indices = np.where(is_last_step == True)[0]  
                 test_output_gen_batch = test_output_gen_batch.select_idxs(last_step_indices) # This batch only has last steps
             else:
                 test_output_gen_batch = self.generate_agent_trajectory(
@@ -959,10 +959,6 @@ class AgentPPOTrainer(RayPPOTrainer):
         other_step_batch.batch["advantages"] = final_advantage
         other_step_batch.batch["returns"] = final_advantage
 
-        # Assign 0 advantage to those 
-        is_pad = torch.tensor(other_step_batch.non_tensor_batch["is_pad_step"], dtype=torch.bool)
-        other_step_batch.batch["advantages"][is_pad] = 0.0
-        other_step_batch.batch["returns"][is_pad] = 0.0
 
     def _masked_pad_to_update_world_size(self, batch):
         world_sizes = []
