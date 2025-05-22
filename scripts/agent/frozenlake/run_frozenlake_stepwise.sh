@@ -13,7 +13,7 @@ python3 -m rllm.train.train_agent_ppo \
     algorithm.adv_estimator=loop \
     data.train_files=${RLLM_DIR}/data/rllm-frozenlake/train.parquet \
     data.val_files=${RLLM_DIR}/data/rllm-frozenlake/test.parquet \
-    data.train_batch_size=32 \
+    data.train_batch_size=16 \
     data.val_batch_size=128 \
     data.max_prompt_length=10240 \
     data.max_response_length=2048 \
@@ -43,7 +43,7 @@ python3 -m rllm.train.train_agent_ppo \
     actor_rollout_ref.rollout.enable_log_prob=False \
     actor_rollout_ref.rollout.temperature=0.7 \
     actor_rollout_ref.rollout.gpu_memory_utilization=0.8 \
-    actor_rollout_ref.rollout.n=8 \
+    actor_rollout_ref.rollout.n=1 \
     actor_rollout_ref.rollout.val_kwargs.n=2 \
     actor_rollout_ref.rollout.val_kwargs.temperature=0.65 \
     actor_rollout_ref.rollout.val_kwargs.top_p=0.8 \
@@ -59,7 +59,7 @@ python3 -m rllm.train.train_agent_ppo \
     trainer.logger=['console','wandb'] \
     trainer.project_name='stepwise-agent' \
     trainer.experiment_name='4b-loop-drgrpo-frozenlake_agent_stepwise-seq-mean-token-sum-norm-normalized' \
-    trainer.val_before_train=True \
+    trainer.val_before_train=False \
     trainer.n_gpus_per_node=4 \
     trainer.nnodes=1 \
     trainer.save_freq=400 \
