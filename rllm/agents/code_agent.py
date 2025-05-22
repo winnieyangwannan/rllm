@@ -52,7 +52,7 @@ class CompetitionCodingAgent(BaseAgent):
         """
         # Format observation based on whether it's the initial problem or subsequent feedback
 
-        formatted_observation = None
+        formatted_observation = ''
         if not self._trajectory.steps:
             # Initial problem statement
             assert isinstance(observation, dict) and 'question' in observation, "Initial observation must be a dict with a 'question' key."
@@ -62,6 +62,8 @@ class CompetitionCodingAgent(BaseAgent):
             if "test_results" in observation:
                 test_results = observation["test_results"]
                 formatted_observation = self.format_test_results(test_results)
+            if 'error' in observation:
+                formatted_observation = observation['error']
 
         # Update reward on the latest step
         if self.trajectory.steps:
@@ -71,18 +73,19 @@ class CompetitionCodingAgent(BaseAgent):
             cur_step.done = done
             cur_step.info = info
 
-        # If next observation is not None, then intialize a new step and append to trajectory
-        if formatted_observation is not None:
-            self.messages.append({
-                "role": "user",
-                "content": formatted_observation
-            })
-                # Create a new step for the current state
-            new_step = Step(
-                observation=formatted_observation,
-                step=self.step
-            )
-            self._trajectory.steps.append(new_step)
+        if done:
+            return
+        
+        self.messages.append({
+            "role": "user",
+            "content": formatted_observation
+        })
+            # Create a new step for the current state
+        new_step = Step(
+            observation=formatted_observation,
+            step=self.step
+        )
+        self._trajectory.steps.append(new_step)
 
     def update_from_model(self, response: Any, **kwargs):
         """

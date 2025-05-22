@@ -31,8 +31,7 @@ class MathAgent(BaseAgent):
             question = observation['question']
             formatted_observation = f'{question} {self.instruction}'
         else:
-            # Subsequent observations are typically strings or simpler structures
-            formatted_observation = str(observation) 
+            formatted_observation = "Your previous answer may contain a mistake. Please review it carefully and answer again. Put your final answer within \\boxed{}."
 
         # If there are previous steps, update the last step's outcome
         if self._trajectory.steps:
@@ -41,18 +40,19 @@ class MathAgent(BaseAgent):
             prior_step.reward = reward
             prior_step.done = done
             prior_step.info = info
-        else:
-            # Add the current observation as a user message
-            self.messages.append({
-                "role": "user",
-                "content": formatted_observation
-            })
-             # Create a new step for the current state
-            cur_step = Step(
-                observation=formatted_observation,
-                step=self.step
-            )
-            self._trajectory.steps.append(cur_step)
+        
+        if done:
+            return
+        
+        self.messages.append({
+            "role": "user",
+            "content": formatted_observation
+        })
+        cur_step = Step(
+            observation=formatted_observation,
+            step=self.step
+        )
+        self._trajectory.steps.append(cur_step)
 
     def update_from_model(self, response: Any, **kwargs):
         """

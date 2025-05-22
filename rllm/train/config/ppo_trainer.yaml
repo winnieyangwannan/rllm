@@ -275,6 +275,7 @@ agent:
   async_engine: True
   n_parallel_agents: null
   trajectory_timeout: null
-  step_advantage_broadcast: False
   normalize_step_advantage: False
   enable_thinking: False # whether to enable thinking in generation, works for supported parser and model
+  use_stepwise_advantage: False
+  stepwise_advantage_mode: "broadcast" 

@@ -36,7 +36,7 @@ class AsyncAgentExecutionEngine(AgentExecutionEngine):
         model_path="",
         n_parallel_agents=None,
         trajectory_timeout=None,
-        gamma=1.0,
+        gamma=0.5,
         api_retries=3,
         retry_limit=1,
         max_steps=5,
@@ -426,7 +426,8 @@ class AsyncAgentExecutionEngine(AgentExecutionEngine):
                 "training_reward": agent.compute_training_reward(trajectory) if hasattr(agent, "compute_training_reward") else trajectory.steps[-1].reward,
                 "environment_reward": trajectory.reward,
                 "idx": env.idx,
-            }
+                "mc_returns": [step.mc_return for step in trajectory.steps][:len(episode_steps)],
+            }            
             return steps_result
 
 
