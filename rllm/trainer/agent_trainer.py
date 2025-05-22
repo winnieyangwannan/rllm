@@ -245,7 +245,7 @@ class AgentPPOTrainer(RayPPOTrainer):
                                 # separate out last step and intermediate steps
                                 is_last_step = batch.non_tensor_batch["is_last_step"]
                                 valid_last_step_indices = np.where(is_last_step)[0]  
-                                not_last_step_indices = np.where(~is_last_step)[0]  
+                                not_last_step_indices = np.where(is_last_step == False)[0]  
                                 last_step_batch = batch.select_idxs(valid_last_step_indices) # This batch only has valid last steps
                                 non_last_step_batch = batch.select_idxs(not_last_step_indices)
 
@@ -329,7 +329,7 @@ class AgentPPOTrainer(RayPPOTrainer):
                             # In case of step-wise advantage broadcast, we would split out the final steps, then merge again
                             is_last_step = batch.non_tensor_batch["is_last_step"]
                             last_step_indices = np.where(is_last_step)[0]  
-                            other_step_indices = np.where(~is_last_step)[0]  
+                            other_step_indices = np.where(is_last_step == False)[0]  
                             other_step_batch = batch.select_idxs(other_step_indices)
                             batch = batch.select_idxs(last_step_indices) # This batch only has last steps
                             
