@@ -1,6 +1,6 @@
 import asyncio
 import json
-from rllm.agents.code_agent import CodeAgent
+from rllm.agents import CompetitionCodingAgent
 from rllm.environments.code.competition_coding import CompetitionCodingEnv
 
 
@@ -20,6 +20,15 @@ def load_data(n=1, dataset_enum=None):
             processed = process_math_fn(example, idx)
         else:
             processed = process_code_fn(example, idx)
+        for i in range(n):
+            data.append(deepcopy(processed))
+    return data
+
+
+def process_data(n, dataset):
+    data = []
+    for idx, example in enumerate(dataset):
+        processed = process_code_fn(example, idx)
         for i in range(n):
             data.append(deepcopy(processed))
     return data
@@ -55,15 +64,17 @@ def process_code_fn(example, idx):
     
     tests = json.dumps(tests)
 
-    instruction = fetch_live_code_bench_system_prompt(prompt=question, starter_code=example.pop("starter_code"))
+    # instruction = fetch_live_code_bench_system_prompt(prompt=question, starter_code=example.pop("starter_code"))
 
-    question = f"{instruction}"
+    # question = f"{instruction}"
+
+    instruction = question
 
     task = {
         "ground_truth": tests,
         "question": instruction,
         "idx": idx,
-        'data_source': 'livecodebench' 
+        'data_source': 'primeintellect' 
     }
     return task
 
@@ -102,18 +113,18 @@ if __name__ == "__main__":
     os.environ["TOKENIZERS_PARALLELISM"] = "true"
 
     # Create the environment (no batch_size parameter)
-    n_parallel_agents = 256
+    n_parallel_agents = 1
 
     model_name = "Qwen/Qwen3-4B"
     
     tokenizer = AutoTokenizer.from_pretrained(model_name)
 
     envs = [
-        CompetitionCodingEnv(max_turns=4) for _ in range(n_parallel_agents)
+        CompetitionCodingEnv(max_turns=2) for _ in range(n_parallel_agents)
     ]
 
     agents = [
-        CodeAgent() for i in range(n_parallel_agents)
+        CompetitionCodingAgent() for i in range(n_parallel_agents)
     ]
 
     sampling_params = {
@@ -133,7 +144,7 @@ if __name__ == "__main__":
         tokenizer=tokenizer,
         sampling_params=sampling_params,
         rollout_engine_args={"base_url": "http://localhost:30000/v1", "api_key": "None"},
-        max_response_length=32768,
+        max_response_length=2048,
         max_prompt_length=2048,
         config=None,
         n_parallel_agents=n_parallel_agents,
@@ -141,11 +152,6 @@ if __name__ == "__main__":
     )
     # engine.update_envs_and_agents(envs, agents)
 
-
-    train_datasets = [TrainDataset.Code.PRIMEINTELLECT, TrainDataset.Code.TACO, TrainDataset.Code.LIVECODEBENCH]
-    train_dataset_data = [load_dataset(d) for d in train_datasets]
-
-    tasks = load_data(n=1, dataset_enum=TestDataset.Code.LIVECODEBENCH)
-
+    tasks = load_data(n=1, dataset_enum=TrainDataset.Code.PRIMEINTELLECT)[1:2]
     results = asyncio.run(engine.execute_tasks(tasks))
     evaluate_results(results)

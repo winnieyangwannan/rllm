@@ -952,6 +952,11 @@ class AgentPPOTrainer(RayPPOTrainer):
         other_step_batch.batch["advantages"] = final_advantage
         other_step_batch.batch["returns"] = final_advantage
 
+        # Assign 0 advantage to those 
+        is_pad = torch.tensor(other_step_batch.non_tensor_batch["is_pad_step"], dtype=torch.bool)
+        other_step_batch.batch["advantages"][is_pad] = 0.0
+        other_step_batch.batch["returns"][is_pad] = 0.0
+
     def _masked_pad_to_update_world_size(self, batch):
         world_sizes = []
         if self.use_critic and self.critic_wg.world_size != 0:
@@ -979,7 +984,6 @@ class AgentPPOTrainer(RayPPOTrainer):
         # for the padded dataproto, make the traj mask to 0. is_last_step also False
         for i in range(pad_size):
             idx = original_batch_size + i
-            batch.batch["traj_mask"][idx] = torch.ones_like(batch.batch["traj_mask"][idx])
             batch.non_tensor_batch["is_last_step"][idx] = False
             batch.non_tensor_batch["is_pad_step"][idx] = True
 

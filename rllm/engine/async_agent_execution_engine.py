@@ -96,7 +96,7 @@ class AsyncAgentExecutionEngine(AgentExecutionEngine):
 
         # Create a thread pool executor for environment interactions (i.e. step, reset, close)
         self.executor = concurrent.futures.ThreadPoolExecutor(max_workers=max_workers)
-        self.chat_template_parser = ChatTemplateParser.get_parser(self.tokenizer, enable_thinking=kwargs.get("enable_thinking", False))
+        self.chat_template_parser = ChatTemplateParser.get_parser(self.tokenizer, enable_thinking=self.config.agent.enable_thinking)
 
     async def get_model_response(self, prompt, application_id, **kwargs):
         """
@@ -287,6 +287,14 @@ class AsyncAgentExecutionEngine(AgentExecutionEngine):
                 max_tokens = self.max_response_length - response_token_len
             else:
                 max_tokens = self.max_response_length
+
+                # since max prompt is enforced, we filter out too long prompts.
+                prompt_str = self.chat_template_parser.parse(prompt_messages, add_generation_prompt=True, is_first_msg=True)
+                prompt_len = len(self.tokenizer.encode(prompt_str, add_special_tokens=False))
+                if prompt_len > self.max_prompt_length:
+                    termination_reason = "PROMPT_TRUNCATION"
+                    break
+                
             kwargs['max_tokens'] = max_tokens
             
             start_time = time.time()
