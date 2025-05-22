@@ -238,7 +238,7 @@ class AgentPPOTrainer(RayPPOTrainer):
                                 # batch now only contains steps with valid uids
                                 # filter out padding steps
                                 is_pad_step = batch.non_tensor_batch["is_pad_step"]
-                                non_pad_step_indices = np.where(~is_pad_step)[0]  
+                                non_pad_step_indices = np.where(is_pad_step == False)[0]  
                                 batch = batch.select_idxs(non_pad_step_indices) # This batch only has non_pad steps
 
                                 # need to make sure both number of last steps (number of uids) and number of total steps in the batch (batch size after processing) are all multiples of world size
