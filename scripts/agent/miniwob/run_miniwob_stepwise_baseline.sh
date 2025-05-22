@@ -68,6 +68,6 @@ python3 -m rllm.train.train_agent_ppo \
     agent.name=webagent \
     agent.max_steps=5 \
     agent.async_engine=False \
-    agent.step_advantage_broadcast=False \
+    agent.use_stepwise_advantage=False \
     agent.enable_thinking=False \
     trainer.total_epochs=100

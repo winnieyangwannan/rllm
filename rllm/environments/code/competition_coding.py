@@ -61,7 +61,7 @@ class CompetitionCodingEnv(MultiTurnEnvironment):
             Tuple of (reward: float, metadata: Dict)
         """
         reward_response = self.reward_fn(
-            data_source=task["data_source"], 
+            data_source=task.get("data_source", ""), 
             llm_solution=action, 
             ground_truth=task["ground_truth"]
         )
