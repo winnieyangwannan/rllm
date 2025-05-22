@@ -934,6 +934,7 @@ class AgentPPOTrainer(RayPPOTrainer):
         # Assign 0 advantage to those 
         is_pad = torch.from_numpy(other_step_batch.non_tensor_batch["is_pad_step"]).bool()
         other_step_batch.batch["advantages"][is_pad] = 0.0
+        other_step_batch.batch["returns"][is_pad] = 0.0
 
     def _masked_pad_to_update_world_size(self, batch):
         world_sizes = []
