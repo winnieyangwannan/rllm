@@ -903,7 +903,14 @@ class AgentPPOTrainer(RayPPOTrainer):
 
         result = DataProto.from_dict(tensors=tensor_batch, non_tensors=non_tensor_batch, meta_info=meta_info)
 
-        self.visualize_trajectory(result, sample_idx=0, max_samples=2)
+        # Find indices of last steps for visualization
+        last_step_indices = [i for i, is_last in enumerate(non_tensor_batch["is_last_step"]) if is_last]
+        if last_step_indices:
+            sample_indices = np.random.choice(last_step_indices, 
+                                             size=min(2, len(last_step_indices)), 
+                                             replace=False)
+            for idx in sample_indices:
+                self.visualize_trajectory(result, sample_idx=idx, max_samples=1)
         return result
 
        

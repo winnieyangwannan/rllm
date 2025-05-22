@@ -1,4 +1,3 @@
-import json
 import logging
 from typing import Dict, List, Any, Tuple
 
@@ -10,7 +9,7 @@ class CompetitionCodingAgent(BaseAgent):
     """
     A code agent that iteratively writes code to solve a problem.
     """
-    def __init__(self):
+    def __init__(self, remove_thinking=True):
         """
         Initialize the MathAgent.
         """
@@ -19,6 +18,7 @@ class CompetitionCodingAgent(BaseAgent):
         self.messages = []
         self.step = 0
         self.max_tests = 2
+        self.remove_thinking = remove_thinking
 
     def format_test_results(self, test_results: List[Dict]) -> str:
         all_passed = True
@@ -107,9 +107,9 @@ class CompetitionCodingAgent(BaseAgent):
         cur_step.model_response = content
 
         # Remove <think></think> blocks from assistant messages
-        if "</think>" in content:
+        if self.remove_thinking:
             think_start = content.find("<think>")
-            think_end = content.find("</think>") + len("</think>")
+            think_end = content.find("</think>")
             if think_start != -1 and think_end != -1 and think_end > think_start:
                 # Remove full <think>...</think> block
                 think_end += len("</think>")
