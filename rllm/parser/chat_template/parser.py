@@ -3,6 +3,7 @@ import json
 class ChatTemplateParser:
     def __init__(self, tokenizer):
         self.tokenizer = tokenizer
+        self.assistant_token = ""
 
     def parse(self, messages, add_generation_prompt=False, **kwargs):
         return self.tokenizer.apply_chat_template(messages, tokenize=False, add_generation_prompt=add_generation_prompt)
@@ -29,8 +30,8 @@ class ChatTemplateParser:
                 parser = DeepseekQwenChatTemplateParser(tokenizer)
                 print(f"Using DeepseekQwenChatTemplateParser for {tokenizer.name_or_path}")
                 return parser
-            elif "qwen" in model_name:
-                enable_thinking = enable_thinking
+            elif "qwen" in model_name or 'r2egym' in model_name:
+                enable_thinking = '3' in model_name
                 parser = QwenChatTemplateParser(tokenizer, enable_thinking=enable_thinking)
                 print(f"Using QwenChatTemplateParser for {tokenizer.name_or_path}")
                 return parser

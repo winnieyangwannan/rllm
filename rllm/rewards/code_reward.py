@@ -1,4 +1,3 @@
-
 """
 This module contains the RewardCode class, which evaluates code datasets answers
 and assigns rewards based on their correctness on unit tests.
@@ -70,7 +69,7 @@ def clean_code_main_block(code: str) -> str:
     return '\n'.join(filtered_lines)
 
 
-def check_correctness(tests: Union[List[Dict[str, str]], Dict[str, List[str]]], code: str, test_fn, timeout_per_test: int = 12, max_tests: int = 15) -> bool:
+def check_correctness(tests: Union[List[Dict[str, str]], Dict[str, List[str]]], code: str, test_fn, timeout_per_test: int = 12, max_tests: int = 15) -> tuple[bool, Dict[str, Any]]:
     """
     Check if generated code passes all test cases within a timeout period.
 
@@ -81,10 +80,9 @@ def check_correctness(tests: Union[List[Dict[str, str]], Dict[str, List[str]]], 
         timeout: Maximum execution time in seconds before killing process
 
     Returns:
-        bool: True if all tests pass, False otherwise
-
-    Raises:
-        AssertionError: If test results list is empty
+        tuple: (bool, dict) where:
+            - bool: True if all tests pass, False otherwise
+            - dict: Detailed test results with test cases and pass/fail status
     """
     manager = Manager()
     test_results = manager.list()
@@ -94,6 +92,8 @@ def check_correctness(tests: Union[List[Dict[str, str]], Dict[str, List[str]]], 
             test_results.append(test_fn(tests, test=generation, debug=debug, timeout=timeout_per_test))
         except Exception as e:
             print(f"Error in evaluate_code: {e}")
+    
+    original_tests = tests
     if isinstance(tests, list):
         total_tests = len(tests)
         if total_tests > max_tests:
@@ -124,12 +124,40 @@ def check_correctness(tests: Union[List[Dict[str, str]], Dict[str, List[str]]], 
     if process.is_alive():
         process.kill()
     test_results = test_results[:]
+    
+    detailed_results = {
+        "all_passed": False,
+        "test_results": [],
+        "total_tests": num_tests,
+        "passed_tests": 0
+    }
+    
     if len(test_results) == 0:
-        return False
-    #assert len(test_results) == 1, f"Expected exactly one test result, but got {test_results}"
+        return False, detailed_results
+    
     test_results = test_results[0]
-    test_results = [r==True for r in test_results]
-    return all(test_results)
+    passed_results = [r==True for r in test_results]
+    
+    # Create detailed test results
+    if isinstance(original_tests, list):
+        for i, (test, result) in enumerate(zip(tests, passed_results)):
+            detailed_results["test_results"].append({
+                "input": test.get("input", ""),
+                "expected": test.get("output", ""),
+                "passed": result
+            })
+    else:
+        for i, (inp, out, result) in enumerate(zip(tests['inputs'], tests['outputs'], passed_results)):
+            detailed_results["test_results"].append({
+                "input": inp,
+                "expected": out,
+                "passed": result
+            })
+    
+    detailed_results["passed_tests"] = sum(passed_results)
+    detailed_results["all_passed"] = all(passed_results)
+    
+    return all(passed_results), detailed_results
 
 
 def postprocess_lcb_sample(sample):
@@ -161,25 +189,25 @@ def primeintellect_check_correctness(tests, code, use_tci=False):
             assert isinstance(tests, dict)
         except (ValueError, SyntaxError) as e:
             print(f"Error parsing string: {e}")
-            return False
+            return False, {"all_passed": False, "error": str(e)}
 
     assert len(tests) >= 1, "PrimeIntellect needs at least one test case"
     # Convert the tests to the format expected by the taco_run_test function
     inputs = [t['input'] for t in tests]
     outputs = [t['output'] for t in tests]
     fn_name = tests[0].get('fn_name', None)
-    tests = {
+    tests_formatted = {
         'inputs': inputs,
         'outputs': outputs,
     }
     if fn_name:
-        tests['fn_name'] = fn_name
+        tests_formatted['fn_name'] = fn_name
 
     if use_tci:
         codetool = TogetherCodeTool()
-        return codetool_check_correctness(tests, code, codetool, is_taco_format=True)
+        return codetool_check_correctness(tests_formatted, code, codetool, is_taco_format=True)
 
-    return check_correctness(tests, code, taco_run_test)
+    return check_correctness(tests_formatted, code, taco_run_test)
 
 def lcb_check_correctness_v2(sample, generation, timeout=6, debug=False):
     """Check correctness of code generation with a global timeout.
@@ -191,7 +219,6 @@ def lcb_check_correctness_v2(sample, generation, timeout=6, debug=False):
     manager = multiprocessing.Manager()
     result = manager.list()
     metadata_list = manager.list()
-
 
     def _temp_run(sample, generation, debug, result, metadata_list, timeout):
         res, metadata = lcb_run_test(sample, test=generation, debug=debug, timeout=timeout)
@@ -206,22 +233,55 @@ def lcb_check_correctness_v2(sample, generation, timeout=6, debug=False):
     p.join(
         timeout=(timeout + 1) * len(json.loads(sample["input_output"])["inputs"]) + 5
     )
+    
+    detailed_results = {
+        "all_passed": False,
+        "test_results": [],
+        "total_tests": 0,
+        "passed_tests": 0
+    }
+    
     if p.is_alive():
         p.kill()
     if not result:
         in_outs = json.loads(sample["input_output"])
         # consider that all tests failed
         result = [[-1 for i in range(len(in_outs["inputs"]))]]
+        detailed_results["total_tests"] = len(in_outs["inputs"])
+        detailed_results["test_results"] = [
+            {
+                "input": inp,
+                "expected": out,
+                "passed": False,
+                "error": "global timeout"
+            }
+            for inp, out in zip(in_outs["inputs"], in_outs["outputs"])
+        ]
         if debug:
             print(f"global timeout")
+        return False, detailed_results
+    
     if not result:
-        return False
-    # print(result[0], metadata_list)
-    # Check if all elements in result[0] are True
-    return all(x == True for x in result[0])
+        return False, detailed_results
+    
+    # Create detailed test results
+    in_outs = json.loads(sample["input_output"])
+    detailed_results["total_tests"] = len(result[0])
+    detailed_results["test_results"] = [
+        {
+            "input": inp,
+            "expected": out,
+            "passed": res == True
+        }
+        for inp, out, res in zip(in_outs["inputs"], in_outs["outputs"], result[0])
+    ]
+    detailed_results["passed_tests"] = sum(1 for r in result[0] if r == True)
+    detailed_results["all_passed"] = all(r == True for r in result[0])
+    
+    return all(x == True for x in result[0]), detailed_results
 
 
-def leetcode_check_correctness(tests: List[Dict[str, str]], code: str) -> bool:
+def leetcode_check_correctness(tests: List[Dict[str, str]], code: str) -> tuple[bool, Dict[str, Any]]:
      """
      Check if generated code passes all LeetCode test cases.
     
@@ -232,14 +292,22 @@ def leetcode_check_correctness(tests: List[Dict[str, str]], code: str) -> bool:
           runtime_debug: Whether to print debug info during test execution
     
      Returns:
-          bool: True if all tests pass and result list exists, False otherwise
+          tuple: (bool, dict) where:
+            - bool: True if all tests pass, False otherwise
+            - dict: Detailed test results
      """
      succ, output = lc_code_exec(code + '\n' + tests["functional"])
+     detailed_results = {
+         "all_passed": succ,
+         "output": output,
+         "test_results": [{"passed": succ, "output": output}]
+     }
+     
      if not succ:
          print(f"Error in code execution: {output}")
-     return succ
+     return succ, detailed_results
 
-def kodcode_check_correctness(test: str, code: str, timeout_per_test: int = 5) -> bool:
+def kodcode_check_correctness(test: str, code: str, timeout_per_test: int = 5) -> tuple[bool, Dict[str, Any]]:
     """
     Check if generated code passes all Kodcode test cases.
     
@@ -250,7 +318,9 @@ def kodcode_check_correctness(test: str, code: str, timeout_per_test: int = 5) -
         runtime_debug: Whether to print debug info during test execution
     
     Returns:
-        bool: True if all tests pass and result list exists, False otherwise
+        tuple: (bool, dict) where:
+            - bool: True if all tests pass, False otherwise
+            - dict: Detailed test results
     """
     # Count the number of test functions in the test file
     num_tests = test.count('def test')
@@ -259,11 +329,18 @@ def kodcode_check_correctness(test: str, code: str, timeout_per_test: int = 5) -
     code = clean_code_main_block(code)
     
     succ, output = kod_code_exec(code, test, timeout_per_test * num_tests)
+    detailed_results = {
+        "all_passed": succ,
+        "output": output,
+        "total_tests": num_tests,
+        "test_results": [{"passed": succ, "output": output}]
+    }
+    
     if not succ:
         print(f"Error in code execution: {output}")
-    return succ
+    return succ, detailed_results
 
-def humanevalplus_check_correctness(test: str, code: str, timeout_per_test: int = 1) -> bool:
+def humanevalplus_check_correctness(test: str, code: str, timeout_per_test: int = 1) -> tuple[bool, Dict[str, Any]]:
     """
     Check if generated code passes all HumanEvalPlus test cases.
     
@@ -274,15 +351,25 @@ def humanevalplus_check_correctness(test: str, code: str, timeout_per_test: int 
         runtime_debug: Whether to print debug info during test execution
     
     Returns:
-        bool: True if all tests pass and result list exists, False otherwise
+        tuple: (bool, dict) where:
+            - bool: True if all tests pass, False otherwise
+            - dict: Detailed test results
     """
     code = clean_code_main_block(code)
 
     num_test_cases = get_num_test_cases(test)
     succ, output = humanevalplus_run_test(code, test, timeout_per_test * num_test_cases)
+    
+    detailed_results = {
+        "all_passed": succ,
+        "output": output,
+        "total_tests": num_test_cases,
+        "test_results": [{"passed": succ, "output": output}]
+    }
+    
     if not succ:
         print(f"Error in code execution: {output}")
-    return succ
+    return succ, detailed_results
 
 def taco_to_lcb_format(tests):
     """
@@ -311,7 +398,7 @@ def taco_to_lcb_format(tests):
     
     return test_cases
 
-def codetool_check_correctness(tests: Any, code: str, codetool: CodeTool, is_taco_format=True, timeout=30) -> bool:
+def codetool_check_correctness(tests: Any, code: str, codetool: CodeTool, is_taco_format=True, timeout=30) -> tuple[bool, Dict[str, Any]]:
     from rllm.tools.utils import stdin_test_code_wrapper, call_based_test_code_wrapper
 
     fn_name = None
@@ -329,10 +416,26 @@ def codetool_check_correctness(tests: Any, code: str, codetool: CodeTool, is_tac
         test_wrapped_code = stdin_test_code_wrapper(code, new_tests)
 
     tool_response = codetool(code=test_wrapped_code, timeout=timeout)
+    
+    detailed_results = {
+        "all_passed": not tool_response.error,
+        "output": tool_response.output,
+        "error": tool_response.error,
+        "test_results": []
+    }
+    
+    # Try to extract individual test results if possible
+    if isinstance(new_tests, list):
+        detailed_results["total_tests"] = len(new_tests)
+        detailed_results["test_results"] = [
+            {"input": test.get("input", ""), "expected": test.get("output", ""), "passed": not tool_response.error}
+            for test in new_tests
+        ]
+    
     if tool_response.error:
         print(f"Error in code execution: {tool_response.error}")
-        return False
-    return True
+        return False, detailed_results
+    return True, detailed_results
 
 class RewardCodeFn(RewardFn):
     """
@@ -354,12 +457,12 @@ class RewardCodeFn(RewardFn):
         tests = metadata
         if tests is None:
             print("No tests found in metadata")
-            return RewardOutput(reward=self.config.format_error_reward, is_correct=False)
+            return RewardOutput(reward=self.config.format_error_reward, is_correct=False, metadata={"error": "No tests found in metadata"})
 
         model_code = extract_code_from_model(model_response)
         if model_code is None:
             # print("No code found in model response")
-            return RewardOutput(reward=self.config.format_error_reward, is_correct=False)
+            return RewardOutput(reward=self.config.format_error_reward, is_correct=False, metadata={"error": "No code found in model response"})
 
         if self.config.use_together_code_interpreter:
             codetool = TogetherCodeTool()
@@ -367,32 +470,34 @@ class RewardCodeFn(RewardFn):
         # Tests: List[Dictionary] - Codeforces, LiveCodeBench
         # Tests: Dictionary[Lists] - CodeContests, Taco/Apps
         is_correct = False
+        test_details = {}
+        
         if dataset_name in ["taco", "apps", "code_contests"]:
             if self.config.use_together_code_interpreter:
-                is_correct = codetool_check_correctness(tests, model_code, codetool, is_taco_format=True)
+                is_correct, test_details = codetool_check_correctness(tests, model_code, codetool, is_taco_format=True)
             else:
                 test_fn = taco_run_test
-                is_correct = check_correctness(tests, model_code, test_fn)
+                is_correct, test_details = check_correctness(tests, model_code, test_fn)
         elif dataset_name == "leetcode":
-            is_correct = leetcode_check_correctness(tests, model_code)
+            is_correct, test_details = leetcode_check_correctness(tests, model_code)
         elif dataset_name in ["livecodebench", "codeforces"]:
-            is_correct = lcb_check_correctness_v2(tests, model_code, debug=False)
+            is_correct, test_details = lcb_check_correctness_v2(tests, model_code, debug=False)
         elif dataset_name == "primeintellect":
-                is_correct = primeintellect_check_correctness(tests, model_code, self.config.use_together_code_interpreter)
+            is_correct, test_details = primeintellect_check_correctness(tests, model_code, self.config.use_together_code_interpreter)
         elif dataset_name == "kodcode":
-            is_correct = kodcode_check_correctness(tests, model_code)
+            is_correct, test_details = kodcode_check_correctness(tests, model_code)
         elif dataset_name == "humanevalplus":
-            is_correct = humanevalplus_check_correctness(tests, model_code)
+            is_correct, test_details = humanevalplus_check_correctness(tests, model_code)
         else:
-            is_correct = check_correctness(tests, model_code, test_fn)
+            is_correct, test_details = check_correctness(tests, model_code, test_fn)
 
         total_time = time.time() - total_start_time
         # print(f"Total reward function execution time: {total_time:.2f} seconds")
 
         if is_correct:
-            return RewardOutput(reward=self.config.correct_reward, is_correct=True)
+            return RewardOutput(reward=self.config.correct_reward, is_correct=True, metadata=test_details)
         else:
-            return RewardOutput(reward=self.config.incorrect_reward, is_correct=False)
+            return RewardOutput(reward=self.config.incorrect_reward, is_correct=False,metadata=test_details)
 
 def rllm_reward_fn_code(data_source: str, llm_solution: str, ground_truth: Dict, **kwargs):
     """Evaluate code solutions against ground truth answers
@@ -407,7 +512,9 @@ def rllm_reward_fn_code(data_source: str, llm_solution: str, ground_truth: Dict,
         enable_llm: Whether to enable language model validation for complex cases (default: False)
 
     Returns:
-        bool: True if the solution passes all the test_case, False otherwise
+        tuple: (bool, dict) where:
+            - bool: True if the solution passes all the test_case, False otherwise
+            - dict: Detailed test results with test cases and pass/fail status
 
     Example:
             model_response = '''
@@ -429,7 +536,7 @@ if __name__ == "__main__":
     metadata = {
          "tests": tests,
     }
-    True
+    True, {"all_passed": True, "test_results": [...]}
     """
     reward_config = RewardConfig()
     reward_fn = RewardCodeFn(reward_config)
@@ -441,5 +548,5 @@ if __name__ == "__main__":
             model_response=llm_solution,
             metadata=ground_truth
         ))
-    return reward_response.is_correct
+    return reward_response
   
