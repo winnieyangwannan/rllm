@@ -275,3 +275,4 @@ agent:
   async_engine: True
   n_parallel_agents: null
   trajectory_timeout: null
+  overlong_filter: False

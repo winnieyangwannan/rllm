@@ -82,6 +82,7 @@ class AgentPPOTrainer(RayPPOTrainer):
                 env_class=self.env_class,
                 env_args=self.config.env.get("env_args", {}),
                 trajectory_timeout=self.config.agent.trajectory_timeout,
+                overlong_filter=self.config.agent.overlong_filter,
             )
         else:
             self.agent_execution_engine = AgentExecutionEngine(

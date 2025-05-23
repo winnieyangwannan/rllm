@@ -47,6 +47,7 @@ class AsyncAgentExecutionEngine(AgentExecutionEngine):
         agent_args={},
         rollout_engine_args={},
         env_args={},
+        overlong_filter=False, # Filter for overlong trajectories (i.e. TRUNCATION, MAX_STEPS)
         **kwargs,
     ):
         self.config = config
@@ -55,6 +56,7 @@ class AsyncAgentExecutionEngine(AgentExecutionEngine):
         self.engine_name = engine_name
         self.n_parallel_agents = n_parallel_agents
         self.model_path = model_path
+        self.overlong_filter = overlong_filter
 
         # For interaction
         self.gamma = gamma
@@ -195,6 +197,7 @@ class AsyncAgentExecutionEngine(AgentExecutionEngine):
         response_tokens = []
         response_masks = []
         total_time = 0
+        reward = 0.0
 
         # Reset environment with the task using the executor
         loop = asyncio.get_event_loop()
@@ -286,7 +289,7 @@ class AsyncAgentExecutionEngine(AgentExecutionEngine):
                 response_masks.extend(truncated_response_masks)
                 
                 cur_step = agent.get_current_state()
-                if response_token_len - len(env_msg_tokens) > self.max_response_length and not hasattr(env, 'compute_final_reward'):
+                if response_token_len - len(env_msg_tokens) > self.max_response_length:
                     cur_step.reward = 0.0
                 cur_step.done = True
                 termination_reason = "TRUNCATION"
@@ -324,6 +327,14 @@ class AsyncAgentExecutionEngine(AgentExecutionEngine):
         # Closing environment using the executor.
         await loop.run_in_executor(self.executor, env.close)
         print(f"Environment closed for trajectory {idx}.")
+        
+        masked_out = False
+        if self.overlong_filter:
+            if (termination_reason == "TRUNCATION" or termination_reason == "MAX_STEPS") and reward <= 0:
+                # Mask out the entire response for overlong trajectories if the reward is 0.
+                response_masks = [0] * len(response_masks)
+                masked_out = True
+        
         if termination_reason:
             if reward > 0:
                 color = "green"
@@ -333,6 +344,9 @@ class AsyncAgentExecutionEngine(AgentExecutionEngine):
                 f"Trajectory {idx} completed due to: {termination_reason}. Reward is {reward}. \n",
                 color,
             )
+            if masked_out:
+                colorful_print(f"Trajectory {idx} is masked out due to overlong filter.", "red")
+
         trajectory = agent.trajectory 
         # Aggregate final trajectory statistics
         compute_trajectory_reward(trajectory)
