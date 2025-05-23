@@ -11,7 +11,7 @@ class CompetitionCodingAgent(BaseAgent):
     """
     def __init__(self, remove_thinking=True):
         """
-        Initialize the MathAgent.
+        Initialize the CodeAgent.
         """
         self.revise_instruction = "Here's the feedback from the previous attempt. Revise the code to fix the errors and improve the solution."
         self._trajectory = Trajectory()
