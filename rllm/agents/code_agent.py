@@ -21,7 +21,7 @@ class CompetitionCodingAgent(BaseAgent):
     """
     A code agent that iteratively writes code to solve a problem.
     """
-    def __init__(self):
+    def __init__(self, strip_thoughts=False, max_tests=2):
         """
         Initialize the MathAgent.
         """
@@ -29,32 +29,27 @@ class CompetitionCodingAgent(BaseAgent):
         self._trajectory = Trajectory()
         self.messages = []
         self.step = 0
-        self.max_tests = 2
+        self.strip_thoughts = strip_thoughts
+        self.max_tests = max_tests
     
     def format_test_results(self, test_results: List[Dict]) -> str:
 
+        def normalize_string(s):
+            return "".join(s.split())
+        
+        normalized_question = normalize_string(self.trajectory.steps[0].observation)
         public_tests = []
         for i, test in enumerate(test_results):
-            if "input" in test and isinstance(test["input"], str):
-                strings_to_match = test["input"].split("\n")
-            elif "input" in test and isinstance(test["input"], list):
-                strings_to_match = test["input"]
-            else:
-                continue
-            
-            question = self.trajectory.steps[0].observation
-            if all(s in question for s in strings_to_match):
+            strings_to_match = [normalize_string(s) for s in test["input"].split("\n")]
+            if all(s in normalized_question for s in strings_to_match):
                 public_tests.append(test)
-
-        if len(public_tests) == 0:
-            print("Warning: No public tests found")
-        else:
-            print(f"Warning: Found {len(public_tests)} public tests")
         
-        if len(public_tests) == 0 or all(test["passed"] for test in public_tests):
+        if len(public_tests) == 0:
+            return "No public tests found. Please review your solution once more for correctness and efficiency, then output your final code if you're confident it's optimal."
+        elif all(test["passed"] for test in public_tests):
             return "Congratulations! You've successfully passed all the public test cases. Please review your solution once more for correctness and efficiency, then output your final code if you're confident it's optimal."
         
-        else:
+        else: # some tests failed
             formatted_test_results = ""
             n_failed = 0
             for i, test in enumerate(public_tests):
@@ -77,7 +72,6 @@ class CompetitionCodingAgent(BaseAgent):
         """
         # Format observation based on whether it's the initial problem or subsequent feedback
 
-        formatted_observation = ''
         if not self._trajectory.steps:
             # Initial problem statement
             assert isinstance(observation, dict) and 'question' in observation, "Initial observation must be a dict with a 'question' key."
@@ -127,26 +121,16 @@ class CompetitionCodingAgent(BaseAgent):
         
         # Update the current step in the trajectory
         cur_step = self._trajectory.steps[-1]
-        cur_step.thought = content 
-        cur_step.action = content  
         cur_step.model_response = content
 
-        # Remove <think></think> blocks from assistant messages
-        # if "</think>" in content:
-        #     think_start = content.find("<think>")
-        #     think_end = content.find("</think>") + len("</think>")
-        #     if think_start != -1 and think_end != -1 and think_end > think_start:
-        #         # Remove full <think>...</think> block
-        #         think_end += len("</think>")
-        #         content = content[:think_start] + content[think_end:]
-        #     elif think_end != -1:
-        #         # Remove everything before and including </think>
-        #         think_end += len("</think>")
-        #         content = content[think_end:]
-
-
-        # Add the assistant's response to the messages
-        self.messages.append({"role": "assistant", "content": content})
+        if self.strip_thoughts and content.count("</think>") == 1:
+            cur_step.thought, cur_step.action = content.split("</think>")
+            cur_step.action += "</think>"        
+            self.messages.append({"role": "assistant", "content": cur_step.action})
+        else:
+            cur_step.thought = content 
+            cur_step.action = content
+            self.messages.append({"role": "assistant", "content": content})
         
         self.step += 1
 

@@ -64,17 +64,13 @@ def process_code_fn(example, idx):
     
     tests = json.dumps(tests)
 
-    # instruction = fetch_live_code_bench_system_prompt(prompt=question, starter_code=example.pop("starter_code"))
-
-    # question = f"{instruction}"
-
-    instruction = question
+    instruction = fetch_live_code_bench_system_prompt(prompt=question, starter_code=example.pop("starter_code"))
 
     task = {
         "ground_truth": tests,
         "question": instruction,
         "idx": idx,
-        'data_source': 'primeintellect' 
+        'data_source': 'livecodebench' 
     }
     return task
 
@@ -115,18 +111,18 @@ if __name__ == "__main__":
     os.environ["TOKENIZERS_PARALLELISM"] = "true"
 
     # Create the environment (no batch_size parameter)
-    n_parallel_agents = 128
+    n_parallel_agents = 256
 
     model_name = "Qwen/Qwen3-4B"
     
     tokenizer = AutoTokenizer.from_pretrained(model_name)
 
     envs = [
-        CompetitionCodingEnv(max_turns=1) for _ in range(n_parallel_agents)
+        CompetitionCodingEnv(max_turns=2) for _ in range(n_parallel_agents)
     ]
 
     agents = [
-        CompetitionCodingAgent() for i in range(n_parallel_agents)
+        CompetitionCodingAgent(strip_thoughts=False, max_tests=2) for i in range(n_parallel_agents)
     ]
 
     sampling_params = {
@@ -146,7 +142,7 @@ if __name__ == "__main__":
         tokenizer=tokenizer,
         sampling_params=sampling_params,
         rollout_engine_args={"base_url": "http://localhost:30000/v1", "api_key": "None"},
-        max_response_length=32768,
+        max_response_length=16384,
         max_prompt_length=4096,
         config=None,
         n_parallel_agents=n_parallel_agents,
@@ -174,6 +170,6 @@ if __name__ == "__main__":
 
     evaluate_results(results)
 
-    results = [result.to_dict() for result in results]
-    with open("qwen3-4b-lcb-1turn-32k.json", "w") as f:
-        json.dump(results, f, indent=4)
+    # results = [result.to_dict() for result in results]
+    # with open("qwen3-4b-lcb-2turn-16k-new.json", "w") as f:
+    #     json.dump(results, f, indent=4)
