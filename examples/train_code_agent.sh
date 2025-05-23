@@ -8,16 +8,16 @@ export VLLM_ENGINE_ITERATION_TIMEOUT_S=100000000000
 export CUDA_VISIBLE_DEVICES=0,1,2,3
 # Find the directory where rllm package is located
 RLLM_DIR=$(python3 -c "import rllm; import os; print(os.path.dirname(os.path.dirname(rllm.__file__)))")
-RLLM_DIR=/data/sijun/rllm-internal
+RLLM_DIR=/ib-scratch/chenguang04/scratch/kyle/rllm-internal-multiturn-code
 
 python3 -m rllm.train.train_agent_ppo \
     algorithm.adv_estimator=grpo \
     data.train_files=${RLLM_DIR}/data/deepscaler_code.parquet  \
     data.val_files=${RLLM_DIR}/data/test_livecodebench.parquet  \
-    data.train_batch_size=64 \
-    data.val_batch_size=128 \
-    data.max_prompt_length=10000 \
-    data.max_response_length=4096 \
+    data.train_batch_size=32 \
+    data.val_batch_size=32 \
+    data.max_prompt_length=2048 \
+    data.max_response_length=16384 \
     actor_rollout_ref.model.path=Qwen/Qwen3-4B \
     actor_rollout_ref.hybrid_engine=True \
     actor_rollout_ref.actor.optim.lr=1e-6 \
@@ -63,13 +63,13 @@ python3 -m rllm.train.train_agent_ppo \
     trainer.n_gpus_per_node=4 \
     trainer.nnodes=1 \
     trainer.save_freq=400 \
-    trainer.test_freq=5 \
+    trainer.test_freq=20 \
     trainer.default_hdfs_dir=null \
     env.name=competition_coding \
     agent.name=code_agent \
     agent.max_steps=2 \
     agent.async_engine=True \
-    agent.use_stepwise_advantage=True \
+    agent.use_stepwise_advantage=False \
     agent.stepwise_advantage_mode="broadcast" \
     agent.normalize_step_advantage=True \
     agent.enable_thinking=True \
