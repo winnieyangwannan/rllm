@@ -21,6 +21,26 @@ class CompetitionCodingEnv(MultiTurnEnvironment):
         """
         super().__init__(task=task, max_turns=max_turns, **kwargs)
         self.reward_fn = rllm_reward_fn
+        self.prev_reward = None
+        self.beta = 0.5
+
+    def reset(self, task=None, seed=None):
+        """Reset the environment and return initial observations."""
+        import random
+        if seed is not None:
+            random.seed(seed)
+        
+        # Use the provided task if available, otherwise use the default task
+        if task is not None:
+            self.task = task
+        
+        self.done = False
+        self.current_turn = 0
+        self.history = []
+        self.prev_reward = None
+        
+        # Return the first question
+        return {"question": self.task["question"]}, {}
 
     def step(self, action):
         """
@@ -36,7 +56,15 @@ class CompetitionCodingEnv(MultiTurnEnvironment):
         self.history.append(action)
         
         # Calculate reward for the current turn using the abstract method
-        reward, next_obs = self.get_reward_and_next_obs(self.task, action)
+        raw_reward, next_obs = self.get_reward_and_next_obs(self.task, action)
+
+        # Reward shaping
+        if self.prev_reward is None:
+            reward = raw_reward
+        else:
+            bonus = self.beta * (raw_reward - self.prev_reward)
+            reward = raw_reward + bonus
+        self.prev_reward = raw_reward
         
         # Increment turn counter
         self.current_turn += 1

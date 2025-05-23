@@ -60,7 +60,7 @@ python3 -m rllm.train.train_agent_ppo \
     trainer.project_name='code-agent' \
     trainer.experiment_name='4b-coding-stepwise-mcreturn-16k' \
     trainer.val_before_train=True \
-    trainer.n_gpus_per_node=8 \
+    trainer.n_gpus_per_node=4 \
     trainer.nnodes=1 \
     trainer.save_freq=400 \
     trainer.test_freq=10 \
