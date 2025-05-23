@@ -10,7 +10,7 @@ class CompetitionCodingEnv(MultiTurnEnvironment):
     
     def __init__(self, 
                  task: Optional[Dict] = None,
-                 max_turns: int = 3,
+                 max_turns: int = 2,
                  **kwargs):
         """
         Initialize the competitive coding environment.
@@ -21,6 +21,33 @@ class CompetitionCodingEnv(MultiTurnEnvironment):
         """
         super().__init__(task=task, max_turns=max_turns, **kwargs)
         self.reward_fn = rllm_reward_fn
+
+    def step(self, action):
+        """
+        Take a step in the environment based on the action.
+        
+        Args:
+            action: Response string from the LLM
+            
+        Returns:
+            next_observation, reward, terminated, truncated, info
+        """
+        # Store the action in history
+        self.history.append(action)
+        
+        # Calculate reward for the current turn using the abstract method
+        reward, next_obs = self.get_reward_and_next_obs(self.task, action)
+        
+        # Increment turn counter
+        self.current_turn += 1
+        
+        # Check if we've reached the maximum number of turns
+        # if self.current_turn >= self.max_turns or reward == 1:
+        if self.current_turn >= self.max_turns:
+            self.done = True
+            return {}, reward, self.done, self.task
+        
+        return next_obs, reward, self.done, self.task
     
     def get_reward_and_next_obs(self, task: Dict, action: str) -> Tuple[float, Dict]:
         """
@@ -34,10 +61,14 @@ class CompetitionCodingEnv(MultiTurnEnvironment):
             Tuple of (reward: float, metadata: Dict)
         """
         reward_response = self.reward_fn(
-            data_source=task["data_source"], 
+            data_source=task.get("data_source", ""), 
             llm_solution=action, 
             ground_truth=task["ground_truth"]
-        )        
+        )
+        # all_passed_bonus = 1.0 if reward_response.metadata["all_passed"] else 0.0
+        # n_passed_tests = reward_response.metadata["passed_tests"]
+        # n_total_tests = reward_response.metadata["total_tests"]
+        # partial_reward = n_passed_tests / n_total_tests
         return reward_response.reward, reward_response.metadata
     
     @staticmethod

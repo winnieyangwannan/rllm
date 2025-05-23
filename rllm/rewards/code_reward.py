@@ -271,7 +271,10 @@ def lcb_check_correctness_v2(sample, generation, timeout=6, debug=False):
         {
             "input": inp,
             "expected": out,
-            "passed": res == True
+            "passed": res == True,
+            "error": metadata_list[0].get("error", None),
+            "error_message": metadata_list[0].get("error_message", None),
+            "output": metadata_list[0].get("output", None)
         }
         for inp, out, res in zip(in_outs["inputs"], in_outs["outputs"], result[0])
     ]
@@ -476,20 +479,20 @@ class RewardCodeFn(RewardFn):
             if self.config.use_together_code_interpreter:
                 is_correct, test_details = codetool_check_correctness(tests, model_code, codetool, is_taco_format=True)
             else:
-                test_fn = taco_run_test
-                is_correct, test_details = check_correctness(tests, model_code, test_fn)
+                tests = taco_to_lcb_format(tests)
+                is_correct, test_details = lcb_check_correctness_v2(tests, model_code, debug=False)
+                # test_fn = taco_run_test
+                # is_correct, test_details = check_correctness(tests, model_code, test_fn)
         elif dataset_name == "leetcode":
             is_correct, test_details = leetcode_check_correctness(tests, model_code)
-        elif dataset_name in ["livecodebench", "codeforces"]:
+        elif dataset_name in ["livecodebench", "codeforces", "primeintellect"]:
             is_correct, test_details = lcb_check_correctness_v2(tests, model_code, debug=False)
-        elif dataset_name == "primeintellect":
-            is_correct, test_details = primeintellect_check_correctness(tests, model_code, self.config.use_together_code_interpreter)
         elif dataset_name == "kodcode":
             is_correct, test_details = kodcode_check_correctness(tests, model_code)
         elif dataset_name == "humanevalplus":
             is_correct, test_details = humanevalplus_check_correctness(tests, model_code)
         else:
-            is_correct, test_details = check_correctness(tests, model_code, test_fn)
+            raise NotImplementedError(f"Dataset {dataset_name} not implemented")
 
         total_time = time.time() - total_start_time
         # print(f"Total reward function execution time: {total_time:.2f} seconds")

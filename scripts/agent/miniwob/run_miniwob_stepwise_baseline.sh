@@ -3,7 +3,7 @@ set -x
 export VLLM_ATTENTION_BACKEND=FLASH_ATTN
 export PYTORCH_CUDA_ALLOC_CONF="expandable_segments:False"
 export VLLM_USE_V1=1
-export CUDA_VISIBLE_DEVICES=4,5,6,7
+export CUDA_VISIBLE_DEVICES=0,1,2,3
 # Find the directory where rllm package is located
 RLLM_DIR=$(python3 -c "import rllm; import os; print(os.path.dirname(os.path.dirname(rllm.__file__)))")
 
@@ -19,7 +19,7 @@ python3 -m rllm.train.train_agent_ppo \
     actor_rollout_ref.hybrid_engine=True \
     actor_rollout_ref.actor.optim.lr=1e-6 \
     actor_rollout_ref.model.use_remove_padding=True \
-    actor_rollout_ref.actor.loss_agg_mode=seq-mean-token-sum \
+    actor_rollout_ref.actor.loss_agg_mode=seq-mean-token-sum-norm \
     actor_rollout_ref.actor.ppo_mini_batch_size=16 \
     actor_rollout_ref.actor.use_dynamic_bsz=True \
     actor_rollout_ref.actor.ppo_max_token_len_per_gpu=24000 \
@@ -68,6 +68,6 @@ python3 -m rllm.train.train_agent_ppo \
     agent.name=webagent \
     agent.max_steps=5 \
     agent.async_engine=False \
-    agent.step_advantage_broadcast=False \
+    agent.use_stepwise_advantage=False \
     agent.enable_thinking=False \
     trainer.total_epochs=100

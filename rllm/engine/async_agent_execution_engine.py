@@ -65,7 +65,7 @@ class AsyncAgentExecutionEngine(AgentExecutionEngine):
         model_path="",
         n_parallel_agents=None,
         trajectory_timeout=None,
-        gamma=1.0,
+        gamma=0.5,
         api_retries=3,
         retry_limit=1,
         max_steps=5,
@@ -125,7 +125,7 @@ class AsyncAgentExecutionEngine(AgentExecutionEngine):
 
         # Create a thread pool executor for environment interactions (i.e. step, reset, close)
         self.executor = concurrent.futures.ThreadPoolExecutor(max_workers=max_workers)
-        self.chat_template_parser = ChatTemplateParser.get_parser(self.tokenizer, enable_thinking=kwargs.get("enable_thinking", False))
+        self.chat_template_parser = ChatTemplateParser.get_parser(self.tokenizer, enable_thinking=self.config.agent.enable_thinking)
 
     async def get_model_response(self, prompt, application_id, **kwargs):
         """
@@ -263,7 +263,7 @@ class AsyncAgentExecutionEngine(AgentExecutionEngine):
         """Run a single agent's trajectory asynchronously"""
         agent = self.agents[idx]
         env = self.envs[idx]
-        env_id = env.env_id
+        # env_id = env.env_id
 
         # Initialize trajectory for this task.
         trajectory = []
@@ -280,8 +280,7 @@ class AsyncAgentExecutionEngine(AgentExecutionEngine):
 
         # Reset environment with the task using the executor
         loop = asyncio.get_event_loop()
-        with status_tracker.track("reset", env_id):
-            observation, info = await loop.run_in_executor(self.executor, lambda: env.reset(task) if task else env.reset())
+        observation, info = await loop.run_in_executor(self.executor, lambda: env.reset(task=task) if task else env.reset())
         info['max_steps'] = self.max_steps
 
         # Reset agent
@@ -310,29 +309,33 @@ class AsyncAgentExecutionEngine(AgentExecutionEngine):
         for step_idx in range(self.max_steps):
             print(f"Trajectory {idx}, Step {step_idx}/{self.max_steps}")
             # Get action from agent
-            chat_completions_messages = agent.chat_completions.copy()
+            prompt_messages = agent.prompt.copy()
             # Max remaining tokens left for the response
             # For enforced max prompt at each step, no need to deduct here
             if not self.enforce_max_prompt_length:
                 max_tokens = self.max_response_length - response_token_len
             else:
                 max_tokens = self.max_response_length
+
+                # since max prompt is enforced, we filter out too long prompts.
+                prompt_str = self.chat_template_parser.parse(prompt_messages, add_generation_prompt=True, is_first_msg=True)
+                prompt_len = len(self.tokenizer.encode(prompt_str, add_special_tokens=False))
+                if prompt_len > self.max_prompt_length:
+                    termination_reason = "PROMPT_TRUNCATION"
+                    break
+                
             kwargs['max_tokens'] = max_tokens
             
             start_time = time.time()
-            with status_tracker.track("get_model_response", env_id):
-                response = await self.get_model_response(
-                    chat_completions_messages,
-                    application_id,
-                    tokenizer=self.tokenizer,
-                    parser=self.chat_template_parser,
-                    contains_first_msg=True,
-                    contains_generation_msg=True,
-                )
+            response = await self.get_model_response(
+                prompt_messages,
+                application_id,
+                **kwargs
+            )
 
             # Update steps
             prompt_response_pair = {
-                "prompt": self.chat_template_parser.parse(chat_completions_messages, add_generation_prompt=True, is_first_msg=True),
+                "prompt": self.chat_template_parser.parse(prompt_messages, add_generation_prompt=True, is_first_msg=True),
                 "response": response,
             }
             episode_steps.append(prompt_response_pair)
@@ -346,8 +349,8 @@ class AsyncAgentExecutionEngine(AgentExecutionEngine):
             action = cur_state.action
             # Take step in environment using the executor
             start_time = time.time()
-            with status_tracker.track("step", env_id):
-                next_observation, reward, done, info = await loop.run_in_executor(self.executor, env.step, action)
+            # with status_tracker.track("step", env_id):
+            next_observation, reward, done, info = await loop.run_in_executor(self.executor, env.step, action)
             total_time += time.time() - start_time
             info['max_steps'] = self.max_steps
             # Update agent internal state.
@@ -425,8 +428,8 @@ class AsyncAgentExecutionEngine(AgentExecutionEngine):
             reward = await loop.run_in_executor(self.executor, env.compute_final_reward)
             cur_step.reward = reward
         # Closing environment using the executor.
-        with status_tracker.track("close", env_id):
-            await loop.run_in_executor(self.executor, env.close)
+        # with status_tracker.track("close", env_id):
+        await loop.run_in_executor(self.executor, env.close)
         self.envs[idx] = None
         
         if termination_reason:
@@ -463,7 +466,8 @@ class AsyncAgentExecutionEngine(AgentExecutionEngine):
                 "training_reward": agent.compute_training_reward(trajectory) if hasattr(agent, "compute_training_reward") else trajectory.steps[-1].reward,
                 "environment_reward": trajectory.reward,
                 "idx": env.idx,
-            }
+                "mc_returns": [step.mc_return for step in trajectory.steps][:len(episode_steps)],
+            }            
             return steps_result
 
     async def run_agent_trajectory_with_retry(

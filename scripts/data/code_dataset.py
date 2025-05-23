@@ -66,8 +66,8 @@ def make_map_fn(split: str):
                 'split': split,
                 'index': idx,
                 'reference': example.get('completion', None), # For leetcode
+                'task': {'data_source': dataset_name, 'question': question, 'ground_truth': tests}
             },
-            'task': {'data_source': dataset_name, 'question': question, 'ground_truth': tests}
         }
         return data
     return process_fn

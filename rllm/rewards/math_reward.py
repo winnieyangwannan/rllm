@@ -135,7 +135,7 @@ def rllm_reward_fn_math(data_source: str, llm_solution: str, ground_truth: Union
                                             model_response=llm_solution,
                                             metadata={"answer": ground_truth, **extra_info},
                                             data_source=data_source))
-    return reward_response.reward
+    return reward_response
 
 
 if __name__ == "__main__":
