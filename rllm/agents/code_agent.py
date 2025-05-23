@@ -1,4 +1,3 @@
-import json
 import logging
 from typing import Dict, List, Any, Tuple, Union
 
@@ -21,15 +20,15 @@ class CompetitionCodingAgent(BaseAgent):
     """
     A code agent that iteratively writes code to solve a problem.
     """
-    def __init__(self, strip_thoughts=False, max_tests=2):
+    def __init__(self, remove_thinking=False, max_tests=2):
         """
-        Initialize the MathAgent.
+        Initialize the CodeAgent.
         """
         self.revise_instruction = "Here's the feedback from the previous attempt. Revise the code to fix the errors and improve the solution."
         self._trajectory = Trajectory()
         self.messages = []
         self.step = 0
-        self.strip_thoughts = strip_thoughts
+        self.remove_thinking = remove_thinking
         self.max_tests = max_tests
     
     def format_test_results(self, test_results: List[Dict]) -> str:
@@ -123,7 +122,7 @@ class CompetitionCodingAgent(BaseAgent):
         cur_step = self._trajectory.steps[-1]
         cur_step.model_response = content
 
-        if self.strip_thoughts and content.count("</think>") == 1:
+        if self.remove_thinking and content.count("</think>") == 1:
             cur_step.thought, cur_step.action = content.split("</think>")
             cur_step.action += "</think>"        
             self.messages.append({"role": "assistant", "content": cur_step.action})

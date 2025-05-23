@@ -11,7 +11,7 @@ class MathAgent(BaseAgent):
     """
     A math agent that solves mathematical problems step by step, following the BaseAgent interface.
     """
-    def __init__(self):
+    def __init__(self, remove_thinking=False):
         """
         Initialize the MathAgent.
         """
@@ -19,6 +19,7 @@ class MathAgent(BaseAgent):
         self._trajectory = Trajectory()
         self.messages = []
         self.step = 0
+        self.remove_thinking = remove_thinking
         
     def update_from_env(self, observation: Any, reward: float, done: bool, info: Dict, **kwargs):
         """
@@ -73,6 +74,18 @@ class MathAgent(BaseAgent):
         cur_step.thought = content 
         cur_step.action = content  # Or potentially parse out the boxed answer? For now, use full content.
         cur_step.model_response = content
+
+        if self.remove_thinking:
+            think_start = content.find("<think>")
+            think_end = content.find("</think>")
+            if think_start != -1 and think_end != -1 and think_end > think_start:
+                # Remove full <think>...</think> block
+                think_end += len("</think>")
+                content = content[:think_start] + content[think_end:]
+            elif think_end != -1:
+                # Remove everything before and including </think>
+                think_end += len("</think>")
+                content = content[think_end:]
 
         # Add the assistant's response to the messages
         self.messages.append({"role": "assistant", "content": content})
