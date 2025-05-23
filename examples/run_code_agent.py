@@ -122,7 +122,7 @@ if __name__ == "__main__":
     ]
 
     agents = [
-        CompetitionCodingAgent(strip_thoughts=False, max_tests=2) for i in range(n_parallel_agents)
+        CompetitionCodingAgent(remove_thinking=False, max_tests=2) for i in range(n_parallel_agents)
     ]
 
     sampling_params = {
