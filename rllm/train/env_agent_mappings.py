@@ -1,6 +1,6 @@
 from rllm.environments import BrowserGym, FrozenLakeEnv, ToolEnvironment, SingleTurnEnvironment, SWEEnv, CompetitionCodingEnv
 
-from rllm.agents import WebAgent, FrozenLakeAgent, ToolAgent, SWEAgent, MathAgent, CompetitionCodingAgent
+from rllm.agents import WebAgent, FrozenLakeAgent, ToolAgent, SWEAgent, MathAgent, CompetitionCodingAgent, WebArenaAgent
 
 ENV_CLASS_MAPPING = {
     'browsergym': BrowserGym,
@@ -14,6 +14,7 @@ ENV_CLASS_MAPPING = {
 
 AGENT_CLASS_MAPPING = {
     'webagent': WebAgent,
+    "webarenaagent": WebArenaAgent,
     'frozenlakeagent': FrozenLakeAgent,
     'tool_agent': ToolAgent,
     'sweagent': SWEAgent,
@@ -29,6 +30,8 @@ def setup_environment(config):
             import browsergym.miniwob
             importlib.reload(browsergym.miniwob)
             os.environ["MINIWOB_URL"] = config.env.miniwob_url
+            return
+        elif config.env.subtask == 'webarena':
             return
     elif config.env.name in ['frozenlake', 'swe', 'math', 'code', 'tool', 'competition_coding']:
         return
