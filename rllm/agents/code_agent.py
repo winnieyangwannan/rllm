@@ -129,7 +129,7 @@ class CompetitionCodingAgent(BaseAgent):
 
         if self.remove_thinking and content.count("</think>") == 1:
             cur_step.thought, cur_step.action = content.split("</think>")
-            cur_step.action += "</think>"        
+            cur_step.thought += "</think>"        
             self.messages.append({"role": "assistant", "content": cur_step.action})
         else:
             cur_step.thought = content 
