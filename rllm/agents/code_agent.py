@@ -39,7 +39,12 @@ class CompetitionCodingAgent(BaseAgent):
         normalized_question = normalize_string(self.trajectory.steps[0].observation)
         public_tests = []
         for i, test in enumerate(test_results):
-            strings_to_match = [normalize_string(s) for s in test["input"].split("\n")]
+            if not isinstance(test, dict) or "input" not in test:
+                continue
+            if isinstance(test["input"], list):
+                strings_to_match = [normalize_string(str(s)) for s in test["input"]]
+            elif isinstance(test["input"], str):
+                strings_to_match = [normalize_string(s) for s in test["input"].split("\n")]
             if all(s in normalized_question for s in strings_to_match):
                 public_tests.append(test)
         

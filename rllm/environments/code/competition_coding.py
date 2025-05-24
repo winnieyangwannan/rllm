@@ -11,6 +11,7 @@ class CompetitionCodingEnv(MultiTurnEnvironment):
     def __init__(self, 
                  task: Optional[Dict] = None,
                  max_turns: int = 2,
+                 reward_bonus_coeff: float = 0.0,
                  **kwargs):
         """
         Initialize the competitive coding environment.
@@ -22,7 +23,7 @@ class CompetitionCodingEnv(MultiTurnEnvironment):
         super().__init__(task=task, max_turns=max_turns, **kwargs)
         self.reward_fn = rllm_reward_fn
         self.prev_reward = None
-        self.beta = 0.5
+        self.reward_bonus_coeff = reward_bonus_coeff
 
     def reset(self, task=None, seed=None):
         """Reset the environment and return initial observations."""
@@ -62,7 +63,7 @@ class CompetitionCodingEnv(MultiTurnEnvironment):
         if self.prev_reward is None:
             reward = raw_reward
         else:
-            bonus = self.beta * (raw_reward - self.prev_reward)
+            bonus = self.reward_bonus_coeff * (raw_reward - self.prev_reward)
             reward = raw_reward + bonus
         self.prev_reward = raw_reward
         

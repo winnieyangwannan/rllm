@@ -1,5 +1,6 @@
 set -x
 
+export WANDB_ENTITY=AxT-dev
 export VLLM_ATTENTION_BACKEND=FLASH_ATTN
 export PYTORCH_CUDA_ALLOC_CONF="expandable_segments:False"
 export VLLM_USE_V1=1
@@ -58,7 +59,7 @@ python3 -m rllm.train.train_agent_ppo \
     trainer.critic_warmup=0 \
     trainer.logger=['console','wandb'] \
     trainer.project_name='code-agent' \
-    trainer.experiment_name='4b-coding-stepwise-mcreturn-16k' \
+    trainer.experiment_name='4b-coding-stepwise-mcreturn-16k-reward-shaping-0.5' \
     trainer.val_before_train=True \
     trainer.n_gpus_per_node=4 \
     trainer.nnodes=1 \
@@ -73,5 +74,6 @@ python3 -m rllm.train.train_agent_ppo \
     agent.stepwise_advantage_mode="mc_return" \
     agent.normalize_step_advantage=True \
     agent.enable_thinking=True \
+    +agent.env_args.reward_bonus_coeff=0.5 \
     +agent.agent_args.remove_thinking=True \
     trainer.total_epochs=100
