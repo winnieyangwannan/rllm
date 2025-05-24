@@ -1,5 +1,6 @@
 set -x
 
+export WANDB_ENTITY=AxT-dev
 export VLLM_ATTENTION_BACKEND=FLASH_ATTN
 export PYTORCH_CUDA_ALLOC_CONF="expandable_segments:False"
 export VLLM_USE_V1=1
@@ -8,7 +9,6 @@ export VLLM_ENGINE_ITERATION_TIMEOUT_S=100000000000
 # export CUDA_VISIBLE_DEVICES=0,1,2,3
 # Find the directory where rllm package is located
 RLLM_DIR=$(python3 -c "import rllm; import os; print(os.path.dirname(os.path.dirname(rllm.__file__)))")
-# RLLM_DIR=/data/sijun/rllm-internal
 
 python3 -m rllm.train.train_agent_ppo \
     algorithm.adv_estimator=grpo \
@@ -76,4 +76,5 @@ python3 -m rllm.train.train_agent_ppo \
     agent.normalize_step_advantage=True \
     agent.enable_thinking=True \
     +agent.agent_args.remove_thinking=True \
+    +agent.env_args.reward_bonus_coeff=0.5 \
     trainer.total_epochs=100
