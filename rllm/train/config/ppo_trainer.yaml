@@ -32,6 +32,8 @@ actor_rollout_ref:
   actor:
     strategy: fsdp  # [fsdp, fsdp2], This is for backward-compatibility
     ppo_mini_batch_size: 256
+    use_dynamic_mini_batch: False
+    ppo_num_mini_batches: 1
     ppo_micro_batch_size: null # will be deprecated, use ppo_micro_batch_size_per_gpu
     ppo_micro_batch_size_per_gpu: null
     use_dynamic_bsz: False
