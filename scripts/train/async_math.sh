@@ -4,6 +4,7 @@ set -x
 # Warning: Export VLLM_ATTENTION_BACKEND on every machine before starting Ray cluster.
 # vLLM without XFORMERS will results in CUDA errors.
 export VLLM_ATTENTION_BACKEND=FLASH_ATTN
+export VLLM_USE_V1=1
 
 # Parse command line arguments
 while [[ $# -gt 0 ]]; do
@@ -48,9 +49,9 @@ python3 -m verl.trainer.main_ppo_async \
     actor_rollout_ref.actor.fsdp_config.optimizer_offload=False \
     actor_rollout_ref.rollout.tensor_model_parallel_size=1 \
     actor_rollout_ref.rollout.name=vllm \
-    actor_rollout_ref.rollout.compute_reward=True \
-    actor_rollout_ref.rollout.async_engine=True \
-    actor_rollout_ref.rollout.enable_log_prob=True \
+    actor_rollout_ref.rollout.mode="async" \
+    actor_rollout_ref.rollout.chat_scheduler=verl.schedulers.naive_chat_scheduler.NaiveChatCompletionScheduler \
+    actor_rollout_ref.rollout.enable_log_prob=False \
     actor_rollout_ref.rollout.temperature=0.6 \
     actor_rollout_ref.rollout.val_kwargs.temperature=0.6 \
     actor_rollout_ref.rollout.gpu_memory_utilization=0.85 \

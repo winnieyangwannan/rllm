@@ -275,12 +275,17 @@ class AsyncAgentExecutionEngine(AgentExecutionEngine):
                 # Truncation length
                 truncation_length = self.max_response_length - response_token_len
                 # Truncate the response and masks
-                truncated_response_tokens = (assistant_msg_tokens + env_msg_tokens)[
-                    :truncation_length
-                ]
-                truncated_response_masks = (assistant_msg_masks + env_msg_masks)[
-                    :truncation_length
-                ]
+                if truncation_length < 0:
+                    truncated_response_tokens = (assistant_msg_tokens + env_msg_tokens)[
+                        :truncation_length
+                    ]
+                    truncated_response_masks = (assistant_msg_masks + env_msg_masks)[
+                        :truncation_length
+                    ]
+                else:
+                    # Edge case where the response is exactly the max response length.
+                    truncated_response_tokens = (assistant_msg_tokens + env_msg_tokens)
+                    truncated_response_masks = (assistant_msg_masks + env_msg_masks)
                 # Update token collections
                 response_tokens.extend(truncated_response_tokens)
                 response_masks.extend(truncated_response_masks)
@@ -380,16 +385,13 @@ class AsyncAgentExecutionEngine(AgentExecutionEngine):
         self.executor = ThreadPoolExecutor(max_workers=max_concurrency)
 
         if self.engine_name == "verl":
-            if self.config.actor_rollout_ref.rollout.mode == "async":
-                self.rollout_engine.wake_up()
-            else:
-                self.router.__enter__()
+            self.rollout_engine.wake_up()
 
         #semaphore = asyncio.Semaphore(max_concurrency)
         async def launch_one_trajectory_task(env_idx: int):
             try:
                 #await semaphore.acquire()
-                await asyncio.sleep(0.15 * env_idx)
+                #await asyncio.sleep(0.15 * env_idx)
 
                 application_id = str(uuid.uuid4())                
                 result = await self.run_agent_trajectory_with_retry(
@@ -424,10 +426,7 @@ class AsyncAgentExecutionEngine(AgentExecutionEngine):
                 raise e
         
         if self.engine_name == "verl":
-            if self.config.actor_rollout_ref.rollout.mode == "async":
-                self.rollout_engine.sleep()
-            else:
-                self.router.__exit__()
+            self.rollout_engine.sleep()
         
         self.executor.shutdown(wait=False)
 
