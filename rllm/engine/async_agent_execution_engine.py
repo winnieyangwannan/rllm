@@ -398,7 +398,6 @@ class AsyncAgentExecutionEngine(AgentExecutionEngine):
             cur_step.reward = reward
         # Closing environment using the executor.
         await loop.run_in_executor(self.executor, env.close)
-        self.envs[idx] = None
         
         if termination_reason:
             if reward > 0:
