@@ -1,15 +1,13 @@
 import asyncio
-import contextlib
-import uuid
 import concurrent.futures
 import time
 import traceback
 import uuid
-import time
 from concurrent.futures import ThreadPoolExecutor
 
 import openai
 import torch
+from openai.types import Completion
 
 from rllm.agents.utils import (
     convert_messages_to_tokens_and_masks,
@@ -23,35 +21,7 @@ from rllm.environments.env_utils import (
 from rllm.misc import colorful_print
 from rllm.parser.chat_template.parser import ChatTemplateParser
 from rllm.router.router import Router
-from rllm.agents.utils import get_recent_assistant_user_messages, convert_messages_to_tokens_and_masks
-from rllm.router.router import Router
-import torch
-import uuid
-from typing import List, Dict
-from collections import defaultdict
 
-
-class StatusTracker:
-    def __init__(self):
-        self.trackers = defaultdict(set)
-
-    @contextlib.contextmanager
-    def track(self, key, value):
-        """Track a value under a specific key."""
-        try:
-            self.trackers[key].add(value)
-            yield
-        finally:
-            self.trackers[key].discard(value)
-
-    def get_tracked(self, key):
-        """Get all currently tracked values for a key."""
-        return self.trackers[key]
-
-
-status_tracker = StatusTracker()
-
-from openai.types import Completion
 
 class AsyncAgentExecutionEngine(AgentExecutionEngine):
     def __init__(
@@ -349,7 +319,6 @@ class AsyncAgentExecutionEngine(AgentExecutionEngine):
             action = cur_state.action
             # Take step in environment using the executor
             start_time = time.time()
-            # with status_tracker.track("step", env_id):
             next_observation, reward, done, info = await loop.run_in_executor(self.executor, env.step, action)
             total_time += time.time() - start_time
             info['max_steps'] = self.max_steps
@@ -428,7 +397,6 @@ class AsyncAgentExecutionEngine(AgentExecutionEngine):
             reward = await loop.run_in_executor(self.executor, env.compute_final_reward)
             cur_step.reward = reward
         # Closing environment using the executor.
-        # with status_tracker.track("close", env_id):
         await loop.run_in_executor(self.executor, env.close)
         self.envs[idx] = None
         
@@ -586,140 +554,5 @@ class AsyncAgentExecutionEngine(AgentExecutionEngine):
         results = await asyncio.gather(*[sem_wrapper(task_id, task) for task_id, task in task_queue])
         
         all_trajectories = {task_id: trajectory for task_id, trajectory in results}
-        ordered_trajectories = [all_trajectories[i] for i in range(len(all_trajectories))]
-        return ordered_trajectories
-
-    async def execute_browsergym_tasks(self, tasks, save_dir=None):
-        """
-        Run asynchronous interactions between the agent and environment where each agent
-        has its own environment instance and can proceed independently.
-
-        Args:
-            tasks: List of tasks to process
-            max_concurrent: Maximum number of concurrent tasks to process (defaults to self.n_parallel_agents)
-
-        Returns:
-            A list of trajectories, one for each task.
-        """
-        from browser_pilot.entrypoint.client import CloudClient
-        from rllm.environments.browsergym.browsergym import BrowserGym
-
-        max_concurrent = self.n_parallel_agents
-
-        # Initialize results list to store trajectories for all tasks
-        all_trajectories = {}
-
-        # Create a queue of tasks to process
-        task_queue = list(enumerate(tasks))
-        semaphore = asyncio.Semaphore(max_concurrent)
-        index_queue = asyncio.Queue(maxsize=max_concurrent)
-        for i in range(max_concurrent):
-            index_queue.put_nowait(i)
-
-        client = CloudClient(
-            url="http://localhost:9999/send_and_wait",
-            max_concurrency=self.n_parallel_agents,
-        )
-
-        async def monitor_status():
-            trial = 0
-            while True:
-                await asyncio.sleep(60)
-                print(
-                    f"[Monitor] Index queue size: {index_queue.qsize()}\n"
-                    f"[Monitor] Running tasks: {sorted(list(status_tracker.get_tracked('running')))}\n"
-                    f"[Monitor] Exception tasks: {sorted(list(status_tracker.get_tracked('exception')))}\n"
-                    f"[Monitor] Reset tasks: {sorted(list(status_tracker.get_tracked('reset')))}\n"
-                    f"[Monitor] Close tasks: {sorted(list(status_tracker.get_tracked('close')))}\n"
-                    f"[Monitor] Get model response tasks: {sorted(list(status_tracker.get_tracked('get_model_response')))}\n"
-                    f"[Monitor] Step tasks: {sorted(list(status_tracker.get_tracked('step')))}\n",
-                    flush=True,
-                )
-                if len(list(status_tracker.get_tracked("running"))) == 0:
-                    trial += 1
-                    if trial > 3:
-                        break
-
-        # Start the monitor status task
-        asyncio.create_task(monitor_status())
-
-        async def sem_wrapper(task_id, task):
-            async with semaphore:
-                # Get an available index
-                index = await index_queue.get()
-                env_index = task.split(".")[-1]
-                try:
-                    with status_tracker.track("running", env_index):
-                        if self.envs[index] != None:
-                            if hasattr(self.envs[index], "close"):
-                                await asyncio.to_thread(self.envs[index].close)
-                        self.envs[index] = None
-                        self.envs[index] = BrowserGym(env_id=task, client=client)
-                        env_id = self.envs[index].env_id
-                        env_index = env_id.split(".")[-1]
-                        res = await self.run_agent_trajectory(index, task_id)
-
-                        print(
-                            f"Saving trajectory to file {save_dir}/trajectory_{env_index}.json"
-                        )
-                        res.save(f"{save_dir}/trajectory_{env_index}.json")
-
-                        # async def reset_webarena_instance():
-                        #     response = requests.get("http://108.214.96.13:7565/reset")
-                        #     print(f"Starting new WebArena instance... {response.text}")
-                        #     timeout = 300
-                        #     start_time = time.time()
-                        #     ready = False
-                        #     while time.time() - start_time < timeout:
-                        #         response = requests.get(
-                        #             "http://108.214.96.13:7565/status"
-                        #         )
-                        #         if "Ready for duty!" in response.text:
-                        #             ready = True
-                        #             break
-                        #         await asyncio.sleep(1)
-
-                        #     if not ready:
-                        #         raise Exception("WebArena instance not ready")
-
-                        #     return ready
-
-                        # is_ready = False
-                        # for trial in range(3):
-                        #     is_ready = await reset_webarena_instance()
-                        #     if is_ready:
-                        #         break
-                        #     else:
-                        #         print(
-                        #             f"WebArena instance not ready, retry {trial + 1}/3"
-                        #         )
-                        #         await asyncio.sleep(10)
-
-                        # if not is_ready:
-                        #     raise Exception("WebArena instance not ready")
-
-                        return task_id, res
-                except Exception as e:
-                    with status_tracker.track("exception", env_index):
-                        import traceback
-
-                        print(f"Error in task {task_id}: {e}, {traceback.format_exc()}")
-                        try:
-                            if self.envs[index] != None:
-                                if hasattr(self.envs[index], "close"):
-                                    await asyncio.to_thread(self.envs[index].close)
-                        except Exception as e:
-                            print(f"Error in closing environment: {e}")
-                        self.envs[index] = None
-                finally:
-                    # Put the index back in the queue when done
-                    await index_queue.put(index)
-
-        # Create a queue of tasks to process
-        task_queue = list(enumerate(tasks))
-        # Run all tasks concurrently
-        results = await asyncio.gather(*[sem_wrapper(task_id, task) for task_id, task in task_queue])
-        
-        all_trajectories = {result[0]: result[1] for result in results if result is not None}
         ordered_trajectories = [all_trajectories[i] for i in range(len(all_trajectories))]
         return ordered_trajectories

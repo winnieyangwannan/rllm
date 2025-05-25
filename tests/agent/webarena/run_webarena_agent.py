@@ -1,14 +1,14 @@
 import asyncio
+import logging
 import os
 import time
 
 import requests
-
 from browser_pilot.entrypoint.client import CloudClient
+from transformers import AutoTokenizer
+
 from rllm.agents import WebArenaAgent
 from rllm.environments.browsergym.browsergym_cloud import BrowserGymCloud
-from transformers import AutoTokenizer
-import logging
 
 logging.basicConfig(
     level=logging.DEBUG,
@@ -24,9 +24,9 @@ logger = logging.getLogger(__name__)
 if __name__ == "__main__":
     # Create the environment (no batch_size parameter)
     client = CloudClient(url="ws://localhost:9999/send_and_wait", max_concurrency=128)
-    n_parallel_agents = 64
+    n_parallel_agents = 1
 
-    model_name = "Qwen/Qwen3-32B"
+    model_name = "Qwen/Qwen3-4B"
 
     tokenizer = AutoTokenizer.from_pretrained(model_name)
 
@@ -68,7 +68,7 @@ if __name__ == "__main__":
         n_parallel_agents=n_parallel_agents,
     )
 
-    save_dir = "/home/tianhao/rllm-internal/tests/agent/webarena/logs"
+    save_dir = "/data/sijun/rllm/tests/agent/webarena/logs"
 
     for i in range(5, 10):
         if not os.path.exists(save_dir + f"_{i}"):

@@ -1,20 +1,12 @@
 import logging
+import random
 import time
-import gymnasium as gym
-from multiprocessing import Process, Pipe
-from typing import Dict, List, Any, Tuple
-import numpy as np
-from typing import Dict, Any, List, Optional, Union
-# from rllm.environments.base.base_env import BaseEnv
+from typing import Dict
+
 from browser_pilot.entrypoint.client import CloudClient
 from browser_pilot.entrypoint.env import CloudEnv
-import random
 
-# logging.basicConfig(level=logging.DEBUG, format="%(asctime)s - %(name)s - %(levelname)s - %(message)s", handlers=[logging.StreamHandler()])
 logger = logging.getLogger(__name__)
-
-# client = CloudClient(url="ws://localhost:9999/send_and_wait", max_concurrency=128)
-
 
 def with_retry(num_retries=3):
     max_wait = 16
@@ -93,9 +85,9 @@ class BrowserGymCloud:
 
     @with_retry(num_retries=5)
     def _close(self):
-        logger.debug(f"Closing env")
+        logger.debug("Closing env")
         self.env.close()
-        logger.debug(f"Successfully closed env")
+        logger.debug("Successfully closed env")
 
     @staticmethod
     def from_json() -> "BrowserGymCloud":
@@ -117,5 +109,5 @@ if __name__ == "__main__":
     env = BrowserGymCloud.from_json()
     obs = env.reset(task=extra_info)
     print(obs)
-    logger.info(f"Reset done")
+    logger.info("Reset done")
     env.close()
