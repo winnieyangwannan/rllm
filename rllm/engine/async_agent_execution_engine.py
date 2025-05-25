@@ -148,41 +148,6 @@ class AsyncAgentExecutionEngine(AgentExecutionEngine):
         response = response.replace(pad_token, "").replace(eos_token, "")
         return response
 
-    # async def _get_openai_async(self, prompt, _, **kwargs):
-    #     """
-    #     Get action from OpenAI API asynchronously with retry logic.
-        
-    #     Args:
-    #         prompt: The input prompt in chat completions format
-    #         application_id: Unique identifier for the application (unused for OpenAI)
-    #         **kwargs: Additional arguments to pass to the OpenAI API
-            
-    #     Returns:
-    #         The response from OpenAI API
-    #     """
-    #     async def get_response(prompt: List[Dict[str, str]]):
-    #         retries = self.api_retries
-    #         while retries > 0:
-    #             try:
-    #                 response = await self.client.chat.completions.create(
-    #                     messages=prompt,
-    #                     **self.sampling_params,
-    #                     **kwargs,
-    #                 )
-    #                 return response
-    #             except openai.RateLimitError:
-    #                 retries -= 1
-    #                 if retries == 0:
-    #                     return "Error: Rate limit reached and retries exhausted."
-    #                 print("Sleep for 5 seconds for API limit.")
-    #                 await asyncio.sleep(5)
-    #             except Exception as e:
-    #                 print("Error: ", e)
-    #                 return f"Error processing content: {e}"
-
-    #     response = await get_response(prompt)
-    #     return response
-
     async def _get_openai_async(self, prompt, _, **kwargs):
         """
         Get action from OpenAI API asynchronously with retry logic.
