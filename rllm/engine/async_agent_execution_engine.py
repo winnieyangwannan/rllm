@@ -278,7 +278,7 @@ class AsyncAgentExecutionEngine(AgentExecutionEngine):
             )
 
         for step_idx in range(self.max_steps):
-            print(f"Trajectory {idx}, Step {step_idx}/{self.max_steps}")
+            print(f"Trajectory {idx}, Step {step_idx + 1}/{self.max_steps}")
             # Get action from agent
             prompt_messages = agent.prompt.copy()
             # Max remaining tokens left for the response

@@ -9,6 +9,7 @@ export VLLM_ENGINE_ITERATION_TIMEOUT_S=100000000000
 export CUDA_VISIBLE_DEVICES=0,1,2,3,4,5,6,7
 # Find the directory where rllm package is located
 RLLM_DIR=$(python3 -c "import rllm; import os; print(os.path.dirname(os.path.dirname(rllm.__file__)))")
+RLLM_DIR=/data/sijun/rllm
 
 python3 -m rllm.train.train_agent_ppo \
     algorithm.adv_estimator=grpo \
@@ -16,18 +17,18 @@ python3 -m rllm.train.train_agent_ppo \
     data.val_files=${RLLM_DIR}/data/test_livecodebench.parquet  \
     data.train_batch_size=32 \
     data.val_batch_size=128 \
-    data.max_prompt_length=8192 \
+    data.max_prompt_length=12288 \
     data.max_response_length=16384 \
     actor_rollout_ref.model.path=Qwen/Qwen3-4B \
     actor_rollout_ref.hybrid_engine=True \
     actor_rollout_ref.actor.optim.lr=1e-6 \
     actor_rollout_ref.model.use_remove_padding=True \
     actor_rollout_ref.actor.loss_agg_mode=seq-mean-token-sum-norm \
-    actor_rollout_ref.actor.ppo_mini_batch_size=32 \
+    actor_rollout_ref.actor.ppo_mini_batch_size=16 \
     actor_rollout_ref.actor.use_dynamic_mini_batch=True \
-    actor_rollout_ref.actor.ppo_num_mini_batches=1 \
+    actor_rollout_ref.actor.ppo_num_mini_batches=2 \
     actor_rollout_ref.actor.use_dynamic_bsz=True \
-    actor_rollout_ref.actor.ppo_max_token_len_per_gpu=26000 \
+    actor_rollout_ref.actor.ppo_max_token_len_per_gpu=29000 \
     actor_rollout_ref.actor.use_kl_loss=False \
     actor_rollout_ref.actor.clip_ratio_high=0.28 \
     actor_rollout_ref.actor.kl_loss_coef=0.001 \
@@ -59,8 +60,8 @@ python3 -m rllm.train.train_agent_ppo \
     algorithm.clip_advantages=False \
     trainer.critic_warmup=0 \
     trainer.logger=['console','wandb'] \
-    trainer.project_name='code-agent' \
-    trainer.experiment_name='4b-coding-stepwise-mcreturn-16k-dynamic-mini-batch' \
+    trainer.project_name='stepwise-agent' \
+    trainer.experiment_name='4b-coding-stepwise-broadcast-16k-dynamic-mini-batch' \
     trainer.val_before_train=False \
     trainer.n_gpus_per_node=8 \
     trainer.nnodes=1 \
