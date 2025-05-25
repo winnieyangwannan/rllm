@@ -1,30 +1,34 @@
 set -x
 
+export WANDB_ENTITY=AxT-dev
 export VLLM_ATTENTION_BACKEND=FLASH_ATTN
 export PYTORCH_CUDA_ALLOC_CONF="expandable_segments:False"
 export VLLM_USE_V1=1
 export VLLM_ALLOW_LONG_MAX_MODEL_LEN=1
 export VLLM_ENGINE_ITERATION_TIMEOUT_S=100000000000
-export CUDA_VISIBLE_DEVICES=0,1,2,3
+export CUDA_VISIBLE_DEVICES=0,1,2,3,4,5,6,7
 # Find the directory where rllm package is located
 RLLM_DIR=$(python3 -c "import rllm; import os; print(os.path.dirname(os.path.dirname(rllm.__file__)))")
+RLLM_DIR=/data/sijun/rllm
 
 python3 -m rllm.train.train_agent_ppo \
-    algorithm.adv_estimator=loop \
-    data.train_files=${RLLM_DIR}/data/rllm-frozenlake/train.parquet \
-    data.val_files=${RLLM_DIR}/data/rllm-frozenlake/test.parquet \
+    algorithm.adv_estimator=grpo \
+    data.train_files=${RLLM_DIR}/data/deepscaler_code.parquet  \
+    data.val_files=${RLLM_DIR}/data/test_livecodebench.parquet  \
     data.train_batch_size=32 \
     data.val_batch_size=128 \
-    data.max_prompt_length=10240 \
-    data.max_response_length=2048 \
+    data.max_prompt_length=12288 \
+    data.max_response_length=16384 \
     actor_rollout_ref.model.path=Qwen/Qwen3-4B \
     actor_rollout_ref.hybrid_engine=True \
     actor_rollout_ref.actor.optim.lr=1e-6 \
     actor_rollout_ref.model.use_remove_padding=True \
     actor_rollout_ref.actor.loss_agg_mode=seq-mean-token-sum-norm \
     actor_rollout_ref.actor.ppo_mini_batch_size=16 \
+    actor_rollout_ref.actor.use_dynamic_mini_batch=True \
+    actor_rollout_ref.actor.ppo_num_mini_batches=2 \
     actor_rollout_ref.actor.use_dynamic_bsz=True \
-    actor_rollout_ref.actor.ppo_max_token_len_per_gpu=24000 \
+    actor_rollout_ref.actor.ppo_max_token_len_per_gpu=29000 \
     actor_rollout_ref.actor.use_kl_loss=False \
     actor_rollout_ref.actor.clip_ratio_high=0.28 \
     actor_rollout_ref.actor.kl_loss_coef=0.001 \
@@ -41,13 +45,12 @@ python3 -m rllm.train.train_agent_ppo \
     actor_rollout_ref.rollout.chat_scheduler=examples.schedulers.completions_scheduler.CompletionsScheduler \
     actor_rollout_ref.rollout.enforce_eager=False \
     actor_rollout_ref.rollout.enable_log_prob=False \
-    actor_rollout_ref.rollout.temperature=0.7 \
-    actor_rollout_ref.rollout.gpu_memory_utilization=0.8 \
+    actor_rollout_ref.rollout.temperature=0.6 \
+    actor_rollout_ref.rollout.gpu_memory_utilization=0.6 \
     actor_rollout_ref.rollout.n=8 \
-    actor_rollout_ref.rollout.val_kwargs.n=2 \
-    actor_rollout_ref.rollout.val_kwargs.temperature=0.65 \
-    actor_rollout_ref.rollout.val_kwargs.top_p=0.8 \
-    actor_rollout_ref.rollout.val_kwargs.top_k=20 \
+    actor_rollout_ref.rollout.val_kwargs.n=1 \
+    actor_rollout_ref.rollout.val_kwargs.temperature=0.6 \
+    actor_rollout_ref.rollout.val_kwargs.top_p=0.95 \
     actor_rollout_ref.ref.fsdp_config.param_offload=True \
     actor_rollout_ref.ref.log_prob_micro_batch_size_per_gpu=1 \
     actor_rollout_ref.rollout.log_prob_micro_batch_size_per_gpu=1 \
@@ -58,24 +61,21 @@ python3 -m rllm.train.train_agent_ppo \
     trainer.critic_warmup=0 \
     trainer.logger=['console','wandb'] \
     trainer.project_name='stepwise-agent' \
-    trainer.experiment_name='4b-loop-drgrpo-frozenlake_agent_stepwise-seq-mean-token-sum-norm-normalized' \
+    trainer.experiment_name='4b-coding-stepwise-broadcast-16k-dynamic-mini-batch' \
     trainer.val_before_train=False \
-    trainer.n_gpus_per_node=4 \
+    trainer.n_gpus_per_node=8 \
     trainer.nnodes=1 \
-    trainer.save_freq=400 \
-    trainer.test_freq=5 \
+    trainer.save_freq=50 \
+    trainer.test_freq=10 \
     trainer.default_hdfs_dir=null \
-    trainer.rejection_sample=True \
-    trainer.rejection_sample_multiplier=2 \
-    env.name=frozenlake \
-    agent.name=frozenlakeagent \
-    agent.max_steps=10 \
+    env.name=competition_coding \
+    agent.name=code_agent \
+    agent.max_steps=2 \
     agent.async_engine=True \
     agent.use_stepwise_advantage=True \
     agent.stepwise_advantage_mode="broadcast" \
     agent.normalize_step_advantage=True \
     agent.enable_thinking=True \
+    +agent.agent_args.remove_thinking=True \
+    +agent.env_args.reward_bonus_coeff=0.5 \
     trainer.total_epochs=100
-
-
-    
