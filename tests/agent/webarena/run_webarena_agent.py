@@ -4,8 +4,9 @@ import time
 
 import requests
 
+from browser_pilot.entrypoint.client import CloudClient
 from rllm.agents import WebArenaAgent
-from rllm.environments.browsergym.browsergym import BrowserGym
+from rllm.environments.browsergym.browsergym_cloud import BrowserGymCloud
 from transformers import AutoTokenizer
 import logging
 
@@ -22,13 +23,14 @@ logger = logging.getLogger(__name__)
 
 if __name__ == "__main__":
     # Create the environment (no batch_size parameter)
+    client = CloudClient(url="ws://localhost:9999/send_and_wait", max_concurrency=128)
     n_parallel_agents = 64
 
     model_name = "Qwen/Qwen3-32B"
 
     tokenizer = AutoTokenizer.from_pretrained(model_name)
 
-    envs = [None for i in range(n_parallel_agents)]
+    envs = [BrowserGymCloud(client=client) for i in range(n_parallel_agents)]
 
     agents = [WebArenaAgent() for i in range(n_parallel_agents)]
 
@@ -60,8 +62,8 @@ if __name__ == "__main__":
             "base_url": "http://localhost:30001/v1",
             "api_key": "token-abc123",
         },
-        max_response_length=200000,
-        max_prompt_length=40048,
+        max_response_length=10000,
+        max_prompt_length=30048,
         max_steps=20,
         n_parallel_agents=n_parallel_agents,
     )
@@ -80,11 +82,19 @@ if __name__ == "__main__":
         tasks_to_run_full = set(range(812))
 
         tasks = [
-            f"browsergym_async/webarena.{i}"
+            i
             for i in tasks_to_run_full
             if i not in finished_tasks
         ]
-        tasks = sorted(tasks)
+        tasks = [
+            {
+                "env_id": f"browsergym_async/webarena.{i}",
+                "env_kwargs": {},
+                "timeout": 30000,
+                "slow_mo": 1000,
+            }
+            for i in sorted(tasks)
+        ]
         logger.info(f"Running {len(tasks)} tasks")
         # print(tasks)
 
@@ -113,18 +123,18 @@ if __name__ == "__main__":
 
             return ready
 
-        timeout = 300
-        is_ready = False
-        for trial in range(3):
-            is_ready = reset_webarena_instance(timeout=timeout)
-            if is_ready:
-                break
-            else:
-                logger.info(f"WebArena instance not ready, retry {trial + 1}/3")
-                timeout += 100
+        # timeout = 300
+        # is_ready = False
+        # for trial in range(3):
+        #     is_ready = reset_webarena_instance(timeout=timeout)
+        #     if is_ready:
+        #         break
+        #     else:
+        #         logger.info(f"WebArena instance not ready, retry {trial + 1}/3")
+        #         timeout += 100
 
         try:
-            results = asyncio.run(engine.execute_browsergym_tasks(tasks, save_dir + f"_{i}"))
+            results = asyncio.run(engine.execute_tasks(tasks))
         except Exception as e:
             logger.info(f"Error: {e}")
             continue
