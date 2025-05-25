@@ -11,6 +11,8 @@ import traceback
 
 USE_CLOUD_ENV = True
 
+client = CloudClient(url="ws://localhost:9999/send_and_wait", max_concurrency=128)
+
 
 def with_retry(num_retries=3):
     max_wait = 16
@@ -23,7 +25,7 @@ def with_retry(num_retries=3):
                     return func(*args, **kwargs)
                 except Exception as e:
                     print(
-                        f"Error in {func.__name__}: {e}, retrying in {cur_wait} seconds. Traceback: {traceback.format_exc()}"
+                        f"Error in {func.__name__}: {e}, retrying in {cur_wait} seconds."
                     )
                     time.sleep(cur_wait)
                     cur_wait *= 2
@@ -86,7 +88,7 @@ class BrowserGym(BaseEnv):
 
     @staticmethod
     def from_json(extra_info) -> "BrowserGym":
-        return BrowserGym(env_id=extra_info["env_id"])
+        return BrowserGym(env_id=extra_info["env_id"], client=client)
 
     @staticmethod
     def is_multithread_safe() -> bool:
