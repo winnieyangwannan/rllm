@@ -14,15 +14,17 @@ python3 -m rllm.train.train_agent_ppo \
     data.train_files=${RLLM_DIR}/data/train.parquet \
     data.val_files=${RLLM_DIR}/data/math.parquet \
     data.train_batch_size=32 \
-    data.val_batch_size=128 \
-    data.max_prompt_length=6000 \
-    data.max_response_length=2048 \
+    data.val_batch_size=500 \
+    data.max_prompt_length=2048 \
+    data.max_response_length=4096 \
     actor_rollout_ref.model.path=Qwen/Qwen3-1.7B \
     actor_rollout_ref.hybrid_engine=True \
     actor_rollout_ref.actor.optim.lr=1e-6 \
     actor_rollout_ref.model.use_remove_padding=True \
     actor_rollout_ref.actor.loss_agg_mode=seq-mean-token-mean \
     actor_rollout_ref.actor.ppo_mini_batch_size=32 \
+    actor_rollout_ref.actor.use_dynamic_mini_batch=True \
+    actor_rollout_ref.actor.ppo_num_mini_batches=1 \
     actor_rollout_ref.actor.use_dynamic_bsz=True \
     actor_rollout_ref.actor.ppo_max_token_len_per_gpu=24000 \
     actor_rollout_ref.actor.use_kl_loss=False \
@@ -58,7 +60,7 @@ python3 -m rllm.train.train_agent_ppo \
     trainer.logger=['console','wandb'] \
     trainer.project_name='code-agent' \
     trainer.experiment_name='4b-math-stepwise-mcreturn' \
-    trainer.val_before_train=False \
+    trainer.val_before_train=True \
     trainer.n_gpus_per_node=8 \
     trainer.nnodes=1 \
     trainer.save_freq=100 \
@@ -71,4 +73,5 @@ python3 -m rllm.train.train_agent_ppo \
     agent.use_stepwise_advantage=True \
     agent.stepwise_advantage_mode="mc_return" \
     agent.enable_thinking=True \
+    +agent.agent_args.remove_thinking=True \
     trainer.total_epochs=100
