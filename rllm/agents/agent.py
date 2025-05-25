@@ -1,6 +1,6 @@
 from abc import ABC, abstractmethod
 from typing import Any, Tuple, Dict, List
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, asdict
 
 
 @dataclass
@@ -21,6 +21,12 @@ class Step:
 class Trajectory:
     steps: List[Step] = field(default_factory=list)
     reward: float = 0.0
+
+    def to_dict(self):
+        return {
+            "steps": [asdict(step) for step in self.steps],
+            "reward": float(self.reward)  # Convert numpy float to Python float
+        }
 
 class BaseAgent(ABC):
     
