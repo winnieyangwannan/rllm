@@ -1,28 +1,40 @@
-from rllm.environments import BrowserGym, FrozenLakeEnv, ToolEnvironment, SingleTurnEnvironment, SWEEnv, CompetitionCodingEnv
+def safe_import(module_path, class_name):
+    try:
+        module = __import__(module_path, fromlist=[class_name])
+        return getattr(module, class_name)
+    except ImportError:
+        return None
 
-from rllm.agents import WebAgent, FrozenLakeAgent, ToolAgent, SWEAgent, MathAgent, CompetitionCodingAgent, WebArenaAgent
-
-ENV_CLASS_MAPPING = {
-    'browsergym': BrowserGym,
-    'frozenlake': FrozenLakeEnv,
-    'tool': ToolEnvironment,
-    'math': SingleTurnEnvironment,
-    'code': SingleTurnEnvironment,
-    'swe': SWEEnv,
-    'competition_coding': CompetitionCodingEnv,
+# Import environment classes
+ENV_CLASSES = {
+    'browsergym': safe_import('rllm.environments.browsergym.browsergym', 'BrowserGym'),
+    'frozenlake': safe_import('rllm.environments.frozenlake.frozenlake', 'FrozenLakeEnv'),
+    'tool': safe_import('rllm.environments.tools.tool_env', 'ToolEnvironment'),
+    'math': safe_import('rllm.environments.base.single_turn_env', 'SingleTurnEnvironment'),
+    'code': safe_import('rllm.environments.base.single_turn_env', 'SingleTurnEnvironment'),
+    'swe': safe_import('rllm.environments.swe.swe', 'SWEEnv'),
+    'competition_coding': safe_import('rllm.environments.code.competition_coding', 'CompetitionCodingEnv'),
 }
 
-AGENT_CLASS_MAPPING = {
-    'webagent': WebAgent,
-    "webarenaagent": WebArenaAgent,
-    'frozenlakeagent': FrozenLakeAgent,
-    'tool_agent': ToolAgent,
-    'sweagent': SWEAgent,
-    'math_agent': MathAgent,
-    'code_agent': CompetitionCodingAgent,
-} 
+# Import agent classes
+AGENT_CLASSES = {
+    'webagent': safe_import('rllm.agents.web_agent', 'WebAgent'),
+    'webarenaagent': safe_import('rllm.agents.webarena_agent', 'WebArenaAgent'),
+    'frozenlakeagent': safe_import('rllm.agents.frozenlake_agent', 'FrozenLakeAgent'),
+    'tool_agent': safe_import('rllm.agents.tool_agent', 'ToolAgent'),
+    'sweagent': safe_import('rllm.agents.swe_agent', 'SWEAgent'),
+    'math_agent': safe_import('rllm.agents.math_agent', 'MathAgent'),
+    'code_agent': safe_import('rllm.agents.code_agent', 'CompetitionCodingAgent'),
+}
+
+# Filter out None values for unavailable imports
+ENV_CLASS_MAPPING = {k: v for k, v in ENV_CLASSES.items() if v is not None}
+AGENT_CLASS_MAPPING = {k: v for k, v in AGENT_CLASSES.items() if v is not None}
 
 def setup_environment(config):
+    if config.env.name not in ENV_CLASS_MAPPING:
+        raise ValueError(f"Environment {config.env.name} not available. Make sure all required dependencies are installed.")
+        
     if config.env.name == 'browsergym':
         if config.env.subtask == 'miniwob':
             import os
