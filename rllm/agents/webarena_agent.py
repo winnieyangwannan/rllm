@@ -771,6 +771,10 @@ class WebArenaAgent(BaseAgent):
     def chat_completions(self) -> List[Dict[str, str]]:
         return self.messages
 
+    @property
+    def prompt(self):
+        return self.messages[-2:]
+
     def get_prompt(self):
         return self.messages[-2:]
 
