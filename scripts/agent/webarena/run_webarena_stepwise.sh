@@ -14,8 +14,8 @@ python3 -m rllm.train.train_agent_ppo \
     algorithm.adv_estimator=loop \
     data.train_files=${RLLM_DIR}/data/rllm-webarena/train.parquet \
     data.val_files=${RLLM_DIR}/data/rllm-webarena/test.parquet \
-    data.train_batch_size=2 \
-    data.val_batch_size=4 \
+    data.train_batch_size=4 \
+    data.val_batch_size=8 \
     data.max_prompt_length=20480 \
     data.max_response_length=10000 \
     actor_rollout_ref.model.path=Qwen/Qwen3-0.6B \
