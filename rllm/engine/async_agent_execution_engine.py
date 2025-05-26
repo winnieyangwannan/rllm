@@ -3,11 +3,11 @@ import concurrent.futures
 import time
 import traceback
 import uuid
-import time
 from concurrent.futures import ThreadPoolExecutor
 
 import openai
 import torch
+from openai.types import Completion
 
 from rllm.agents.utils import (
     convert_messages_to_tokens_and_masks,
@@ -22,7 +22,6 @@ from rllm.misc import colorful_print
 from rllm.parser.chat_template.parser import ChatTemplateParser
 from rllm.router.router import Router
 
-from openai.types import Completion
 
 class AsyncAgentExecutionEngine(AgentExecutionEngine):
     def __init__(
@@ -36,7 +35,7 @@ class AsyncAgentExecutionEngine(AgentExecutionEngine):
         model_path="",
         n_parallel_agents=None,
         trajectory_timeout=None,
-        gamma=0.5,
+        gamma=0.2,
         api_retries=3,
         retry_limit=1,
         max_steps=5,
@@ -48,7 +47,7 @@ class AsyncAgentExecutionEngine(AgentExecutionEngine):
         rollout_engine_args={},
         env_args={},
         max_workers=64,
-        enforce_max_prompt_length=False, # If enabled, applies max_prompt check per step
+        enforce_max_prompt_length=False,  # If enabled, applies max_prompt check per step
         **kwargs,
     ):
         self.config = config
@@ -89,7 +88,7 @@ class AsyncAgentExecutionEngine(AgentExecutionEngine):
 
         if self.engine_name == "openai":
             from openai import AsyncOpenAI
-            self.client = AsyncOpenAI(**self.rollout_engine_args) 
+            self.client = AsyncOpenAI(**self.rollout_engine_args)
         elif self.engine_name == "verl":
             # All generation is done via scheduler. Currently only works for verl
             self.router = Router(config=self.config, tokenizer=self.tokenizer, addresses=self.server_addresses)
@@ -149,41 +148,6 @@ class AsyncAgentExecutionEngine(AgentExecutionEngine):
         response = response.replace(pad_token, "").replace(eos_token, "")
         return response
 
-    # async def _get_openai_async(self, prompt, _, **kwargs):
-    #     """
-    #     Get action from OpenAI API asynchronously with retry logic.
-        
-    #     Args:
-    #         prompt: The input prompt in chat completions format
-    #         application_id: Unique identifier for the application (unused for OpenAI)
-    #         **kwargs: Additional arguments to pass to the OpenAI API
-            
-    #     Returns:
-    #         The response from OpenAI API
-    #     """
-    #     async def get_response(prompt: List[Dict[str, str]]):
-    #         retries = self.api_retries
-    #         while retries > 0:
-    #             try:
-    #                 response = await self.client.chat.completions.create(
-    #                     messages=prompt,
-    #                     **self.sampling_params,
-    #                     **kwargs,
-    #                 )
-    #                 return response
-    #             except openai.RateLimitError:
-    #                 retries -= 1
-    #                 if retries == 0:
-    #                     return "Error: Rate limit reached and retries exhausted."
-    #                 print("Sleep for 5 seconds for API limit.")
-    #                 await asyncio.sleep(5)
-    #             except Exception as e:
-    #                 print("Error: ", e)
-    #                 return f"Error processing content: {e}"
-
-    #     response = await get_response(prompt)
-    #     return response
-
     async def _get_openai_async(self, prompt, _, **kwargs):
         """
         Get action from OpenAI API asynchronously with retry logic.
@@ -234,7 +198,7 @@ class AsyncAgentExecutionEngine(AgentExecutionEngine):
         """Run a single agent's trajectory asynchronously"""
         agent = self.agents[idx]
         env = self.envs[idx]
-        
+        # env_id = env.env_id
 
         # Initialize trajectory for this task.
         trajectory = []
@@ -258,7 +222,7 @@ class AsyncAgentExecutionEngine(AgentExecutionEngine):
         agent.reset()
         # Update agent internal state from environment.
         agent.update_from_env(
-            observation=observation, # Raw observation from environment
+            observation=observation,  # Raw observation from environment
             reward=0.0,
             done=False,
             info=info,
@@ -360,7 +324,7 @@ class AsyncAgentExecutionEngine(AgentExecutionEngine):
                 # Update token collections
                 response_tokens.extend(truncated_response_tokens)
                 response_masks.extend(truncated_response_masks)
-                
+
                 cur_step = agent.get_current_state()
                 if response_token_len - len(env_msg_tokens) > self.max_response_length and not hasattr(env, 'compute_final_reward'):
                     cur_step.reward = 0.0
@@ -389,7 +353,7 @@ class AsyncAgentExecutionEngine(AgentExecutionEngine):
 
             response_tokens.extend(env_msg_tokens)
             response_masks.extend(env_msg_masks)
-            
+
             if step_idx == self.max_steps - 1:
                 termination_reason = "MAX_STEPS"
 
@@ -437,7 +401,6 @@ class AsyncAgentExecutionEngine(AgentExecutionEngine):
                 "mc_returns": [step.mc_return for step in trajectory.steps][:len(episode_steps)],
             }            
             return steps_result
-
 
     async def run_agent_trajectory_with_retry(
         self, idx, application_id, seed=0, mode="Text", **kwargs

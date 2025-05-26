@@ -1,9 +1,9 @@
+from typing import Dict, Optional
+
 import gymnasium as gym
-from multiprocessing import Process, Pipe
-from typing import Dict, List, Any, Tuple
-import numpy as np
-from typing import Dict, Any, List, Optional, Union
+
 from rllm.environments.base.base_env import BaseEnv
+
 
 class BrowserGym(BaseEnv):
     def __init__(

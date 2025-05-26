@@ -65,6 +65,7 @@ class CompetitionCodingEnv(MultiTurnEnvironment):
         else:
             bonus = self.reward_bonus_coeff * (raw_reward - self.prev_reward)
             reward = raw_reward + bonus
+
         self.prev_reward = raw_reward
         
         # Increment turn counter
@@ -104,5 +105,6 @@ class CompetitionCodingEnv(MultiTurnEnvironment):
     def from_json(info: Dict) -> "CompetitionCodingEnv":
         return CompetitionCodingEnv(
             task=info["task"],
-            max_turns=info.get("max_turns", 2)
+            max_turns=info.get("max_turns", 2),
+            reward_bonus_coeff=info.get("reward_bonus_coeff", 0.0)
         )

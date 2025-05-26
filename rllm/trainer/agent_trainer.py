@@ -174,7 +174,7 @@ class AgentPPOTrainer(RayPPOTrainer):
                         final_gen_batch_output.meta_info.pop("repeat_counts", None) # no longer needed after this
                         # batch needs to be padded to divisor of world size, we will pad with everything masked out
                         batch = batch.union(final_gen_batch_output)
-                        batch = self._masked_pad_to_update_world_size(batch=batch)
+                        batch = self._pad_dataproto_to_world_size(batch=batch)
                     else:
                         final_gen_batch_output = self.generate_agent_trajectory(timing_raw=timing_raw, meta_info=batch.meta_info)
                         batch = batch.union(final_gen_batch_output)
@@ -275,7 +275,7 @@ class AgentPPOTrainer(RayPPOTrainer):
 
                                 # concatenate then pad
                                 batch = DataProto.concat([last_step_batch, non_last_step_batch])
-                                batch = self._masked_pad_to_update_world_size(batch)
+                                batch = self._pad_dataproto_to_world_size(batch)
                             else:
                                 # Round down to the nearest multiple of world size
                                 num_trainer_replicas = self.actor_rollout_wg.world_size
@@ -340,6 +340,8 @@ class AgentPPOTrainer(RayPPOTrainer):
                                 other_step_indices = np.where(is_last_step == False)[0]  
                                 other_step_batch = batch.select_idxs(other_step_indices)
                                 batch = batch.select_idxs(last_step_indices) # This batch only has last steps
+                            else:
+                                raise ValueError(f"Stepwise advantage mode {self.config.agent.stepwise_advantage_mode} not supported")
 
 
                         # compute advantages, executed on the driver process
@@ -360,7 +362,7 @@ class AgentPPOTrainer(RayPPOTrainer):
                             batch = DataProto.concat([batch, other_step_batch])
 
 
-                    batch = self._masked_pad_to_update_world_size(batch=batch)
+                    batch = self._pad_dataproto_to_world_size(batch=batch)
                     # balance the number of valid tokens on each dp rank.
                     # Note that this breaks the order of data inside the batch.
                     # Please take care when you implement group based adv computation such as GRPO and rloo
@@ -511,7 +513,10 @@ class AgentPPOTrainer(RayPPOTrainer):
             
         metric_dict = {}
         for data_source, rewards in data_source_reward.items():
-            metric_dict[f"val/test_score/{data_source}"] = np.mean(rewards)
+            # clip rewards to be between 0 and 1
+            rewards_array = np.array(rewards)
+            rewards_array = np.clip(rewards_array, 0, 1)
+            metric_dict[f"val/test_score/{data_source}"] = np.mean(rewards_array)
 
         for data_source, env_rewards in data_source_env_reward.items():
             metric_dict[f"val/env_score/{data_source}"] = np.mean(env_rewards)
@@ -960,7 +965,7 @@ class AgentPPOTrainer(RayPPOTrainer):
         other_step_batch.batch["returns"] = final_advantage
 
 
-    def _masked_pad_to_update_world_size(self, batch):
+    def _pad_dataproto_to_world_size(self, batch):
         world_sizes = []
         if self.use_critic and self.critic_wg.world_size != 0:
             world_sizes.append(self.critic_wg.world_size)

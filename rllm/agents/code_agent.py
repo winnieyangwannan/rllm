@@ -20,7 +20,7 @@ class CompetitionCodingAgent(BaseAgent):
     """
     A code agent that iteratively writes code to solve a problem.
     """
-    def __init__(self, remove_thinking=False, max_tests=2):
+    def __init__(self, remove_thinking=False, max_tests=2, public_test_only=True):
         """
         Initialize the CodeAgent.
         """
@@ -30,6 +30,7 @@ class CompetitionCodingAgent(BaseAgent):
         self.step = 0
         self.remove_thinking = remove_thinking
         self.max_tests = max_tests
+        self.public_test_only = public_test_only
     
     def format_test_results(self, test_results: List[Dict]) -> str:
 
@@ -37,10 +38,12 @@ class CompetitionCodingAgent(BaseAgent):
             return "".join(s.split())
         
         normalized_question = normalize_string(self.trajectory.steps[0].observation)
-        public_tests = []
-        for i, test in enumerate(test_results):
-            if not isinstance(test, dict) or "input" not in test:
-                continue
+        
+        if self.public_test_only:
+            public_tests = []
+            for i, test in enumerate(test_results):
+                if not isinstance(test, dict) or "input" not in test:
+                    continue
             if isinstance(test["input"], list):
                 strings_to_match = [normalize_string(str(s)) for s in test["input"]]
             elif isinstance(test["input"], str):
@@ -48,27 +51,29 @@ class CompetitionCodingAgent(BaseAgent):
             if all(s in normalized_question for s in strings_to_match):
                 public_tests.append(test)
         
-        if len(public_tests) == 0:
-            return "No public tests found. Please review your solution once more for correctness and efficiency, then output your final code if you're confident it's optimal."
-        elif all(test["passed"] for test in public_tests):
-            return "Congratulations! You've successfully passed all the public test cases. Please review your solution once more for correctness and efficiency, then output your final code if you're confident it's optimal."
+            if len(public_tests) == 0:
+                return "No public tests found. Please review your solution once more for correctness and efficiency, then output your final code if you're confident it's optimal."
+                
+            test_results = public_tests
         
-        else: # some tests failed
-            formatted_test_results = ""
-            n_failed = 0
-            for i, test in enumerate(public_tests):
-                if not test["passed"]:
-                    formatted_test_results += f"### Test {i+1} failed\n"
-                    formatted_test_results += f"  Input: {truncatefn(test['input'])}\n"
-                    formatted_test_results += f"  Expected: {truncatefn(test['expected'])}\n"
-                    formatted_test_results += f"  Actual: {truncatefn(test['output'])}\n\n" if 'output' in test and test['output'] is not None else ""
-                    formatted_test_results += f"  Error message: {truncatefn(test['error_message'])}\n" if 'error_message' in test and test['error_message'] is not None else ""
+        formatted_test_results = ""
+        n_failed = 0
+        for i, test in enumerate(test_results):
+            if not test["passed"]:
+                formatted_test_results += f"### Test {i+1} failed\n"
+                formatted_test_results += f"  Input: {truncatefn(test['input'])}\n"
+                formatted_test_results += f"  Expected: {truncatefn(test['expected'])}\n"
+                formatted_test_results += f"  Actual: {truncatefn(test['output'])}\n\n" if 'output' in test and test['output'] is not None else ""
+                formatted_test_results += f"  Error message: {truncatefn(test['error_message'])}\n" if 'error_message' in test and test['error_message'] is not None else ""
 
-                    n_failed += 1
-                    if n_failed >= self.max_tests:
-                        break
+                n_failed += 1
+                if n_failed >= self.max_tests:
+                    break
 
+        if n_failed > 0:
             return f"Here are the results on the public test cases:\n{formatted_test_results}\nSome test cases are still failing. Please carefully analyze the error patterns, revise your code to address these issues, and ensure your solution handles all the test cases correctly. Then, output your final code."
+        else:
+            return "Congratulations! You've successfully passed all test cases. Please carefully review your solution one more time to ensure it handles all edge cases properly. If you're confident your code is optimal, you can proceed with outputting your final solution."
         
     def update_from_env(self, observation: Any, reward: float, done: bool, info: Dict, **kwargs):
         """

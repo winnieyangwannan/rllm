@@ -17,7 +17,7 @@ python3 -m rllm.train.train_agent_ppo \
     data.train_batch_size=32 \
     data.val_batch_size=128 \
     data.max_prompt_length=8192 \
-    data.max_response_length=16384 \
+    data.max_response_length=8192 \
     actor_rollout_ref.model.path=Qwen/Qwen3-4B \
     actor_rollout_ref.hybrid_engine=True \
     actor_rollout_ref.actor.optim.lr=1e-6 \
@@ -60,14 +60,15 @@ python3 -m rllm.train.train_agent_ppo \
     trainer.critic_warmup=0 \
     trainer.logger=['console','wandb'] \
     trainer.project_name='code-agent' \
-    trainer.experiment_name='4b-coding-stepwise-mcreturn-16k-dynamic-mini-batch' \
+    trainer.experiment_name='4b-coding-stepwise-mcreturn-8k' \
     trainer.val_before_train=False \
     trainer.n_gpus_per_node=8 \
     trainer.nnodes=1 \
-    trainer.save_freq=50 \
+    trainer.save_freq=20 \
     trainer.test_freq=10 \
     trainer.default_hdfs_dir=null \
     env.name=competition_coding \
+    +env.env_args.reward_bonus_coeff=0.5 \
     agent.name=code_agent \
     agent.max_steps=2 \
     agent.async_engine=True \
@@ -76,5 +77,4 @@ python3 -m rllm.train.train_agent_ppo \
     agent.normalize_step_advantage=True \
     agent.enable_thinking=True \
     +agent.agent_args.remove_thinking=True \
-    +agent.env_args.reward_bonus_coeff=0.5 \
     trainer.total_epochs=100

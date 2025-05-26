@@ -626,7 +626,8 @@ class AgentExecutionEngine:
                     "steps": episode,
                     "training_reward": training_reward,
                     "environment_reward": environment_reward,
-                    "idx": self.envs[i].idx
+                    "idx": self.envs[i].idx,
+                    "mc_returns": [step.mc_return for step in trajectory.steps][:len(episode)],
                 })
             return steps_result
 
