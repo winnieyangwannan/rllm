@@ -68,6 +68,7 @@ python3 -m rllm.train.train_agent_ppo \
     trainer.test_freq=10 \
     trainer.default_hdfs_dir=null \
     env.name=competition_coding \
+    +env.env_args.reward_bonus_coeff=0.5 \
     agent.name=code_agent \
     agent.max_steps=2 \
     agent.async_engine=True \
@@ -76,5 +77,4 @@ python3 -m rllm.train.train_agent_ppo \
     agent.normalize_step_advantage=True \
     agent.enable_thinking=True \
     +agent.agent_args.remove_thinking=True \
-    +agent.env_args.reward_bonus_coeff=0.5 \
     trainer.total_epochs=100
