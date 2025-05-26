@@ -64,7 +64,7 @@ python3 -m rllm.train.train_agent_ppo \
     trainer.val_before_train=False \
     trainer.n_gpus_per_node=8 \
     trainer.nnodes=1 \
-    trainer.save_freq=50 \
+    trainer.save_freq=20 \
     trainer.test_freq=10 \
     trainer.default_hdfs_dir=null \
     env.name=competition_coding \

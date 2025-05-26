@@ -123,7 +123,6 @@ if __name__ == "__main__":
         max_response_length=32768,
         max_prompt_length=2048,
     )
-    # engine.update_envs_and_agents(envs, agents)
 
     tasks = load_data(n=1, dataset_enum=TestDataset.Code.LIVECODEBENCH)
 
