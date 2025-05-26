@@ -513,7 +513,10 @@ class AgentPPOTrainer(RayPPOTrainer):
             
         metric_dict = {}
         for data_source, rewards in data_source_reward.items():
-            metric_dict[f"val/test_score/{data_source}"] = np.mean(rewards)
+            # clip rewards to be between 0 and 1
+            rewards_array = np.array(rewards)
+            rewards_array = np.clip(rewards_array, 0, 1)
+            metric_dict[f"val/test_score/{data_source}"] = np.mean(rewards_array)
 
         for data_source, env_rewards in data_source_env_reward.items():
             metric_dict[f"val/env_score/{data_source}"] = np.mean(env_rewards)

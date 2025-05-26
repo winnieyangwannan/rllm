@@ -35,7 +35,7 @@ class AsyncAgentExecutionEngine(AgentExecutionEngine):
         model_path="",
         n_parallel_agents=None,
         trajectory_timeout=None,
-        gamma=0.5,
+        gamma=0.2,
         api_retries=3,
         retry_limit=1,
         max_steps=5,
