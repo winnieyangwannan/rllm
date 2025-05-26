@@ -397,7 +397,12 @@ def taco_to_lcb_format(tests):
         # Use the first element as a fallback if the list is shorter than n.
         inp = inputs[i] if i < len(inputs) else (inputs[0] if inputs else "")
         out = outputs[i] if i < len(outputs) else (outputs[0] if outputs else "")
-        test_cases.append({"input": inp, "output": out})
+        out = out[0] if isinstance(out, list) else out
+        test_case = {"input": inp, "output": out, "metadata": {}}
+        if "fn_name" in tests:
+            test_case["testtype"] = "functional"
+            test_case["metadata"]["func_name"] = tests["fn_name"]
+        test_cases.append(test_case)
     
     return test_cases
 
