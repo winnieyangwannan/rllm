@@ -34,6 +34,8 @@ class ChatTemplateParser:
                 parser = QwenChatTemplateParser(tokenizer, enable_thinking=enable_thinking)
                 print(f"Using QwenChatTemplateParser for {tokenizer.name_or_path}")
                 return parser
+            else:
+                raise ValueError(f"Unsupported model: {tokenizer.name_or_path}")
         
         # Default to the standard parser if no specific match
         parser = ChatTemplateParser(tokenizer)

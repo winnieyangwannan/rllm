@@ -34,7 +34,6 @@ python3 -m rllm.train.train_agent_ppo \
     actor_rollout_ref.actor.fsdp_config.optimizer_offload=True \
     actor_rollout_ref.rollout.tensor_model_parallel_size=1 \
     actor_rollout_ref.rollout.name=vllm \
-    actor_rollout_ref.rollout.async_engine=False \
     actor_rollout_ref.rollout.enforce_eager=False \
     actor_rollout_ref.rollout.enable_log_prob=False \
     actor_rollout_ref.rollout.temperature=0.7 \
@@ -68,7 +67,3 @@ python3 -m rllm.train.train_agent_ppo \
     agent.max_steps=10 \
     agent.async_engine=False \
     trainer.total_epochs=100
-
-        # env.miniwob_url="$MINIWOB_URL" \
-    #         data.train_files=${RLLM_DIR}/data/rllm-miniwob/train.parquet \
-    # data.val_files=${RLLM_DIR}/data/rllm-miniwob/test.parquet \
