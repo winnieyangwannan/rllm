@@ -250,6 +250,7 @@ class AsyncAgentExecutionEngine(AgentExecutionEngine):
             next_observation, reward, done, info = await loop.run_in_executor(self.executor, env.step, action)
             total_time += time.time() - start_time
             info['max_steps'] = self.max_steps
+            info['cur_tokens'] = response_token_len
             # Update agent internal state.
             agent.update_from_env(
                 observation=next_observation,
@@ -278,12 +279,19 @@ class AsyncAgentExecutionEngine(AgentExecutionEngine):
                 # Truncation length
                 truncation_length = self.max_response_length - response_token_len
                 # Truncate the response and masks
-                truncated_response_tokens = (assistant_msg_tokens + env_msg_tokens)[
-                    :truncation_length
-                ]
-                truncated_response_masks = (assistant_msg_masks + env_msg_masks)[
-                    :truncation_length
-                ]
+                truncation_length = self.max_response_length - response_token_len
+                # Truncate the response and masks
+                if truncation_length < 0:
+                    truncated_response_tokens = (assistant_msg_tokens + env_msg_tokens)[
+                        :truncation_length
+                    ]
+                    truncated_response_masks = (assistant_msg_masks + env_msg_masks)[
+                        :truncation_length
+                    ]
+                else:
+                    # Edge case where the response is exactly the max response length.
+                    truncated_response_tokens = (assistant_msg_tokens + env_msg_tokens)
+                    truncated_response_masks = (assistant_msg_masks + env_msg_masks)
                 # Update token collections
                 response_tokens.extend(truncated_response_tokens)
                 response_masks.extend(truncated_response_masks)
@@ -320,20 +328,20 @@ class AsyncAgentExecutionEngine(AgentExecutionEngine):
             if step_idx == self.max_steps - 1:
                 termination_reason = "MAX_STEPS"
 
-        if hasattr(env, 'compute_final_reward'):
+        masked_out = False
+        if self.overlong_filter:
+            if (termination_reason == "TRUNCATION" or termination_reason == "MAX_STEPS" or termination_reason == "TIMEOUT"):
+                # Mask out the entire response for overlong trajectories if the reward is 0.
+                response_masks = [0] * len(response_masks)
+                masked_out = True
+
+        if hasattr(env, 'compute_final_reward') and not masked_out:
             cur_step = agent.get_current_state()
             reward = await loop.run_in_executor(self.executor, env.compute_final_reward)
             cur_step.reward = reward
         # Closing environment using the executor.
         await loop.run_in_executor(self.executor, env.close)
         print(f"Environment closed for trajectory {idx}.")
-        
-        masked_out = False
-        if self.overlong_filter:
-            if (termination_reason == "TRUNCATION" or termination_reason == "MAX_STEPS" or termination_reason == "TIMEOUT") and reward <= 0:
-                # Mask out the entire response for overlong trajectories if the reward is 0.
-                response_masks = [0] * len(response_masks)
-                masked_out = True
         
         if termination_reason:
             if reward > 0:

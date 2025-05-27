@@ -10,6 +10,7 @@ from rllm.agents.system_prompts import SWE_SYSTEM_PROMPT, SWE_USER_PROMPT, \
     SWE_SYSTEM_PROMPT_FN_CALL, SWE_USER_PROMPT_FN_CALL
 from rllm.agents.agent import BaseAgent, Step, Trajectory
 
+TOKEN_WARNING_THRESHOLD = 28000
 
 def parse_oai_response(response):
     thought = response.choices[0].message.content
@@ -104,11 +105,15 @@ class SWEAgent(BaseAgent):
 
         max_steps = info.get('max_steps', None)
         if max_steps:
-            remaining_steps = max_steps - self.step
+            remaining_steps = max_steps - self.step - 1
             if remaining_steps > 0:
                 observation += f"\nSteps Remaining: {remaining_steps}"
             else:
                 observation += "\nYou have reached the maximum number of steps. Please submit your answer NOW."
+        
+        cur_tokens = info.get('cur_tokens', None)
+        if cur_tokens is not None and cur_tokens >= TOKEN_WARNING_THRESHOLD:
+            observation += f"\nYou are running out of tokens. Please submit your answer NOW."
 
         if self._trajectory.steps:
             prior_step = self._trajectory.steps[-1]
