@@ -95,7 +95,7 @@ class AsyncAgentExecutionEngine(AgentExecutionEngine):
 
         # Create a thread pool executor for environment interactions (i.e. step, reset, close)
         self.executor = concurrent.futures.ThreadPoolExecutor(max_workers=max_workers)
-        self.chat_template_parser = ChatTemplateParser.get_parser(self.tokenizer, enable_thinking=self.config.agent.enable_thinking)
+        self.chat_template_parser = ChatTemplateParser.get_parser(self.tokenizer, enable_thinking=kwargs.get("enable_thinking", False))
 
     async def get_model_response(self, prompt, application_id, **kwargs):
         """

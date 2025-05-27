@@ -90,6 +90,7 @@ class AgentPPOTrainer(RayPPOTrainer):
                 env_args=self.config.env.get("env_args", {}),
                 enforce_max_prompt_length=self.config.agent.use_stepwise_advantage,
                 trajectory_timeout=self.config.agent.trajectory_timeout,
+                **self.config.agent.get("engine_args", {})
             )
         else:
             self.agent_execution_engine = AgentExecutionEngine(

@@ -72,6 +72,6 @@ python3 -m rllm.train.train_agent_ppo \
     agent.async_engine=True \
     agent.use_stepwise_advantage=True \
     agent.stepwise_advantage_mode="mc_return" \
-    agent.enable_thinking=True \
+    +agent.engine_args.enable_thinking=True \
     +agent.agent_args.remove_thinking=True \
     trainer.total_epochs=100

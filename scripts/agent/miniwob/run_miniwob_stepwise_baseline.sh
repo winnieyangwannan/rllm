@@ -69,5 +69,5 @@ python3 -m rllm.train.train_agent_ppo \
     agent.max_steps=5 \
     agent.async_engine=False \
     agent.use_stepwise_advantage=False \
-    agent.enable_thinking=False \
+    +agent.engine_args.enable_thinking=False \
     trainer.total_epochs=100
