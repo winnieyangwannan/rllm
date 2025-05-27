@@ -77,7 +77,7 @@ python3 -m rllm.train.train_agent_ppo \
     agent.use_stepwise_advantage=True \
     agent.stepwise_advantage_mode="broadcast" \
     agent.normalize_step_advantage=True \
-    agent.enable_thinking=True \
+    +agent.engine_args.disable_thinking=False \
     +agent.agent_args.remove_thinking=True \
     +agent.env_args.reward_bonus_coeff=0.5 \
     trainer.total_epochs=100

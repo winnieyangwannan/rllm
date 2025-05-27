@@ -9,13 +9,13 @@ class ChatTemplateParser:
         return self.tokenizer.apply_chat_template(messages, tokenize=False, add_generation_prompt=add_generation_prompt)
 
     @classmethod
-    def get_parser(cls, tokenizer, enable_thinking=False):
+    def get_parser(cls, tokenizer, disable_thinking=False):
         """Factory method to get the appropriate parser based on a string identifier.
         
         Args:
             parser_type (str): String identifier for the parser type
             tokenizer: The tokenizer to use with the parser
-            enable_thinking: Whether generation prompt will enable thinking.
+            disable_thinking: Whether generation prompt will disable thinking.
             
         Returns:
             ChatTemplateParser: An instance of the requested parser
@@ -31,7 +31,7 @@ class ChatTemplateParser:
                 print(f"Using DeepseekQwenChatTemplateParser for {tokenizer.name_or_path}")
                 return parser
             elif "qwen" in model_name or 'r2egym' in model_name:
-                parser = QwenChatTemplateParser(tokenizer, enable_thinking=enable_thinking)
+                parser = QwenChatTemplateParser(tokenizer, disable_thinking=disable_thinking)
                 print(f"Using QwenChatTemplateParser for {tokenizer.name_or_path}")
                 return parser
             else:
@@ -84,7 +84,7 @@ class DeepseekQwenChatTemplateParser(ChatTemplateParser):
     
 
 class QwenChatTemplateParser(ChatTemplateParser):
-    def __init__(self, tokenizer, enable_thinking=True):
+    def __init__(self, tokenizer, disable_thinking=True):
         super().__init__(tokenizer)
         self.bos_token = tokenizer.bos_token
         self.eos_token = tokenizer.eos_token
@@ -92,18 +92,16 @@ class QwenChatTemplateParser(ChatTemplateParser):
         self.system_token = '<|im_start|>system\n'
         self.user_token = '<|im_start|>user\n'
         self.assistant_token = '<|im_start|>assistant\n'
+        if disable_thinking:
+            self.assistant_token += '<think>\\n\\n</think>\\n\\n'
         self.generation_prompt = self.assistant_token
-        if enable_thinking:
-            self.generation_prompt += '<think>\n'
+        
         
         self.tool_start_token = "\n<tool_call>\n"
         self.tool_end_token = "\n</tool_call>"
         
         self.tool_response_start_token = '<tool_response>\n'
         self.tool_response_end_token = '\n</tool_response>'
-        # enable_thinking only adds thinking for generation, not when transforming assistant messages
-        if enable_thinking:
-            print(f"Thinking is enabled, the required context will be larger") 
 
     def parse(self, messages, add_generation_prompt=False, is_first_msg=False):
         result = ''

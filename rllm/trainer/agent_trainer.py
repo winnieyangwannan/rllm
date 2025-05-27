@@ -103,6 +103,7 @@ class AgentPPOTrainer(RayPPOTrainer):
                 max_response_length=self.config.data.max_response_length,
                 max_prompt_length=self.config.data.max_prompt_length,
                 enforce_max_prompt_length=self.config.agent.use_stepwise_advantage,
+                **self.config.agent.get("engine_args", {})
             )
 
     def init_envs_and_agents(self, batch):

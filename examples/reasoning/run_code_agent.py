@@ -145,7 +145,7 @@ if __name__ == "__main__":
         max_prompt_length=4096,
         config=None,
         n_parallel_agents=n_parallel_agents,
-        enable_thinking=True,
+        disable_thinking=False,
     )
     # engine.update_envs_and_agents(envs, agents)
 

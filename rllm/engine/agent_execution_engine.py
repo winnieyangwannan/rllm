@@ -29,16 +29,22 @@ class AgentExecutionEngine:
         engine_name,
         tokenizer,
         config,
-        agents=None,  # List of agents
-        envs=None,  # List of environments
+        agents=[],
+        envs=[],
         model_path="",
+        n_parallel_agents=None,
+        trajectory_timeout=None,
         gamma=0.95,
         api_retries=3,
         retry_limit=1,
         max_steps=5,
-        max_prompt_length=2048,  # Max prompt length for agent is only applied to first request
         max_response_length=16384,
-        rollout_engine_args=None,
+        max_prompt_length=2048,  # Max prompt length for agent is only applied to first request
+        agent_class=None,
+        env_class=None,
+        agent_args={},
+        rollout_engine_args={},
+        env_args={},
         max_workers=16,
         enforce_max_prompt_length=False, # If enabled, applies max_prompt check per step
         **kwargs,
@@ -65,6 +71,7 @@ class AgentExecutionEngine:
         self.rollout_engine = rollout_engine
         self.tokenizer = tokenizer
         self.engine_name = engine_name
+        self.n_parallel_agents = n_parallel_agents
         self.model_path = model_path
 
         # For interaction
@@ -72,21 +79,28 @@ class AgentExecutionEngine:
         self.retry_limit = retry_limit
         self.api_retries = api_retries
         self.max_steps = max_steps
+        self.agent_args = agent_args
         self.max_response_length = max_response_length
         self.max_prompt_length = max_prompt_length
         self.enforce_max_prompt_length = enforce_max_prompt_length
         self.max_workers = max_workers
-        agents = agents or []
-        envs = envs or []
-        self.n_parallel_agents = len(envs)
+        
+        self.agent_class = agent_class
+        self.agent_args = agent_args
+        self.agents = agents
+        self.env_class = env_class
+        self.env_args = env_args
+        self.envs = envs
         
         assert len(agents) == len(envs), (
             f"Number of agents must equal to number of environments but received, "
             f"{len(agents)} and {len(envs)}"
         )
-        self.agents = agents
-        self.envs = envs
 
+        self.trajectory_timeout = trajectory_timeout
+        if not trajectory_timeout:
+            self.trajectory_timeout = int(1e9)
+            
         # rollout engine args
         self.rollout_engine_args = rollout_engine_args or {}
         self.sampling_params = kwargs.get("sampling_params", None)
@@ -95,7 +109,7 @@ class AgentExecutionEngine:
             from openai import OpenAI 
             self.client = OpenAI(**self.rollout_engine_args)
 
-        self.chat_template_parser = ChatTemplateParser.get_parser(self.tokenizer, enable_thinking=self.config.agent.enable_thinking)
+        self.chat_template_parser = ChatTemplateParser.get_parser(self.tokenizer, disable_thinking=kwargs.get("disable_thinking", False))
     
     def get_model_response(self, prompts, seq_idxs, **kwargs):
         """
