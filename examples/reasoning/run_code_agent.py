@@ -6,76 +6,27 @@ from transformers import AutoTokenizer
 
 from rllm.agents.code_agent import CompetitionCodingAgent
 from rllm.data.dataset_types import TestDataset, TrainDataset
-from rllm.data.utils import fetch_live_code_bench_system_prompt, load_dataset
+from rllm.data import Dataset
 from rllm.engine.async_agent_execution_engine import AsyncAgentExecutionEngine
 from rllm.environments.code.competition_coding import CompetitionCodingEnv
 
 
 def load_data(n=1, dataset_enum=None):
-    dataset = load_dataset(dataset_enum)
+    """Load data using the new Dataset interface."""
+    # Determine the split based on the dataset_enum type
+    split = "train" if isinstance(dataset_enum, TrainDataset) else "test"
+    
+    # Load dataset using the new Dataset class
+    dataset_obj = Dataset(dataset_name=dataset_enum, split=split)
+    
+    # Data is already processed by the Dataset class
     data = []
-    for idx, example in enumerate(dataset):
-        if isinstance(dataset_enum, TestDataset.Math):
-            processed = process_math_fn(example, idx)
-        else:
-            processed = process_code_fn(example, idx)
-        for i in range(n):
-            data.append(deepcopy(processed))
+    for i in range(n):
+        # Duplicate each example n times
+        for example in dataset_obj:
+            data.append(deepcopy(example))
+    
     return data
-
-
-def process_data(n, dataset):
-    data = []
-    for idx, example in enumerate(dataset):
-        processed = process_code_fn(example, idx)
-        for i in range(n):
-            data.append(deepcopy(processed))
-    return data
-
-
-def process_math_fn(example, idx):
-    question = example.pop("problem")
-    instruction = "Let's think step by step, put your final answer within \\boxed{}, and write python to evaluate math expressions if needed."
-    question = f"{question} {instruction}"
-    answer = example.pop("answer")
-
-    task = {
-        "ground_truth": answer,
-        "question": question,
-        "idx": idx,
-        "data_source": "math",
-    }
-    return task
-
-
-def process_code_fn(example, idx):
-    question = example.pop("problem")
-    tests = example.pop("tests")
-
-    if example.get("metadata", {}):
-        assert (
-            "func_name" in example["metadata"]
-        ), f"Function name is not found, check if your LCB data is preprocessed correctly: {example['metadata']}"
-        if isinstance(tests, dict):
-            tests["metadata"] = example["metadata"]
-        else:
-            for test in tests:
-                assert isinstance(test, dict), "Test is not a dict"
-                test["metadata"] = example["metadata"]
-
-    tests = json.dumps(tests)
-
-    instruction = fetch_live_code_bench_system_prompt(
-        prompt=question, starter_code=example.pop("starter_code")
-    )
-
-    task = {
-        "ground_truth": tests,
-        "question": instruction,
-        "idx": idx,
-        "data_source": "livecodebench",
-    }
-    return task
 
 
 def evaluate_results(results):
