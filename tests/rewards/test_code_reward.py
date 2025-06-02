@@ -49,7 +49,7 @@ if __name__ == "__main__":
             # Test case 1: Simple path with 3 cities
             "4 3 3\n1 2 3\n1 2 3\n2 3 2\n3 4 4\n",
             # Test case 2: Complete graph with 5 cities
-            "5 10 4\n1 2 3 4\n1 2 5\n1 3 5\n1 4 5\n1 5 5\n2 3 5\n2 4 5\n2 5 5\n3 4 5\n3 5 5\n4 5 5\n"
+            "5 10 4\n1 2 3 4\n1 2 5\n1 3 5\n1 4 5\n1 5 5\n2 3 5\n2 4 5\n2 5 5\n3 4 5\n3 5 5\n4 5 5\n",
             # Test case 3: Larger graph with 7 cities
             "7 21 4\n1 3 5 7\n1 2 4\n1 3 8\n1 4 1\n1 5 7\n1 6 3\n1 7 9\n2 3 5\n2 4 2\n2 5 6\n2 6 8\n2 7 4\n3 4 7\n3 5 9\n3 6 1\n3 7 6\n4 5 3\n4 6 5\n4 7 8\n5 6 2\n5 7 4\n6 7 7\n"
         ],
@@ -226,8 +226,8 @@ if __name__ == "__main__":
         "inputs": [
             # Test case 1: Simple path with 3 cities
             "4 3 3\n1 2 3\n1 2 3\n2 3 2\n3 4 4\n",
-            # Test case 2: Complete graph with 5 cities
-            "5 10 4\n1 2 3 4\n1 2 5\n1 3 5\n1 4 5\n1 5 5\n2 3 5\n2 4 5\n2 5 5\n3 4 5\n3 5 5\n4 5 5\n"
+            # # Test case 2: Complete graph with 5 cities
+            "5 10 4\n1 2 3 4\n1 2 5\n1 3 5\n1 4 5\n1 5 5\n2 3 5\n2 4 5\n2 5 5\n3 4 5\n3 5 5\n4 5 5\n",
             # Test case 3: Larger graph with 7 cities
             "7 21 4\n1 3 5 7\n1 2 4\n1 3 8\n1 4 1\n1 5 7\n1 6 3\n1 7 9\n2 3 5\n2 4 2\n2 5 6\n2 6 8\n2 7 4\n3 4 7\n3 5 9\n3 6 1\n3 7 6\n4 5 3\n4 6 5\n4 7 8\n5 6 2\n5 7 4\n6 7 7\n"
         ],
@@ -241,6 +241,67 @@ if __name__ == "__main__":
     input = RewardInput(problem="", problem_type=RewardType.CODE, model_response=model_response, metadata=metadata, data_source="taco")
     output = reward(input)
     assert output.is_correct == True
+
+
+def test_reward_taco_call_based():
+    model_response = """
+```python
+def is_anagram(test, original):
+    return sorted(original.lower()) == sorted(test.lower())
+```
+"""
+    metadata = {
+        "fn_name": "is_anagram",
+        "inputs": [
+            ["foefet", "toffee"],
+            ["Buckethead", "DeathCubeK"],
+            ["Twoo", "WooT"],
+            ["dumble", "bumble"],
+            ["ound", "round"],
+            ["apple", "pale"],
+        ],
+        "outputs": [[True], [True], [True], [False], [False], [False]],
+    }
+    """
+    Test the reward function on the taco dataset.
+    """
+    reward = RewardCodeFn(RewardConfig)
+    input = RewardInput(problem="", problem_type=RewardType.CODE, model_response=model_response, metadata=metadata, data_source="taco")
+    output = reward(input)
+    print(output)
+    assert output.is_correct == True
+
+
+def test_reward_taco_call_based2():
+    model_response = """
+```python
+def total(arr):
+    while len(arr) > 1:
+        arr = [x + y for (x, y) in zip(arr, arr[1:])]
+    return arr[0]
+```
+"""
+    metadata = {
+        "fn_name": "total",
+        "inputs": [
+            [[1, 2, 3, 4, 5]],
+            [[1, 2, 3, 4]],
+            [[1, 2, 3]],
+            [[4, 4, 52, 23, 32, 1, -1]],
+            [[4, 4, 5, -1]],
+            [[-1, -1, -1]],
+            [[-1, -1, -10, 42, 92, 1, 23, 6, -3]],
+            [[-1, 1, -1, 1]],
+            [[42]],
+        ],
+        "outputs": [[48], [20], [8], [1753], [30], [-4], [9248], [0], [42]],
+    }
+    reward = RewardCodeFn(RewardConfig)
+    input = RewardInput(problem="", problem_type=RewardType.CODE, model_response=model_response, metadata=metadata, data_source="taco")
+    output = reward(input)
+    print(output)
+    assert output.is_correct == True
+
 
 
 def test_reward_livecodebench():
@@ -418,8 +479,10 @@ def test_longest_subsequence_empty_list():
 
 
 if __name__ == "__main__":
+    test_reward_taco_call_based()
+    test_reward_taco_call_based2()
     test_reward_code_contests()
-    # test_reward_leetcode()
+    # # test_reward_leetcode()
     test_reward_taco()
     test_reward_codeforces()
     test_reward_livecodebench()

@@ -45,14 +45,14 @@ def is_valid(board: List[List[str]], max_size: int) -> bool:
 
 
 def generate_random_map(
-    size: int = 8, p: float = 0.8, seed: Optional[int] = None
+    size: int = 8, p: float = 0.8, seed: int = 0
 ) -> List[str]:
     """Generates a random valid map (one that has a path from start to goal)
 
     Args:
         size: size of each side of the grid
         p: probability that a tile is frozen
-        seed: optional seed to ensure the generation of reproducible maps
+        seed: seed to ensure the generation of reproducible maps
 
     Returns:
         A random valid map
@@ -168,7 +168,7 @@ class FrozenLakeEnv(GymFrozenLakeEnv, BaseEnv):
         is_slippery = kwargs.pop('is_slippery', False)
         size = kwargs.pop('size', 8)
         p = kwargs.pop('p', 0.8)
-        seed = kwargs.pop('seed', None)
+        seed = kwargs.pop('seed', 42)
         self.seed = seed
         self.size = size
         self.p = p
@@ -183,7 +183,7 @@ class FrozenLakeEnv(GymFrozenLakeEnv, BaseEnv):
 
         GymFrozenLakeEnv.__init__(
             self,
-            desc=random_map,
+            desc=random_map[:],
             is_slippery=is_slippery
         )
         self.ACTION_SPACE = gym.spaces.discrete.Discrete(4, start=1)
@@ -232,6 +232,7 @@ class FrozenLakeEnv(GymFrozenLakeEnv, BaseEnv):
                 p=self.map_kwargs["p"],
                 seed=seed,
                 is_slippery=self.env_kwargs["is_slippery"],
+                desc=self.desc
             )
         GymFrozenLakeEnv.reset(self, seed=seed)
         return self.render(mode), {}
@@ -253,7 +254,7 @@ class FrozenLakeEnv(GymFrozenLakeEnv, BaseEnv):
         - Check if the action is effective (whether player moves in the env).
         """
         if self.success():
-            return self.render(), 0, True, {"action_is_effective": False}
+            return self.render(), 1, True, {"action_is_effective": False}
         
         if not action:
             action = self.INVALID_ACTION
@@ -267,7 +268,7 @@ class FrozenLakeEnv(GymFrozenLakeEnv, BaseEnv):
         prev_player_position = int(self.s)
 
         player_pos, reward, done, _, prob = GymFrozenLakeEnv.step(self, self.action_map[action])
-
+        
         obs = self.render()
         return obs, reward, done, {"action_is_effective": prev_player_position != int(player_pos)}
     

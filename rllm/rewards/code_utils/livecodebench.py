@@ -214,10 +214,10 @@ def grade_call_based(
         return
 
     all_inputs = [
-        [json.loads(line) for line in inputs.split("\n")] for inputs in all_inputs
+        [json.loads(line) for line in inputs.split("\n")] if isinstance(inputs, str) else inputs for inputs in all_inputs
     ]
-
-    all_outputs = [json.loads(output) for output in all_outputs]
+    
+    all_outputs = [json.loads(output) if isinstance(output, str) else output for output in all_outputs]
 
     total_execution = 0
     all_results = []
