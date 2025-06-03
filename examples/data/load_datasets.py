@@ -14,7 +14,8 @@ def example_math_data_loading():
     gsm8k_dataset = Dataset(
         dataset_name="GSM8K",
         split="test",
-        load_from_hf=True
+        load_from_hf=True,
+        name="main"  # gsm8k requires config specification
     )
     print(f"Loaded {len(gsm8k_dataset)} GSM8K test problems")
     print(f"First example: {gsm8k_dataset[0]}")
@@ -25,22 +26,25 @@ def example_math_data_loading():
         question = example.get("problem", "")
         instruction = "Solve this math problem. Show all your work and explain each step."
         task = {
-            "ground_truth": example.get("answer", ""),
+            "ground_truth": example.get("solution", ""),  # Use 'solution' field from math-500
             "question": f"{question}\n\n{instruction}",
             "idx": idx,
             "data_source": "custom_math"
         }
         return task
     
-    math500_dataset = Dataset(
-        dataset_name="MATH500",
-        split="test", 
-        load_from_hf=True,
-        trust_remote_code=True,
-        postprocess_fn=custom_math_process
-    )
-    print(f"Loaded {len(math500_dataset)} MATH500 test problems with custom processing")
-    print(f"First example: {math500_dataset[0]}")
+    try:
+        math500_dataset = Dataset(
+            dataset_name="ankner/math-500",  # Use the correct HuggingFace dataset name
+            split="test", 
+            load_from_hf=True,
+            trust_remote_code=True,
+            postprocess_fn=custom_math_process
+        )
+        print(f"Loaded {len(math500_dataset)} MATH500 test problems with custom processing")
+        print(f"First example: {math500_dataset[0]}")
+    except Exception as e:
+        print(f"Failed to load MATH500 dataset: {e}")
     
     # Load from local files (fallback)
     aime_dataset = Dataset(
@@ -54,11 +58,22 @@ def example_math_data_loading():
 
 def example_code_data_loading():
     """Example of loading code datasets."""
+    
+    # fix by registering LCB before using it
+    @DatasetRegistry.register_dataset(dataset_name="LIVECODEBENCH", hf_dataset_name="livecodebench/code_generation_lite")
+    def process_lcb(example, idx):
+        return {
+            "problem": example.get("problem", ""),
+            "tests": example.get("tests", []),
+            "data_source": "livecodebench"
+        }
+    
     # Load LiveCodeBench directly from HuggingFace
     lcb_dataset = Dataset(
         dataset_name="LIVECODEBENCH",
         split="test",
-        load_from_hf=True
+        load_from_hf=True,
+        trust_remote_code=True  # fix
     )
     print(f"Loaded {len(lcb_dataset)} LiveCodeBench test problems")
     print(f"First example: {lcb_dataset[0]}")
@@ -68,18 +83,25 @@ def example_code_data_loading():
         # Example of a custom processing function for code problems
         question = example.get("problem", "")
         task = {
-            "ground_truth": json.dumps(example.get("test_cases", [])),
+            "ground_truth": json.dumps(example.get("input_output", {})),  # fix
             "question": f"Write a solution for this programming problem:\n\n{question}",
             "idx": idx,
             "data_source": "custom_code"
         }
         return task
     
+    # fix by registering APPS 
+    DatasetRegistry.register_dataset(
+        dataset_name="APPS",
+        hf_dataset_name="codeparrot/apps",
+        postprocess_fn=custom_code_process
+    )
+    
     apps_dataset = Dataset(
         dataset_name="APPS",
         split="test",
         load_from_hf=True,
-        postprocess_fn=custom_code_process
+        trust_remote_code=True  # fix
     )
     print(f"Loaded {len(apps_dataset)} APPS test problems with custom processing")
     print(f"First example: {apps_dataset[0]}")
@@ -127,7 +149,8 @@ def example_custom_dataset_registration():
         mbpp_dataset = Dataset(
             dataset_name="MBPP",
             split="test",
-            load_from_hf=True
+            load_from_hf=True,
+            trust_remote_code=True  # fix
         )
         print(f"Loaded {len(mbpp_dataset)} MBPP test problems")
         print(f"First example: {mbpp_dataset[0]}")
@@ -162,5 +185,5 @@ if __name__ == "__main__":
     example_custom_dataset_registration()
     
     # Example of saving a processed dataset
-    gsm8k_dataset = Dataset("GSM8K", split="test", load_from_hf=True)
+    gsm8k_dataset = Dataset("GSM8K", split="test", load_from_hf=True, name="main")  # add config
     save_processed_dataset(gsm8k_dataset, "processed_data/gsm8k_processed.json") 
