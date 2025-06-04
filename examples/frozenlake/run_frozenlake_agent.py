@@ -1,17 +1,13 @@
 import asyncio
-import json
-from copy import deepcopy
 
+import numpy as np
 from transformers import AutoTokenizer
 
 from rllm.agents.frozenlake_agent import FrozenLakeAgent
-from rllm.data.dataset_types import TestDataset, TrainDataset
-from rllm.data import Dataset
 from rllm.data.dataset import DatasetRegistry
 from rllm.engine.async_agent_execution_engine import AsyncAgentExecutionEngine
 from rllm.environments.frozenlake.frozenlake import FrozenLakeEnv
 
-import numpy as np
 
 def load_frozenlake_data(n=1, train_size=3000, test_size=100):
     # Check if dataset already exists in registry
@@ -63,8 +59,6 @@ if __name__ == "__main__":
     envs = [FrozenLakeEnv() for _ in range(n_parallel_agents)]
 
     engine = AsyncAgentExecutionEngine(
-        # agent_class=FrozenLakeAgent,
-        # env_class=FrozenLakeEnv,
         agents=agents,
         envs=envs,
         rollout_engine=None,
@@ -82,6 +76,6 @@ if __name__ == "__main__":
         enable_thinking=True,
     )
 
-    _, tasks = load_frozenlake_data(n=1)
+    tasks = load_frozenlake_data(n=1)
 
     results = asyncio.run(engine.execute_tasks(tasks))
