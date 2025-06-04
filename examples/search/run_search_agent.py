@@ -1,8 +1,7 @@
 import asyncio
 
-import numpy as np
-from transformers import AutoTokenizer
 from datasets import load_dataset
+from transformers import AutoTokenizer
 
 from rllm.agents.tool_agent import ToolAgent
 from rllm.data.dataset import DatasetRegistry

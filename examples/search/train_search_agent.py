@@ -1,10 +1,10 @@
 import hydra
 
-
 from rllm.agents.tool_agent import ToolAgent
+from rllm.data import DatasetRegistry
 from rllm.environments.tools.tool_env import ToolEnvironment
 from rllm.train.agent_trainer import AgentTrainer
-from rllm.data import DatasetRegistry
+
 
 @hydra.main(config_path="pkg://rllm.train.config", config_name="ppo_trainer", version_base=None)
 def main(config):
