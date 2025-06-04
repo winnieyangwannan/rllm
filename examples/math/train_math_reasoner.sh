@@ -9,10 +9,8 @@ export VLLM_ENGINE_ITERATION_TIMEOUT_S=100000000000
 # Find the directory where rllm package is located
 RLLM_DIR=$(python3 -c "import rllm; import os; print(os.path.dirname(os.path.dirname(rllm.__file__)))")
 
-python3 -m examples.math.train_math_agent \
+python3 -m examples.math.train_math_reasoner \
     algorithm.adv_estimator=grpo \
-    data.train_files=${RLLM_DIR}/data/train.parquet \
-    data.val_files=${RLLM_DIR}/data/math.parquet \
     data.train_batch_size=32 \
     data.val_batch_size=500 \
     data.max_prompt_length=2048 \
@@ -39,7 +37,7 @@ python3 -m examples.math.train_math_agent \
     actor_rollout_ref.rollout.tensor_model_parallel_size=1 \
     actor_rollout_ref.rollout.name=vllm \
     actor_rollout_ref.rollout.mode="async" \
-    actor_rollout_ref.rollout.chat_scheduler=examples.schedulers.completions_scheduler.CompletionsScheduler \
+    actor_rollout_ref.rollout.chat_scheduler=verl.schedulers.completions_scheduler.CompletionsScheduler \
     actor_rollout_ref.rollout.enforce_eager=False \
     actor_rollout_ref.rollout.enable_log_prob=False \
     actor_rollout_ref.rollout.temperature=0.6 \
@@ -57,7 +55,7 @@ python3 -m examples.math.train_math_agent \
     algorithm.clip_advantages=False \
     trainer.critic_warmup=0 \
     trainer.logger=['console','wandb'] \
-    trainer.project_name='code-agent' \
+    trainer.project_name='rllm-agent' \
     trainer.experiment_name='4b-math-stepwise-mcreturn' \
     trainer.val_before_train=True \
     trainer.n_gpus_per_node=2 \
@@ -65,8 +63,6 @@ python3 -m examples.math.train_math_agent \
     trainer.save_freq=100 \
     trainer.test_freq=20 \
     trainer.default_hdfs_dir=null \
-    env.name=competition_coding \
-    agent.name=math_agent \
     agent.max_steps=2 \
     agent.async_engine=True \
     agent.use_stepwise_advantage=True \

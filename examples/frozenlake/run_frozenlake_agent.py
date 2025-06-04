@@ -9,7 +9,7 @@ from rllm.engine.async_agent_execution_engine import AsyncAgentExecutionEngine
 from rllm.environments.frozenlake.frozenlake import FrozenLakeEnv
 
 
-def load_frozenlake_data(n=1, train_size=3000, test_size=100):
+def load_frozenlake_data(train_size=3000, test_size=100):
     # Check if dataset already exists in registry
     if DatasetRegistry.dataset_exists("frozenlake", "test"):
         test_dataset = DatasetRegistry.load_dataset("frozenlake", "test")
@@ -76,6 +76,6 @@ if __name__ == "__main__":
         enable_thinking=True,
     )
 
-    tasks = load_frozenlake_data(n=1)
+    tasks = load_frozenlake_data()
 
     results = asyncio.run(engine.execute_tasks(tasks))

@@ -42,5 +42,5 @@ class SingleTurnEnvironment(MultiTurnEnvironment):
         return reward_response.reward, {}
 
     @staticmethod
-    def from_json(info: Dict) -> "SingleTurnEnvironment":
-        return SingleTurnEnvironment(task=info["task"])
+    def from_json(extra_info: Dict) -> "SingleTurnEnvironment":
+        return SingleTurnEnvironment(task=extra_info)

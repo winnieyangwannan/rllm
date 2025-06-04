@@ -1,11 +1,9 @@
 import json
-import os
-import pandas as pd
-from typing import Any, Dict, List, Optional, Tuple, Union
 import logging
+import os
+from typing import Any, Dict, List, Optional, Union
 
-from rllm.data.dataset_types import TrainDataset, TestDataset
-
+import pandas as pd
 import torch
 
 logger = logging.getLogger(__name__)
@@ -37,6 +35,30 @@ class Dataset(torch.utils.data.Dataset):
     def get_data(self) -> List[Dict[str, Any]]:
         """Get the dataset data."""
         return self.data
+    
+    def repeat(self, n: int) -> "Dataset":
+        """Repeat the dataset n times, keeping repeated entries adjacent.
+        
+        Args:
+            n: Number of times to repeat the dataset
+            
+        Returns:
+            Dataset: A new dataset with repeated entries
+        """
+        if n <= 0:
+            raise ValueError("Repeat count must be positive")
+            
+        # Create repeated data with adjacent copies
+        repeated_data = []
+        for item in self.data:
+            # Add n copies of this item consecutively
+            repeated_data.extend([item.copy() for _ in range(n)])
+            
+        return Dataset(
+            data=repeated_data,
+            name=self.name,
+            split=self.split
+        )
     
     def get_data_path(self) -> Optional[str]:
         """Get the absolute path of the dataset file.
@@ -128,7 +150,7 @@ class DatasetRegistry:
             with open(cls._REGISTRY_FILE, "r", encoding="utf-8") as f:
                 return json.load(f)
         except json.JSONDecodeError:
-            logger.warning(f"Invalid JSON format in registry file. Creating a new registry.")
+            logger.warning("Invalid JSON format in registry file. Creating a new registry.")
             return {}
     
     @classmethod
@@ -139,12 +161,12 @@ class DatasetRegistry:
             json.dump(registry, f, indent=2)
     
     @classmethod
-    def register_dataset(cls, name: str, data: List[Dict[str, Any]], split: str = "default") -> Dataset:
+    def register_dataset(cls, name: str, data: Union[List[Dict[str, Any]], Any], split: str = "default") -> Dataset:
         """Register a dataset by saving it to disk and updating the registry.
         
         Args:
             name: Name of the dataset
-            data: List of dictionaries containing the dataset examples
+            data: List of dictionaries containing the dataset examples or a Hugging Face dataset
             split: Split name (e.g., 'train', 'test', 'default')
             
         Returns:
@@ -156,13 +178,22 @@ class DatasetRegistry:
         dataset_dir = os.path.join(cls._DATASET_DIR, name)
         os.makedirs(dataset_dir, exist_ok=True)
         
+        # Convert HuggingFace dataset to list of dictionaries if needed
+        if hasattr(data, 'to_pandas') and callable(data.to_pandas):
+            # This is likely a HuggingFace dataset
+            data_df = data.to_pandas()
+            data_list = data_df.to_dict('records')
+        else:
+            # Assume it's already a list of dictionaries
+            data_list = data
+            data_df = pd.DataFrame(data_list)
+        
         # Save original data
         dataset_path = os.path.join(dataset_dir, f"{split}.parquet")
-        data_df = pd.DataFrame(data)
         data_df.to_parquet(dataset_path)
         
         # Apply Verl postprocessing and save
-        verl_data = cls.apply_verl_postprocessing(data)
+        verl_data = cls.apply_verl_postprocessing(data_list)
         verl_dataset_path = os.path.join(dataset_dir, f"{split}_verl.parquet")
         verl_data_df = pd.DataFrame(verl_data)
         verl_data_df.to_parquet(verl_dataset_path)
@@ -178,9 +209,9 @@ class DatasetRegistry:
         registry[name][split] = dataset_path
         cls._save_registry(registry)
         
-        logger.info(f"Registered dataset '{name}' split '{split}' with {len(data)} examples. Verl-processed version saved at {verl_dataset_path}.")
+        logger.info(f"Registered dataset '{name}' split '{split}' with {len(data_list)} examples. Verl-processed version saved at {verl_dataset_path}.")
         
-        return Dataset(data=data, name=name, split=split)
+        return Dataset(data=data_list, name=name, split=split)
     
     @classmethod
     def load_dataset(cls, name: str, split: str = "default") -> Optional[Dataset]:

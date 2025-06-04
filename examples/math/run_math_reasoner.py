@@ -1,30 +1,42 @@
 import asyncio
-from copy import deepcopy
 
+from datasets import load_dataset
 from transformers import AutoTokenizer
 
 from rllm.agents.math_agent import MathAgent
-from rllm.data import Dataset
-from rllm.data.dataset_types import TestDataset
+from rllm.data.dataset import DatasetRegistry
 from rllm.engine.async_agent_execution_engine import AsyncAgentExecutionEngine
 from rllm.environments.base.single_turn_env import SingleTurnEnvironment
 
 
-def load_data(n=1, dataset_enum=None):
-    """Load data using the new Dataset interface."""
-    # Determine the split based on the dataset_enum type
-    split = "test"  # Default to test since we're using TestDataset.Math.AIME
+def prepare_math_data():
+    if DatasetRegistry.dataset_exists(
+        "deepscaler_math"
+    ) and DatasetRegistry.dataset_exists("aime2024"):
+        train_dataset = DatasetRegistry.load_dataset("deepscaler_math", "train")
+        test_dataset = DatasetRegistry.load_dataset("aime2024", "test")
+        return train_dataset, test_dataset
 
-    # Load dataset using the new Dataset class
-    dataset_obj = Dataset(dataset_name=dataset_enum, split=split)
+    train_dataset = load_dataset(
+        "agentica-org/DeepScaleR-Preview-Dataset", split="train"
+    )
+    test_dataset = load_dataset("HuggingFaceH4/aime_2024", split="train")
 
-    data = []
-    for i in range(n):
-        # Duplicate each example n times
-        for example in dataset_obj:
-            data.append(deepcopy(example))
+    def preprocess_fn(example, idx):
+        return {
+            "question": example["problem"],
+            "ground_truth": example["answer"],
+            "data_source": "math",
+        }
 
-    return data
+    train_dataset = train_dataset.map(preprocess_fn, with_indices=True)
+    test_dataset = test_dataset.map(preprocess_fn, with_indices=True)
+
+    train_dataset = DatasetRegistry.register_dataset(
+        "deepscaler_math", train_dataset, "train"
+    )
+    test_dataset = DatasetRegistry.register_dataset("aime2024", test_dataset, "test")
+    return train_dataset, test_dataset
 
 
 def evaluate_results(results):
@@ -92,7 +104,8 @@ if __name__ == "__main__":
         enable_thinking=True,
     )
 
-    tasks = load_data(n=8, dataset_enum=TestDataset.Math.AIME)
+    _, test_dataset = prepare_math_data()
+    tasks = test_dataset.repeat(n=4)  # repeat to evaluate pass@k
 
     results = asyncio.run(engine.execute_tasks(tasks))
     evaluate_results(results)
