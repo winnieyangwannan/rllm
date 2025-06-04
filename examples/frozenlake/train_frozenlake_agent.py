@@ -2,8 +2,8 @@
 import hydra
 
 
-from rllm.agents.math_agent import MathAgent
-from rllm.environments.base.single_turn_env import SingleTurnEnvironment
+from rllm.agents.frozenlake_agent import FrozenLakeAgent
+from rllm.environments.frozenlake.frozenlake import FrozenLakeEnv
 from rllm.train.agent_trainer import AgentTrainer
 from rllm.data import DatasetRegistry
 
@@ -13,8 +13,8 @@ def main(config):
     val_dataset = DatasetRegistry.load_dataset("frozenlake", "test")
 
     trainer = AgentTrainer(
-        agent_class=MathAgent,
-        env_class=SingleTurnEnvironment,
+        agent_class=FrozenLakeAgent,
+        env_class=FrozenLakeEnv,
         config=config,
         train_dataset=train_dataset,
         val_dataset=val_dataset,

@@ -33,6 +33,8 @@ from rllm.engine.agent_execution_engine import AgentExecutionEngine
 from rllm.engine.async_agent_execution_engine import AsyncAgentExecutionEngine
 import math
 from functools import reduce
+from rllm.data.dataset import Dataset
+
 class AgentPPOTrainer(RayPPOTrainer):
 
     def __init__(

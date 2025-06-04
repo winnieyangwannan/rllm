@@ -6,9 +6,11 @@ import logging
 
 from rllm.data.dataset_types import TrainDataset, TestDataset
 
+import torch
+
 logger = logging.getLogger(__name__)
 
-class Dataset:
+class Dataset(torch.utils.data.Dataset):
     """A class representing a dataset."""
     
     def __init__(self, data: List[Dict[str, Any]], name: Optional[str] = None, split: Optional[str] = None):
@@ -19,6 +21,7 @@ class Dataset:
             name: Optional name for the dataset
             split: Optional split name (e.g., 'train', 'test')
         """
+        super().__init__()
         self.data = data
         self.name = name
         self.split = split
@@ -49,6 +52,55 @@ class Dataset:
             return None
             
         return registry[self.name][self.split]
+    
+    def get_verl_data_path(self) -> Optional[str]:
+        """Get the absolute path of the Verl-processed dataset file.
+        
+        Returns:
+            Optional[str]: The absolute path of the Verl-processed dataset file, or None if not found
+        """
+        data_path = self.get_data_path()
+        if data_path is None:
+            return None
+            
+        verl_path = data_path.replace('.parquet', '_verl.parquet')
+        return verl_path if os.path.exists(verl_path) else None
+
+    @classmethod
+    def load_data(cls, path: str) -> "Dataset":
+        """Load dataset directly from a file path.
+        
+        Args:
+            path: Path to the dataset file
+            
+        Returns:
+            Dataset: The loaded dataset
+            
+        Raises:
+            FileNotFoundError: If the file does not exist
+            ValueError: If the file format is not supported
+        """
+        if not os.path.exists(path):
+            raise FileNotFoundError(f"Dataset file not found at {path}")
+            
+        file_ext = os.path.splitext(path)[1].lower()
+        
+        if file_ext == '.json':
+            with open(path, 'r', encoding='utf-8') as f:
+                data = json.load(f)
+        elif file_ext == '.jsonl':
+            data = []
+            with open(path, 'r', encoding='utf-8') as f:
+                for line in f:
+                    data.append(json.loads(line))
+        elif file_ext == '.csv':
+            data = pd.read_csv(path).to_dict('records')
+        elif file_ext == '.parquet':
+            data = pd.read_parquet(path).to_dict('records')
+        else:
+            raise ValueError(f"Unsupported file format: {file_ext}")
+            
+        return cls(data=data)
 
 
 class DatasetRegistry:
@@ -104,10 +156,16 @@ class DatasetRegistry:
         dataset_dir = os.path.join(cls._DATASET_DIR, name)
         os.makedirs(dataset_dir, exist_ok=True)
         
-        # Save data
+        # Save original data
         dataset_path = os.path.join(dataset_dir, f"{split}.parquet")
         data_df = pd.DataFrame(data)
         data_df.to_parquet(dataset_path)
+        
+        # Apply Verl postprocessing and save
+        verl_data = cls.apply_verl_postprocessing(data)
+        verl_dataset_path = os.path.join(dataset_dir, f"{split}_verl.parquet")
+        verl_data_df = pd.DataFrame(verl_data)
+        verl_data_df.to_parquet(verl_dataset_path)
         
         # Update registry
         registry = cls._load_registry()
@@ -120,7 +178,7 @@ class DatasetRegistry:
         registry[name][split] = dataset_path
         cls._save_registry(registry)
         
-        logger.info(f"Registered dataset '{name}' split '{split}' with {len(data)} examples.")
+        logger.info(f"Registered dataset '{name}' split '{split}' with {len(data)} examples. Verl-processed version saved at {verl_dataset_path}.")
         
         return Dataset(data=data, name=name, split=split)
     
@@ -226,6 +284,11 @@ class DatasetRegistry:
         if dataset_path and os.path.exists(dataset_path):
             os.remove(dataset_path)
         
+        # Also remove the Verl-processed file if it exists
+        verl_path = dataset_path.replace('.parquet', '_verl.parquet')
+        if os.path.exists(verl_path):
+            os.remove(verl_path)
+        
         # Remove split from registry
         del registry[name][split]
         
@@ -264,6 +327,11 @@ class DatasetRegistry:
         for split, path in dataset_info.items():
             if path and os.path.exists(path):
                 os.remove(path)
+                
+            # Also check for and remove verl-processed file if it exists
+            verl_path = path.replace('.parquet', '_verl.parquet')
+            if os.path.exists(verl_path):
+                os.remove(verl_path)
         
         # Remove dataset directory if it's empty
         dataset_dir = os.path.join(cls._DATASET_DIR, name)
@@ -276,3 +344,27 @@ class DatasetRegistry:
         
         logger.info(f"Removed dataset '{name}' from registry.")
         return True 
+    
+    @classmethod
+    def apply_verl_postprocessing(cls, data: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+        """Apply Verl postprocessing to the dataset.
+        
+        Args:
+            data: List of dictionaries containing the dataset examples
+            
+        Returns:
+            List of dictionaries with Verl-compatible format
+        """
+        processed_data = []
+        for entry in data:
+            processed_entry = {
+                "prompt": [{"role": "user", "content": "placeholder"}],
+                "reward_model": {
+                    "style": "rule",
+                    "ground_truth": None,
+                },
+                "extra_info": entry
+            }
+            processed_data.append(processed_entry)
+        return processed_data
+

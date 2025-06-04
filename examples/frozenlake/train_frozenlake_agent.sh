@@ -53,7 +53,7 @@ python3 -m examples.frozenlake.train_frozenlake_agent \
     algorithm.clip_advantages=False \
     trainer.critic_warmup=0 \
     trainer.logger=['console','wandb'] \
-    trainer.project_name='deepscaler-agent' \
+    trainer.project_name='rllm-agent' \
     trainer.experiment_name='7b-loop-drgrpo-frozenlake_agent' \
     trainer.val_before_train=False \
     trainer.n_gpus_per_node=2 \
