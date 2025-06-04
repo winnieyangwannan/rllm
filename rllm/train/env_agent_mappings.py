@@ -32,8 +32,8 @@ ENV_CLASS_MAPPING = {k: v for k, v in ENV_CLASSES.items() if v is not None}
 AGENT_CLASS_MAPPING = {k: v for k, v in AGENT_CLASSES.items() if v is not None}
 
 def setup_environment(config):
-    if config.env.name not in ENV_CLASS_MAPPING:
-        raise ValueError(f"Environment {config.env.name} not available. Make sure all required dependencies are installed.")
+    # if config.env.name not in ENV_CLASS_MAPPING:
+    #     raise ValueError(f"Environment {config.env.name} not available. Make sure all required dependencies are installed.")
         
     if config.env.name == 'browsergym':
         if config.env.subtask == 'miniwob':
@@ -45,6 +45,6 @@ def setup_environment(config):
             return
         elif config.env.subtask == 'webarena':
             return
-    elif config.env.name in ['frozenlake', 'swe', 'math', 'code', 'tool', 'competition_coding']:
+    elif config.env.name in ['frozenlake', 'swe', 'math', 'code', 'tool', 'competition_coding', "custom"]:
         return
     raise ValueError(f"Environment subtask not supported, env: {config.env.name}, subtask: {config.env.subtask == 'miniwob'}")

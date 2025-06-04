@@ -8,7 +8,7 @@ import hydra
 
 # Local application imports
 
-from rllm.trainer.agent_trainer import AgentPPOTrainer
+from rllm.trainer.agent_ppo_trainer import AgentPPOTrainer
 
 from rllm.train.env_agent_mappings import ENV_CLASS_MAPPING, AGENT_CLASS_MAPPING, setup_environment
 
@@ -29,7 +29,7 @@ def run_ppo_agent(config, compute_score=None):
 
 
 @ray.remote(num_cpus=1)  # please make sure main_task is not scheduled on head
-def main_task(config, compute_score=None):
+def main_task(config, compute_score=None, env_class=None, agent_class=None):
     from verl.utils.fs import copy_local_path_from_hdfs
     # print initial config
     from pprint import pprint
@@ -81,10 +81,12 @@ def main_task(config, compute_score=None):
     reward_fn = load_reward_manager(config, tokenizer, num_examine=0, **config.reward_model.get("reward_kwargs", {}))
     val_reward_fn = load_reward_manager(config, tokenizer, num_examine=1)
     resource_pool_manager = ResourcePoolManager(resource_pool_spec=resource_pool_spec, mapping=mapping)
-        
-    # Below are agent specific initialization
-    env_class = ENV_CLASS_MAPPING[config.env.name]
-    agent_class = AGENT_CLASS_MAPPING[config.agent.name]
+    
+    if env_class is None:
+        env_class = ENV_CLASS_MAPPING[config.env.name]
+    if agent_class is None:
+        agent_class = AGENT_CLASS_MAPPING[config.agent.name]
+    
     setup_environment(config)    
 
     trainer = AgentPPOTrainer(config=config,

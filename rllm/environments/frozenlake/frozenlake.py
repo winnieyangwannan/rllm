@@ -215,7 +215,8 @@ class FrozenLakeEnv(GymFrozenLakeEnv, BaseEnv):
             self,
             mode='tiny_rgb_array',
             reset_map=True,
-            seed=None
+            seed=None,
+            task=None
     ):
         """
         Reset the environment, there are two options:
@@ -224,6 +225,11 @@ class FrozenLakeEnv(GymFrozenLakeEnv, BaseEnv):
         Both can reset the seed
         NOTE if seed is the same, the map will be the same
         """
+
+        if task:
+            seed = task['seed']
+        
+
         if not seed:
             seed = self.seed
         if reset_map:

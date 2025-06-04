@@ -97,6 +97,8 @@ class AsyncAgentExecutionEngine(AgentExecutionEngine):
         self.executor = concurrent.futures.ThreadPoolExecutor(max_workers=max_workers)
         self.chat_template_parser = ChatTemplateParser.get_parser(self.tokenizer, enable_thinking=kwargs.get("enable_thinking", False))
 
+        self.is_last_trajectory = False
+
     async def get_model_response(self, prompt, application_id, **kwargs):
         """
         Compute model response asynchronously based on the engine type.
