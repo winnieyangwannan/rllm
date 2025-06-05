@@ -77,8 +77,8 @@ class ToolEnvironment(BaseEnv):
                 arguments = finish_action.get('function', {}).get('arguments', {})
                 llm_solution = arguments.get('response', '')
                 # llm_solution = json.loads(arguments).get('response', '')
-            reward = self.reward_fn(data_source=self.data_source, llm_solution=llm_solution, ground_truth=self.task["ground_truth"])
-            return {}, reward, done, {"response": action}
+            reward_response = self.reward_fn(data_source=self.data_source, llm_solution=llm_solution, ground_truth=self.task["ground_truth"])
+            return {}, reward_response.reward, done, {"response": action}
 
         tool_calls = action
         tool_outputs = self._execute_tool_calls(tool_calls)

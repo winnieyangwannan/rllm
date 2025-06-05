@@ -10,51 +10,37 @@ from transformers import AutoTokenizer
 
 from rllm.data.utils import fetch_live_code_bench_system_prompt
 
-
-def load_data(n=1, dataset_enum=None):
-    dataset = load_dataset(dataset_enum)
-    data = []
-    for idx, example in enumerate(dataset):
-        if isinstance(dataset_enum, TestDataset.Math):
-            processed = process_math_fn(example, idx)
-        else:
-            processed = process_code_fn(example, idx)
-        for i in range(n):
-            data.append(deepcopy(processed))
-    return data
+from rllm.data.dataset import DatasetRegistry
 
 
-def process_math_fn(example, idx):
-    print(example)
-    question = example.pop("problem")
-    instruction = "Let's think step by step, put your final answer within \\boxed{}, and write python to evaluate math expressions if needed."
-    question = f"{question} {instruction}"
-    answer = example.pop("answer")
+def prepare_math_data():
+    if DatasetRegistry.dataset_exists(
+        "deepscaler_math"
+    ) and DatasetRegistry.dataset_exists("aime2024"):
+        train_dataset = DatasetRegistry.load_dataset("deepscaler_math", "train")
+        test_dataset = DatasetRegistry.load_dataset("aime2024", "test")
+        return train_dataset, test_dataset
 
-    task = {
-        "ground_truth": answer,
-        "question": question,
-        "idx": idx,
-        'data_source': 'math' 
-    }
-    return task
+    train_dataset = load_dataset(
+        "agentica-org/DeepScaleR-Preview-Dataset", split="train"
+    )
+    test_dataset = load_dataset("HuggingFaceH4/aime_2024", split="train")
 
+    def preprocess_fn(example, idx):
+        return {
+            "question": example["problem"],
+            "ground_truth": example["answer"],
+            "data_source": "math",
+        }
 
-def process_code_fn(example, idx):
-    # print(example)
-    question = example.pop("problem")
-    instruction = fetch_live_code_bench_system_prompt(prompt=question, starter_code=example.pop("starter_code"))
+    train_dataset = train_dataset.map(preprocess_fn, with_indices=True)
+    test_dataset = test_dataset.map(preprocess_fn, with_indices=True)
 
-    question = f"{instruction}. You have access to a python interpreter. You can use it to write code and test it before outputting your final answer."
-    ground_truth = example.pop("tests")
-
-    task = {
-        "ground_truth": ground_truth,
-        "question": instruction,
-        "idx": idx,
-        'data_source': 'livecodebench' 
-    }
-    return task
+    train_dataset = DatasetRegistry.register_dataset(
+        "deepscaler_math", train_dataset, "train"
+    )
+    test_dataset = DatasetRegistry.register_dataset("aime2024", test_dataset, "test")
+    return train_dataset, test_dataset
 
 
 def evaluate_results(results):
@@ -88,8 +74,7 @@ def evaluate_results(results):
     
 
 if __name__ == "__main__":
-    # Create the environment (no batch_size parameter)
-    n_parallel_agents = 1
+    n_parallel_agents = 64
 
     model_name = "Qwen/Qwen3-4B"
     
@@ -106,7 +91,6 @@ if __name__ == "__main__":
     sampling_params = {
         "temperature": 0.6,
         "top_p": 0.95,
-        "tools": envs[0].tools.json, 
         "model": model_name
     }
     
@@ -120,11 +104,13 @@ if __name__ == "__main__":
         tokenizer=tokenizer,
         sampling_params=sampling_params,
         rollout_engine_args={"base_url": "http://localhost:30000/v1", "api_key": "None"},
-        max_response_length=32768,
+        max_response_length=8192,
         max_prompt_length=2048,
+        n_parallel_agents=n_parallel_agents,
     )
 
-    tasks = load_data(n=1, dataset_enum=TestDataset.Code.LIVECODEBENCH)
+    _, test_dataset = prepare_math_data()
+    tasks = test_dataset.repeat(n=1)
 
     results = asyncio.run(engine.execute_tasks(tasks))
     evaluate_results(results)

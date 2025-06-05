@@ -29,11 +29,11 @@ class AsyncAgentExecutionEngine(AgentExecutionEngine):
         rollout_engine,
         engine_name,
         tokenizer,
-        config,
+        config=None,
         agents=[],
         envs=[],
         model_path="",
-        n_parallel_agents=None,
+        n_parallel_agents=1,
         trajectory_timeout=None,
         gamma=0.2,
         api_retries=3,
@@ -187,6 +187,8 @@ class AsyncAgentExecutionEngine(AgentExecutionEngine):
         prompt_text = prompt
         if isinstance(prompt, list) and all(isinstance(msg, dict) for msg in prompt):
             prompt_text = self.chat_template_parser.parse(prompt, add_generation_prompt=True, is_first_msg=True)
+
+        colorful_print(f"Prompt: {prompt_text}", "cyan")
 
         response = await get_response(prompt_text)
         if isinstance(response, Completion):

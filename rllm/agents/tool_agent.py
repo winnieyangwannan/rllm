@@ -99,7 +99,7 @@ class ToolAgent(BaseAgent):
         )
         self._trajectory.steps.append(current_step)
 
-    def update_from_model(self, response: Any, **kwargs):
+    def update_from_model(self, response: str, **kwargs):
         """
         Updates the agent's state based on the model's response.
         Parses the response, updates messages, and the current step in the trajectory.
@@ -110,6 +110,7 @@ class ToolAgent(BaseAgent):
         # Process response (either string or OpenAI completion object)
         if isinstance(response, str):
             assistant_content = response
+            print(f"assistant_content: {assistant_content}", flush=True)
             # Attempt to parse tool calls from string response
             try:
                 tool_inputs = self.tool_parser.parse_input(response)
@@ -123,21 +124,6 @@ class ToolAgent(BaseAgent):
             except Exception as e:
                 logger.error(f"Failed to parse tool calls from string response: {e}")
                 tool_calls_dict = [] # Indicate no valid tool calls parsed
-        else: # Assuming OpenAI-like completion object
-            completion = response
-            assistant_content = completion.choices[0].message.content
-            print(f"assistant_content: {assistant_content}", flush=True)
-            if completion.choices[0].message.tool_calls:
-                tool_calls_dict = [{
-                    "id": tool_call.id,
-                    "type": tool_call.type,
-                    "function": {
-                        "name": tool_call.function.name,
-                        "arguments": tool_call.function.arguments # Arguments are already string here
-                    }
-                } for tool_call in completion.choices[0].message.tool_calls]
-            else:
-                tool_calls_dict = []
 
         print(f"tool_calls_dict: {tool_calls_dict}", flush=True)
 
