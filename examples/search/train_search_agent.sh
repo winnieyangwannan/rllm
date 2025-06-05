@@ -6,9 +6,9 @@ export VLLM_USE_V1=1
 export VLLM_ALLOW_LONG_MAX_MODEL_LEN=1
 export VLLM_ENGINE_ITERATION_TIMEOUT_S=100000000000
 
-# Find the directory where rllm package is located
 RLLM_DIR=$(python3 -c "import rllm; import os; print(os.path.dirname(os.path.dirname(rllm.__file__)))")
 
+# Run the training script with the specified configuration
 python3 -m examples.search_r1.train_search_r1_agent \
     algorithm.adv_estimator=loop \
     data.train_batch_size=64 \
@@ -63,4 +63,8 @@ python3 -m examples.search_r1.train_search_r1_agent \
     trainer.default_hdfs_dir=null \
     agent.max_steps=10 \
     agent.async_engine=True \
+    +agent.agent_args.tools=["google_search"] \
+    +agent.agent_args.model_name="Qwen/Qwen3-4B" \
+    +agent.agent_args.parser_name="qwen" \
+    +env.env_args.tools=["google_search"] \
     trainer.total_epochs=100 
