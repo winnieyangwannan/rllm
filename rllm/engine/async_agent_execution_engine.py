@@ -1,27 +1,26 @@
 import asyncio
-import uuid
+import concurrent.futures
 import time
+import traceback
+import uuid
 from concurrent.futures import ThreadPoolExecutor
 
 import openai
 import torch
-import traceback
+from openai.types import Completion
 
-from rllm.agents.agent import Step, Trajectory
+from rllm.agents.utils import (
+    convert_messages_to_tokens_and_masks,
+    get_recent_assistant_user_messages,
+)
 from rllm.engine.agent_execution_engine import AgentExecutionEngine
 from rllm.environments.env_utils import (
-    compute_trajectory_reward,
     compute_mc_return,
+    compute_trajectory_reward,
 )
-
 from rllm.misc import colorful_print
 from rllm.parser.chat_template.parser import ChatTemplateParser
 from rllm.router.router import Router
-from rllm.agents.utils import get_recent_assistant_user_messages, convert_messages_to_tokens_and_masks
-from rllm.router.router import Router
-import torch
-import uuid
-from typing import List, Dict
 
 
 class AsyncAgentExecutionEngine(AgentExecutionEngine):
@@ -36,7 +35,7 @@ class AsyncAgentExecutionEngine(AgentExecutionEngine):
         model_path="",
         n_parallel_agents=None,
         trajectory_timeout=None,
-        gamma=1.0,
+        gamma=0.2,
         api_retries=3,
         retry_limit=3,
         max_steps=5,
@@ -47,6 +46,8 @@ class AsyncAgentExecutionEngine(AgentExecutionEngine):
         agent_args={},
         rollout_engine_args={},
         env_args={},
+        max_workers=64,
+        enforce_max_prompt_length=False,  # If enabled, applies max_prompt check per step
         **kwargs,
     ):
         self.config = config
@@ -61,9 +62,9 @@ class AsyncAgentExecutionEngine(AgentExecutionEngine):
         self.retry_limit = retry_limit
         self.api_retries = api_retries
         self.max_steps = max_steps
-        self.agent_args = agent_args
         self.max_response_length = max_response_length
         self.max_prompt_length = max_prompt_length
+        self.enforce_max_prompt_length = enforce_max_prompt_length
 
         self.agent_class = agent_class
         self.agent_args = agent_args
@@ -81,16 +82,19 @@ class AsyncAgentExecutionEngine(AgentExecutionEngine):
         # rollout engine args
         self.rollout_engine_args = rollout_engine_args
         self.sampling_params = kwargs.get("sampling_params", None)
-        self.server_addresses = self.rollout_engine.server_addresses
-        print(self.server_addresses)
+
+        self.server_addresses = getattr(self.rollout_engine, "server_addresses", None)
+
         if self.engine_name == "openai":
             from openai import AsyncOpenAI
-            self.client = AsyncOpenAI(**self.rollout_engine_args) 
+            self.client = AsyncOpenAI(**self.rollout_engine_args)
         elif self.engine_name == "verl":
             # All generation is done via scheduler. Currently only works for verl
             self.router = Router(config=self.config, tokenizer=self.tokenizer, addresses=self.server_addresses)
 
-        self.chat_template_parser = ChatTemplateParser.get_parser(self.tokenizer)
+        # Create a thread pool executor for environment interactions (i.e. step, reset, close)
+        self.executor = concurrent.futures.ThreadPoolExecutor(max_workers=max_workers)
+        self.chat_template_parser = ChatTemplateParser.get_parser(self.tokenizer, disable_thinking=kwargs.get("disable_thinking", False))
 
     async def get_model_response(self, prompt, application_id, **kwargs):
         """
@@ -148,19 +152,20 @@ class AsyncAgentExecutionEngine(AgentExecutionEngine):
         Get action from OpenAI API asynchronously with retry logic.
         
         Args:
-            prompt: The input prompt in chat completions format
+            prompt: The input prompt in text format for completions API
             application_id: Unique identifier for the application (unused for OpenAI)
             **kwargs: Additional arguments to pass to the OpenAI API
             
         Returns:
             The response from OpenAI API
         """
-        async def get_response(prompt: List[Dict[str, str]]):
+        async def get_response(prompt_text: str):
             retries = self.api_retries
             while retries > 0:
                 try:
-                    response = await self.client.chat.completions.create(
-                        messages=prompt,
+                    response = await self.client.completions.create(
+                        prompt=prompt_text,
+                        timeout=3600,
                         **self.sampling_params,
                         **kwargs,
                     )
@@ -175,16 +180,24 @@ class AsyncAgentExecutionEngine(AgentExecutionEngine):
                     print("Error: ", e)
                     return f"Error processing content: {e}"
 
-        response = await get_response(prompt)
+        # If prompt is in chat format, convert it to text format
+        prompt_text = prompt
+        if isinstance(prompt, list) and all(isinstance(msg, dict) for msg in prompt):
+            prompt_text = self.chat_template_parser.parse(prompt, add_generation_prompt=True, is_first_msg=True)
+
+        response = await get_response(prompt_text)
+        if isinstance(response, Completion):
+            response = response.choices[0].text
         return response
 
+
     async def run_agent_trajectory_async(
-        self, idx, application_id, seed=0, mode="Text", **kwargs
+        self, idx, application_id, task=None, seed=0, mode="Text", **kwargs
     ):
         """Run a single agent's trajectory asynchronously"""
         agent = self.agents[idx]
         env = self.envs[idx]
-        
+        # env_id = env.env_id
 
         # Initialize trajectory for this task.
         trajectory = []
@@ -196,16 +209,19 @@ class AsyncAgentExecutionEngine(AgentExecutionEngine):
         response_masks = []
         total_time = 0
 
+        # for step return
+        episode_steps = []
+
         # Reset environment with the task using the executor
         loop = asyncio.get_event_loop()
-        observation, info = await loop.run_in_executor(self.executor, env.reset)
+        observation, info = await loop.run_in_executor(self.executor, lambda: env.reset(task=task) if task else env.reset())
         info['max_steps'] = self.max_steps
 
         # Reset agent
         agent.reset()
         # Update agent internal state from environment.
         agent.update_from_env(
-            observation=observation, # Raw observation from environment
+            observation=observation,  # Raw observation from environment
             reward=0.0,
             done=False,
             info=info,
@@ -225,20 +241,43 @@ class AsyncAgentExecutionEngine(AgentExecutionEngine):
             )
 
         for step_idx in range(self.max_steps):
-            print(f"Trajectory {idx}, Step {step_idx}/{self.max_steps}")
+            print(f"Trajectory {idx}, Step {step_idx + 1}/{self.max_steps}")
             # Get action from agent
-            chat_completions_messages = agent.chat_completions
+            prompt_messages = agent.prompt.copy()
             # Max remaining tokens left for the response
-            kwargs['max_tokens'] = self.max_response_length - response_token_len
+            # For enforced max prompt at each step, no need to deduct here
+            if not self.enforce_max_prompt_length:
+                max_tokens = self.max_response_length - response_token_len
+            else:
+                max_tokens = self.max_response_length
+
+                # since max prompt is enforced, we filter out too long prompts.
+                prompt_str = self.chat_template_parser.parse(prompt_messages, add_generation_prompt=True, is_first_msg=True)
+                prompt_len = len(self.tokenizer.encode(prompt_str, add_special_tokens=False))
+                if prompt_len > self.max_prompt_length:
+                    termination_reason = "PROMPT_TRUNCATION"
+                    break
+                
+            kwargs['max_tokens'] = max_tokens
             
             start_time = time.time()
             response = await self.get_model_response(
-                chat_completions_messages,
+                prompt_messages,
                 application_id,
                 **kwargs
             )
+
+            # Update steps
+            prompt_response_pair = {
+                "prompt": self.chat_template_parser.parse(prompt_messages, add_generation_prompt=True, is_first_msg=True),
+                "response": response,
+            }
+            episode_steps.append(prompt_response_pair)
+
+            # Update agent with model response
             total_time += time.time() - start_time
             agent.update_from_model(response)
+
             # Fetch action from agent's internal state.
             cur_state = agent.get_current_state()
             action = cur_state.action
@@ -271,7 +310,7 @@ class AsyncAgentExecutionEngine(AgentExecutionEngine):
             # Update repsonse token length
             response_token_len += len(assistant_msg_tokens) + len(env_msg_tokens)
             # Reached maximum number of tokens for the trajectory
-            if response_token_len >= self.max_response_length:
+            if not self.enforce_max_prompt_length and response_token_len >= self.max_response_length:
                 # Truncation length
                 truncation_length = self.max_response_length - response_token_len
                 # Truncate the response and masks
@@ -289,7 +328,7 @@ class AsyncAgentExecutionEngine(AgentExecutionEngine):
                 # Update token collections
                 response_tokens.extend(truncated_response_tokens)
                 response_masks.extend(truncated_response_masks)
-                
+
                 cur_step = agent.get_current_state()
                 if response_token_len - len(env_msg_tokens) > self.max_response_length and not hasattr(env, 'compute_final_reward'):
                     cur_step.reward = 0.0
@@ -318,7 +357,7 @@ class AsyncAgentExecutionEngine(AgentExecutionEngine):
 
             response_tokens.extend(env_msg_tokens)
             response_masks.extend(env_msg_masks)
-            
+
             if step_idx == self.max_steps - 1:
                 termination_reason = "MAX_STEPS"
 
@@ -357,6 +396,15 @@ class AsyncAgentExecutionEngine(AgentExecutionEngine):
             return token_result
         elif mode == "Conversation":
             return agent.chat_completions
+        elif mode == "Step":
+            steps_result = {
+                "steps": episode_steps,
+                "training_reward": agent.compute_training_reward(trajectory) if hasattr(agent, "compute_training_reward") else trajectory.steps[-1].reward,
+                "environment_reward": trajectory.reward,
+                "idx": env.idx,
+                "mc_returns": [step.mc_return for step in trajectory.steps][:len(episode_steps)],
+            }            
+            return steps_result
 
     async def run_agent_trajectory_with_retry(
         self, idx, application_id, seed=0, mode="Text", **kwargs
@@ -430,47 +478,47 @@ class AsyncAgentExecutionEngine(AgentExecutionEngine):
         
         self.executor.shutdown(wait=False)
 
-    # async def execute_tasks(self, tasks):
-    #     """
-    #     Run asynchronous interactions between the agent and environment where each agent
-    #     has its own environment instance and can proceed independently.
+    async def execute_tasks(self, tasks):
+        """
+        Run asynchronous interactions between the agent and environment where each agent
+        has its own environment instance and can proceed independently.
         
-    #     Args:
-    #         tasks: List of tasks to process
-    #         max_concurrent: Maximum number of concurrent tasks to process (defaults to self.n_parallel_agents)
+        Args:
+            tasks: List of tasks to process
+            max_concurrent: Maximum number of concurrent tasks to process (defaults to self.n_parallel_agents)
             
-    #     Returns:
-    #         A list of trajectories, one for each task.
-    #     """
+        Returns:
+            A list of trajectories, one for each task.
+        """
 
-    #     max_concurrent = self.n_parallel_agents
+        max_concurrent = self.n_parallel_agents
         
-    #     # Initialize results list to store trajectories for all tasks
-    #     all_trajectories = {}
+        # Initialize results list to store trajectories for all tasks
+        all_trajectories = {}
         
-    #     # Create a queue of tasks to process
-    #     task_queue = list(enumerate(tasks))
-    #     semaphore = asyncio.Semaphore(max_concurrent)
-    #     index_queue = asyncio.Queue(maxsize=max_concurrent)
-    #     for i in range(max_concurrent):
-    #         index_queue.put_nowait(i)
+        # Create a queue of tasks to process
+        task_queue = list(enumerate(tasks))
+        semaphore = asyncio.Semaphore(max_concurrent)
+        index_queue = asyncio.Queue(maxsize=max_concurrent)
+        for i in range(max_concurrent):
+            index_queue.put_nowait(i)
 
-    #     async def sem_wrapper(task_id, task):
-    #         async with semaphore:
-    #             # Get an available index
-    #             index = await index_queue.get()
-    #             try:
-    #                 res = await self.run_agent_trajectory(index, task_id)
-    #                 return task_id, res
-    #             finally:
-    #                 # Put the index back in the queue when done
-    #                 await index_queue.put(index)
+        async def sem_wrapper(task_id, task):
+            async with semaphore:
+                # Get an available index
+                index = await index_queue.get()
+                try:
+                    res = await self.run_agent_trajectory_async(index, task_id, task)
+                    return task_id, res
+                finally:
+                    # Put the index back in the queue when done
+                    await index_queue.put(index)
         
-    #     # Create a queue of tasks to process
-    #     task_queue = list(enumerate(tasks))
-    #     # Run all tasks concurrently
-    #     results = await asyncio.gather(*[sem_wrapper(task_id, task) for task_id, task in task_queue])
+        # Create a queue of tasks to process
+        task_queue = list(enumerate(tasks))
+        # Run all tasks concurrently
+        results = await asyncio.gather(*[sem_wrapper(task_id, task) for task_id, task in task_queue])
         
-    #     all_trajectories = {task_id: trajectory for task_id, trajectory in results}
-    #     ordered_trajectories = [all_trajectories[i] for i in range(len(all_trajectories))]
-    #     return ordered_trajectories
+        all_trajectories = {task_id: trajectory for task_id, trajectory in results}
+        ordered_trajectories = [all_trajectories[i] for i in range(len(all_trajectories))]
+        return ordered_trajectories

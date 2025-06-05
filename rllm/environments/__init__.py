@@ -1,13 +1,25 @@
 from rllm.environments.base.single_turn_env import SingleTurnEnvironment
 from rllm.environments.tools.tool_env import ToolEnvironment
-from rllm.environments.browsergym.browsergym import BrowserGym
-from rllm.environments.frozenlake.frozenlake import FrozenLakeEnv
-from rllm.environments.swe.swe import SWEEnv
 
-__all__ = [
-    "SingleTurnEnvironment",
-    "ToolEnvironment",
-    "BrowserGym",
-    "FrozenLakeEnv",
-    "SWEEnv",
+__all__ = ["SingleTurnEnvironment", "ToolEnvironment"]
+
+def safe_import(module_path, class_name):
+    try:
+        module = __import__(module_path, fromlist=[class_name])
+        return getattr(module, class_name)
+    except ImportError:
+        return None
+    
+
+ENVIRONMENT_IMPORTS = [
+    ("rllm.environments.browsergym.browsergym", "BrowserGym"),
+    ("rllm.environments.frozenlake.frozenlake", "FrozenLakeEnv"),
+    ("rllm.environments.swe.swe", "SWEEnv"),
+    ("rllm.environments.code.competition_coding", "CompetitionCodingEnv"),
 ]
+
+for module_path, class_name in ENVIRONMENT_IMPORTS:
+    imported_class = safe_import(module_path, class_name)
+    if imported_class is not None:
+        globals()[class_name] = imported_class
+        __all__.append(class_name)

@@ -94,6 +94,10 @@ if sys.version_info.major == 3:
     def _fullargspec(func):
         return __targspec(func, ofullargspec)
     inspect.getfullargspec = _fullargspec
+    oargspec = inspect.getfullargspec
+    def _argspec(func):
+        return __targspec(func, oargspec)
+    inspect.getargspec = _argspec
     def _exec(m,g): exec(m,g)
 else:
     @set_docstring(__modify_function_doc)
@@ -114,10 +118,8 @@ else:
 def _gettypes(args):
     return tuple(map(type, args))
 
-oargspec = inspect.getargspec
-
 def _argspec(func):
-    return __targspec(func, oargspec)
+    return __targspec(func, argspec)
 
 inspect.getargspec = _argspec
 

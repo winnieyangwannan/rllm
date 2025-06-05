@@ -7,7 +7,7 @@ data:
   max_prompt_length: 512
   max_response_length: 512
   train_batch_size: 1024
-  val_batch_size: null # DEPRECATED: Validation datasets are sent to inference engines as a whole batch, which will schedule the memory themselves
+  val_batch_size: null
   return_raw_input_ids: False  # This should be set to true when the tokenizer between policy and rm differs
   return_raw_chat: False
   shuffle: True
@@ -30,8 +30,10 @@ actor_rollout_ref:
     use_remove_padding: False
     use_liger: False
   actor:
-    strategy: fsdp  # This is for backward-compatibility
+    strategy: fsdp  # [fsdp, fsdp2], This is for backward-compatibility
     ppo_mini_batch_size: 256
+    use_dynamic_mini_batch: False
+    ppo_num_mini_batches: 1
     ppo_micro_batch_size: null # will be deprecated, use ppo_micro_batch_size_per_gpu
     ppo_micro_batch_size_per_gpu: null
     use_dynamic_bsz: False
@@ -259,6 +261,7 @@ env:
   name: browsergym
   subtask: miniwob
   miniwob_url: "file://<PATH_TO_MINIWOB_CLONED_REPO>/miniwob/html/miniwob/" 
+  env_args: {}
 
 agent:
   name: webagent
@@ -266,3 +269,8 @@ agent:
   async_engine: True
   n_parallel_agents: null
   trajectory_timeout: null
+  normalize_step_advantage: False
+  use_stepwise_advantage: False
+  stepwise_advantage_mode: "broadcast" 
+  agent_args: {}
+  engine_args: {}

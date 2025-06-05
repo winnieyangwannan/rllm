@@ -19,7 +19,6 @@ logger = logging.getLogger(__name__)
 
 
 class FrozenLakeAgent(BaseAgent):
-
     SYSTEM_PROMPT = """You are Qwen, created by Alibaba Cloud. You are a helpful assistant. You are walking on a frozen lake.
 
 FrozenLake Quick Guide
@@ -42,7 +41,36 @@ Reach goal: +1.0
 You will be provided the current observation, please decide on the next Action.
 You should show your thought process and then input the final action in ``` ```.
 You should only output the NEXT ACTION at each interation in the ``` ```. For example, if you want to move up, you should output ```Up```.
-You should plan ahead and try to achieve it in minimum number of steps.
+You should plan ahead and need to achieve it in minimum number of steps.
+You should be aware that frozen tiles can be slippery, but the chance is small and you should not overthink it.
+
+Please show your thinking process and put the final action in ``` ```. In every turn, the final action MUST be one of Up, Down, Left, Right.
+"""
+
+    MULTI_SHOT_SYSTEM_PROMPT = """You are Qwen, created by Alibaba Cloud. You are a helpful assistant. You are walking on a frozen lake.
+
+FrozenLake Quick Guide
+Goal: Reach the goal (G). Player (P) and Goal (G) must overlap.
+
+Symbols:
+_ Frozen | O Hole | G Goal | P Player
+
+Rules:
+1. Avoid falling into holes (O).
+2. Frozen tiles are slippery, you may move perpendicular to your intended direction.
+
+Valid Action (separated by | ):
+Up | Down | Left | Right
+
+Rewards:
+Fall into hole: 0
+Reach goal: +1.0
+
+You will be provided the current observation, please decide on the next Action.
+You should show your thought process and then input the final action in ``` ```.
+You should only output the NEXT ACTION at each interation in the ``` ```. For example, if you want to move up, you should output ```Up```.
+You should plan ahead and need to achieve it in minimum number of steps.
+You should be aware that frozen tiles can be slippery, but the chance is small and you should not overthink it.
 
 Below are examples for an interaction:
 Example1:
@@ -105,6 +133,8 @@ Now it is your turn, please show your thinking process and put the final action 
         self._trajectory = Trajectory()
         self.messages: List[Dict[str, str]] = []
         self.step = 0
+        self.accumulate_thinking = False # controlls whether to accumulate the thinking portion of the response
+        self.multistep_prompt = False
         self.reset()
 
     def update_from_env(self, observation: Any, reward: float, done: bool, info: Dict, **kwargs):
@@ -114,7 +144,7 @@ Now it is your turn, please show your thinking process and put the final action 
         """
         current_obs_str = str(observation)
         # Base message for the user
-        user_prompt_content = "Current Observation: \n" + current_obs_str + "\n" + "You have not achieved the goal, P has not reached G yet. Please give the next action."
+        user_prompt_content = f"Current Observation ({self.step}): \n" + current_obs_str + "\n" + "You have not achieved the goal, P has not reached G yet. Please give the next action."
 
         # Check if the observation is the same as the previous step's observation
         # This check only makes sense if we have completed at least one step (i.e., received a model response and acted)
@@ -159,6 +189,11 @@ Now it is your turn, please show your thinking process and put the final action 
                 content = str(response)
 
         assert self._trajectory.steps, "Trajectory should not be empty when update_from_model is called."
+
+        if not self.accumulate_thinking:
+            _, sep, after = content.partition("</think>")
+            if sep:
+                content = after
 
         thought, action_str = self._parse_model_response(content)
 
@@ -210,7 +245,7 @@ Now it is your turn, please show your thinking process and put the final action 
         self._trajectory = Trajectory()
         self.messages = [{
             'role': 'system',
-            'content': self.SYSTEM_PROMPT,
+            'content': self.SYSTEM_PROMPT if not self.multistep_prompt else self.MULTI_SHOT_SYSTEM_PROMPT,
         }]
         self.step = 0
 
@@ -224,11 +259,12 @@ Now it is your turn, please show your thinking process and put the final action 
             return 0
         
         reward = trajectory.steps[-1].reward
-        reward_penalty = 0    
-        for step in trajectory.steps:
-            if not self.validate_step(step):
-                reward_penalty -= 0.2
-        return reward + reward_penalty
+        # reward_penalty = 0    
+        # for step in trajectory.steps:
+        #     if not self.validate_step(step):
+        #         reward_penalty -= 0.2
+        #eturn reward + reward_penalty
+        return reward
 
     def validate_step(self, trajectory_step: Step) -> bool:
         action_str = trajectory_step.action
