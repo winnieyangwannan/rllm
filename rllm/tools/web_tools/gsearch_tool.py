@@ -1,15 +1,12 @@
+import os
+
 import httpx
-from typing import Dict
 
 from rllm.tools.tool_base import Tool, ToolOutput
 
 REFERENCE_COUNT = 8
 DEFAULT_SEARCH_ENGINE_TIMEOUT = 5
 GOOGLE_SEARCH_ENDPOINT = "https://customsearch.googleapis.com/customsearch/v1"
-
-# Must enter secret key and engine id https://programmablesearchengine.google.com/controlpanel/all
-SECRET_KEY = "***REMOVED***"
-ENGINE_ID = "04fd2a07df5174d1a"
 
 class GoogleSearchTool(Tool):
     """A tool for searching google."""
@@ -63,9 +60,14 @@ class GoogleSearchTool(Tool):
         """
         Search with google and return the contexts.
         """
+
+        secret_key = os.getenv("GOOGLE_SEARCH_SECRET_KEY")
+        engine_id = os.getenv("GOOGLE_SEARCH_ENGINE_ID")
+        if not secret_key or not engine_id:
+            raise ValueError("GOOGLE_SEARCH_SECRET_KEY or GOOGLE_SEARCH_ENGINE_ID is not set")
         params = {
-            "key": SECRET_KEY,
-            "cx": ENGINE_ID,
+            "key": secret_key,
+            "cx": engine_id,
             "q": query,
             "num": REFERENCE_COUNT,
         }
@@ -102,9 +104,12 @@ class GoogleSearchTool(Tool):
             return ToolOutput(name=self.name, error=f"{type(e).__name__} - {str(e)}")
 
     def __del__(self):
-        self.client.close()
-
+        try:
+            self.client.close()
+        except Exception:
+            pass
 
 if __name__ == '__main__':
     search = GoogleSearchTool()
     print(search(query='Give me current time right now in PST'))
+    

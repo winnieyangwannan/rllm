@@ -1,8 +1,9 @@
 import asyncio
+import os
 
-import numpy as np
-from transformers import AutoTokenizer
 from datasets import load_dataset
+from dotenv import load_dotenv
+from transformers import AutoTokenizer
 
 from rllm.agents.tool_agent import ToolAgent
 from rllm.data.dataset import DatasetRegistry
@@ -128,18 +129,18 @@ def load_search_r1_data(n=1, train_size=3000, test_size=100):
     return test_dataset.get_data()
 
 if __name__ == "__main__":
-    import os
-
     os.environ["TOKENIZERS_PARALLELISM"] = "true"
 
-    n_parallel_agents = 64
+    load_dotenv()
+
+    n_parallel_agents = 1
 
     model_name = "Qwen/Qwen3-4B"
 
     tokenizer = AutoTokenizer.from_pretrained(model_name)
 
     envs = [
-        ToolEnvironment(tools=["google_search"]) for _ in range(n_parallel_agents)
+        ToolEnvironment(tools=["tavily_extract", "tavily_search"]) for _ in range(n_parallel_agents)
     ]
 
     agents = [
@@ -168,11 +169,8 @@ if __name__ == "__main__":
         max_prompt_length=4096,
         config=None,
         n_parallel_agents=n_parallel_agents,
-        enable_thinking=True,
     )
 
     tasks = load_search_r1_data(n=1)
 
-    env_tasks = [item["task"] for item in tasks]
-
-    results = asyncio.run(engine.execute_tasks(env_tasks)) 
+    results = asyncio.run(engine.execute_tasks(tasks)) 

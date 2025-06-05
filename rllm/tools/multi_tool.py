@@ -1,15 +1,15 @@
 from typing import List
 
 from rllm.tools.tool_base import Tool, ToolOutput
-from rllm.tools import TOOL_REGISTRY
+from rllm.tools import tool_registry
 
-class  MultiTool(Tool):
+class MultiTool(Tool):
     def __init__(self, tools: List[str]):
         # Check if all tools are in the registry
-        assert all(tool in TOOL_REGISTRY for tool in tools), "All tools must be in the registry TOOL_REGISTRY"
+        assert all(tool in tool_registry for tool in tools), "All tools must be in the registry"
         self.tools = tools
         # Initialize the tool map
-        self.tool_map = {tool: TOOL_REGISTRY[tool]() for tool in tools}
+        self.tool_map = {tool: tool_registry.instantiate(tool) for tool in tools}
 
     @property
     def json(self):

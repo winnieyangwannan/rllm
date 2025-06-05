@@ -1,19 +1,20 @@
+import os
+from typing import List, Optional
+
 import httpx
-from typing import List, Dict
 
 from rllm.tools.tool_base import Tool, ToolOutput
 
 TAVILY_EXTRACT_ENDPOINT = "https://api.tavily.com/extract"
-# https://docs.tavily.com/api-reference/endpoint/extract#body-extract-depth
-API_KEY = "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"
+TAVILY_SEARCH_ENDPOINT = "https://api.tavily.com/search"
 
-class TavilyTool(Tool):
+class TavilyExtractTool(Tool):
     """A tool for extracting data from websites."""
 
     def __init__(self):
         self._init_client()
         super().__init__(
-            name="tavily",
+            name="tavily_extract",
             description="Extract web page content from one or more specified URLs"
         )
         
@@ -58,6 +59,9 @@ class TavilyTool(Tool):
         Returns:
             ToolOutput: An object containing either the extracted content or an error message.
         """
+        api_key = os.getenv("TAVILY_API_KEY")
+        if not api_key:
+            raise ValueError("TAVILY_API_KEY is not set")
         try:
             params = {
                 "urls": urls,
@@ -65,7 +69,7 @@ class TavilyTool(Tool):
                 "extract_depth": "basic"
             }
             headers = {
-                "Authorization": f"Bearer {API_KEY}",
+                "Authorization": f"Bearer {api_key}",
                 "Content-Type": "application/json"
             }
             
@@ -90,24 +94,153 @@ class TavilyTool(Tool):
         """Clean up resources when the tool is garbage collected."""
         self._close_client()
 
+class TavilySearchTool(Tool):
+    """A tool for searching the web using Tavily API."""
+
+    def __init__(self):
+        self._init_client()
+        super().__init__(
+            name="tavily_search",
+            description="Search the web for information on a specific query"
+        )
+        
+    @property
+    def json(self):
+        return {
+            "type": "function", 
+            "function": {
+                "name": self.name,
+                "description": self.description,
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "query": {
+                            "type": "string",
+                            "description": "The search query"
+                        },
+                        "search_depth": {
+                            "type": "string",
+                            "enum": ["basic", "advanced"],
+                            "description": "The depth of search (basic or advanced)"
+                        },
+                        "include_domains": {
+                            "type": "array",
+                            "items": {
+                                "type": "string"
+                            },
+                            "description": "List of domains to include in the search"
+                        },
+                        "exclude_domains": {
+                            "type": "array",
+                            "items": {
+                                "type": "string"
+                            },
+                            "description": "List of domains to exclude from the search"
+                        },
+                        "max_results": {
+                            "type": "integer",
+                            "description": "Maximum number of search results to return"
+                        }
+                    },
+                    "required": ["query"]
+                }
+            }
+        }
+
+    def _init_client(self):
+        self.client = httpx.Client()
+
+    def _close_client(self):
+        if self.client:
+            self.client.close()
+        self.client = None
+
+    def forward(self, 
+                query: str, 
+                search_depth: str = "basic",
+                include_domains: Optional[List[str]] = None,
+                exclude_domains: Optional[List[str]] = None,
+                max_results: int = 5) -> ToolOutput:
+        """
+        Search the web using Tavily API.
+        
+        Args:
+            query (str): The search query.
+            search_depth (str, optional): The depth of search. Defaults to "basic".
+            include_domains (List[str], optional): List of domains to include in the search.
+            exclude_domains (List[str], optional): List of domains to exclude from the search.
+            max_results (int, optional): Maximum number of search results to return. Defaults to 5.
+            
+        Returns:
+            ToolOutput: An object containing either the search results or an error message.
+        """
+        api_key = os.getenv("TAVILY_API_KEY")
+        if not api_key:
+            raise ValueError("TAVILY_API_KEY is not set")
+        try:
+            params = {
+                "query": query,
+                "search_depth": search_depth,
+                "max_results": max_results
+            }
+            
+            if include_domains:
+                params["include_domains"] = include_domains
+            if exclude_domains:
+                params["exclude_domains"] = exclude_domains
+                
+            headers = {
+                "Authorization": f"Bearer {api_key}",
+                "Content-Type": "application/json"
+            }
+            
+            response = self.client.post(
+                url=TAVILY_SEARCH_ENDPOINT, 
+                json=params, 
+                headers=headers
+            )
+            
+            if not response.is_success:
+                return ToolOutput(name=self.name, error=f"Error: {response.status_code} - {response.text}")
+            
+            result = response.json()
+            return ToolOutput(name=self.name, output=result)
+        except Exception as e:
+            return ToolOutput(name=self.name, error=f"{type(e).__name__} - {str(e)}")
+
+    def __del__(self):
+        """Clean up resources when the tool is garbage collected."""
+        self._close_client()
+
 
 if __name__ == '__main__':
-    tavily_tool = TavilyTool()
-    result = tavily_tool(urls=["https://agentica-project.com/", "https://michaelzhiluo.github.io/"])
-    print(result)
+    # Test extract tool
+    extract_tool = TavilyExtractTool()
+    extract_result = extract_tool(urls=["https://agentica-project.com/"])
+    print("Extract Tool Result:")
+    print(extract_result)
     
-    # Try async
+    # Test search tool
+    search_tool = TavilySearchTool()
+    search_result = search_tool(query="Latest developments in AI research")
+    print("\nSearch Tool Result:")
+    print(search_result)
+    
     import asyncio
     
     async def test_async():
-        print("Starting async request...")
-        # Get coroutine without executing it
-        coro = tavily_tool(urls=["https://agentica-project.com/", "https://michaelzhiluo.github.io/"], use_async=True)
-        print(f"Coroutine created: {coro}")
-        print("Executing in background...")
+        print("\nStarting async requests...")
         
-        # Execute the coroutine
-        result = await coro
-        print("Async request completed!")
-        print(result)
+        # Extract async
+        extract_coro = extract_tool(urls=["https://agentica-project.com/"], use_async=True)
+        extract_result = await extract_coro
+        print("Async extract completed!")
+        print(extract_result)
+        
+        # Search async
+        search_coro = search_tool(query="Python programming best practices", use_async=True)
+        search_result = await search_coro
+        print("Async search completed!")
+        print(search_result)
+        
     asyncio.run(test_async())
