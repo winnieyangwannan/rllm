@@ -1,10 +1,10 @@
-
 import json
 from rllm.tools.multi_tool import MultiTool
 from typing import List, Dict, Union
 
 from rllm.environments.base.base_env import BaseEnv
 from rllm.rewards.rl_reward import rllm_reward_fn
+from rllm.rewards.reward_types import RewardOutput
 
 from typing import Any, Tuple, Optional
 
@@ -78,6 +78,9 @@ class ToolEnvironment(BaseEnv):
                 llm_solution = arguments.get('response', '')
                 # llm_solution = json.loads(arguments).get('response', '')
             reward = self.reward_fn(data_source=self.data_source, llm_solution=llm_solution, ground_truth=self.task["ground_truth"])
+            
+            if isinstance(reward, RewardOutput):
+                reward = reward.reward
             return {}, reward, done, {"response": action}
 
         tool_calls = action
@@ -87,7 +90,6 @@ class ToolEnvironment(BaseEnv):
         # Return results as lists with single items to maintain batch structure
         return next_obs, reward, done, {"response": action}
     
-
     def _execute_tool_calls(self, tool_calls: List[Dict]):
         import threading
         import queue

@@ -8,25 +8,6 @@ from rllm.agents.tool_agent import ToolAgent
 from rllm.data.dataset import DatasetRegistry
 from rllm.engine.async_agent_execution_engine import AsyncAgentExecutionEngine
 from rllm.environments.tools.tool_env import ToolEnvironment
-from rllm.rewards.reward_types import RewardOutput
-
-
-class ScalarRewardToolEnvironment(ToolEnvironment):
-    def step(self, action):
-        next_obs, reward, done, info = super().step(action)
-        
-        if isinstance(reward, RewardOutput):
-            reward = reward.reward
-            
-        return next_obs, reward, done, info
-
-    def compute_final_reward(self):
-        if hasattr(super(), 'compute_final_reward'):
-            reward = super().compute_final_reward()
-            if isinstance(reward, RewardOutput):
-                return reward.reward
-            return reward
-        return 0.0
 
 
 def load_search_r1_data(n=1, train_size=3000, test_size=100):
@@ -158,7 +139,7 @@ if __name__ == "__main__":
     tokenizer = AutoTokenizer.from_pretrained(model_name)
 
     envs = [
-        ScalarRewardToolEnvironment(tools=["google_search"]) for _ in range(n_parallel_agents)
+        ToolEnvironment(tools=["google_search"]) for _ in range(n_parallel_agents)
     ]
 
     agents = [
