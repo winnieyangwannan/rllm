@@ -261,6 +261,7 @@ env:
   name: browsergym
   subtask: miniwob
   miniwob_url: "file://<PATH_TO_MINIWOB_CLONED_REPO>/miniwob/html/miniwob/" 
+  env_args: {}
 
 agent:
   name: webagent
@@ -271,3 +272,5 @@ agent:
   normalize_step_advantage: False
   use_stepwise_advantage: False
   stepwise_advantage_mode: "broadcast" 
+  agent_args: {}
+  engine_args: {}

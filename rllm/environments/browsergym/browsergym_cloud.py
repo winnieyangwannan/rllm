@@ -2,6 +2,7 @@ import logging
 import random
 import time
 from typing import Dict
+from rllm.environments.base.base_env import BaseEnv
 
 from browser_pilot.entrypoint.client import CloudClient
 from browser_pilot.entrypoint.env import CloudEnv
@@ -32,48 +33,63 @@ def with_retry(num_retries=3):
     return decorator
 
 
-class BrowserGymCloud:
+class BrowserGymCloud(BaseEnv):
     def __init__(
         self,
         client: CloudClient = None,
+        env_id=None,
+        timeout=30000,
+        slow_mo=1000,
+        url="ws://localhost:9999/send_and_wait",
     ):
-        """
-        Initialize batched browser gym environment using multiple processes
-        Args:
-            batch_size: Number of parallel environments
-            env_id: Gym environment ID to use
-        """
         self.env = None
         self.client = client
+        self.env_id = env_id
+        self.timeout = timeout
+        self.slow_mo = slow_mo
+        self.url = url
 
-    @with_retry(num_retries=5)
-    def reset(self, task: Dict = {}):
-        # clean up old env
-        task = task.copy()
-        env_id = task.pop("env_id", None)
-        assert env_id is not None, "env_id is required"
-        # task = task.pop("task", None)
-        env_kwargs = task.pop("env_kwargs", {})
-        timeout = task.pop("timeout", 30000)
-        slow_mo = task.pop("slow_mo", 1000)
-
-        if self.env is not None:
-            self.env.close()
-            self.env = None
-
-        logger.debug(f"Resetting env {env_id} with task {task} and env_kwargs {env_kwargs}")
-        
         self.env = CloudEnv(
-            url="ws://localhost:9999/send_and_wait",
+            url=self.url,
             id=env_id,  # "browsergym_async/webarena.{id}"
             client=self.client,
             timeout=timeout,
             slow_mo=slow_mo,
-            **env_kwargs
         )
 
-        obs, info = self.env.reset()
-        return obs, info
+    @with_retry(num_retries=5)
+    def reset(self, task: Dict = {}):
+        # if not task: # empty new task, reuse the old environment
+        assert self.env is not None, "Environment is never initialized"
+        print(f"try reset url: {self.url}")
+        return self.env.reset()
+        
+        # # clean up old env
+        # task = task.copy()
+        # env_id = task.pop("env_id", self.env_id)
+        # assert env_id is not None, "env_id is required"
+        # # task = task.pop("task", None)
+        # env_kwargs = task.pop("env_kwargs", {})
+        # timeout = task.pop("timeout", self.timeout)
+        # slow_mo = task.pop("slow_mo", self.slow_mo)
+
+        # if self.env is not None:
+        #     self.env.close()
+        #     self.env = None
+
+        # logger.debug(f"Resetting env {env_id} with task {task} and env_kwargs {env_kwargs}")
+        
+        # self.env = CloudEnv(
+        #     url=self.url,
+        #     id=env_id,  # "browsergym_async/webarena.{id}"
+        #     client=self.client,
+        #     timeout=timeout,
+        #     slow_mo=slow_mo,
+        #     **env_kwargs
+        # )
+
+        # obs, info = self.env.reset()
+        # return obs, info
 
     def step(self, action, timeout=30000):
         obs, reward, terminated, truncated, extra_info = self.env.step(action, timeout)
@@ -90,8 +106,10 @@ class BrowserGymCloud:
         logger.debug("Successfully closed env")
 
     @staticmethod
-    def from_json() -> "BrowserGymCloud":
-        return BrowserGymCloud()
+    def from_json(extra_info_json={}) -> "BrowserGymCloud":
+        env_id = extra_info_json['env_id']
+        url = extra_info_json['url']
+        return BrowserGymCloud(env_id=env_id, url=url)
 
     @staticmethod
     def is_multithread_safe() -> bool:

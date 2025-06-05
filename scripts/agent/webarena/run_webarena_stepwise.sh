@@ -5,10 +5,14 @@ export PYTORCH_CUDA_ALLOC_CONF="expandable_segments:False"
 export VLLM_USE_V1=1
 export VLLM_ALLOW_LONG_MAX_MODEL_LEN=1
 export VLLM_ENGINE_ITERATION_TIMEOUT_S=100000000000
-export CUDA_VISIBLE_DEVICES=1,5,7
-export NCCL_P2P_DISABLE=1
+export CUDA_VISIBLE_DEVICES=0,1,2,3,4,5,6,7
+
+export RAY_TMPDIR=/home/colin/tmp/ray
+mkdir -p $RAY_TMPDIR
+# export NCCL_P2P_DISABLE=1
 # Find the directory where rllm package is located
 RLLM_DIR=$(python3 -c "import rllm; import os; print(os.path.dirname(os.path.dirname(rllm.__file__)))")
+RLLM_DIR=/home/colin
 
 python3 -m rllm.train.train_agent_ppo \
     algorithm.adv_estimator=loop \
@@ -64,8 +68,9 @@ python3 -m rllm.train.train_agent_ppo \
     trainer.save_freq=400 \
     trainer.test_freq=5 \
     trainer.default_hdfs_dir=null \
-    env.name=browsergym \
+    env.name=browsergym_cloud \
     env.subtask=webarena \
+    +env.env_args.url="ws://18.234.63.23:5294/send_and_wait" \
     agent.name=webarenaagent \
     agent.max_steps=3 \
     agent.async_engine=False \

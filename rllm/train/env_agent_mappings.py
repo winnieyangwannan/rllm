@@ -2,7 +2,8 @@ def safe_import(module_path, class_name):
     try:
         module = __import__(module_path, fromlist=[class_name])
         return getattr(module, class_name)
-    except ImportError:
+    except ImportError as e:
+        raise e
         return None
 
 # Import environment classes
@@ -14,6 +15,7 @@ ENV_CLASSES = {
     'code': safe_import('rllm.environments.base.single_turn_env', 'SingleTurnEnvironment'),
     'swe': safe_import('rllm.environments.swe.swe', 'SWEEnv'),
     'competition_coding': safe_import('rllm.environments.code.competition_coding', 'CompetitionCodingEnv'),
+    'browsergym_cloud': safe_import('rllm.environments.browsergym.browsergym_cloud', 'BrowserGymCloud'),
 }
 
 # Import agent classes
@@ -45,6 +47,6 @@ def setup_environment(config):
             return
         elif config.env.subtask == 'webarena':
             return
-    elif config.env.name in ['frozenlake', 'swe', 'math', 'code', 'tool', 'competition_coding']:
+    elif config.env.name in ['frozenlake', 'swe', 'math', 'code', 'tool', 'competition_coding', 'browsergym_cloud']:
         return
     raise ValueError(f"Environment subtask not supported, env: {config.env.name}, subtask: {config.env.subtask == 'miniwob'}")
