@@ -5,8 +5,6 @@ import queue
 import signal
 import traceback
 
-
-from rllm.tools.code_tools.code_tool import CodeTool, CodeToolOutput
 from rllm.rewards.code_utils.livecodebench import (
     Capturing,
     clean_if_name,
@@ -16,6 +14,7 @@ from rllm.rewards.code_utils.livecodebench import (
     reliability_guard,
     timeout_handler,
 )
+from rllm.tools.code_tools.code_tool import CodeTool, CodeToolOutput
 
 
 def lcb_sandbox(code, timeout):
@@ -116,7 +115,7 @@ def lcb_sandbox(code, timeout):
                 except Exception as e:
                     signal.alarm(0)
                     if "timeoutexception" in repr(e).lower():
-                        stderr = f"Time Limit Exceeded."
+                        stderr = "Time Limit Exceeded."
                     else:
                         stderr = traceback.format_exc()
                 finally:
@@ -124,7 +123,7 @@ def lcb_sandbox(code, timeout):
                     faulthandler.disable()
             stdout = captured_output[0] if captured_output else ""
             return stdout, stderr, result
-        except Exception as e:
+        except Exception:
             return stdout, stderr, result
         finally:
             signal.alarm(0)

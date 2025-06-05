@@ -1,6 +1,6 @@
 import asyncio
+import os
 import time
-from typing import Dict
 
 try:
     from firecrawl import FirecrawlApp
@@ -10,13 +10,13 @@ except ImportError as e:
 
 from rllm.tools.tool_base import Tool, ToolOutput
 
-FIRECRAWL_API = "***REMOVED***"
+FIRECRAWL_API_KEY = os.getenv("FIRECRAWL_API_KEY", '')
 TIMEOUT = 10
 
 class FirecrawlTool(Tool):
     """A tool for extracting data from websites using the FireCrawl service."""
 
-    def __init__(self, timeout: int = TIMEOUT, api_key: str = FIRECRAWL_API, api_url: str = None):
+    def __init__(self, timeout: int = TIMEOUT, api_key: str = FIRECRAWL_API_KEY, api_url: str = None):
         """
         Initialize the Firecrawl tool.
         

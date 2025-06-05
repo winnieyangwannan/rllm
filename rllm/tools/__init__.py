@@ -1,6 +1,4 @@
 from rllm.tools.code_tools import (
-    E2BPythonInterpreter,
-    LCBPythonInterpreter,
     PythonInterpreter,
 )
 from rllm.tools.registry import ToolRegistry
@@ -13,9 +11,7 @@ from rllm.tools.web_tools import (
 
 # Define default tools dict
 DEFAULT_TOOLS = {
-    'e2b_python': E2BPythonInterpreter,
-    'local_python': PythonInterpreter,
-    'python': LCBPythonInterpreter, # Make LCBPythonInterpreter the default python tool for CodeExec.
+    'python': PythonInterpreter,
     'google_search': GoogleSearchTool,
     'firecrawl': FirecrawlTool,
     'tavily_extract': TavilyExtractTool,
@@ -28,8 +24,6 @@ tool_registry.register_all(DEFAULT_TOOLS)
 
 __all__ = [
     'PythonInterpreter',
-    'E2BPythonInterpreter',
-    'LCBPythonInterpreter',
     'GoogleSearchTool',
     'FirecrawlTool',
     'TavilyExtractTool',
