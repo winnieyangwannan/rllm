@@ -6,7 +6,7 @@ validate answers when necessary.
 from typing import List, Union
 
 from rllm.globals import THOUGHT_DELIMITER_START, THOUGHT_DELIMITER_END, OAI_RM_MODEL
-from rllm.rewards import RewardConfig, RewardFn, RewardInput, RewardOutput, RewardType
+from rllm.rewards.reward_types import RewardConfig, RewardFn, RewardInput, RewardOutput, RewardType
 from rllm.rewards.math_utils.utils import extract_answer, grade_answer_sympy, grade_answer_mathd
 
 from rllm.system_prompts import ORM_PROMPT

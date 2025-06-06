@@ -11,7 +11,7 @@ from rllm.rewards.reward_types import RewardOutput
 class RewardFunction(Protocol):
     """Protocol for reward functions"""
     
-    def __call__(self, task_info: Dict, action: str) -> float | RewardOutput:
+    def __call__(self, task_info: Dict, action: str) -> RewardOutput:
         """
         Calculate the reward for an agent's action.
         
