@@ -38,15 +38,17 @@ def setup_environment(config):
         raise ValueError(f"Environment {config.env.name} not available. Make sure all required dependencies are installed.")
         
     if config.env.name == 'browsergym':
-        if config.env.subtask == 'miniwob':
+        assert hasattr(config.env.env_args, 'subtask'), "subtask must be defined in environment argument for browsergym"
+        if config.env.env_args.subtask == 'miniwob':
             import os
             import importlib
             import browsergym.miniwob
             importlib.reload(browsergym.miniwob)
-            os.environ["MINIWOB_URL"] = config.env.miniwob_url
+            assert hasattr(config.env.env_args, 'miniwob_url'), "miniwob_url must be defined in environment argument for browsergym miniwob"
+            os.environ["MINIWOB_URL"] = config.env.env_args.miniwob_url
             return
-        elif config.env.subtask == 'webarena':
+        elif config.env.env_args.subtask == 'webarena':
             return
     elif config.env.name in ['frozenlake', 'swe', 'math', 'code', 'tool', 'competition_coding', 'browsergym_cloud']:
         return
-    raise ValueError(f"Environment subtask not supported, env: {config.env.name}, subtask: {config.env.subtask == 'miniwob'}")
+    raise ValueError(f"Environment subtask not supported, env: {config.env.name}")

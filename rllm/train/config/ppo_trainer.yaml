@@ -37,7 +37,6 @@ actor_rollout_ref:
     ppo_micro_batch_size: null # will be deprecated, use ppo_micro_batch_size_per_gpu
     ppo_micro_batch_size_per_gpu: null
     use_dynamic_bsz: False
-    use_dynamic_mini_batch: False
     ppo_max_token_len_per_gpu: 16384 # n * ${data.max_prompt_length} + ${data.max_response_length}
     grad_clip: 1.0
     # pg_losses2 = -advantages * torch.clamp(ratio, 1 - cliprange_low, 1 + cliprange_high)
@@ -259,8 +258,6 @@ ray_init:
 # RLLM Agent Config
 env:
   name: browsergym
-  subtask: miniwob
-  miniwob_url: "file://<PATH_TO_MINIWOB_CLONED_REPO>/miniwob/html/miniwob/" 
   env_args: {}
 
 agent:
