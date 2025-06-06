@@ -49,19 +49,21 @@ class BrowserGymCloud(BaseEnv):
         self.slow_mo = slow_mo
         self.url = url
 
-        self.env = CloudEnv(
-            url=self.url,
-            id=env_id,  # "browsergym_async/webarena.{id}"
-            client=self.client,
-            timeout=timeout,
-            slow_mo=slow_mo,
-        )
-
+        
     @with_retry(num_retries=5)
     def reset(self, task: Dict = {}):
-        # if not task: # empty new task, reuse the old environment
-        assert self.env is not None, "Environment is never initialized"
-        print(f"try reset url: {self.url}")
+        if self.env is not None:
+            self.env.close()
+            self.env = None
+        
+        self.env = CloudEnv(
+            url=self.url,
+            id=self.env_id,  # "browsergym_async/webarena.{id}"
+            client=self.client,
+            timeout=self.timeout,
+            slow_mo=self.slow_mo,
+        )
+        print(f"try reset url: {self.url}, {self.env_id}, {self.client}, {self.timeout}, {self.slow_mo}")
         return self.env.reset()
         
         # # clean up old env
