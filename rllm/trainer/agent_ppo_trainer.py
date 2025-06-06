@@ -48,12 +48,16 @@ class AgentPPOTrainer(RayPPOTrainer):
             val_reward_fn=None,
             env_class=None,
             agent_class=None,
+            env_args=None,
+            agent_args=None,
         ):
         super().__init__(config=config, tokenizer=tokenizer, role_worker_mapping=role_worker_mapping,
                          resource_pool_manager=resource_pool_manager, ray_worker_group_cls=ray_worker_group_cls,
                          reward_fn=reward_fn, val_reward_fn=val_reward_fn)
         self.env_class = env_class
         self.agent_class = agent_class
+        self.env_args = env_args or {}
+        self.agent_args = agent_args or {}
 
         if self.config.agent.use_stepwise_advantage:
             print(f"Using step-level advantage, max_prompt_length and max_response_length will be applied step-wise")
@@ -87,9 +91,9 @@ class AgentPPOTrainer(RayPPOTrainer):
                 max_prompt_length=self.config.data.max_prompt_length,
                 n_parallel_agents=self.config.agent.n_parallel_agents,
                 agent_class=self.agent_class,
-                agent_args=self.config.agent.get("agent_args", {}),
+                agent_args=self.agent_args,
                 env_class=self.env_class,
-                env_args=self.config.env.get("env_args", {}),
+                env_args=self.env_args,
                 enforce_max_prompt_length=self.config.agent.use_stepwise_advantage,
                 trajectory_timeout=self.config.agent.trajectory_timeout,
                 **self.config.agent.get("engine_args", {})
@@ -112,8 +116,8 @@ class AgentPPOTrainer(RayPPOTrainer):
         Initialize environment depending on env_class with the necessary extra_info, also set uid of the batch.
         """
         env_args = batch.non_tensor_batch["extra_info"].tolist()
-        envs = [self.env_class.from_json({**env_args[i], **self.config.env.get("env_args", {})}) for i in range(len(env_args))]
-        agents = [self.agent_class(**self.config.agent.get("agent_args", {})) for _ in range(len(envs))]
+        envs = [self.env_class.from_json({**env_args[i], **self.env_args}) for i in range(len(env_args))]
+        agents = [self.agent_class(**self.agent_args) for _ in range(len(envs))]
         self.agent_execution_engine.update_envs_and_agents(envs, agents)
         return envs
 

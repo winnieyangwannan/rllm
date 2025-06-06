@@ -1,46 +1,11 @@
 import asyncio
 
-from rllm.agents import ToolAgent
-from rllm.environments.tools.tool_env import ToolEnvironment
-
-from rllm.data.dataset_types import TestDataset, TrainDataset
-from rllm.data.utils import load_dataset
-from copy import deepcopy
 from transformers import AutoTokenizer
 
-from rllm.data.utils import fetch_live_code_bench_system_prompt
-
+from rllm.agents import ToolAgent
 from rllm.data.dataset import DatasetRegistry
-
-
-def prepare_math_data():
-    if DatasetRegistry.dataset_exists(
-        "deepscaler_math"
-    ) and DatasetRegistry.dataset_exists("aime2024"):
-        train_dataset = DatasetRegistry.load_dataset("deepscaler_math", "train")
-        test_dataset = DatasetRegistry.load_dataset("aime2024", "test")
-        return train_dataset, test_dataset
-
-    train_dataset = load_dataset(
-        "agentica-org/DeepScaleR-Preview-Dataset", split="train"
-    )
-    test_dataset = load_dataset("HuggingFaceH4/aime_2024", split="train")
-
-    def preprocess_fn(example, idx):
-        return {
-            "question": example["problem"],
-            "ground_truth": example["answer"],
-            "data_source": "math",
-        }
-
-    train_dataset = train_dataset.map(preprocess_fn, with_indices=True)
-    test_dataset = test_dataset.map(preprocess_fn, with_indices=True)
-
-    train_dataset = DatasetRegistry.register_dataset(
-        "deepscaler_math", train_dataset, "train"
-    )
-    test_dataset = DatasetRegistry.register_dataset("aime2024", test_dataset, "test")
-    return train_dataset, test_dataset
+from rllm.engine.async_agent_execution_engine import AsyncAgentExecutionEngine
+from rllm.environments.tools.tool_env import ToolEnvironment
 
 
 def evaluate_results(results):
@@ -74,6 +39,10 @@ def evaluate_results(results):
     
 
 if __name__ == "__main__":
+    import os
+
+    os.environ["TOKENIZERS_PARALLELISM"] = "true"
+
     n_parallel_agents = 64
 
     model_name = "Qwen/Qwen3-4B"
@@ -85,7 +54,7 @@ if __name__ == "__main__":
     ]
 
     agents = [
-        ToolAgent(tools=envs[i].tools.tools, model_name=model_name, parser_name='qwen') for i in range(n_parallel_agents)
+        ToolAgent(tools=['python'], parser_name='qwen') for i in range(n_parallel_agents)
     ]
 
     sampling_params = {
@@ -93,8 +62,6 @@ if __name__ == "__main__":
         "top_p": 0.95,
         "model": model_name
     }
-    
-    from rllm.engine.async_agent_execution_engine import AsyncAgentExecutionEngine
 
     engine = AsyncAgentExecutionEngine(
         agents=agents,
@@ -104,13 +71,18 @@ if __name__ == "__main__":
         tokenizer=tokenizer,
         sampling_params=sampling_params,
         rollout_engine_args={"base_url": "http://localhost:30000/v1", "api_key": "None"},
-        max_response_length=8192,
+        max_response_length=16384,
         max_prompt_length=2048,
         n_parallel_agents=n_parallel_agents,
     )
 
-    _, test_dataset = prepare_math_data()
-    tasks = test_dataset.repeat(n=1)
+    test_dataset = DatasetRegistry.load_dataset("aime2024", "test")
+    if test_dataset is None:
+        print("Dataset not found, preparing dataset...")
+        from .prepare_math_data import prepare_math_data
+        _, test_dataset = prepare_math_data()
+
+    tasks = test_dataset.repeat(n=4)  # repeat to evaluate pass@k
 
     results = asyncio.run(engine.execute_tasks(tasks))
     evaluate_results(results)

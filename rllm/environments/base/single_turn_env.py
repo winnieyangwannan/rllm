@@ -21,7 +21,7 @@ class SingleTurnEnvironment(MultiTurnEnvironment):
             task: Dictionary containing the task information, including at least a "question" field
         """
         super().__init__(task=task, max_turns=1, **kwargs)
-        self.reward_fn = rllm_reward_fn
+        self.reward_fn = kwargs.get("reward_fn", rllm_reward_fn)
     
     def get_reward_and_next_obs(self, task: Dict, action: Any) -> Tuple[float, Dict]:
         """

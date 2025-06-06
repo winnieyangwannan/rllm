@@ -133,7 +133,7 @@ if __name__ == "__main__":
 
     load_dotenv()
 
-    n_parallel_agents = 1
+    n_parallel_agents = 64
 
     model_name = "Qwen/Qwen3-4B"
 

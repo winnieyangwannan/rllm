@@ -20,16 +20,16 @@ def main(config):
     run_ppo_agent(config)
 
 
-def run_ppo_agent(config, compute_score=None):
+def run_ppo_agent(config):
     if not ray.is_initialized():
         # this is for local ray cluster
         ray.init(runtime_env={'env_vars': {'TOKENIZERS_PARALLELISM': 'true', 'NCCL_DEBUG': 'WARN'}})
 
-    ray.get(main_task.remote(config, compute_score))
+    ray.get(train_agent.remote(config))
 
 
 @ray.remote(num_cpus=1)  # please make sure main_task is not scheduled on head
-def main_task(config, compute_score=None, env_class=None, agent_class=None):
+def train_agent(config, agent_class=None, env_class=None, agent_args=None, env_args=None):
     from verl.utils.fs import copy_local_path_from_hdfs
     # print initial config
     from pprint import pprint
@@ -86,6 +86,13 @@ def main_task(config, compute_score=None, env_class=None, agent_class=None):
         env_class = ENV_CLASS_MAPPING[config.env.name]
     if agent_class is None:
         agent_class = AGENT_CLASS_MAPPING[config.agent.name]
+
+    env_args = env_args or {}
+    agent_args = agent_args or {}
+    if config.env.get("env_args") is not None:
+        env_args.update(config.env.get("env_args"))
+    if config.agent.get("agent_args") is not None:
+        agent_args.update(config.agent.get("agent_args"))
     
     setup_environment(config)    
 
@@ -97,7 +104,10 @@ def main_task(config, compute_score=None, env_class=None, agent_class=None):
                             reward_fn=reward_fn,
                             val_reward_fn=val_reward_fn,
                             env_class=env_class,
-                            agent_class=agent_class)
+                            agent_class=agent_class,
+                            env_args=env_args,
+                            agent_args=agent_args,
+                            )
     
     trainer.init_workers()
     trainer.fit_agent()

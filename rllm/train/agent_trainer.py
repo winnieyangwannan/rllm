@@ -1,8 +1,9 @@
-import ray
-from typing import Type, Dict, Any, Optional, Union, List
+from typing import Any, Dict, List, Optional, Type, Union
 
-from rllm.train.train_agent_ppo import main_task
+import ray
+
 from rllm.data import Dataset
+from rllm.train.train_agent_ppo import train_agent
 
 
 class AgentTrainer:
@@ -15,6 +16,8 @@ class AgentTrainer:
         self,
         agent_class: Type,
         env_class: Type,
+        agent_args: Optional[Dict[str, Any]] = None,
+        env_args: Optional[Dict[str, Any]] = None,
         config: Optional[Union[Dict[str, Any], List[str]]] = None,
         train_dataset: Optional[Dataset] = None,
         val_dataset: Optional[Dataset] = None,
@@ -28,9 +31,15 @@ class AgentTrainer:
             config: Configuration overrides to apply to the default config
                    Can be a dictionary with dot notation keys (e.g., {"data.train_batch_size": 8})
                    or a list of strings in the format "key=value" (e.g., ["data.train_batch_size=8"])
+            train_dataset: Optional train dataset to use
+            val_dataset: Optional validation dataset to use
+            agent_args: Optional arguments to pass to the agent class
+            env_args: Optional arguments to pass to the environment class
         """
         self.agent_class = agent_class
         self.env_class = env_class
+        self.agent_args = agent_args or {}
+        self.env_args = env_args or {}
 
         self.config = config
 
@@ -44,4 +53,10 @@ class AgentTrainer:
         if not ray.is_initialized():
             ray.init(runtime_env={'env_vars': {'TOKENIZERS_PARALLELISM': 'true', 'NCCL_DEBUG': 'WARN'}})
 
-        ray.get(main_task.remote(self.config, None, self.env_class, self.agent_class))
+        ray.get(train_agent.remote(
+            self.config, 
+            self.agent_class, 
+            self.env_class, 
+            self.agent_args, 
+            self.env_args
+        ))

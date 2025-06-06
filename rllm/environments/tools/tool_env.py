@@ -123,7 +123,8 @@ class ToolEnvironment(BaseEnv):
     
     @staticmethod
     def from_json(json_dict: Dict) -> "ToolEnvironment":
-        return ToolEnvironment(task=json_dict['task'], tools=json_dict['tools'])
+        tools = json_dict.pop('tools', [])
+        return ToolEnvironment(task=json_dict, tools=tools)
 
 if __name__ == "__main__":
     env = ToolEnvironment(task={"question": "What is the 1+2?", "answer": "3"}, tools=["google_search"])

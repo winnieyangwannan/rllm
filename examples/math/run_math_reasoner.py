@@ -1,42 +1,11 @@
 import asyncio
 
-from datasets import load_dataset
 from transformers import AutoTokenizer
 
 from rllm.agents.math_agent import MathAgent
 from rllm.data.dataset import DatasetRegistry
 from rllm.engine.async_agent_execution_engine import AsyncAgentExecutionEngine
 from rllm.environments.base.single_turn_env import SingleTurnEnvironment
-
-
-def prepare_math_data():
-    if DatasetRegistry.dataset_exists(
-        "deepscaler_math"
-    ) and DatasetRegistry.dataset_exists("aime2024"):
-        train_dataset = DatasetRegistry.load_dataset("deepscaler_math", "train")
-        test_dataset = DatasetRegistry.load_dataset("aime2024", "test")
-        return train_dataset, test_dataset
-
-    train_dataset = load_dataset(
-        "agentica-org/DeepScaleR-Preview-Dataset", split="train"
-    )
-    test_dataset = load_dataset("HuggingFaceH4/aime_2024", split="train")
-
-    def preprocess_fn(example, idx):
-        return {
-            "question": example["problem"],
-            "ground_truth": example["answer"],
-            "data_source": "math",
-        }
-
-    train_dataset = train_dataset.map(preprocess_fn, with_indices=True)
-    test_dataset = test_dataset.map(preprocess_fn, with_indices=True)
-
-    train_dataset = DatasetRegistry.register_dataset(
-        "deepscaler_math", train_dataset, "train"
-    )
-    test_dataset = DatasetRegistry.register_dataset("aime2024", test_dataset, "test")
-    return train_dataset, test_dataset
 
 
 def evaluate_results(results):
@@ -73,7 +42,6 @@ if __name__ == "__main__":
 
     os.environ["TOKENIZERS_PARALLELISM"] = "true"
 
-    # Create the environment (no batch_size parameter)
     n_parallel_agents = 256
 
     model_name = "Qwen/Qwen3-4B"
@@ -104,8 +72,13 @@ if __name__ == "__main__":
         enable_thinking=True,
     )
 
-    _, test_dataset = prepare_math_data()
-    tasks = test_dataset.repeat(n=4)  # repeat to evaluate pass@k
+    test_dataset = DatasetRegistry.load_dataset("aime2024", "test")
+    if test_dataset is None:
+        print("Dataset not found, preparing dataset...")
+        from .prepare_math_data import prepare_math_data
+        _, test_dataset = prepare_math_data()
+    
+    tasks = test_dataset.repeat(n=16)  # repeat to evaluate pass@k
 
     results = asyncio.run(engine.execute_tasks(tasks))
     evaluate_results(results)

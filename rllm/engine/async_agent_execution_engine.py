@@ -188,8 +188,6 @@ class AsyncAgentExecutionEngine(AgentExecutionEngine):
         if isinstance(prompt, list) and all(isinstance(msg, dict) for msg in prompt):
             prompt_text = self.chat_template_parser.parse(prompt, add_generation_prompt=True, is_first_msg=True)
 
-        colorful_print(f"Prompt: {prompt_text}", "cyan")
-
         response = await get_response(prompt_text)
         if isinstance(response, Completion):
             response = response.choices[0].text
