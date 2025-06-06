@@ -59,16 +59,10 @@ tavily = TOOL_REGISTRY['tavily']()
 
 @mcp.tool()
 async def calculator_tool(expression: str) -> str:
-    """Evaluate mathematical expressions safely.
-    
-    Args:
-        expression: The mathematical expression to evaluate
-    """
     result = await calculator(expression, use_async=True)
     return format_tool_output(result)
 
 def execute_python_locally(code: str) -> str:
-    """Execute Python code locally using subprocess."""
     try:
         with tempfile.NamedTemporaryFile(suffix='.py', mode='w', delete=False) as f:
             f.write(code)
@@ -98,7 +92,6 @@ def execute_python_locally(code: str) -> str:
 
 @mcp.tool()
 async def python_interpreter_tool(code: str) -> str:
-    """Execute Python code safely, with LCB primary and local subprocess fallback on LCB timeout."""
     logger.info("[MCP_SERVER_DEBUG] python_interpreter_tool ENTERED (LCB with execute_python_locally fallback)")
     
     fallback_output_str = execute_python_locally(code) 
@@ -141,32 +134,17 @@ async def python_interpreter_tool(code: str) -> str:
 
 @mcp.tool()
 async def google_search_tool(query: str) -> str:
-    """Search Google for a query and return results.
-    
-    Args:
-        query: The search query
-    """
     result = await google_search(query=query, use_async=True)
     return format_tool_output(result)
 
 @mcp.tool()
 async def firecrawl_tool(url: str) -> str:
-    """Extract content from a web page using Firecrawl.
-    
-    Args:
-        url: The URL to extract content from
-    """
+
     result = await firecrawl(url, use_async=True)
     return format_tool_output(result)
 
 @mcp.tool()
 async def tavily_tool(query: str, search_depth: str = "basic") -> str:
-    """Search the web using Tavily search engine.
-    
-    Args:
-        query: The search query
-        search_depth: Search depth (basic or advanced)
-    """
     result = await tavily(query=query, search_depth=search_depth, use_async=True)
     return format_tool_output(result)
 
