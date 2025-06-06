@@ -6,6 +6,7 @@ from rllm.agents import ToolAgent
 from rllm.data.dataset import DatasetRegistry
 from rllm.engine.async_agent_execution_engine import AsyncAgentExecutionEngine
 from rllm.environments.tools.tool_env import ToolEnvironment
+from rllm.rewards.reward_fn import math_reward_fn
 
 
 def evaluate_results(results):
@@ -50,7 +51,7 @@ if __name__ == "__main__":
     tokenizer = AutoTokenizer.from_pretrained(model_name)
 
     envs = [
-        ToolEnvironment(tools=["python"]) for _ in range(n_parallel_agents)
+        ToolEnvironment(tools=["python"], reward_fn=math_reward_fn) for _ in range(n_parallel_agents)
     ]
 
     agents = [

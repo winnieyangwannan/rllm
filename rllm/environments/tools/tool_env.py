@@ -1,25 +1,28 @@
 import json
+import warnings
 from rllm.tools.multi_tool import MultiTool
 from typing import List, Dict, Union
 
 from rllm.environments.base.base_env import BaseEnv
-from rllm.rewards.rl_reward import rllm_reward_fn
-from rllm.rewards.reward_types import RewardOutput
+from rllm.rewards.reward_protocol import RewardFunction, zero_reward
 
-from typing import Any, Tuple, Optional
+from typing import Any, Tuple, Optional, Callable
 
 class ToolEnvironment(BaseEnv):
     """
     A simple environment for tool-based agents that provides questions and evaluates responses.
     """
     
-    def __init__(self, task: Optional[Dict] = None, tools: List[str] = [], max_steps=10):
+    def __init__(self, task: Optional[Dict] = None, tools: List[str] = [], reward_fn: Optional[RewardFunction] = None, max_steps=10):
         self.step_count = 0
         self.max_steps = max_steps
 
         self.tools = MultiTool(tools)
         self.task = task
-        self.reward_fn = rllm_reward_fn
+        self.reward_fn = reward_fn
+        if reward_fn is None:
+            warnings.warn("No reward function specified, will get 0 reward.")
+            self.reward_fn = zero_reward
         self.current_data = None
         self.data_source = ""
         if self.task:
@@ -66,7 +69,7 @@ class ToolEnvironment(BaseEnv):
         if done:
             # Cannot find tool calls which means the agent is not using the tool and is done.
             if isinstance(action, str):
-                llm_solution = action
+                llm_response = action
             elif isinstance(action, list):
                 # Find the finish tool call
                 finish_action = None
@@ -75,10 +78,10 @@ class ToolEnvironment(BaseEnv):
                         finish_action = tool_call
                         break
                 arguments = finish_action.get('function', {}).get('arguments', {})
-                llm_solution = arguments.get('response', '')
-                # llm_solution = json.loads(arguments).get('response', '')
-            reward_response = self.reward_fn(data_source=self.data_source, llm_solution=llm_solution, ground_truth=self.task["ground_truth"])
-            return {}, reward_response.reward, done, {"response": action}
+                llm_response = arguments.get('response', '')
+                
+            reward = self.reward_fn(task=self.task, action=llm_response)
+            return {}, reward, done, {"response": action}
 
         tool_calls = action
         tool_outputs = self._execute_tool_calls(tool_calls)
@@ -125,19 +128,3 @@ class ToolEnvironment(BaseEnv):
     def from_json(json_dict: Dict) -> "ToolEnvironment":
         tools = json_dict.pop('tools', [])
         return ToolEnvironment(task=json_dict, tools=tools)
-
-if __name__ == "__main__":
-    env = ToolEnvironment(task={"question": "What is the 1+2?", "answer": "3"}, tools=["google_search"])
-    obs, _ = env.reset()
-    next_obs, reward, done, info = env.step(action=[{"function": {"name": "google_search", "arguments": json.dumps({"query": "What is the 1+2?"})}, "id": "1"}])
-    print(next_obs)
-    print(reward)
-    print(done)
-    print(info)
-
-    # Finish enviornment, note that this function is created in tool_agent.py if no tool calls are found in LLM response.
-    next_obs, reward, done, info = env.step(action=[{"function": {"name": "finish", "arguments": json.dumps({"response": "<think> I think the answer is </think> \\boxed{{3}}"})}, "id": "2"}])
-    print(next_obs)
-    print(reward)
-    print(done)
-    print(info)
