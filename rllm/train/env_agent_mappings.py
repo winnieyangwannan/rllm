@@ -16,6 +16,7 @@ ENV_CLASSES = {
     'swe': safe_import('rllm.environments.swe.swe', 'SWEEnv'),
     'competition_coding': safe_import('rllm.environments.code.competition_coding', 'CompetitionCodingEnv'),
     'browsergym_cloud': safe_import('rllm.environments.browsergym.browsergym_cloud', 'BrowserGymCloud'),
+    'browsergym_process': safe_import('rllm.environments.browsergym.browsergym', 'BrowserGymProcess'),
 }
 
 # Import agent classes
@@ -37,7 +38,7 @@ def setup_environment(config):
     if config.env.name not in ENV_CLASS_MAPPING:
         raise ValueError(f"Environment {config.env.name} not available. Make sure all required dependencies are installed.")
         
-    if config.env.name == 'browsergym':
+    if config.env.name == 'browsergym' or config.env.name == 'browsergym_process' :
         assert hasattr(config.env.env_args, 'subtask'), "subtask must be defined in environment argument for browsergym"
         if config.env.env_args.subtask == 'miniwob':
             import os

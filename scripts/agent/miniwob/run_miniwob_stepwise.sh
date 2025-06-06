@@ -13,10 +13,10 @@ mkdir -p $RAY_TMPDIR
 RLLM_DIR=$(python3 -c "import rllm; import os; print(os.path.dirname(os.path.dirname(rllm.__file__)))")
 
 python3 -m rllm.train.train_agent_ppo \
-    algorithm.adv_estimator=loop \
+    algorithm.adv_estimator=grpo \
     data.train_files=/home/colin/data/rllm-miniwob/train.parquet \
     data.val_files=/home/colin/data/rllm-miniwob/test.parquet \
-    data.train_batch_size=16 \
+    data.train_batch_size=32 \
     data.val_batch_size=128 \
     data.max_prompt_length=16384 \
     data.max_response_length=4096 \
@@ -24,7 +24,7 @@ python3 -m rllm.train.train_agent_ppo \
     actor_rollout_ref.hybrid_engine=True \
     actor_rollout_ref.actor.optim.lr=1e-6 \
     actor_rollout_ref.model.use_remove_padding=True \
-    actor_rollout_ref.actor.loss_agg_mode=seq-mean-token-sum-norm \
+    actor_rollout_ref.actor.loss_agg_mode=seq-mean-token-mean \
     actor_rollout_ref.actor.ppo_mini_batch_size=16 \
     actor_rollout_ref.actor.use_dynamic_bsz=True \
     actor_rollout_ref.actor.ppo_max_token_len_per_gpu=24000 \
@@ -38,12 +38,12 @@ python3 -m rllm.train.train_agent_ppo \
     actor_rollout_ref.actor.fsdp_config.optimizer_offload=True \
     actor_rollout_ref.rollout.tensor_model_parallel_size=1 \
     actor_rollout_ref.rollout.name=vllm \
-    actor_rollout_ref.rollout.mode="sync" \
+    actor_rollout_ref.rollout.mode="async" \
     actor_rollout_ref.rollout.chat_scheduler=verl.schedulers.completions_scheduler.CompletionsScheduler \
     actor_rollout_ref.rollout.enforce_eager=False \
-    actor_rollout_ref.rollout.temperature=0.7 \
+    actor_rollout_ref.rollout.temperature=0.6 \
     actor_rollout_ref.rollout.gpu_memory_utilization=0.65 \
-    actor_rollout_ref.rollout.n=12 \
+    actor_rollout_ref.rollout.n=8 \
     actor_rollout_ref.rollout.val_kwargs.n=1 \
     actor_rollout_ref.rollout.val_kwargs.temperature=0.7 \
     actor_rollout_ref.rollout.val_kwargs.top_p=0.8 \
@@ -58,19 +58,19 @@ python3 -m rllm.train.train_agent_ppo \
     trainer.critic_warmup=0 \
     trainer.logger=['console','wandb'] \
     trainer.project_name='stepwise-agent' \
-    trainer.experiment_name='8b-loop-drgrpo-miniwob_agent_stepwise-seq-mean-token-sum-norm' \
+    trainer.experiment_name='8b-miniwob_agent_stepwise-seq-mean-token-mean' \
     trainer.val_before_train=True \
     trainer.n_gpus_per_node=8 \
-    trainer.nnodes=1 \
+    trainer.nnodes=2 \
     trainer.save_freq=400 \
-    trainer.test_freq=5 \
+    trainer.test_freq=10 \
     trainer.default_hdfs_dir=null \
-    env.name=browsergym \
+    env.name=browsergym_process \
     +env.env_args.subtask=miniwob \
     +env.env_args.miniwob_url="file:///home/colin/code/miniwob-plusplus/miniwob/html/miniwob/" \
     agent.name=webagent \
     agent.max_steps=10 \
-    agent.async_engine=False \
+    agent.async_engine=True \
     agent.use_stepwise_advantage=True \
     agent.normalize_step_advantage=True \
     agent.stepwise_advantage_mode="broadcast" \
