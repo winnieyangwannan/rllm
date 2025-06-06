@@ -9,6 +9,7 @@ from rllm.agents.tool_agent import ToolAgent
 from rllm.data.dataset import DatasetRegistry
 from rllm.engine.async_agent_execution_engine import AsyncAgentExecutionEngine
 from rllm.environments.tools.tool_env import ToolEnvironment
+from rllm.rewards.search_reward import rllm_reward_fn_search
 
 
 def load_search_r1_data(n=1, train_size=3000, test_size=100):
@@ -142,6 +143,8 @@ if __name__ == "__main__":
     envs = [
         ToolEnvironment(tools=["tavily_extract", "tavily_search"]) for _ in range(n_parallel_agents)
     ]
+    for env in envs:
+        env.reward_fn = rllm_reward_fn_search
 
     agents = [
         ToolAgent(tools=envs[i].tools.tools, model_name=model_name, parser_name='qwen') 

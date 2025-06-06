@@ -1,4 +1,3 @@
-#!/usr/bin/env python3
 import asyncio
 import os
 import sys
@@ -23,9 +22,7 @@ from rllm.data.utils import load_dataset
 
 load_dotenv()
 
-class MCPTool(Tool):
-    """A Tool implementation that adapts MCP tools to work with our client"""
-    
+class MCPTool(Tool):    
     def __init__(self, session, tool_name, tool_description, tool_schema):
         self._tool_schema = tool_schema
         self.session = session
@@ -37,7 +34,6 @@ class MCPTool(Tool):
         
     @property
     def json(self):
-        """Return the tool's information in a standardized format"""
         return {
             "type": "function",
             "function": {
@@ -48,7 +44,6 @@ class MCPTool(Tool):
         }
     
     async def async_forward(self, **kwargs) -> ToolOutput:
-        """Execute the tool via MCP session"""
         try:
             print(f"Calling MCP tool: {self.name} with args: {kwargs}")
             
@@ -71,10 +66,7 @@ class MCPTool(Tool):
             return ToolOutput(name=self.name, error=f"Error: {str(e)}")
 
 class MCPToolAgent(ToolAgent):
-    """A ToolAgent subclass that properly handles MCP Tool instances"""
-    
     def __init__(self, model_name="", parser_name="qwen", tools=[]):
-        """Initialize MCPToolAgent with Tool instances directly"""
         self.system_prompt = TOOL_SYSTEM_PROMPT
         self.tools = tools
         self.tool_map = {tool.name: tool for tool in tools}
@@ -94,12 +86,9 @@ class MCPToolAgent(ToolAgent):
         self.reset()
     
     def get_tool_by_name(self, tool_name: str) -> Optional[Tool]:
-        """Get a tool instance by name"""
         return self.tool_map.get(tool_name)
 
 class MCPClient:
-    """Core MCP client that handles connection and query processing"""
-    
     def __init__(self, model_base_url="http://localhost:30000/v1", model_name="Qwen/Qwen3-4B"):
         self.session: Optional[ClientSession] = None
         self.exit_stack = AsyncExitStack()
@@ -114,13 +103,6 @@ class MCPClient:
         self.model_name = model_name
     
     async def connect_to_server(self, server_command: str, server_args: List[str] = None, env: Dict[str, str] = None):
-        """Connect to an MCP server
-        
-        Args:
-            server_command: Command to run the server (e.g., "python", "npx")
-            server_args: Arguments for the server command (e.g., ["script.py"] or ["-y", "tavily-mcp@0.1.3"])
-            env: Environment variables for the server
-        """
         server_params = StdioServerParameters(
             command=server_command,
             args=server_args or [],
@@ -156,7 +138,6 @@ class MCPClient:
         print(f"Agent initialized with {len(self.mcp_tools)} tools")
     
     async def process_query(self, query: str, max_rounds: int = 5) -> str:
-        """Process a query using our agent and available tools"""
         if not self.agent:
             return "Error: Agent not initialized. Please connect to an MCP server first."
         
@@ -184,21 +165,24 @@ class MCPClient:
                     tool_choice="auto"
                 )
                 
-                self.agent.update_from_model(response)
-                
-                assistant_messages = [msg for msg in self.agent.chat_completions if msg.get("role") == "assistant"]
-                if assistant_messages and assistant_messages[-1].get("content"):
-                    content = assistant_messages[-1].get("content")
-                    if content not in final_text:
-                        final_text.append(content)
-                
+                # Extract the response content properly
                 assistant_message = response.choices[0].message
-                if assistant_message.tool_calls:
-                    print(f"\n[Processing {len(assistant_message.tool_calls)} tool calls]")
+                content = assistant_message.content or ""
+                tool_calls = assistant_message.tool_calls or []
+                
+                # Update agent with the OpenAI response - pass the raw content, not the response object
+                self.agent.update_from_model(content)
+                
+                # Check if there's content to add to final text
+                if content:
+                    final_text.append(content)
+                
+                if tool_calls:
+                    print(f"\n[Processing {len(tool_calls)} tool calls]")
                     
                     tool_outputs = {}
                     
-                    for tool_call in assistant_message.tool_calls:
+                    for tool_call in tool_calls:
                         tool_name = tool_call.function.name
                         tool_args_str = tool_call.function.arguments
                         tool_id = tool_call.id
@@ -222,12 +206,37 @@ class MCPClient:
                             print(f"Tool {tool_name} not found!")
                             tool_outputs[tool_id] = f"Error: Tool {tool_name} not found"
                     
-                    self.agent.update_from_env(
-                        observation={"tool_outputs": tool_outputs},
-                        reward=0.0,
-                        done=False,
-                        info={}
-                    )
+                    # Now we need to manually add the tool call messages to the agent's message history
+                    # First, add the assistant message with tool calls
+                    assistant_message_dict = {
+                        "role": "assistant",
+                        "content": content,
+                        "tool_calls": [
+                            {
+                                "id": tc.id,
+                                "type": "function",
+                                "function": {
+                                    "name": tc.function.name,
+                                    "arguments": tc.function.arguments
+                                }
+                            } for tc in tool_calls
+                        ]
+                    }
+                    
+                    # Replace the last assistant message with the proper format
+                    if self.agent.messages and self.agent.messages[-1]["role"] == "assistant":
+                        self.agent.messages[-1] = assistant_message_dict
+                    else:
+                        self.agent.messages.append(assistant_message_dict)
+                    
+                    # Add tool response messages
+                    for tool_call in tool_calls:
+                        tool_response = {
+                            "role": "tool",
+                            "content": tool_outputs[tool_call.id],
+                            "tool_call_id": tool_call.id
+                        }
+                        self.agent.messages.append(tool_response)
                 else: 
                     done = True
                     
@@ -241,7 +250,6 @@ class MCPClient:
         return "\n".join(final_text)
 
     async def chat_loop(self):
-        """Run an interactive chat loop"""
         print("\nMCP Client Started!")
         print(f"Connected to model at: {self.client.base_url}")
         print("Type your queries or 'quit' to exit.")
@@ -261,16 +269,8 @@ class MCPClient:
                 traceback.print_exc()
 
     async def cleanup(self):
-        """Clean up resources"""
         await self.exit_stack.aclose()
 
-# Legacy wrapper class for backwards compatibility
-class MCPClientWithToolAgent(MCPClient):
-    async def connect_to_server(self, server_script_path: str):
-        """Legacy method for connecting to a Python script server"""
-        await super().connect_to_server("python", [server_script_path])
-
-# AIME-specific functions - moved to bottom for modularity
 def process_math_fn(example, idx):
     print(example)
     question = example.pop("problem")
@@ -300,8 +300,7 @@ def load_data(n=1, dataset_enum=None):
     return data
 
 async def run_aime_evaluation():
-    """Run AIME evaluation - separated from main client"""
-    client = MCPClientWithToolAgent()
+    client = MCPClient()
     try:
         await client.connect_to_server(sys.argv[1])
         
