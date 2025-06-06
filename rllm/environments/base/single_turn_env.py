@@ -1,8 +1,8 @@
-from typing import Callable, Dict, Optional, Tuple, Any
+from typing import Any, Dict, Optional, Tuple
 
-from rllm.environments.base.base_env import BaseEnv
 from rllm.environments.base.multi_turn_env import MultiTurnEnvironment
-from rllm.rewards.rl_reward import rllm_reward_fn
+from rllm.rewards.reward_fn import RewardFunction, rllm_reward_fn
+
 
 class SingleTurnEnvironment(MultiTurnEnvironment):
     """
@@ -13,7 +13,8 @@ class SingleTurnEnvironment(MultiTurnEnvironment):
     
     def __init__(self, 
                  task: Optional[Dict] = None, 
-                **kwargs):
+                 reward_fn: Optional[RewardFunction] = None,
+                 **kwargs):
         """
         Initialize the single turn environment.
         
@@ -21,7 +22,7 @@ class SingleTurnEnvironment(MultiTurnEnvironment):
             task: Dictionary containing the task information, including at least a "question" field
         """
         super().__init__(task=task, max_turns=1, **kwargs)
-        self.reward_fn = kwargs.get("reward_fn", rllm_reward_fn)
+        self.reward_fn = reward_fn or rllm_reward_fn
     
     def get_reward_and_next_obs(self, task: Dict, action: Any) -> Tuple[float, Dict]:
         """
@@ -34,12 +35,12 @@ class SingleTurnEnvironment(MultiTurnEnvironment):
         Returns:
             Tuple of (reward: float, next_observation: Dict)
         """
-        reward_response = self.reward_fn(
-            data_source=task["data_source"], 
-            llm_solution=action, 
-            ground_truth=task["ground_truth"]
+        reward_output = self.reward_fn(
+            task_info=task,
+            action=action
         )
-        return reward_response.reward, {}
+        
+        return reward_output.reward, {}
 
     @staticmethod
     def from_json(extra_info: Dict) -> "SingleTurnEnvironment":

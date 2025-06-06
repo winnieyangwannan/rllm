@@ -1,12 +1,11 @@
 import json
 import warnings
-from rllm.tools.multi_tool import MultiTool
-from typing import List, Dict, Union
+from typing import Dict, List, Optional, Union
 
 from rllm.environments.base.base_env import BaseEnv
-from rllm.rewards.reward_protocol import RewardFunction, zero_reward
+from rllm.rewards.reward_fn import RewardFunction, zero_reward
+from rllm.tools.multi_tool import MultiTool
 
-from typing import Any, Tuple, Optional, Callable
 
 class ToolEnvironment(BaseEnv):
     """
@@ -79,20 +78,20 @@ class ToolEnvironment(BaseEnv):
                         break
                 arguments = finish_action.get('function', {}).get('arguments', {})
                 llm_response = arguments.get('response', '')
-                
-            reward = self.reward_fn(task=self.task, action=llm_response)
-            return {}, reward, done, {"response": action}
+            
+            reward_output = self.reward_fn(task_info=self.task, action=llm_response)
+            return {}, reward_output.reward, done, {"response": action, "metadata": reward_output.metadata}
 
         tool_calls = action
         tool_outputs = self._execute_tool_calls(tool_calls)
         next_obs = {"tool_outputs": tool_outputs}
 
         # Return results as lists with single items to maintain batch structure
-        return next_obs, reward, done, {"response": action}
+        return next_obs, reward, done, {"response": action, "metadata": {}}
     
     def _execute_tool_calls(self, tool_calls: List[Dict]):
-        import threading
         import queue
+        import threading
 
         # Create a dictionary to store results in order
         tool_outputs = {}

@@ -5,6 +5,8 @@ to evaluate model responses for various problem types, including math and coding
 
 from dataclasses import dataclass, field
 from enum import Enum
+from typing import Optional
+
 
 @dataclass
 class RewardConfig:
@@ -101,7 +103,7 @@ class RewardOutput:
         is_correct (bool): A boolean flag indicating whether the model's response is deemed correct.
     """
     reward: float
-    is_correct: bool
+    is_correct: Optional[bool]
     metadata: dict = field(default_factory=dict)
 
 
