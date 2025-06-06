@@ -1,14 +1,17 @@
+import json
 import logging
 import re
-import json
 from typing import Tuple
 
-import numpy as np
-
 from r2egym.agenthub.action import Action
-from rllm.agents.system_prompts import SWE_SYSTEM_PROMPT, SWE_USER_PROMPT, \
-    SWE_SYSTEM_PROMPT_FN_CALL, SWE_USER_PROMPT_FN_CALL
+
 from rllm.agents.agent import BaseAgent, Step, Trajectory
+from rllm.agents.system_prompts import (
+    SWE_SYSTEM_PROMPT,
+    SWE_SYSTEM_PROMPT_FN_CALL,
+    SWE_USER_PROMPT,
+    SWE_USER_PROMPT_FN_CALL,
+)
 
 
 def parse_oai_response(response):

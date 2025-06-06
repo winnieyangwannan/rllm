@@ -2,25 +2,21 @@ import base64
 import io
 import logging
 import re
-import collections
-from typing import List, Dict, Any, Tuple
+from typing import Any, Dict, List
 
 import numpy as np
 
 # from browsergym.utils.obs import flatten_axtree_to_str, flatten_dom_to_str, prune_html
 from PIL import Image
 
-from rllm.agents.system_prompts import *
 from rllm.agents.agent import BaseAgent, Step, Trajectory
-
+from rllm.agents.system_prompts import *
 
 logger = logging.getLogger(__name__)
 
 
-import json
-import re
 from dataclasses import dataclass, field
-from typing import Any, Dict, List, Optional, Union
+from typing import Optional, Union
 
 from browsergym.utils.obs import _process_bid
 
@@ -225,7 +221,7 @@ def prune_axtree(
 
         has_attributes = False
         for property in node.properties:
-            if not "value" in property or not "value" in property["value"]:
+            if "value" not in property or "value" not in property["value"]:
                 continue
             prop_name = property["name"]
             prop_value = property["value"]["value"]
@@ -404,7 +400,7 @@ def flatten_axtree(
 
         attributes = []
         for property in node.properties:
-            if not "value" in property or not "value" in property["value"]:
+            if "value" not in property or "value" not in property["value"]:
                 continue
             prop_name = property["name"]
             prop_value = property["value"]["value"]

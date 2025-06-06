@@ -1,7 +1,9 @@
-from typing import List, Dict, Tuple, Union, Optional
-from transformers import AutoTokenizer, PreTrainedTokenizer, PreTrainedTokenizerFast
-import logging
+from typing import Dict, List
+
+from transformers import AutoTokenizer
+
 from rllm.parser.chat_template.parser import ChatTemplateParser
+
 
 def get_recent_assistant_user_messages(chat_completions_messages):
     """

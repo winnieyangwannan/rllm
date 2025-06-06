@@ -2,17 +2,15 @@ import base64
 import io
 import logging
 import re
-import collections
-from typing import List, Dict, Any, Tuple
+from typing import Any, Dict, List
 
 import numpy as np
 from browsergym.core.action.highlevel import HighLevelActionSet
 from browsergym.utils.obs import flatten_axtree_to_str, flatten_dom_to_str, prune_html
 from PIL import Image
 
-from rllm.agents.system_prompts import *
 from rllm.agents.agent import BaseAgent, Step, Trajectory
-
+from rllm.agents.system_prompts import *
 
 logger = logging.getLogger(__name__)
 
@@ -255,7 +253,7 @@ class WebAgent(BaseAgent):
     def _format_open_tabs(self, urls: list, titles: list, active_index: int) -> list:
         messages = [{"type": "text", "text": "# Currently open tabs (This is the current active tabs)\n"}]
 
-        for idx, (url, title) in enumerate(zip(urls, titles)):
+        for idx, (url, title) in enumerate(zip(urls, titles, strict=False)):
             active_marker = " (active tab)" if idx == active_index else ""
             messages.append({
                 "type": "text",

@@ -1,9 +1,7 @@
-import json
 import logging
-from typing import Dict, List, Any, Tuple
+from typing import Any, Dict, List
 
 from rllm.agents.agent import BaseAgent, Step, Trajectory
-from rllm.rewards.math_reward import rllm_reward_fn_math
 
 logger = logging.getLogger(__name__)
 

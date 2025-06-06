@@ -1,19 +1,10 @@
-import base64
-import io
 import logging
 import re
-import collections
-from typing import List, Dict, Any, Tuple
+from typing import Any, Dict, List, Tuple
 
-import numpy as np
-from browsergym.core.action.highlevel import HighLevelActionSet
-from browsergym.utils.obs import flatten_axtree_to_str, flatten_dom_to_str, prune_html
-from PIL import Image
-
-from rllm.agents.system_prompts import *
 from rllm.agents.agent import BaseAgent, Step, Trajectory
+from rllm.agents.system_prompts import *
 from rllm.environments.frozenlake.frozenlake import FrozenLakeEnv
-
 
 logger = logging.getLogger(__name__)
 
@@ -264,11 +255,6 @@ Now it is your turn, please show your thinking process and put the final action 
             return 0
         
         reward = trajectory.steps[-1].reward
-        # reward_penalty = 0    
-        # for step in trajectory.steps:
-        #     if not self.validate_step(step):
-        #         reward_penalty -= 0.2
-        #eturn reward + reward_penalty
         return reward
 
     def validate_step(self, trajectory_step: Step) -> bool:
