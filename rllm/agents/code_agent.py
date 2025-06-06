@@ -1,5 +1,5 @@
 import logging
-from typing import Dict, List, Any, Tuple, Union
+from typing import Any, Dict, List, Tuple, Union
 
 from rllm.agents.agent import BaseAgent, Step, Trajectory
 
@@ -44,15 +44,18 @@ class CompetitionCodingAgent(BaseAgent):
             for i, test in enumerate(test_results):
                 if not isinstance(test, dict) or "input" not in test:
                     continue
-            if isinstance(test["input"], list):
-                strings_to_match = [normalize_string(str(s)) for s in test["input"]]
-            elif isinstance(test["input"], str):
-                strings_to_match = [normalize_string(s) for s in test["input"].split("\n")]
-            if all(s in normalized_question for s in strings_to_match):
-                public_tests.append(test)
+                if isinstance(test["input"], list):
+                    strings_to_match = [normalize_string(str(s)) for s in test["input"]]
+                elif isinstance(test["input"], str):
+                    strings_to_match = [normalize_string(s) for s in test["input"].split("\n")]
+                if all(s in normalized_question for s in strings_to_match):
+                    public_tests.append(test)
         
             if len(public_tests) == 0:
-                return "No public tests found. Please review your solution once more for correctness and efficiency, then output your final code if you're confident it's optimal."
+                # If no public tests found, use first 2 test cases as public tests
+                public_tests = test_results[:2]
+                if not public_tests:
+                    return "No test cases found. Please review your solution once more for correctness and efficiency, then output your final code if you're confident it's optimal."
                 
             test_results = public_tests
         
@@ -134,7 +137,8 @@ class CompetitionCodingAgent(BaseAgent):
 
         if self.remove_thinking and content.count("</think>") == 1:
             cur_step.thought, cur_step.action = content.split("</think>")
-            cur_step.thought += "</think>"        
+            cur_step.thought += "</think>"
+            cur_step.action = cur_step.action.strip()
             self.messages.append({"role": "assistant", "content": cur_step.action})
         else:
             cur_step.thought = content 

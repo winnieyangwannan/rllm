@@ -129,12 +129,13 @@ Assistant: G is at the bottom right corner of P. I can move left, right, or up. 
 Now it is your turn, please show your thinking process and put the final action in ``` ```. In every turn, the final action MUST be one of Up, Down, Left, Right.
 """
 
-    def __init__(self):
+    def __init__(self, max_steps=None):
         self._trajectory = Trajectory()
         self.messages: List[Dict[str, str]] = []
         self.step = 0
         self.accumulate_thinking = False # controlls whether to accumulate the thinking portion of the response
         self.multistep_prompt = False
+        self.max_steps = max_steps
         self.reset()
 
     def update_from_env(self, observation: Any, reward: float, done: bool, info: Dict, **kwargs):
@@ -146,12 +147,16 @@ Now it is your turn, please show your thinking process and put the final action 
         # Base message for the user
         user_prompt_content = f"Current Observation ({self.step}): \n" + current_obs_str + "\n" + "You have not achieved the goal, P has not reached G yet. Please give the next action."
 
+
         # Check if the observation is the same as the previous step's observation
         # This check only makes sense if we have completed at least one step (i.e., received a model response and acted)
         if self._trajectory.steps and self._trajectory.steps[-1].action is not None: # Check if the last step has an action (meaning it's a completed step)
             last_step_obs_str = self._trajectory.steps[-1].observation
             if last_step_obs_str == current_obs_str:
                 user_prompt_content += "\nYour last response is invalid. Your position didn't change at all. You may need to recheck your thinking process, action outputted, and the format of response. Remember, you should only output the NEXT ACTION at each interation in the ``` ```. For example, if you want to move up, you should output ```Up```."
+
+        if self.max_steps is not None and self.max_steps - self.step > 0:
+            user_prompt_content += f"\nThe maximum number of steps remaining is {self.max_steps - self.step}."
 
         # Update the last step in the trajectory with the outcome (next_observation, reward, done, info)
         if self._trajectory.steps:

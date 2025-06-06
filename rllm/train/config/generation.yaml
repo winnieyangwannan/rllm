@@ -16,7 +16,6 @@ model:
 
 rollout:
   name: vllm
-  enable_log_prob: False
   temperature: 0.6
   top_k: -1 # 0 for hf rollout, -1 for vllm rollout
   top_p: 0.95

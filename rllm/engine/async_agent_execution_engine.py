@@ -62,7 +62,6 @@ class AsyncAgentExecutionEngine(AgentExecutionEngine):
         self.retry_limit = retry_limit
         self.api_retries = api_retries
         self.max_steps = max_steps
-        self.agent_args = agent_args
         self.max_response_length = max_response_length
         self.max_prompt_length = max_prompt_length
         self.enforce_max_prompt_length = enforce_max_prompt_length
@@ -95,7 +94,7 @@ class AsyncAgentExecutionEngine(AgentExecutionEngine):
 
         # Create a thread pool executor for environment interactions (i.e. step, reset, close)
         self.executor = concurrent.futures.ThreadPoolExecutor(max_workers=max_workers)
-        self.chat_template_parser = ChatTemplateParser.get_parser(self.tokenizer, enable_thinking=kwargs.get("enable_thinking", False))
+        self.chat_template_parser = ChatTemplateParser.get_parser(self.tokenizer, disable_thinking=kwargs.get("disable_thinking", False))
 
         self.is_last_trajectory = False
 

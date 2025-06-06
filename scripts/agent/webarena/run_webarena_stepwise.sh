@@ -5,10 +5,14 @@ export PYTORCH_CUDA_ALLOC_CONF="expandable_segments:False"
 export VLLM_USE_V1=1
 export VLLM_ALLOW_LONG_MAX_MODEL_LEN=1
 export VLLM_ENGINE_ITERATION_TIMEOUT_S=100000000000
-export CUDA_VISIBLE_DEVICES=1,5,7
-export NCCL_P2P_DISABLE=1
+export CUDA_VISIBLE_DEVICES=0,1,2,3,4,5,6,7
+
+export RAY_TMPDIR=/home/colin/tmp/ray
+mkdir -p $RAY_TMPDIR
+# export NCCL_P2P_DISABLE=1
 # Find the directory where rllm package is located
 RLLM_DIR=$(python3 -c "import rllm; import os; print(os.path.dirname(os.path.dirname(rllm.__file__)))")
+RLLM_DIR=/home/colin
 
 python3 -m rllm.train.train_agent_ppo \
     algorithm.adv_estimator=loop \
@@ -36,11 +40,9 @@ python3 -m rllm.train.train_agent_ppo \
     actor_rollout_ref.actor.fsdp_config.optimizer_offload=True \
     actor_rollout_ref.rollout.tensor_model_parallel_size=1 \
     actor_rollout_ref.rollout.name=vllm \
-    actor_rollout_ref.rollout.async_engine=False \
     actor_rollout_ref.rollout.mode="sync" \
-    actor_rollout_ref.rollout.chat_scheduler=examples.schedulers.completions_scheduler.CompletionsScheduler \
+    actor_rollout_ref.rollout.chat_scheduler=verl.schedulers.completions_scheduler.CompletionsScheduler \
     actor_rollout_ref.rollout.enforce_eager=False \
-    actor_rollout_ref.rollout.enable_log_prob=False \
     actor_rollout_ref.rollout.temperature=0.7 \
     actor_rollout_ref.rollout.gpu_memory_utilization=0.65 \
     actor_rollout_ref.rollout.n=4 \
@@ -65,12 +67,13 @@ python3 -m rllm.train.train_agent_ppo \
     trainer.save_freq=400 \
     trainer.test_freq=5 \
     trainer.default_hdfs_dir=null \
-    env.name=browsergym \
-    env.subtask=webarena \
+    env.name=browsergym_cloud \
+    +env.env_args.subtask=webarena \
+    +env.env_args.url="ws://18.234.63.23:5294/send_and_wait" \
     agent.name=webarenaagent \
     agent.max_steps=3 \
     agent.async_engine=False \
     agent.use_stepwise_advantage=True \
     agent.stepwise_advantage_mode="broadcast" \
-    agent.enable_thinking=True \
+    +agent.engine_args.disable_thinking=False \
     trainer.total_epochs=100

@@ -48,7 +48,7 @@ if __name__ == "__main__":
 
     class AgentConfig:
         def __init__(self):
-            self.enable_thinking = True
+            self.disable_thinking = False
 
     engine = AsyncAgentExecutionEngine(
         config=Config(),

@@ -90,7 +90,7 @@ if __name__ == "__main__":
         max_prompt_length=2048,
         config=None,
         n_parallel_agents=n_parallel_agents,
-        enable_thinking=True,
+        disable_thinking=False
     )
 
     tasks = load_data(n=32, dataset_enum=TestDataset.Math.AIME)[:10]

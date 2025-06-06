@@ -91,7 +91,7 @@ actor_rollout_ref:
   rollout:
     name: vllm
     mode: sync # sync: LLM, async: AsyncLLM
-    chat_scheduler: null # async chat scheduler, e.g examples.schedulers.naive_chat_scheduler.NaiveChatCompletionScheduler
+    chat_scheduler: null # async chat scheduler, e.g verl.schedulers.naive_chat_scheduler.NaiveChatCompletionScheduler
     temperature: 1.0
     top_k: -1 # 0 for hf rollout, -1 for vllm rollout
     top_p: 1
@@ -134,7 +134,6 @@ actor_rollout_ref:
       tool_config_path: null  # null for no tool
       format: chatml  # chatml, more formats will be supported in the future
     # RLLM Arguments
-    enable_log_prob: False # Append log_prob from vllm rollout, disables FSDP log_prob.
     disable_logging: True # Disable logging for vLLM async rollout.
 
 critic:
@@ -258,9 +257,8 @@ ray_init:
 
 # RLLM Agent Config
 env:
-  name: custom
-  subtask: custom
-  miniwob_url: "file://<PATH_TO_MINIWOB_CLONED_REPO>/miniwob/html/miniwob/" 
+  name: browsergym
+  env_args: {}
 
 agent:
   name: webagent
@@ -271,3 +269,5 @@ agent:
   normalize_step_advantage: False
   use_stepwise_advantage: False
   stepwise_advantage_mode: "broadcast" 
+  agent_args: {}
+  engine_args: {}

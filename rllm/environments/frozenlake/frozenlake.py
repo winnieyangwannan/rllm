@@ -163,6 +163,8 @@ class FrozenLakeEnv(GymFrozenLakeEnv, BaseEnv):
 
 
     def __init__(self, **kwargs):
+        global MAX_STEPS
+        MAX_STEPS = kwargs.pop('max_steps', 5)
 
         desc = kwargs.pop('desc', None)
         is_slippery = kwargs.pop('is_slippery', False)
@@ -321,4 +323,4 @@ class FrozenLakeEnv(GymFrozenLakeEnv, BaseEnv):
     
     @staticmethod
     def from_json(extra_info) -> "FrozenLakeEnv":
-        return FrozenLakeEnv(size=extra_info["size"], seed=extra_info["seed"], p=extra_info["p"])
+        return FrozenLakeEnv(size=extra_info["size"], seed=extra_info["seed"], p=extra_info["p"], max_steps=extra_info.get('max_steps', MAX_STEPS))
