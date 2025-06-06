@@ -53,7 +53,7 @@ python3 -m rllm.train.train_agent_ppo \
     actor_rollout_ref.rollout.tensor_model_parallel_size=1 \
     actor_rollout_ref.rollout.name=vllm \
     actor_rollout_ref.rollout.mode="async" \
-    actor_rollout_ref.rollout.chat_scheduler=examples.schedulers.naive_chat_scheduler.NaiveChatCompletionScheduler \
+    actor_rollout_ref.rollout.chat_scheduler=verl.schedulers.naive_chat_scheduler.NaiveChatCompletionScheduler \
     actor_rollout_ref.rollout.temperature=0.6 \
     actor_rollout_ref.rollout.val_kwargs.temperature=0.6 \
     actor_rollout_ref.rollout.gpu_memory_utilization=0.5 \

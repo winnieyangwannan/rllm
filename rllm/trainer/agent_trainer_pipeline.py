@@ -220,17 +220,10 @@ class PipelineAgentPPOTrainer(AgentPPOTrainer):
                             mini_batch_metrics['batch/solve_all'] = solve_all
                             mini_batch_metrics['batch/solve_partial'] = solve_partial
                             
-                            if self.config.actor_rollout_ref.rollout.enable_log_prob:
-                                # Avoid recompute log_prob bugs. Log probs from vLLM. (Could be buggy)
-                                mini_batch.meta_info['micro_batch_size'] = self.config.actor_rollout_ref.rollout.log_prob_micro_batch_size_per_gpu
-                                mini_batch.meta_info['max_token_len'] = self.config.actor_rollout_ref.rollout.log_prob_max_token_len_per_gpu
-                                mini_batch.meta_info['use_dynamic_bsz'] = self.config.actor_rollout_ref.rollout.log_prob_use_dynamic_bsz
-                                mini_batch.meta_info['temperature'] = self.config.actor_rollout_ref.rollout.temperature
-                            else:
-                                # Recompute old_log_probs using Pytorch FSDP.
-                                with Timer('old_log_prob', timing_raw):
-                                    old_log_prob = self.actor_wg.compute_log_prob(mini_batch)
-                                    mini_batch = mini_batch.union(old_log_prob)
+                            # Recompute old_log_probs using Pytorch FSDP.
+                            with Timer('old_log_prob', timing_raw):
+                                old_log_prob = self.actor_wg.compute_log_prob(mini_batch)
+                                mini_batch = mini_batch.union(old_log_prob)
 
                             if self.use_reference_policy:
                                 # compute reference log_prob
