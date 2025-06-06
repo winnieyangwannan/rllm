@@ -31,10 +31,12 @@ class BrowserGym(BaseEnv):
     def reset(self):
         return self.env.reset()
 
-
     def step(self, action):
         obs, reward, terminated, truncated, extra_info = self.env.step(action)
         return obs, reward, terminated or truncated, extra_info
+    
+    def close(self):
+        self.env.close()
 
     @staticmethod
     def from_json(extra_info) -> "BrowserGym":

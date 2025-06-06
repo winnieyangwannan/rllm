@@ -16,11 +16,11 @@ python3 -m rllm.train.train_agent_ppo \
     algorithm.adv_estimator=loop \
     data.train_files=/home/colin/data/rllm-miniwob/train.parquet \
     data.val_files=/home/colin/data/rllm-miniwob/test.parquet \
-    data.train_batch_size=32 \
+    data.train_batch_size=16 \
     data.val_batch_size=128 \
     data.max_prompt_length=16384 \
     data.max_response_length=4096 \
-    actor_rollout_ref.model.path=Qwen/Qwen3-4B \
+    actor_rollout_ref.model.path=Qwen/Qwen3-8B \
     actor_rollout_ref.hybrid_engine=True \
     actor_rollout_ref.actor.optim.lr=1e-6 \
     actor_rollout_ref.model.use_remove_padding=True \
@@ -43,7 +43,7 @@ python3 -m rllm.train.train_agent_ppo \
     actor_rollout_ref.rollout.enforce_eager=False \
     actor_rollout_ref.rollout.temperature=0.7 \
     actor_rollout_ref.rollout.gpu_memory_utilization=0.65 \
-    actor_rollout_ref.rollout.n=8 \
+    actor_rollout_ref.rollout.n=12 \
     actor_rollout_ref.rollout.val_kwargs.n=1 \
     actor_rollout_ref.rollout.val_kwargs.temperature=0.7 \
     actor_rollout_ref.rollout.val_kwargs.top_p=0.8 \
@@ -58,7 +58,7 @@ python3 -m rllm.train.train_agent_ppo \
     trainer.critic_warmup=0 \
     trainer.logger=['console','wandb'] \
     trainer.project_name='stepwise-agent' \
-    trainer.experiment_name='4b-loop-drgrpo-miniwob_agent_stepwise-seq-mean-token-sum-norm' \
+    trainer.experiment_name='8b-loop-drgrpo-miniwob_agent_stepwise-seq-mean-token-sum-norm' \
     trainer.val_before_train=True \
     trainer.n_gpus_per_node=8 \
     trainer.nnodes=1 \
