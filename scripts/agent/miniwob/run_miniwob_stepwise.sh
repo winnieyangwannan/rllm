@@ -18,8 +18,8 @@ python3 -m rllm.train.train_agent_ppo \
     data.val_files=/home/colin/data/rllm-miniwob/test.parquet \
     data.train_batch_size=32 \
     data.val_batch_size=128 \
-    data.max_prompt_length=10240 \
-    data.max_response_length=8192 \
+    data.max_prompt_length=16384 \
+    data.max_response_length=4096 \
     actor_rollout_ref.model.path=Qwen/Qwen3-4B \
     actor_rollout_ref.hybrid_engine=True \
     actor_rollout_ref.actor.optim.lr=1e-6 \
@@ -43,7 +43,7 @@ python3 -m rllm.train.train_agent_ppo \
     actor_rollout_ref.rollout.enforce_eager=False \
     actor_rollout_ref.rollout.temperature=0.7 \
     actor_rollout_ref.rollout.gpu_memory_utilization=0.65 \
-    actor_rollout_ref.rollout.n=16 \
+    actor_rollout_ref.rollout.n=8 \
     actor_rollout_ref.rollout.val_kwargs.n=1 \
     actor_rollout_ref.rollout.val_kwargs.temperature=0.7 \
     actor_rollout_ref.rollout.val_kwargs.top_p=0.8 \
@@ -72,6 +72,7 @@ python3 -m rllm.train.train_agent_ppo \
     agent.max_steps=10 \
     agent.async_engine=False \
     agent.use_stepwise_advantage=True \
+    agent.normalize_step_advantage=True \
     agent.stepwise_advantage_mode="broadcast" \
     +agent.engine_args.disable_thinking=False \
     trainer.total_epochs=100

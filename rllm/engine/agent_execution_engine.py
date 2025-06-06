@@ -96,6 +96,8 @@ class AgentExecutionEngine:
             f"Number of agents must equal to number of environments but received, "
             f"{len(agents)} and {len(envs)}"
         )
+        
+        
 
         self.trajectory_timeout = trajectory_timeout
         if not trajectory_timeout:
@@ -108,6 +110,9 @@ class AgentExecutionEngine:
         if engine_name == "openai":
             from openai import OpenAI 
             self.client = OpenAI(**self.rollout_engine_args)
+        elif engine_name == "verl":
+            # only compatible with synchronous verl engine
+            assert self.config.actor_rollout_ref.rollout.mode != "async", "Only synchronous engine is supported for synchronous execution engine"
 
         self.chat_template_parser = ChatTemplateParser.get_parser(self.tokenizer, disable_thinking=kwargs.get("disable_thinking", False))
     
