@@ -21,7 +21,7 @@ from rllm.rewards.code_utils.firejail_exec import code_exec_firejail as lc_code_
 from rllm.rewards.code_utils.kodcode import code_exec as kod_code_exec
 from rllm.tools.code_tools.together_tool import TogetherCodeTool
 from rllm.tools.code_tools.code_tool import CodeTool
-from rllm.rewards.reward_types import RewardConfig, RewardFn, RewardInput, RewardOutput, RewardType
+from rllm.rewards.reward_types import RewardConfig, RewardInput, RewardOutput, RewardType
 
 
 def extract_code_from_model(model_response: str):
@@ -445,32 +445,50 @@ def codetool_check_correctness(tests: Any, code: str, codetool: CodeTool, is_tac
         return False, detailed_results
     return True, detailed_results
 
-class RewardCodeFn(RewardFn):
+class RewardCodeFn:
     """
     Reward function for evaluating code dataset answers.
 
-    This class implements the __call__ method to process the input and determine
+    This class implements the RewardFunction protocol to process the input and determine
     the reward based on the correctness of the unit tests provided
     """
-    def __call__(self, input: RewardInput) -> RewardOutput:
+    
+    def __init__(self, config: RewardConfig):
+        self.config = config
+    
+    def __call__(self, task_info: Dict, action: str) -> RewardOutput:
+        """
+        Calculate the reward for a code task based on the agent's action.
+        
+        Args:
+            task_info: Dictionary containing problem, data_source, problem_type, and ground_truth
+            action: The agent's response/solution (code)
+            
+        Returns:
+            RewardOutput: The calculated reward with correctness information
+        """
         total_start_time = time.time()
 
-        assert input.problem_type == RewardType.CODE, \
-            "Invalid problem type: expected 'CODE', but got '{}'".format(input.problem_type)
+        # Extract information from task_info
+        problem_type = task_info.get('problem_type', RewardType.UNK)
+        if problem_type != RewardType.CODE:
+            return RewardOutput(reward=self.config.format_error_reward, is_correct=False, 
+                              metadata={"error": f"Invalid problem type: expected 'CODE', but got '{problem_type}'"})
 
-        model_response= input.model_response
-        metadata = input.metadata
+        model_response = action
+        dataset_name = task_info.get('data_source', '')
+        tests = task_info.get('ground_truth', None)
         
-        dataset_name = input.data_source
-        tests = metadata
         if tests is None:
-            print("No tests found in metadata")
-            return RewardOutput(reward=self.config.format_error_reward, is_correct=False, metadata={"error": "No tests found in metadata"})
+            print("No tests found in task_info")
+            return RewardOutput(reward=self.config.format_error_reward, is_correct=False, 
+                              metadata={"error": "No tests found in task_info"})
 
         model_code = extract_code_from_model(model_response)
         if model_code is None:
             # print("No code found in model response")
-            return RewardOutput(reward=self.config.format_error_reward, is_correct=False, metadata={"error": "No code found in model response"})
+            return RewardOutput(reward=self.config.format_error_reward, is_correct=False, 
+                              metadata={"error": "No code found in model response"})
 
         if self.config.use_together_code_interpreter:
             codetool = TogetherCodeTool()
@@ -505,7 +523,7 @@ class RewardCodeFn(RewardFn):
         if is_correct:
             return RewardOutput(reward=self.config.correct_reward, is_correct=True, metadata=test_details)
         else:
-            return RewardOutput(reward=self.config.incorrect_reward, is_correct=False,metadata=test_details)
+            return RewardOutput(reward=self.config.incorrect_reward, is_correct=False, metadata=test_details)
 
 def rllm_reward_fn_code(data_source: str, llm_solution: str, ground_truth: Dict, **kwargs):
     """Evaluate code solutions against ground truth answers
@@ -548,13 +566,15 @@ if __name__ == "__main__":
     """
     reward_config = RewardConfig()
     reward_fn = RewardCodeFn(reward_config)
-    reward_response = reward_fn(
-        RewardInput(
-            problem=None,
-            problem_type=RewardType.CODE,
-            data_source=data_source,
-            model_response=llm_solution,
-            metadata=ground_truth
-        ))
+    
+    # Convert to new format
+    task_info = {
+        'problem': None,
+        'problem_type': RewardType.CODE,
+        'data_source': data_source,
+        'ground_truth': ground_truth
+    }
+    
+    reward_response = reward_fn(task_info, llm_solution)
     return reward_response
   
