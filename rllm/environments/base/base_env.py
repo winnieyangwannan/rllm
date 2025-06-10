@@ -30,13 +30,9 @@ class BaseEnv(ABC):
         self._idx = value
 
     @abstractmethod
-    def reset(self, seed: int = 0, **kwargs) -> Tuple[List, List]:
+    def reset(self) -> Tuple[List, List]:
         """Standard Gym reset method. Resets the environment to an initial state.
         
-        Args:
-            seed: The random seed for environment initialization.
-            **kwargs: Additional arguments specific to the environment's reset logic.
-
         Returns:
             A tuple typically containing the initial observation and auxiliary info.
         """
@@ -50,7 +46,7 @@ class BaseEnv(ABC):
             action: An action provided by the agent.
 
         Returns:
-            A tuple containing (observation, reward, terminated, truncated, info).
+            A tuple containing (observation, reward, done, info).
         """
         pass
 
@@ -76,7 +72,7 @@ class BaseEnv(ABC):
             NotImplementedError: If the subclass does not implement this method.
         """
         # BaseEnv is abstract, subclasses must implement this factory method.
-        raise NotImplementedError("Subclasses must implement the 'from_json' static method.")
+        raise NotImplementedError("Subclasses must implement the 'from_dict' static method.")
 
     @staticmethod
     def is_multithread_safe() -> bool:

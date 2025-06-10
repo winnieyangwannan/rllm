@@ -10,24 +10,14 @@ All environments in rLLM inherit from the `BaseEnv` class, which follows the Gym
 from rllm.environments.base.base_env import BaseEnv
 
 class BaseEnv(ABC):
-    @property
-    def idx(self) -> Any:
-        """Environment index for batch processing."""
-        return getattr(self, "_idx", None)
-    
-    @idx.setter 
-    def idx(self, value: Any):
-        """Set environment index for batch processing."""
-        self._idx = value
-
     @abstractmethod
-    def reset(self, seed: int = 0, **kwargs) -> Tuple[Any, Dict]:
+    def reset(self) -> Tuple[Any, Dict]:
         """Reset environment and return initial observation and info."""
         pass
 
     @abstractmethod
     def step(self, action: Any) -> Tuple[Any, float, bool, bool, Dict]:
-        """Execute action and return (observation, reward, terminated, truncated, info)."""
+        """Execute action and return (observation, reward, done, info)."""
         pass
 
     def close(self):
@@ -36,20 +26,10 @@ class BaseEnv(ABC):
 
     @staticmethod
     @abstractmethod
-    def from_json(info: Dict) -> "BaseEnv":
-        """Create environment instance from JSON configuration."""
+    def from_dict(env_args: Dict) -> "BaseEnv":
+        """Create environment instance from dictionary. This function is used both during inference and training to instantiate a new environment instance, so it has to be implemented properly."""
         pass
-
-    @staticmethod
-    def is_multithread_safe() -> bool:
-        """Whether environment can be used in parallel threads."""
-        return True
 ```
-
-### Key Concepts
-
-- **Gymnasium Compatibility**: Environments follow Gymnasium's step/reset interface with (observation, reward, terminated, truncated, info) returns
-- **JSON Serialization**: All environments can be created from JSON configurations
 
 ## Environment Types
 
@@ -317,154 +297,6 @@ class MyCustomEnvironment(BaseEnv):
     @staticmethod
     def is_multithread_safe() -> bool:
         return True  # Specify thread safety
-```
-
-### Custom MultiTurnEnvironment
-
-```python
-from rllm.environments.base.multi_turn_env import MultiTurnEnvironment
-from typing import Dict, Tuple
-
-class DialogueEnvironment(MultiTurnEnvironment):
-    """Custom environment for dialogue training."""
-    
-    def __init__(self, task: Dict = None, max_turns: int = 5, **kwargs):
-        super().__init__(task=task, max_turns=max_turns, **kwargs)
-        self.conversation_history = []
-    
-    def reset(self, task=None, seed=None):
-        """Reset dialogue environment."""
-        result = super().reset(task, seed)
-        self.conversation_history = []
-        return result
-    
-    def get_reward_and_next_obs(self, task: Dict, action: str) -> Tuple[float, Dict]:
-        """Compute reward and generate next observation."""
-        # Add action to conversation history
-        self.conversation_history.append(action)
-        
-        # Compute reward based on dialogue quality
-        reward = self._evaluate_dialogue_quality(action, task)
-        
-        # Generate next conversation prompt
-        if self.current_turn < self.max_turns - 1:
-            next_obs = {
-                "question": self._generate_next_prompt(task, self.conversation_history),
-                "history": self.conversation_history.copy()
-            }
-        else:
-            next_obs = {}
-        
-        return reward, next_obs
-    
-    def _evaluate_dialogue_quality(self, action: str, task: Dict) -> float:
-        """Evaluate the quality of the dialogue turn."""
-        # Custom dialogue evaluation logic
-        if len(action.split()) < 3:
-            return 0.1  # Too short
-        elif "inappropriate" in action.lower():
-            return -0.5  # Inappropriate content
-        else:
-            return 0.5  # Reasonable response
-    
-    def _generate_next_prompt(self, task: Dict, history: list) -> str:
-        """Generate the next conversation prompt."""
-        prompts = task.get("prompts", ["Tell me more.", "What do you think?", "Continue."])
-        return prompts[len(history) % len(prompts)]
-    
-    @staticmethod
-    def from_json(info: Dict) -> "DialogueEnvironment":
-        return DialogueEnvironment(
-            task=info.get("task", {}),
-            max_turns=info.get("max_turns", 5)
-        )
-```
-
-## Environment Utilities
-
-rLLM provides utilities for working with environments in `rllm.environments.env_utils`:
-
-### Trajectory Processing
-
-```python
-from rllm.environments.env_utils import compute_trajectory_reward, compute_mc_return
-
-# Compute total trajectory reward
-trajectory = compute_trajectory_reward(agent_trajectory)
-print(f"Total reward: {trajectory.reward}")
-
-# Compute Monte Carlo returns with discounting
-trajectory = compute_mc_return(trajectory, gamma=0.95)
-for step in trajectory.steps:
-    print(f"Step {step.step}: MC return = {step.mc_return}")
-```
-
-### Parallel Processing
-
-```python
-from rllm.environments.env_utils import parallel_task_manager
-
-def process_environment(env_config):
-    env = MyEnvironment(**env_config)
-    env.reset()
-    return env.some_computation()
-
-env_configs = [{"task": {"id": i}} for i in range(100)]
-
-with parallel_task_manager(process_environment, env_configs, max_workers=16) as results:
-    for idx, result in results:
-        print(f"Environment {idx}: {result}")
-```
-
-## Environment Configuration
-
-### JSON Configuration
-
-All environments support JSON-based configuration for reproducibility:
-
-```python
-# Environment configuration
-config = {
-    "task": {
-        "question": "Solve this problem",
-        "context": {"domain": "mathematics"}
-    },
-    "max_steps": 10,
-    "reward_params": {"threshold": 0.8}
-}
-
-# Create environment from config
-env = MyCustomEnvironment.from_json(config)
-
-# Save and load configurations
-import json
-with open("env_config.json", "w") as f:
-    json.dump(config, f)
-```
-
-### Batch Processing
-
-Environments support batch processing with indexing:
-
-```python
-# Create multiple environments
-envs = [SingleTurnEnvironment(task=task) for task in tasks]
-
-# Set indices for tracking
-for i, env in enumerate(envs):
-    env.idx = i
-
-# Process in parallel (if thread-safe)
-import concurrent.futures
-
-def run_episode(env):
-    obs, info = env.reset()
-    action = generate_action(obs)
-    result = env.step(action)
-    return env.idx, result
-
-with concurrent.futures.ThreadPoolExecutor() as executor:
-    results = list(executor.map(run_episode, envs))
 ```
 
 ## Best Practices

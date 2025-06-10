@@ -41,7 +41,6 @@ if __name__ == "__main__":
         agent_args=agent_args,
         env_class=ToolEnvironment,
         env_args=env_args,
-        rollout_engine=None,
         engine_name="openai", 
         tokenizer=tokenizer,
         sampling_params=sampling_params,

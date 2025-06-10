@@ -15,7 +15,7 @@ class ToolAgent(BaseAgent):
     An tool agent that can use tools to interact with the environment,
     refactored to follow the BaseAgent abstraction.
     """
-    def __init__(self, parser_name="qwen", tools=[]):
+    def __init__(self, system_prompt=TOOL_SYSTEM_PROMPT, parser_name="qwen", tools=[]):
         """
         Initialize the ToolAgent.
         
@@ -24,7 +24,7 @@ class ToolAgent(BaseAgent):
             parser_name: Name of the parser to use for tool calls.
             tools: List of tools available to the agent.
         """
-        self.system_prompt = TOOL_SYSTEM_PROMPT
+        self.system_prompt = system_prompt
         self.tools = MultiTool(tools)
         parser_class = get_tool_parser(parser_name=parser_name)
         self.tool_parser = parser_class()
