@@ -60,8 +60,8 @@ class BaseEnv(ABC):
 
     @staticmethod
     @abstractmethod
-    def from_json(info: Dict) -> "BaseEnv":
-        """Creates an environment instance from a JSON-like dictionary.
+    def from_dict(info: Dict) -> "BaseEnv":
+        """Creates an environment instance from a dictionary.
         
         This method should be implemented by concrete subclasses to handle
         environment-specific initialization from serialized data.

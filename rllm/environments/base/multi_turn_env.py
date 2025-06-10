@@ -88,7 +88,7 @@ class MultiTurnEnvironment(BaseEnv, ABC):
         pass
 
     @staticmethod
-    def from_json(info: Dict) -> "MultiTurnEnvironment":
+    def from_dict(info: Dict) -> "MultiTurnEnvironment":
         return MultiTurnEnvironment(
             task=info["task"],
             max_turns=info.get("max_turns", 3)
