@@ -1,0 +1,48 @@
+site_name: rLLM
+site_description: A library for training LLM agents with reinforcement learning
+repo_url: https://github.com/agentica-project/rllm
+theme:
+  name: material
+  palette:
+    primary: indigo
+    accent: indigo
+  features:
+    - navigation.instant
+    - navigation.tracking
+    - navigation.expand
+    - navigation.indexes
+    - content.code.copy
+    - content.code.annotate
+
+markdown_extensions:
+  - pymdownx.highlight:
+      anchor_linenums: true
+  - pymdownx.inlinehilite
+  - pymdownx.snippets
+  - pymdownx.superfences
+  - admonition
+  - pymdownx.details
+  - pymdownx.tabbed:
+      alternate_style: true
+  - tables
+  - footnotes
+
+nav:
+  - Home: index.md
+  - Getting Started:
+      - Installation: getting-started/installation.md
+      - Quick Start: getting-started/quick-start.md
+  - Core Concepts:
+      - Overview: core-concepts/overview.md
+      - Agents: core-concepts/agents.md
+      - Environments: core-concepts/environments.md
+      - Rewards: core-concepts/rewards.md
+      - Training: core-concepts/training.md
+  - Examples:
+      - Basic Examples: examples/basic.md
+      - Agent Examples: examples/agents.md
+      - Environment Examples: examples/environments.md
+  - API Reference:
+      - Agents: api/agents.md
+      - Environments: api/environments.md
+  - Contributing: contributing.md
