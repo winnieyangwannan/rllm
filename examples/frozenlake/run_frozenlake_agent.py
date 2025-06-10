@@ -8,39 +8,19 @@ from rllm.data.dataset import DatasetRegistry
 from rllm.engine.async_agent_execution_engine import AsyncAgentExecutionEngine
 from rllm.environments.frozenlake.frozenlake import FrozenLakeEnv
 from rllm.utils import compute_pass_at_k
+from prepare_frozenlake_data import prepare_frozenlake_data
 
-def load_frozenlake_data(train_size=3000, test_size=100):
-    # Check if dataset already exists in registry
+
+def load_frozenlake_data():
     if DatasetRegistry.dataset_exists("frozenlake", "test"):
         test_dataset = DatasetRegistry.load_dataset("frozenlake", "test")
         return test_dataset.get_data()
     
-    # If not, create and register the dataset
-    np.random.seed(42)
-    train_seeds = np.random.randint(0, 100000, size=train_size)
-    test_seeds = np.random.randint(0, 100000, size=test_size)
-    train_sizes = np.random.randint(2, 10, size=train_size)
-    test_sizes = np.random.randint(2, 10, size=test_size)
-    train_ps = np.random.uniform(0.6, 0.85, size=train_size)
-    test_ps = np.random.uniform(0.6, 0.85, size=test_size)
-
-    def frozenlake_process_fn(seed, size, p, idx):
-        return {
-            "seed": seed,
-            "size": size,
-            "p": p,
-            "index": idx,
-            "uid": f"{seed}_{size}_{p}"
-        }
-
-    train_data = [frozenlake_process_fn(seed, train_sizes[idx], train_ps[idx], idx) for idx, seed in enumerate(train_seeds)]
-    test_data = [frozenlake_process_fn(seed, test_sizes[idx], test_ps[idx], idx) for idx, seed in enumerate(test_seeds)]
-
-    # Register the datasets with separate splits
-    DatasetRegistry.register_dataset("frozenlake", train_data, "train")
-    test_dataset = DatasetRegistry.register_dataset("frozenlake", test_data, "test")
+    print("FrozenLake datasets not found. Preparing datasets...")
+    train_dataset, test_dataset = prepare_frozenlake_data()
     
     return test_dataset.get_data()
+
 
 if __name__ == "__main__":
     import os
@@ -74,5 +54,5 @@ if __name__ == "__main__":
 
     tasks = load_frozenlake_data()
 
-    results = asyncio.run(engine.execute_tasks(tasks[:10]))
+    results = asyncio.run(engine.execute_tasks(tasks))
     compute_pass_at_k(results)
