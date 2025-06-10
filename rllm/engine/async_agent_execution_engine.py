@@ -1,5 +1,6 @@
 import asyncio
 import concurrent.futures
+import logging
 import time
 import traceback
 import uuid
@@ -22,13 +23,14 @@ from rllm.misc import colorful_print
 from rllm.parser.chat_template.parser import ChatTemplateParser
 from rllm.router.router import Router
 
+logger = logging.getLogger(__name__)
 
 class AsyncAgentExecutionEngine(AgentExecutionEngine):
     def __init__(
         self,
-        rollout_engine,
         engine_name,
         tokenizer,
+        rollout_engine=None,
         config=None,
         model_path="",
         n_parallel_agents=1,
@@ -76,7 +78,6 @@ class AsyncAgentExecutionEngine(AgentExecutionEngine):
         if not trajectory_timeout:
             self.trajectory_timeout = int(1e9)
 
-
         assert env_class.is_multithread_safe(), "Environment must be multithread safe for async engine"
         # rollout engine args
         self.rollout_engine_args = rollout_engine_args
@@ -84,9 +85,12 @@ class AsyncAgentExecutionEngine(AgentExecutionEngine):
 
         self.server_addresses = getattr(self.rollout_engine, "server_addresses", None)
 
+        assert self.engine_name in ["openai", "verl"], "Currently only openai and verl are supported as rollout engine"
         if self.engine_name == "openai":
             from openai import AsyncOpenAI
             self.client = AsyncOpenAI(**self.rollout_engine_args)
+            # Disable httpx INFO logs that show HTTP requests
+            logging.getLogger("httpx").setLevel(logging.WARNING)
         elif self.engine_name == "verl":
             # All generation is done via scheduler. Currently only works for verl
             self.router = Router(config=self.config, tokenizer=self.tokenizer, addresses=self.server_addresses)
@@ -175,10 +179,10 @@ class AsyncAgentExecutionEngine(AgentExecutionEngine):
                     retries -= 1
                     if retries == 0:
                         return "Error: Rate limit reached and retries exhausted."
-                    print("Sleep for 5 seconds for API limit.")
+                    logger.info("Sleep for 5 seconds for API limit.")
                     await asyncio.sleep(5)
                 except Exception as e:
-                    print("Error: ", e)
+                    logger.error("Error: %s", e)
                     return f"Error processing content: {e}"
 
         # If prompt is in chat format, convert it to text format
@@ -242,7 +246,6 @@ class AsyncAgentExecutionEngine(AgentExecutionEngine):
             )
 
         for step_idx in range(self.max_steps):
-            print(f"Trajectory {idx}, Step {step_idx + 1}/{self.max_steps}")
             # Get action from agent
             prompt_messages = agent.prompt.copy()
             # Max remaining tokens left for the response
@@ -368,7 +371,6 @@ class AsyncAgentExecutionEngine(AgentExecutionEngine):
             cur_step.reward = reward
         # Closing environment using the executor.
         await loop.run_in_executor(self.executor, env.close)
-        print(f"Environment closed for trajectory {idx}.")
         if termination_reason:
             if reward > 0:
                 color = "green"
@@ -504,7 +506,12 @@ class AsyncAgentExecutionEngine(AgentExecutionEngine):
         for i in range(max_concurrent):
             index_queue.put_nowait(i)
 
+        # Track completed trajectories
+        completed = 0
+        total = len(tasks)
+
         async def sem_wrapper(task_id, task):
+            nonlocal completed
             async with semaphore:
                 # Get an available index
                 index = await index_queue.get()
@@ -512,6 +519,8 @@ class AsyncAgentExecutionEngine(AgentExecutionEngine):
                     self.envs[index] = self.env_class.from_dict({**task, **self.env_args})
                     self.agents[index] = self.agent_class(**self.agent_args)
                     res = await self.run_agent_trajectory_async(index, application_id=task_id)
+                    completed += 1
+                    colorful_print(f"Progress: {completed}/{total} trajectories completed", "cyan")
                     return task_id, res
                 finally:
                     # Put the index back in the queue when done

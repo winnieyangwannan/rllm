@@ -14,6 +14,35 @@ from vertexai.generative_models import GenerationConfig, GenerativeModel, HarmBl
 
 from rllm.globals import GCP_PROJECT_ID, GCP_LOCATION, GEMINI_MODEL, OAI_RM_MODEL
 
+def compute_pass_at_k(results):
+    from collections import defaultdict
+
+    # Create a map to store correct answers per problem
+    problem_correct_map = defaultdict(int)
+    problem_total_map = defaultdict(int)
+
+    # Count correct answers for each problem
+    for trajectory in results:
+        problem = trajectory.steps[0].observation
+
+        is_correct = 1 if trajectory.reward > 0 else 0
+
+        problem_correct_map[problem] += is_correct
+        problem_total_map[problem] += 1
+
+    # Calculate pass@1 and pass@16
+    total_problems = len(problem_correct_map)
+    pass_at_1 = sum(problem_correct_map.values()) / sum(problem_total_map.values())
+    pass_at_k = (
+        sum(1 for problem, correct in problem_correct_map.items() if correct > 0)
+        / total_problems
+    )
+
+    print("Total unique problems:", total_problems)
+    print("Average Pass@1 Accuracy:", pass_at_1)
+    print("Average Pass@k Accuracy:", pass_at_k)
+
+
 def call_oai_rm_llm(
     prompt: str,
     system_prompt: str,
@@ -179,32 +208,3 @@ class RAG:
                 'idx': int(idx),
             })
         return results
-
-def find_available_ports(base_port: int, count: int) -> List[int]:
-    """Find consecutive available ports starting from base_port."""
-    available_ports = []
-    current_port = base_port
-
-    while len(available_ports) < count:
-        if is_port_available(current_port):
-            available_ports.append(current_port)
-        current_port += random.randint(100, 1000)
-
-    return available_ports
-
-
-def is_port_available(port):
-    """Return whether a port is available."""
-    with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
-        try:
-            s.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
-            s.bind(("", port))
-            s.listen(1)
-            return True
-        except socket.error:
-            return False
-        except OverflowError:
-            return False
-
-if __name__ == '__main__':
-    print(is_port_available(8000))

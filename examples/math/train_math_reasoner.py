@@ -5,15 +5,20 @@ from rllm.agents.math_agent import MathAgent
 from rllm.data.dataset import DatasetRegistry
 from rllm.environments.base.single_turn_env import SingleTurnEnvironment
 from rllm.train.agent_trainer import AgentTrainer
+from rllm.rewards.reward_fn import math_reward_fn
 
 
 @hydra.main(config_path="pkg://rllm.train.config", config_name="ppo_trainer", version_base=None)
 def main(config):
     train_dataset = DatasetRegistry.load_dataset("deepscaler_math", "train")
     test_dataset = DatasetRegistry.load_dataset("aime2024", "test")
+
+    env_args = {"reward_fn": math_reward_fn}
     
     trainer = AgentTrainer(
         agent_class=MathAgent,
+        agent_args={},
+        env_args=env_args,
         env_class=SingleTurnEnvironment,
         config=config,
         train_dataset=train_dataset,

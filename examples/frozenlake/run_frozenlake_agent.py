@@ -7,7 +7,7 @@ from rllm.agents.frozenlake_agent import FrozenLakeAgent
 from rllm.data.dataset import DatasetRegistry
 from rllm.engine.async_agent_execution_engine import AsyncAgentExecutionEngine
 from rllm.environments.frozenlake.frozenlake import FrozenLakeEnv
-
+from rllm.utils import compute_pass_at_k
 
 def load_frozenlake_data(train_size=3000, test_size=100):
     # Check if dataset already exists in registry
@@ -55,13 +55,11 @@ if __name__ == "__main__":
 
     sampling_params = {"temperature": 0.6, "top_p": 0.95, "model": model_name}
 
-    agents = [FrozenLakeAgent() for _ in range(n_parallel_agents)]
-    envs = [FrozenLakeEnv() for _ in range(n_parallel_agents)]
-
     engine = AsyncAgentExecutionEngine(
-        agents=agents,
-        envs=envs,
-        rollout_engine=None,
+        agent_class=FrozenLakeAgent,
+        env_class=FrozenLakeEnv,
+        agent_args={},
+        env_args={},
         engine_name="openai",
         tokenizer=tokenizer,
         sampling_params=sampling_params,
@@ -71,11 +69,10 @@ if __name__ == "__main__":
         },
         max_response_length=16384,
         max_prompt_length=4096,
-        config=None,
         n_parallel_agents=n_parallel_agents,
-        enable_thinking=True,
     )
 
     tasks = load_frozenlake_data()
 
-    results = asyncio.run(engine.execute_tasks(tasks))
+    results = asyncio.run(engine.execute_tasks(tasks[:10]))
+    compute_pass_at_k(results)

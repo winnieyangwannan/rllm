@@ -22,25 +22,12 @@ class ToolEnvironment(BaseEnv):
         if reward_fn is None:
             warnings.warn("No reward function specified, will get 0 reward.")
             self.reward_fn = zero_reward
-        self.current_data = None
-        self.data_source = ""
-        if self.task:
-            self.data_source = self.task.get("data_source", "")
     
-    def reset(self, task=None, seed=None):
+    def reset(self):
         """Reset the environment and return initial observations."""
-        import random
-        if seed is not None:
-            random.seed(seed)
-
         self.step_count = 0
         
-        # Use the provided task if available, otherwise use the default task
-        if task is not None:
-            self.task = task
-        
-        # Return a single observation in a list to maintain the batch structure
-        return {"question": self.task["question"]}, {}
+        return self.task, {}
     
     def step(self, action: Union[List[Dict], str, Dict]):
         """
@@ -126,4 +113,6 @@ class ToolEnvironment(BaseEnv):
     @staticmethod
     def from_dict(env_args: Dict) -> "ToolEnvironment":
         tools = env_args.pop('tools', [])
-        return ToolEnvironment(task=env_args, tools=tools)
+        reward_fn = env_args.pop('reward_fn', None)
+        max_steps = env_args.pop('max_steps', 10)
+        return ToolEnvironment(task=env_args, tools=tools, max_steps=max_steps, reward_fn=reward_fn)

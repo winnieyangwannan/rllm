@@ -9,13 +9,13 @@ export VLLM_ENGINE_ITERATION_TIMEOUT_S=100000000000
 # Find the directory where rllm package is located
 RLLM_DIR=$(python3 -c "import rllm; import os; print(os.path.dirname(os.path.dirname(rllm.__file__)))")
 
-python3 -m examples.math.train_math_with_tool \
+python3 -m examples.math_tool.train_math_with_tool \
     algorithm.adv_estimator=grpo \
     data.train_batch_size=32 \
     data.val_batch_size=500 \
     data.max_prompt_length=2048 \
     data.max_response_length=8192 \
-    actor_rollout_ref.model.path=Qwen/Qwen3-1.7B \
+    actor_rollout_ref.model.path=Qwen/Qwen3-4B \
     actor_rollout_ref.hybrid_engine=True \
     actor_rollout_ref.actor.optim.lr=1e-6 \
     actor_rollout_ref.model.use_remove_padding=True \
@@ -56,9 +56,9 @@ python3 -m examples.math.train_math_with_tool \
     trainer.critic_warmup=0 \
     trainer.logger=['console','wandb'] \
     trainer.project_name='rllm-agent' \
-    trainer.experiment_name='1.7b-math-tool' \
+    trainer.experiment_name='4b-math-tool' \
     trainer.val_before_train=True \
-    trainer.n_gpus_per_node=2 \
+    trainer.n_gpus_per_node=8 \
     trainer.nnodes=1 \
     trainer.save_freq=100 \
     trainer.test_freq=20 \

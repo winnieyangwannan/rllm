@@ -7,36 +7,7 @@ from rllm.data.dataset import DatasetRegistry
 from rllm.engine.async_agent_execution_engine import AsyncAgentExecutionEngine
 from rllm.environments.tools.tool_env import ToolEnvironment
 from rllm.rewards.reward_fn import math_reward_fn
-
-
-def evaluate_results(results):
-    from collections import defaultdict
-
-    # Create a map to store correct answers per problem
-    problem_correct_map = defaultdict(int)
-    problem_total_map = defaultdict(int)
-
-    # Count correct answers for each problem
-    for trajectory in results:
-        problem = trajectory.steps[0].observation['question']
-        
-        # Get is_correct directly from the trajectory's reward
-        is_correct = 1 if trajectory.reward > 0 else 0
-        
-        problem_correct_map[problem] += is_correct
-        problem_total_map[problem] += 1
-
-    # Calculate pass@1 and pass@16
-    total_problems = len(problem_correct_map)
-    pass_at_1 = sum(problem_correct_map.values()) / sum(problem_total_map.values())
-    pass_at_16 = (
-        sum(1 for problem, correct in problem_correct_map.items() if correct > 0)
-        / total_problems
-    )
-
-    print("Total unique problems:", total_problems)
-    print("Average Pass@1 Accuracy:", pass_at_1)
-    print("Average Pass@16 Accuracy:", pass_at_16)
+from rllm.utils import compute_pass_at_k
     
 
 if __name__ == "__main__":
@@ -50,13 +21,14 @@ if __name__ == "__main__":
     
     tokenizer = AutoTokenizer.from_pretrained(model_name)
 
-    envs = [
-        ToolEnvironment(tools=["python"], reward_fn=math_reward_fn) for _ in range(n_parallel_agents)
-    ]
-
-    agents = [
-        ToolAgent(tools=['python'], parser_name='qwen') for i in range(n_parallel_agents)
-    ]
+    agent_args = {
+        "tools": ["python"],
+        "parser_name": "qwen"
+    }
+    env_args = {
+        "tools": ["python"],
+        "reward_fn": math_reward_fn,
+    }
 
     sampling_params = {
         "temperature": 0.6,
@@ -65,8 +37,10 @@ if __name__ == "__main__":
     }
 
     engine = AsyncAgentExecutionEngine(
-        agents=agents,
-        envs=envs,
+        agent_class=ToolAgent,
+        agent_args=agent_args,
+        env_class=ToolEnvironment,
+        env_args=env_args,
         rollout_engine=None,
         engine_name="openai", 
         tokenizer=tokenizer,
@@ -86,4 +60,4 @@ if __name__ == "__main__":
     tasks = test_dataset.repeat(n=4)  # repeat to evaluate pass@k
 
     results = asyncio.run(engine.execute_tasks(tasks))
-    evaluate_results(results)
+    compute_pass_at_k(results)

@@ -13,33 +13,6 @@ pip install -r requirements.txt
 ```
 ```
 
-## Dataset Setup
-
-```bash
-cd scripts/data
-# Download large datasets.
-python download_datasets.py
-# Math Datasets
-python deepscaler_dataset.py
-# Code Ddatasets
-python code_dataset.py
-```
-
-## Train
-```bash
-cd scripts/train
-# 8k training run, for example.
-./run_deepscaler_1.5b_8k.sh --model agentica-org/DeepScaleR-1.5B-Preview
-```
-
-
-### WandB
-
-```bash
-wandb login
-wandb init
-```
-
 ### WebAgent 
 
 #### BrowserGym setup
@@ -59,3 +32,5 @@ export MINIWOB_URL="file://<PATH_TO_MINIWOB_PLUSPLUS_CLONED_REPO>/miniwob/html/m
 cd rllm
 python scripts/data/miniwob_dataset.py --local_dir ~/data/rllm-miniwob
 ```
+
+

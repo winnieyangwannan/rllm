@@ -4,7 +4,7 @@ from rllm.agents import ToolAgent
 from rllm.data.dataset import DatasetRegistry
 from rllm.environments.tools.tool_env import ToolEnvironment
 from rllm.train.agent_trainer import AgentTrainer
-
+from rllm.rewards.reward_fn import math_reward_fn
 
 @hydra.main(config_path="pkg://rllm.train.config", config_name="ppo_trainer", version_base=None)
 def main(config):
@@ -12,7 +12,7 @@ def main(config):
     test_dataset = DatasetRegistry.load_dataset("aime2024", "test")
 
     agent_args = {"tools": ["python"], "parser_name": "qwen"}
-    env_args = {"tools": ["python"]}
+    env_args = {"tools": ["python"], "reward_fn": math_reward_fn}
     
     trainer = AgentTrainer(
         agent_class=ToolAgent,

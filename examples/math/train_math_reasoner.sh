@@ -15,7 +15,7 @@ python3 -m examples.math.train_math_reasoner \
     data.val_batch_size=500 \
     data.max_prompt_length=2048 \
     data.max_response_length=4096 \
-    actor_rollout_ref.model.path=Qwen/Qwen3-1.7B \
+    actor_rollout_ref.model.path=Qwen/Qwen3-4B \
     actor_rollout_ref.hybrid_engine=True \
     actor_rollout_ref.actor.optim.lr=1e-6 \
     actor_rollout_ref.model.use_remove_padding=True \
