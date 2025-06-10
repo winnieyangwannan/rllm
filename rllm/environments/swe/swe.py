@@ -12,12 +12,19 @@ from rllm.environments.base.base_env import BaseEnv
 
 R2EGYM_PATH = os.path.dirname(r2egym.__file__)
 # List of tools to be used in the environment.
-R2EGYM_COMMAND_FILES = [
+R2EGYM_COMMAND_FILES_V1 = [
     os.path.join(R2EGYM_PATH, "agenthub/tools/file_editor.py"),
     os.path.join(R2EGYM_PATH, "agenthub/tools/search.py"),
     os.path.join(R2EGYM_PATH, "agenthub/tools/execute_bash.py"),
     os.path.join(R2EGYM_PATH, "agenthub/tools/finish.py"),
 ]
+
+R2EGYM_COMMAND_FILES_V2 = [
+    os.path.join(R2EGYM_PATH, "agenthub/tools/str_replace_editor.py"),
+    os.path.join(R2EGYM_PATH, "agenthub/tools/execute_bash.py"),
+    os.path.join(R2EGYM_PATH, "agenthub/tools/submit.py"),
+]
+
 R2E_ENV_IDS = [
     "R2E-Gym/R2E-Gym-Subset",
     "R2E-Gym/R2E-Gym-V1",
@@ -41,6 +48,7 @@ class SWEEnv(BaseEnv):
         backend: str = "kubernetes",
         delete_image: bool = False,
         verbose: bool = False,
+        version: str = "v2",
     ):
         """Initialize the SWE environment.
 
@@ -71,6 +79,7 @@ class SWEEnv(BaseEnv):
         self.backend = backend
         self.env = None
         self.verbose = verbose
+        self.version = version
 
     def reset(self) -> Tuple[str, Dict]:
         """Reset the environment to initial state.
@@ -93,7 +102,10 @@ class SWEEnv(BaseEnv):
         if not first_time:
             self.env.runtime.reset()
             self.env.runtime.setup_env()
-        self.env.add_commands(R2EGYM_COMMAND_FILES)
+        if self.version == "v1":
+            self.env.add_commands(R2EGYM_COMMAND_FILES_V1)
+        else:
+            self.env.add_commands(R2EGYM_COMMAND_FILES_V2)
         self.total_steps = 0
 
         gt_patch = self.env.runtime.commit.get_patch(
