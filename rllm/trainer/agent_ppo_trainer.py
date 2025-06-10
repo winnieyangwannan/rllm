@@ -117,7 +117,7 @@ class AgentPPOTrainer(RayPPOTrainer):
         Initialize environment depending on env_class with the necessary extra_info, also set uid of the batch.
         """
         env_args = batch.non_tensor_batch["extra_info"].tolist()
-        envs = [self.env_class.from_json({**env_args[i], **self.env_args}) for i in range(len(env_args))]
+        envs = [self.env_class.from_dict({**env_args[i], **self.env_args}) for i in range(len(env_args))]
         agents = [self.agent_class(**self.agent_args) for _ in range(len(envs))]
         self.agent_execution_engine.update_envs_and_agents(envs, agents)
         return envs

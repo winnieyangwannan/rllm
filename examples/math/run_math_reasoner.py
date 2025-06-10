@@ -6,7 +6,7 @@ from rllm.agents.math_agent import MathAgent
 from rllm.data.dataset import DatasetRegistry
 from rllm.engine.async_agent_execution_engine import AsyncAgentExecutionEngine
 from rllm.environments.base.single_turn_env import SingleTurnEnvironment
-
+from rllm.rewards.reward_fn import math_reward_fn
 
 def evaluate_results(results):
     from collections import defaultdict
@@ -48,7 +48,9 @@ if __name__ == "__main__":
 
     tokenizer = AutoTokenizer.from_pretrained(model_name)
 
-    envs = [SingleTurnEnvironment() for _ in range(n_parallel_agents)]
+    reward_fn = math_reward_fn
+
+    envs = [SingleTurnEnvironment(reward_fn=reward_fn) for _ in range(n_parallel_agents)]
 
     agents = [MathAgent() for i in range(n_parallel_agents)]
 

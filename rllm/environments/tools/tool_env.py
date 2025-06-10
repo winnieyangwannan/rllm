@@ -124,6 +124,6 @@ class ToolEnvironment(BaseEnv):
         return tool_outputs
     
     @staticmethod
-    def from_json(json_dict: Dict) -> "ToolEnvironment":
-        tools = json_dict.pop('tools', [])
-        return ToolEnvironment(task=json_dict, tools=tools)
+    def from_dict(env_args: Dict) -> "ToolEnvironment":
+        tools = env_args.pop('tools', [])
+        return ToolEnvironment(task=env_args, tools=tools)

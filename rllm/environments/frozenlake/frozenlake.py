@@ -322,5 +322,5 @@ class FrozenLakeEnv(GymFrozenLakeEnv, BaseEnv):
             return result
     
     @staticmethod
-    def from_json(extra_info) -> "FrozenLakeEnv":
-        return FrozenLakeEnv(size=extra_info["size"], seed=extra_info["seed"], p=extra_info["p"], max_steps=extra_info.get('max_steps', MAX_STEPS))
+    def from_dict(env_info: Dict) -> "FrozenLakeEnv":
+        return FrozenLakeEnv(size=env_info["size"], seed=env_info["seed"], p=env_info["p"], max_steps=env_info.get('max_steps', MAX_STEPS))

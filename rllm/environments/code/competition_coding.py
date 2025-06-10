@@ -102,9 +102,9 @@ class CompetitionCodingEnv(MultiTurnEnvironment):
         return reward_response.reward, reward_response.metadata
     
     @staticmethod
-    def from_json(info: Dict) -> "CompetitionCodingEnv":
+    def from_dict(env_args: Dict) -> "CompetitionCodingEnv":
         return CompetitionCodingEnv(
-            task=info["task"],
-            max_turns=info.get("max_turns", 2),
-            reward_bonus_coeff=info.get("reward_bonus_coeff", 0.0)
+            task=env_args["task"],
+            max_turns=env_args.get("max_turns", 2),
+            reward_bonus_coeff=env_args.get("reward_bonus_coeff", 0.0)
         )

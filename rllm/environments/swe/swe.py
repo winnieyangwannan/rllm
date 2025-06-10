@@ -143,7 +143,7 @@ class SWEEnv(BaseEnv):
             os.system(f"docker rmi {docker_image}")
 
     @staticmethod
-    def from_json(extra_info: Dict) -> "SWEEnv":
+    def from_dict(env_args: Dict) -> "SWEEnv":
         """Create an environment instance from JSON configuration.
         
         Args:
@@ -152,7 +152,7 @@ class SWEEnv(BaseEnv):
         Returns:
             Initialized SWEEnv instance
         """
-        return SWEEnv(entry=extra_info)
+        return SWEEnv(entry=env_args)
 
 
 if __name__ == "__main__":

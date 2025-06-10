@@ -88,8 +88,12 @@ class MultiTurnEnvironment(BaseEnv, ABC):
         pass
 
     @staticmethod
-    def from_dict(info: Dict) -> "MultiTurnEnvironment":
+    def from_dict(env_args: Dict) -> "MultiTurnEnvironment":
+        if 'task' in env_args:
+            task = env_args['task']
+        else:
+            task = env_args
         return MultiTurnEnvironment(
-            task=info["task"],
-            max_turns=info.get("max_turns", 3)
+            task=task,
+            max_turns=env_args.get("max_turns", 3)
         )
