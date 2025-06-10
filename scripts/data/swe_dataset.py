@@ -7,7 +7,7 @@ import rllm
 from datasets import load_dataset
 
 from rllm.agents.system_prompts import SWE_SYSTEM_PROMPT, SWE_USER_PROMPT, \
-    SWE_SYSTEM_PROMPT_FN_CALL, SWE_USER_PROMPT_FN_CALL
+    SWE_SYSTEM_PROMPT_FN_CALL, SWE_USER_PROMPT_FN_CALL, SWE_SYSTEM_PROMPT_V2, SWE_USER_PROMPT_V2
 
 
 # Get the directory for rLLM repo (rllm.__file__)
@@ -39,7 +39,7 @@ def main():
             problem_statement = row_dict.get("problem_statement", "")
             return {
                 "data_source": "swe",
-                "prompt": [{"role": "system", "content": SWE_SYSTEM_PROMPT}, {"role": "user", "content": SWE_USER_PROMPT.format(problem_statement=problem_statement)}],
+                "prompt": [{"role": "system", "content": SWE_SYSTEM_PROMPT_V2}, {"role": "user", "content": SWE_USER_PROMPT_V2.format(problem_statement=problem_statement)}],
                 "ability": "swe",
                 "reward_model": {"style": "rule", "ground_truth": ""},
                 "extra_info": row_dict,
