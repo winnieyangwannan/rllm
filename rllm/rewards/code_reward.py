@@ -469,12 +469,6 @@ class RewardCodeFn:
         """
         total_start_time = time.time()
 
-        # Extract information from task_info
-        problem_type = task_info.get('problem_type', RewardType.UNK)
-        if problem_type != RewardType.CODE:
-            return RewardOutput(reward=self.config.format_error_reward, is_correct=False, 
-                              metadata={"error": f"Invalid problem type: expected 'CODE', but got '{problem_type}'"})
-
         model_response = action
         dataset_name = task_info.get('data_source', '')
         tests = task_info.get('ground_truth', None)

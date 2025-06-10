@@ -41,11 +41,7 @@ class RewardMathFn:
         Returns:
             RewardOutput: The calculated reward with correctness information
         """
-        # Extract information from task_info
-        problem_type = task_info.get('problem_type', RewardType.UNK)
-        if problem_type != RewardType.MATH:
-            return RewardOutput(reward=self.config.format_error_reward, is_correct=False)
-            
+        # Extract information from task_info            
         problem = task_info.get('problem', '')
         model_response = action
         

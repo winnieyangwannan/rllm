@@ -30,22 +30,12 @@ class MultiTurnEnvironment(BaseEnv, ABC):
         self.done = False
         self.history = []
     
-    def reset(self, task=None, seed=None):
-        """Reset the environment and return initial observations."""
-        import random
-        if seed is not None:
-            random.seed(seed)
-        
-        # Use the provided task if available, otherwise use the default task
-        if task is not None:
-            self.task = task
-        
+    def reset(self):        
         self.done = False
         self.current_turn = 0
         self.history = []
         
-        # Return the first question
-        return {"question": self.task["question"]}, {}
+        return self.task, {}
     
     def step(self, action):
         """
@@ -89,6 +79,7 @@ class MultiTurnEnvironment(BaseEnv, ABC):
 
     @staticmethod
     def from_dict(env_args: Dict) -> "MultiTurnEnvironment":
+        print("env_args", env_args)
         if 'task' in env_args:
             task = env_args['task']
         else:

@@ -79,5 +79,5 @@ class RewardOutput:
     """
     reward: float
     metadata: dict = field(default_factory=dict)
-    is_correct: Optional[bool]
+    is_correct: Optional[bool] = None
 

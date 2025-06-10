@@ -30,8 +30,6 @@ class AsyncAgentExecutionEngine(AgentExecutionEngine):
         engine_name,
         tokenizer,
         config=None,
-        agents=[],
-        envs=[],
         model_path="",
         n_parallel_agents=1,
         trajectory_timeout=None,
@@ -68,17 +66,18 @@ class AsyncAgentExecutionEngine(AgentExecutionEngine):
 
         self.agent_class = agent_class
         self.agent_args = agent_args
-        self.agents = agents
         self.env_class = env_class
         self.env_args = env_args
-        self.envs = envs
+
+        self.agents = [None for _ in range(n_parallel_agents)]
+        self.envs = [None for _ in range(n_parallel_agents)]
         
         self.trajectory_timeout = trajectory_timeout
         if not trajectory_timeout:
             self.trajectory_timeout = int(1e9)
 
 
-        assert all(type(env).is_multithread_safe() for env in self.envs), "All environments must be multithread safe for async engine"
+        assert env_class.is_multithread_safe(), "Environment must be multithread safe for async engine"
         # rollout engine args
         self.rollout_engine_args = rollout_engine_args
         self.sampling_params = kwargs.get("sampling_params", None)
@@ -194,7 +193,7 @@ class AsyncAgentExecutionEngine(AgentExecutionEngine):
 
 
     async def run_agent_trajectory_async(
-        self, idx, application_id, task=None, seed=0, mode="Text", **kwargs
+        self, idx, application_id, seed=0, mode="Text", **kwargs
     ):
         """Run a single agent's trajectory asynchronously"""
         agent = self.agents[idx]
@@ -216,7 +215,7 @@ class AsyncAgentExecutionEngine(AgentExecutionEngine):
 
         # Reset environment with the task using the executor
         loop = asyncio.get_event_loop()
-        observation, info = await loop.run_in_executor(self.executor, lambda: env.reset(task=task) if task else env.reset())
+        observation, info = await loop.run_in_executor(self.executor, env.reset)
         info['max_steps'] = self.max_steps
 
         # Reset agent
@@ -510,7 +509,9 @@ class AsyncAgentExecutionEngine(AgentExecutionEngine):
                 # Get an available index
                 index = await index_queue.get()
                 try:
-                    res = await self.run_agent_trajectory_async(index, task_id, task)
+                    self.envs[index] = self.env_class.from_dict({**task, **self.env_args})
+                    self.agents[index] = self.agent_class(**self.agent_args)
+                    res = await self.run_agent_trajectory_async(index, application_id=task_id)
                     return task_id, res
                 finally:
                     # Put the index back in the queue when done

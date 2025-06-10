@@ -213,37 +213,16 @@ class FrozenLakeEnv(GymFrozenLakeEnv, BaseEnv):
     def _get_player_position(self):
         return (self.s // self.ncol, self.s % self.ncol) # (row, col)
 
-    def reset(
-            self,
-            mode='tiny_rgb_array',
-            reset_map=True,
-            seed=None,
-            task=None
-    ):
-        """
-        Reset the environment, there are two options:
-        1. reset the map, generate a new map (reset_map=True)
-        2. reset the environment with the same map, while putting the agent back to the start position (reset_map=False)
-        Both can reset the seed
-        NOTE if seed is the same, the map will be the same
-        """
-
-        if task:
-            seed = task['seed']
-        
-
-        if not seed:
-            seed = self.seed
-        if reset_map:
-            self.__init__(
-                size=self.map_kwargs["size"],
-                p=self.map_kwargs["p"],
-                seed=seed,
-                is_slippery=self.env_kwargs["is_slippery"],
-                desc=self.desc
-            )
-        GymFrozenLakeEnv.reset(self, seed=seed)
-        return self.render(mode), {}
+    def reset(self):
+        self.__init__(
+            size=self.map_kwargs["size"],
+            p=self.map_kwargs["p"],
+            seed=self.seed,
+            is_slippery=self.env_kwargs["is_slippery"],
+            desc=self.desc
+        )
+        GymFrozenLakeEnv.reset(self, seed=self.seed)
+        return self.render(mode='tiny_rgb_array'), {}
     
     def finished(self):
         player_pos = self._get_player_position()
@@ -251,7 +230,7 @@ class FrozenLakeEnv(GymFrozenLakeEnv, BaseEnv):
         
     def success(self):
         """
-        Check if the agent has reached the goal (G) or hole (H)
+        Check if the agent has reacched the goal (G) or hole (H)
         """
         player_pos = self._get_player_position()
         return self.desc[player_pos] in b"G"

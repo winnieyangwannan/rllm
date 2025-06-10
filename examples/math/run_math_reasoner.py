@@ -50,15 +50,17 @@ if __name__ == "__main__":
 
     reward_fn = math_reward_fn
 
-    envs = [SingleTurnEnvironment(reward_fn=reward_fn) for _ in range(n_parallel_agents)]
-
-    agents = [MathAgent() for i in range(n_parallel_agents)]
+    env_args = {
+        "reward_fn": reward_fn,
+    }
 
     sampling_params = {"temperature": 0.6, "top_p": 0.95, "model": model_name}
 
     engine = AsyncAgentExecutionEngine(
-        agents=agents,
-        envs=envs,
+        agent_class=MathAgent,
+        env_class=SingleTurnEnvironment,
+        agent_args={},
+        env_args=env_args,
         rollout_engine=None,
         engine_name="openai",
         tokenizer=tokenizer,
@@ -71,7 +73,6 @@ if __name__ == "__main__":
         max_prompt_length=2048,
         config=None,
         n_parallel_agents=n_parallel_agents,
-        enable_thinking=True,
     )
 
     test_dataset = DatasetRegistry.load_dataset("aime2024", "test")
@@ -82,5 +83,5 @@ if __name__ == "__main__":
     
     tasks = test_dataset.repeat(n=16)  # repeat to evaluate pass@k
 
-    results = asyncio.run(engine.execute_tasks(tasks))
+    results = asyncio.run(engine.execute_tasks(tasks[:1]))
     evaluate_results(results)
