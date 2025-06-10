@@ -1,7 +1,7 @@
 from typing import Any, Dict, Optional, Tuple
 
 from rllm.environments.base.multi_turn_env import MultiTurnEnvironment
-from rllm.rewards.reward_fn import RewardFunction, rllm_reward_fn
+from rllm.rewards.reward_fn import RewardFunction, zero_reward
 
 
 class SingleTurnEnvironment(MultiTurnEnvironment):
@@ -22,7 +22,7 @@ class SingleTurnEnvironment(MultiTurnEnvironment):
             task: Dictionary containing the task information, including at least a "question" field
         """
         super().__init__(task=task, max_turns=1, **kwargs)
-        self.reward_fn = reward_fn or rllm_reward_fn
+        self.reward_fn = reward_fn or zero_reward
     
     def get_reward_and_next_obs(self, task: Dict, action: Any) -> Tuple[float, Dict]:
         """

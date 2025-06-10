@@ -3,7 +3,6 @@ import re
 from typing import Any, Dict, List, Tuple
 
 from rllm.agents.agent import BaseAgent, Step, Trajectory
-from rllm.agents.system_prompts import *
 from rllm.environments.frozenlake.frozenlake import FrozenLakeEnv
 
 logger = logging.getLogger(__name__)
