@@ -1,6 +1,6 @@
-# Quick Start with RLLM
+# Quick Start with rLLM
 
-This guide walks you through using RLLM to build AI agents with tool usage capabilities. We'll use the **math tool agent** example to demonstrate the complete workflow from dataset preparation through model training.
+This guide walks you through using rLLM to build AI agents with tool usage capabilities. We'll use the **math tool agent** example to demonstrate the complete workflow from dataset preparation through model training.
 
 ## Overview
 

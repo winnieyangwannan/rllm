@@ -79,7 +79,6 @@ class MultiTurnEnvironment(BaseEnv, ABC):
 
     @staticmethod
     def from_dict(env_args: Dict) -> "MultiTurnEnvironment":
-        print("env_args", env_args)
         if 'task' in env_args:
             task = env_args['task']
         else:

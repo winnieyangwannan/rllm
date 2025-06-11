@@ -33,10 +33,7 @@ AGENT_CLASSES = {
 ENV_CLASS_MAPPING = {k: v for k, v in ENV_CLASSES.items() if v is not None}
 AGENT_CLASS_MAPPING = {k: v for k, v in AGENT_CLASSES.items() if v is not None}
 
-def setup_environment(config):
-    # if config.env.name not in ENV_CLASS_MAPPING:
-    #     raise ValueError(f"Environment {config.env.name} not available. Make sure all required dependencies are installed.")
-        
+def setup_environment(config):        
     if config.env.name == 'browsergym':
         assert hasattr(config.env.env_args, 'subtask'), "subtask must be defined in environment argument for browsergym"
         if config.env.env_args.subtask == 'miniwob':

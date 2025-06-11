@@ -118,32 +118,26 @@ class CompetitionCodingAgent(BaseAgent):
         )
         self._trajectory.steps.append(new_step)
 
-    def update_from_model(self, response: Any, **kwargs):
+    def update_from_model(self, response: str, **kwargs):
         """
         Updates the agent's internal state based on the model's response.
         """
-        # Extract content from the response
-        if isinstance(response, str):
-            content = response
-        else:
-            # Assuming response object similar to OAI completion
-            content = response.choices[0].message.content
+        content = response
         
         assert self._trajectory.steps, "Trajectory should not be empty when update_from_model is called."
         
         # Update the current step in the trajectory
         cur_step = self._trajectory.steps[-1]
-        cur_step.model_response = content
+        cur_step.model_response = response
 
         if self.remove_thinking and content.count("</think>") == 1:
-            cur_step.thought, cur_step.action = content.split("</think>")
+            cur_step.thought, cur_step.action = response.split("</think>")
             cur_step.thought += "</think>"
             cur_step.action = cur_step.action.strip()
             self.messages.append({"role": "assistant", "content": cur_step.action})
         else:
-            cur_step.thought = content 
-            cur_step.action = content
-            self.messages.append({"role": "assistant", "content": content})
+            cur_step.model_response = response
+            self.messages.append({"role": "assistant", "content": response})
         
         self.step += 1
 

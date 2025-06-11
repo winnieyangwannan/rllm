@@ -711,17 +711,8 @@ class WebArenaAgent(BaseAgent):
         assert "axtree_txt" in obs, "Only axtree is supported for now"
         self.past_obs.append(obs["axtree_txt"])
 
-    def update_from_model(self, response: Any, **kwargs):
-        if isinstance(response, str):
-            content = response
-        else:  # OpenAI response
-            try:
-                content = response.choices[0].message.content
-            except Exception as e:
-                logger.error(
-                    f"Failed to extract content from response: {response}. Error: {e}"
-                )
-                content = str(response)
+    def update_from_model(self, response: str, **kwargs):
+        content = response
 
         assert (
             self._trajectory.steps
@@ -765,10 +756,6 @@ class WebArenaAgent(BaseAgent):
 
     @property
     def chat_completions(self) -> List[Dict[str, str]]:
-        return self.messages
-
-    @property
-    def prompt(self):
         return self.messages[-2:]
 
     def get_prompt(self):

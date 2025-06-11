@@ -39,14 +39,9 @@ class BaseAgent(ABC):
     def trajectory(self) -> Trajectory:
         """Converts agent's internal state into a Trajectory object."""
         return Trajectory()
-    
-    @property
-    def prompt(self) -> List[Dict[str, str]]:
-        """Converts agent's internal state to list of OAI chat completions used for next prompt"""
-        return self.chat_completions
 
     @abstractmethod
-    def update_from_env(self, observation: Any, action: Any, reward: float, done: bool, info: Dict, **kwargs):
+    def update_from_env(self, observation: Any, reward: float, done: bool, info: Dict, **kwargs):
         """
         Updates the agent's internal state after an environment step.
 
@@ -55,7 +50,6 @@ class BaseAgent(ABC):
 
         Args:
             observation (Any): The observation after stepping through environment.
-            action (Any): The action taken by the agent.
             reward (float): The reward received after taking the action.
             done (bool): Whether the episode has ended due to termination.
             info (dict): Additional metadata from the environment.
@@ -63,7 +57,7 @@ class BaseAgent(ABC):
         raise NotImplementedError("Subclasses must implement this method")
 
     @abstractmethod
-    def update_from_model(self, response: Any, **kwargs):
+    def update_from_model(self, response: str, **kwargs):
         """
         Updates the agent's internal state after an environment step.
 
@@ -100,6 +94,7 @@ class BaseAgent(ABC):
         which can be useful for debugging, logging, or state management.
         
         Returns:
-            Dict: A dictionary containing the agent's current state information.
+            Step: The agent's current state.
         """
-        return Step()
+        assert self.trajectory.steps, "Trajectory should not be empty when get_current_state is called."
+        return self.trajectory.steps[-1]

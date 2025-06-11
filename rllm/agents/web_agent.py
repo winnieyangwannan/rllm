@@ -100,16 +100,8 @@ class WebAgent(BaseAgent):
         )
         self._trajectory.steps.append(cur_step)
         
-    def update_from_model(self, response: Any, **kwargs):
-        if isinstance(response, str):
-            content = response
-        else: # OpenAI response
-            try:
-                content = response.choices[0].message.content
-            except Exception as e:
-                logger.error(f"Failed to extract content from response: {response}. Error: {e}")
-                content = str(response)
-
+    def update_from_model(self, response: str, **kwargs):
+        content = response
         if not self.accumulate_thinking:
             _, sep, after = content.partition("</think>")
             if sep:
@@ -357,40 +349,3 @@ Action: ```send_msg_to_user("The price for a 15\\" laptop is 1499 USD.")```
         #         reward_penalty = -0.5
         #         break
         return reward + reward_penalty
-
-    # def validate_step(self, trajectory_step):
-    #     """
-    #     Validates if the trajectory_step(dict) is valid or malformated.
-    #     """
-    #     thought = trajectory_step.thought
-    #     action = trajectory_step.action
-
-    #     pattern = r"```(.*?)```"
-    #     match = re.search(pattern, response, re.DOTALL)
-
-    #     # Response has no action wrapped in ``` ```
-    #     if not match:
-    #         return False
-
-    #     # Response has action that results in error
-    #     if trajectory_step["next_observation"]["last_action_error"]:
-    #         return False
-
-    #     # Response not in Thought, Action format
-    #     format_pattern = r"Thought:.*?Action:.*?"
-    #     if not re.search(format_pattern, response, re.DOTALL):
-    #         return False
-
-    #     # Response has repeated meaningless tokens
-    #     def contains_repeated_tokens(response, min_length=5):
-    #         for index in range(int(len(response)//2), min_length, -1):
-    #             if response[-index:] == response[-2*index:-index]:
-    #                 return True
-    #         return False
-
-        
-    #     if contains_repeated_tokens(response):
-    #         return False
-        
-    #     return True
-

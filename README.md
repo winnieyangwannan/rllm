@@ -34,3 +34,5 @@ python scripts/data/miniwob_dataset.py --local_dir ~/data/rllm-miniwob
 ```
 
 
+## ToDO for release
+- [ ] Check all training scripts in the examples to make sure they are all runnable

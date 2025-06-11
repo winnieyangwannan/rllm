@@ -9,7 +9,7 @@ class MathAgent(BaseAgent):
     """
     A math agent that solves mathematical problems step by step, following the BaseAgent interface.
     """
-    def __init__(self, remove_thinking=False):
+    def __init__(self, accumulate_thinking=True):
         """
         Initialize the MathAgent.
         """
@@ -17,7 +17,7 @@ class MathAgent(BaseAgent):
         self._trajectory = Trajectory()
         self.messages = []
         self.step = 0
-        self.remove_thinking = remove_thinking
+        self.accumulate_thinking = accumulate_thinking
         
     def update_from_env(self, observation: Any, reward: float, done: bool, info: Dict, **kwargs):
         """
@@ -53,40 +53,22 @@ class MathAgent(BaseAgent):
         )
         self._trajectory.steps.append(cur_step)
 
-    def update_from_model(self, response: Any, **kwargs):
+    def update_from_model(self, response: str, **kwargs):
         """
         Updates the agent's internal state based on the model's response.
-        """
-        # Extract content from the response
-        if isinstance(response, str):
-            content = response
-        else:
-            # Assuming response object similar to OAI completion
-            content = response.choices[0].message.content
-        
-        assert self._trajectory.steps, "Trajectory should not be empty when update_from_model is called."
+        """        
+        assert self.trajectory.steps, "Trajectory should not be empty when update_from_model is called."
         
         # Update the current step in the trajectory
-        cur_step = self._trajectory.steps[-1]
-        # For MathAgent, the model response represents both the thought and action.
-        cur_step.thought = content 
-        cur_step.action = content  # Or potentially parse out the boxed answer? For now, use full content.
-        cur_step.model_response = content
+        cur_step = self.get_current_state()
+        cur_step.model_response = response
 
-        if self.remove_thinking:
-            think_start = content.find("<think>")
-            think_end = content.find("</think>")
-            if think_start != -1 and think_end != -1 and think_end > think_start:
-                # Remove full <think>...</think> block
-                think_end += len("</think>")
-                content = content[:think_start] + content[think_end:]
-            elif think_end != -1:
-                # Remove everything before and including </think>
-                think_end += len("</think>")
-                content = content[think_end:]
+        if not self.accumulate_thinking:
+            _, sep, after = response.partition("</think>")
+            if sep:
+                response = after
 
-        # Add the assistant's response to the messages
-        self.messages.append({"role": "assistant", "content": content})
+        self.messages.append({"role": "assistant", "content": response})
         
         self.step += 1
 
@@ -107,8 +89,3 @@ class MathAgent(BaseAgent):
     def trajectory(self) -> Trajectory:
         """Returns the trajectory object."""
         return self._trajectory
-
-    def get_current_state(self) -> Step:
-        """Returns the current step/state of the agent."""
-        assert self._trajectory.steps, "Trajectory should not be empty when get_current_state is called."
-        return self._trajectory.steps[-1]

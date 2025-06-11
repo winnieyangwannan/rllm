@@ -173,31 +173,22 @@ Now it is your turn, please show your thinking process and put the final action 
         )
         self._trajectory.steps.append(cur_step)
 
-    def update_from_model(self, response: Any, **kwargs):
-        if isinstance(response, str):
-            content = response
-        else: # OpenAI response
-            try:
-                content = response.choices[0].message.content
-            except Exception as e:
-                logger.error(f"Failed to extract content from response: {response}. Error: {e}")
-                content = str(response)
-
+    def update_from_model(self, response: str, **kwargs):
         assert self._trajectory.steps, "Trajectory should not be empty when update_from_model is called."
 
         if not self.accumulate_thinking:
-            _, sep, after = content.partition("</think>")
+            _, sep, after = response.partition("</think>")
             if sep:
-                content = after
+                response = after
 
-        thought, action_str = self._parse_model_response(content)
+        thought, action_str = self._parse_model_response(response)
 
         cur_step = self._trajectory.steps[-1]
         cur_step.thought = thought
         cur_step.action = action_str
-        cur_step.model_response = content
+        cur_step.model_response = response
 
-        self.messages.append({"role": "assistant", "content": content})
+        self.messages.append({"role": "assistant", "content": response})
 
         self.step += 1
 

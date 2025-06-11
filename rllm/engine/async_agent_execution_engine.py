@@ -247,7 +247,7 @@ class AsyncAgentExecutionEngine(AgentExecutionEngine):
 
         for step_idx in range(self.max_steps):
             # Get action from agent
-            prompt_messages = agent.prompt.copy()
+            prompt_messages = agent.chat_completions.copy()
             # Max remaining tokens left for the response
             # For enforced max prompt at each step, no need to deduct here
             if not self.enforce_max_prompt_length:

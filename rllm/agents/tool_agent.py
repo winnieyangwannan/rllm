@@ -117,8 +117,6 @@ class ToolAgent(BaseAgent):
             logger.error(f"Failed to parse tool calls from string response: {e}")
             tool_calls_dict = [] # Indicate no valid tool calls parsed
 
-        print(f"tool_calls_dict: {tool_calls_dict}", flush=True)
-
         # Append assistant message to chat history
         assistant_message = {"role": "assistant", "content": assistant_content}
         if len(tool_calls_dict) > 0:
