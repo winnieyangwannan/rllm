@@ -9,12 +9,12 @@ from rllm.agents.tool_agent import ToolAgent
 from rllm.data.dataset import DatasetRegistry
 from rllm.engine.async_agent_execution_engine import AsyncAgentExecutionEngine
 from rllm.environments.tools.tool_env import ToolEnvironment
-from rllm.rewards.search_reward import rllm_reward_fn_search
+from rllm.rewards.search_reward import rllm_reward_fn_search_boxed
+from rllm.agents.system_prompts import SEARCH_SYSTEM_PROMPT
 
-
-def load_search_r1_data(n=1, train_size=3000, test_size=100):
-    if DatasetRegistry.dataset_exists("search_r1_combined", "test"):
-        test_dataset = DatasetRegistry.load_dataset("search_r1_combined", "test")
+def load_search_data(n=1, train_size=3000, test_size=100):
+    if DatasetRegistry.dataset_exists("hotpotqa_combined", "test"):
+        test_dataset = DatasetRegistry.load_dataset("hotpotqa_combined", "test")
         return test_dataset.get_data()
     
     print("Loading HotpotQA dataset...")
@@ -124,8 +124,11 @@ def load_search_r1_data(n=1, train_size=3000, test_size=100):
     
     print(f"Combined dataset: {len(train_processed)} train examples, {len(test_processed)} test examples")
     
-    DatasetRegistry.register_dataset("search_r1_combined", train_processed, "train")
-    test_dataset = DatasetRegistry.register_dataset("search_r1_combined", test_processed, "test")
+    #DatasetRegistry.register_dataset("search_combined", train_processed, "train")
+    # test_dataset = DatasetRegistry.register_dataset("search_combined", test_processed, "test")
+
+    DatasetRegistry.register_dataset("hotpotqa_combined", hotpot_train_processed, "train")
+    test_dataset = DatasetRegistry.register_dataset("hotpotqa_combined", hotpot_val_processed, "test")
     
     return test_dataset.get_data()
 
@@ -140,17 +143,6 @@ if __name__ == "__main__":
 
     tokenizer = AutoTokenizer.from_pretrained(model_name)
 
-    envs = [
-        ToolEnvironment(tools=["tavily_extract", "tavily_search"]) for _ in range(n_parallel_agents)
-    ]
-    for env in envs:
-        env.reward_fn = rllm_reward_fn_search
-
-    agents = [
-        ToolAgent(tools=envs[i].tools.tools, model_name=model_name, parser_name='qwen') 
-        for i in range(n_parallel_agents)
-    ]
-
     sampling_params = {
         "temperature": 0.6, 
         "top_p": 0.95, 
@@ -158,8 +150,17 @@ if __name__ == "__main__":
     }
 
     engine = AsyncAgentExecutionEngine(
-        agents=agents,
-        envs=envs,
+        agent_class=ToolAgent,
+        agent_args={
+            "tools": ["local_search"],
+            "system_prompt": SEARCH_SYSTEM_PROMPT, 
+            "parser_name": "qwen"
+        },
+        env_class=ToolEnvironment,
+        env_args={
+            "tools": ["local_search"],
+            "reward_fn": rllm_reward_fn_search_boxed
+        },
         rollout_engine=None,
         engine_name="openai",
         tokenizer=tokenizer,
@@ -174,6 +175,6 @@ if __name__ == "__main__":
         n_parallel_agents=n_parallel_agents,
     )
 
-    tasks = load_search_r1_data(n=1)
+    tasks = load_search_data(n=1)
 
     results = asyncio.run(engine.execute_tasks(tasks)) 

@@ -227,3 +227,18 @@ Follow these steps to resolve the issue:
 
 TOOL_SYSTEM_PROMPT= """You are a tool agent. You are given a task to complete. You have a set of tools at your disposal. Before you use the tools, outputting your thoughts before calling the tools. 
 """
+
+SEARCH_SYSTEM_PROMPT = """You are a helpful AI assistant that can search for information to answer questions accurately.
+
+When answering questions:
+1. Use the available search tools to find relevant and reliable information
+2. Synthesize information from multiple sources when needed
+3. Provide accurate and comprehensive answers based on your search results
+4. Always put your final answer in \\boxed{} format
+
+For example:
+- If the answer is "American", write: \\boxed{American}
+- If the answer is "yes", write: \\boxed{yes}
+- If the answer is a year like "1985", write: \\boxed{1985}
+
+Remember to search thoroughly and provide your final answer clearly within the \\boxed{} format."""

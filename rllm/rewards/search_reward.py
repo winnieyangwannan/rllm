@@ -5,12 +5,12 @@ from typing import Union, List, Dict, Any
 from collections import Counter
 from difflib import SequenceMatcher
 
-from rllm.rewards.reward_types import RewardConfig, RewardFn, RewardInput, RewardOutput, RewardType
+from rllm.rewards.reward_types import RewardConfig, RewardInput, RewardOutput, RewardType
 
 
-class RewardSearchFn(RewardFn):
+class RewardSearchFn:
     def __init__(self, config: RewardConfig):
-        super().__init__(config)
+        self.config = config
         
     def normalize_answer(self, s: str) -> str:
         """Normalize answer text for evaluation (following HotpotQA/SQuAD standards)"""
@@ -231,11 +231,9 @@ class RewardSearchFn(RewardFn):
         return is_correct, max_f1, metadata
     
     def __call__(self, input: RewardInput) -> RewardOutput:
-        assert input.problem_type in [RewardType.UNK, RewardType.WEB], \
-            f"Invalid problem type: expected 'UNK' or 'WEB', but got '{input.problem_type}'"
-        
-        model_response = input.model_response
-        ground_truth = input.metadata.get("ground_truth") or input.metadata.get("answer")
+        # Extract information from task_info and action
+        model_response = input.action
+        ground_truth = input.task_info.get("ground_truth") or input.task_info.get("answer")
         
         if ground_truth is None:
             return RewardOutput(
@@ -273,11 +271,31 @@ def rllm_reward_fn_search(data_source: str, llm_solution: str, ground_truth: Uni
         metadata.update(extra_info)
     
     reward_response = reward_fn(RewardInput(
-        problem="",
-        problem_type=RewardType.UNK,
-        model_response=llm_solution,
-        metadata=metadata,
-        data_source=data_source
+        task_info=metadata,
+        action=llm_solution
     ))
     
-    return reward_response 
+    return reward_response
+
+
+def rllm_reward_fn_search_boxed(*args, task_info=None, action=None, data_source=None, llm_solution=None, ground_truth=None, extra_info=None, **kwargs) -> RewardOutput:
+    if len(args) >= 3:
+        data_source, llm_solution, ground_truth = args[0], args[1], args[2]
+        if len(args) > 3:
+            extra_info = args[3]
+        return rllm_reward_fn_search(data_source, llm_solution, ground_truth, extra_info, **kwargs)
+    
+    elif task_info is not None and action is not None:
+        nested_task = task_info.get("task", {})
+        extracted_data_source = nested_task.get("data_source", task_info.get("data_source", "unknown"))
+        extracted_ground_truth = nested_task.get("ground_truth", task_info.get("ground_truth", ""))
+        
+        return rllm_reward_fn_search(extracted_data_source, action, extracted_ground_truth, extra_info, **kwargs)
+    
+    elif data_source is not None and llm_solution is not None and ground_truth is not None:
+        return rllm_reward_fn_search(data_source, llm_solution, ground_truth, extra_info, **kwargs)
+    
+    else:
+        raise ValueError("rllm_reward_fn_search_boxed requires either:\n"
+                       "- Positional args: func(data_source, llm_solution, ground_truth)\n"
+                       "- Named args: func(task_info=..., action=...) or func(data_source=..., llm_solution=..., ground_truth=...)") 
