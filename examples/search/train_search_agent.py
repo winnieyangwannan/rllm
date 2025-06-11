@@ -1,27 +1,29 @@
 import hydra
+import os
+import logging
 
 from rllm.agents.tool_agent import ToolAgent
 from rllm.data import DatasetRegistry
 from rllm.environments.tools.tool_env import ToolEnvironment
 from rllm.train.agent_trainer import AgentTrainer
+from rllm.rewards.search_reward import rllm_reward_fn_search_boxed
+from rllm.agents.system_prompts import SEARCH_SYSTEM_PROMPT
 
-
-@hydra.main(config_path="pkg://rllm.train.config", config_name="ppo_trainer", version_base=None)
+@hydra.main(config_path="../../rllm/train/config", config_name="search_agent_trainer", version_base=None)
 def main(config):
-    train_dataset = DatasetRegistry.load_dataset("search_r1_combined", "train")
-    val_dataset = DatasetRegistry.load_dataset("search_r1_combined", "test")
+    train_dataset = DatasetRegistry.load_dataset("hotpotqa_combined", "train")
+    val_dataset = DatasetRegistry.load_dataset("hotpotqa_combined", "test")
 
-    # Example agent and environment arguments
-    agent_args = {
-        "temperature": 0.7,
-        "max_tokens_per_step": 512,
-        # Add other agent-specific arguments as needed
+    env_args = {
+        "max_steps": 3, 
+        "tools": ["local_search"],
+        "reward_fn": rllm_reward_fn_search_boxed,
     }
     
-    env_args = {
-        "max_turns": 5,
-        "timeout": 30,
-        # Add other environment-specific arguments as needed
+    agent_args = {
+        "system_prompt": SEARCH_SYSTEM_PROMPT,
+        "tools": ["local_search"],
+        "parser_name": "qwen"
     }
 
     trainer = AgentTrainer(
