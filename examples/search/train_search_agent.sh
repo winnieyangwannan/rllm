@@ -54,9 +54,9 @@ python3 -m examples.search.train_search_agent \
     trainer.critic_warmup=0 \
     trainer.logger=['console','wandb'] \
     trainer.project_name='deepscaler-agent' \
-    trainer.experiment_name='7b-loop-drgrpo-search_r1_agent' \
+    trainer.experiment_name='7b-loop-drgrpo-search_agent' \
     trainer.val_before_train=False \
-    trainer.n_gpus_per_node=2 \
+    trainer.n_gpus_per_node=1\
     trainer.nnodes=1 \
     trainer.save_freq=40 \
     trainer.test_freq=10 \

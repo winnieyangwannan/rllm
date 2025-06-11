@@ -164,6 +164,11 @@ class ToolAgent(BaseAgent):
     def chat_completions(self) -> List[Dict[str, str]]:
         """Returns the current message history for the model."""
         return self.messages
+    
+    @property
+    def prompt(self) -> List[Dict[str, str]]:
+        """Returns the current message history for the model."""
+        return self.messages
 
     @property
     def trajectory(self) -> Trajectory:
