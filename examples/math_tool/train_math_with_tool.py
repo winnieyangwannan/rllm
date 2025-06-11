@@ -11,8 +11,15 @@ def main(config):
     train_dataset = DatasetRegistry.load_dataset("deepscaler_math", "train")
     test_dataset = DatasetRegistry.load_dataset("aime2024", "test")
 
-    agent_args = {"tools": ["python"], "parser_name": "qwen"}
-    env_args = {"tools": ["python"], "reward_fn": math_reward_fn}
+    agent_args = {
+        "tools": ["python"],
+        "parser_name": "qwen",
+        "tool_system_prompt": "You are a math assistant that can write python to solve math problems."
+    }
+    env_args = {
+        "tools": ["python"],
+        "reward_fn": math_reward_fn,
+    }
     
     trainer = AgentTrainer(
         agent_class=ToolAgent,

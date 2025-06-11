@@ -1,9 +1,6 @@
-import logging
 from typing import Any, Dict, List
 
 from rllm.agents.agent import BaseAgent, Step, Trajectory
-
-logger = logging.getLogger(__name__)
 
 class MathAgent(BaseAgent):
     """
@@ -20,20 +17,24 @@ class MathAgent(BaseAgent):
         self.accumulate_thinking = accumulate_thinking
         
     def update_from_env(self, observation: Any, reward: float, done: bool, info: Dict, **kwargs):
-        """
-        Updates the agent's internal state after an environment step.
-        """
+        """Process environment feedback and update internal state."""
+        
         # Format observation based on whether it's the initial problem or subsequent feedback
-        if not self._trajectory.steps:
-            # Initial problem statement
-            assert isinstance(observation, dict) and 'question' in observation, "Initial observation must be a dict with a 'question' key."
+        if not self.trajectory.steps:
+            # Initial problem presentation
+            assert isinstance(observation, dict) and 'question' in observation
             question = observation['question']
             formatted_observation = f'{question} {self.instruction}'
         else:
-            formatted_observation = "Your previous answer may contain a mistake. Please review it carefully and answer again. Put your final answer within \\boxed{}."
+            # Follow-up correction prompt
+            formatted_observation = (
+                "Your previous answer may contain a mistake. "
+                "Please review it carefully and answer again. "
+                "Put your final answer within \\boxed{}."
+            )
 
         # If there are previous steps, update the last step's outcome
-        if self._trajectory.steps:
+        if self.trajectory.steps:
             prior_step = self._trajectory.steps[-1]
             prior_step.next_observation = formatted_observation
             prior_step.reward = reward
@@ -51,7 +52,7 @@ class MathAgent(BaseAgent):
             observation=formatted_observation,
             step=self.step
         )
-        self._trajectory.steps.append(cur_step)
+        self.trajectory.steps.append(cur_step)
 
     def update_from_model(self, response: str, **kwargs):
         """
@@ -73,19 +74,17 @@ class MathAgent(BaseAgent):
         self.step += 1
 
     def reset(self):
-        """
-        Resets the agent's internal state for a new episode.
-        """
+        """Reset agent state for new episode."""
         self._trajectory = Trajectory()
         self.messages = []
         self.step = 0
 
     @property
     def chat_completions(self) -> List[Dict[str, str]]:
-        """Returns the history of messages for chat completion."""
+        """Return conversation history for model interaction."""
         return self.messages
     
     @property
     def trajectory(self) -> Trajectory:
-        """Returns the trajectory object."""
+        """Return complete interaction trajectory."""
         return self._trajectory

@@ -23,7 +23,8 @@ if __name__ == "__main__":
 
     agent_args = {
         "tools": ["python"],
-        "parser_name": "qwen"
+        "parser_name": "qwen",
+        "tool_system_prompt": "You are a math assistant that can write python to solve math problems."
     }
     env_args = {
         "tools": ["python"],
@@ -42,9 +43,9 @@ if __name__ == "__main__":
         env_class=ToolEnvironment,
         env_args=env_args,
         engine_name="openai", 
+        rollout_engine_args={"base_url": "http://localhost:30000/v1", "api_key": "None"},
         tokenizer=tokenizer,
         sampling_params=sampling_params,
-        rollout_engine_args={"base_url": "http://localhost:30000/v1", "api_key": "None"},
         max_response_length=16384,
         max_prompt_length=2048,
         n_parallel_agents=n_parallel_agents,
@@ -56,7 +57,7 @@ if __name__ == "__main__":
         from .prepare_math_data import prepare_math_data
         _, test_dataset = prepare_math_data()
 
-    tasks = test_dataset.repeat(n=4)  # repeat to evaluate pass@k
+    tasks = test_dataset.repeat(n=8)  # repeat to evaluate pass@k
 
     results = asyncio.run(engine.execute_tasks(tasks))
     compute_pass_at_k(results)

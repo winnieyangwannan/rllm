@@ -33,11 +33,9 @@ nav:
       - Installation: getting-started/installation.md
       - Quick Start: getting-started/quick-start.md
   - Core Concepts:
-      - Overview: core-concepts/overview.md
-      - Agents: core-concepts/agents.md
-      - Environments: core-concepts/environments.md
-      - Rewards: core-concepts/rewards.md
-      - Training: core-concepts/training.md
+      - Agent and Environment: core-concepts/agent_env.md
+      - AgentExecutionEngine for Trajectory Rollout: core-concepts/overview.md
+      - AgentTrainer for RL Training: core-concepts/training.md
   - API Reference:
       - Agents: api/agents.md
       - Environments: api/environments.md

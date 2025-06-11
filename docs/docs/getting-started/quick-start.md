@@ -4,26 +4,30 @@ This guide walks you through using rLLM to build AI agents with tool usage capab
 
 ## Overview
 
-In this tutorial, we'll create a math reasoning agent that can:
+In this tutorial, you'll create a math reasoning agent that can:
+
 - Access a Python interpreter to solve mathematical problems
-- Perform step-by-step reasoning with tool usage
-- Learn through reinforcement learning from human feedback (RLHF)
+- Perform step-by-step reasoning with interleaved tool usage
+- Learn and improve its math problem solving ability through reinforcement learning
 
 The example uses:
-- **Base Model**: Qwen3-4B (a capable instruction-following LLM)
-- **Training Data**: DeepScaleR-Math dataset 
+
+- **Base Model**: Qwen3-4B
+- **Training Data**: DeepScaleR-Preview-Math dataset 
 - **Evaluation Data**: AIME 2024 mathematics competition problems
 - **Tools**: Python interpreter for mathematical computations
 
 ## Prerequisites
 
-1. **Install rLLM**: Follow the [installation guide](../installation.md)
+Before starting, ensure you have:
+
+1. **rLLM Installation**: Follow the [installation guide](../installation.md)
 2. **GPU Requirements**: At least 1 GPU with 16GB+ memory for inference, 8+ GPUs for training
 3. **Model Server**: We'll use vLLM or SGLang to serve the base model
 
 ## Step 1: Dataset Preparation
 
-RLLM's `DatasetRegistry` provides a centralized way to manage datasets. Let's examine how to prepare math datasets:
+rLLM's `DatasetRegistry` provides a centralized way to manage datasets. Let's prepare the math datasets:
 
 ```python
 from datasets import load_dataset
@@ -38,7 +42,7 @@ def prepare_math_data():
     # Load test data from AIME 2024 (competition math problems)
     test_dataset = load_dataset("HuggingFaceH4/aime_2024", split="train")
 
-    # Standardize data format for RLLM
+    # Standardize data format for rLLM
     def preprocess_fn(example, idx):
         return {
             "question": example["problem"],        # The math problem to solve
@@ -50,7 +54,7 @@ def prepare_math_data():
     train_dataset = train_dataset.map(preprocess_fn, with_indices=True)
     test_dataset = test_dataset.map(preprocess_fn, with_indices=True)
 
-    # Register datasets with RLLM's registry for easy access
+    # Register datasets with rLLM's registry for easy access
     train_dataset = DatasetRegistry.register_dataset(
         "deepscaler_math", train_dataset, "train"
     )
@@ -59,20 +63,17 @@ def prepare_math_data():
     return train_dataset, test_dataset
 ```
 
+This registers the training dataset `deepscaler_math` and the testing dataset `aime2024`. Under the hood, rLLM stores the processed data as parquet files in a format suitable for both inference and training. Later, you can easily load the registered datasets using `DatasetRegistry.load_dataset`.
+
 **Run the preparation script:**
 ```bash
 cd examples/math_tool
 python prepare_math_data.py
 ```
 
-**Key Concepts:**
-- **DatasetRegistry**: Centralized dataset management for consistent access across training and inference
-- **Preprocessing**: Standardizing data format ensures compatibility with RLLM's agent framework
-- **Ground Truth**: Reference answers enable reward computation during training
-
 ## Step 2: Model Server Setup
 
-RLLM requires a model server for inference. Choose one of these options:
+rLLM requires a model server for inference. Choose one of these options:
 
 ### Option A: vLLM Server
 ```bash
@@ -133,17 +134,16 @@ sampling_params = {
 # Create the execution engine
 engine = AsyncAgentExecutionEngine(
     agent_class=ToolAgent,                    # Use ToolAgent for tool-enabled reasoning
-    agent_args=agent_args,
     env_class=ToolEnvironment,                # Environment that provides tool access
+    agent_args=agent_args,
     env_args=env_args,
-    rollout_engine=None,
     engine_name="openai",                     # Use OpenAI-compatible API
-    tokenizer=tokenizer,
-    sampling_params=sampling_params,
     rollout_engine_args={                     # Connection to model server
         "base_url": "http://localhost:30000/v1", 
         "api_key": "None"
     },
+    tokenizer=tokenizer,
+    sampling_params=sampling_params,
     max_response_length=16384,                # Maximum tokens in response
     max_prompt_length=2048,                   # Maximum tokens in prompt
     n_parallel_agents=64,                     # Parallel execution for efficiency
@@ -151,11 +151,11 @@ engine = AsyncAgentExecutionEngine(
 
 # Load test dataset and run inference
 test_dataset = DatasetRegistry.load_dataset("aime2024", "test")
-tasks = test_dataset.repeat(n=4)              # Repeat for Pass@K evaluation
+tasks = test_dataset.repeat(n=8)              # Repeat for Pass@K evaluation
 
 # Execute tasks asynchronously
 results = asyncio.run(engine.execute_tasks(tasks))
-compute_pass_at_k(results)                    # Compute Pass@1, Pass@4 metrics
+compute_pass_at_k(results)                    # Compute Pass@1, Pass@8 metrics
 ```
 
 **Run the inference script:**
@@ -164,15 +164,13 @@ cd examples/math_tool
 python run_math_with_tool.py
 ```
 
-**Key Concepts:**
-- **ToolAgent**: An agent class that can use external tools (Python interpreter) for reasoning
-- **ToolEnvironment**: Provides a safe sandbox for tool execution and reward computation
-- **AsyncAgentExecutionEngine**: Efficiently handles parallel agent execution for scalability
-- **Pass@K Evaluation**: Measures success rate when allowing K attempts per problem
+The script above configures a `ToolAgent` from rLLM with access to the `python` tool for solving math problems in AIME2024, and a `ToolEnvironment` for handling Python tool calls and returning results. 
 
-## Step 4: Agent Training with RLHF
+The `AsyncAgentExecutionEngine` orchestrates the interaction between the `ToolAgent` and `ToolEnvironment`. The `execute_tasks` function launches 64 agent-environment pairs in parallel (`n_parallel_agents=64`) for rollout generation and returns results after all problems from the AIME2024 dataset are processed. Finally, the Pass@1 and Pass@K metrics for AIME are computed and printed. 
 
-Training improves the agent's ability to use tools effectively. RLLM uses PPO (Proximal Policy Optimization) for this:
+## Step 4: Agent Training with GRPO
+
+Training improves the agent's ability to use tools effectively. rLLM uses verl as its training backend, which supports training language models with GRPO and various other RL algorithms.
 
 ```python
 import hydra
@@ -213,36 +211,14 @@ cd examples/math_tool
 bash train_math_with_tool.sh
 ```
 
-**Key Training Configuration:**
-```bash
-# Key hyperparameters from train_math_with_tool.sh
-algorithm.adv_estimator=grpo                 # Advantage estimation method
-data.train_batch_size=32                     # Training batch size
-data.max_response_length=8192                # Max response length during training
-actor_rollout_ref.actor.optim.lr=1e-6       # Learning rate
-actor_rollout_ref.rollout.temperature=0.6    # Generation temperature
-trainer.total_epochs=100                      # Number of training epochs
-```
+The script above launches an RL training job for our ToolAgent, using `deepscaler_math` as the training set and `aime2024` as the test set. Under the hood, rLLM handles agent trajectory generation using our `AsyncAgentExecutionEngine` and transforms the trajectories into `verl`'s format for model training using FSDP or Megatron. The training process works as follows:
 
-**Key Concepts:**
-- **PPO Training**: Policy optimization that balances exploration vs exploitation
-- **Reward Function**: `math_reward_fn` evaluates correctness of mathematical solutions
-- **GRPO**: Group-relative policy optimization for improved training stability
-- **Hybrid Engine**: Combines training and inference engines for efficiency
+1. **Rollout Generation**: A batch of data is passed to `AsyncAgentExecutionEngine`, which launches multiple agent-environment pairs in parallel to process the batch. The engine returns all trajectories along with rewards computed by the environment.
+2. **Transform Trajectories**: Agent trajectories are transformed into the corresponding format for our training backend `verl`. 
+3. **Advantage Calculation with GRPO**: `verl` uses GRPO for advantage calculation.
+4. **Model Update**: `verl` updates the model parameters to increase the probability of successful actions. The updated model is then used to generate trajectories for the next batch of data.
 
-## Understanding the Complete Workflow
-
-### 1. Agent-Environment Interaction Loop
-```
-Problem → Agent → Tool Call → Environment → Reward → Agent Update
-```
-
-- **Agent** receives a math problem and generates reasoning steps
-- **Tool calls** execute Python code to perform calculations  
-- **Environment** provides safe execution and computes rewards
-- **Rewards** guide learning to improve problem-solving strategies
-
-### 2. Key RLLM Components
+### Key rLLM Components in This Example
 
 | Component | Purpose | Example Usage |
 |-----------|---------|---------------|
@@ -252,38 +228,6 @@ Problem → Agent → Tool Call → Environment → Reward → Agent Update
 | `AsyncAgentExecutionEngine` | Parallel agent execution | Efficient batch inference |
 | `AgentTrainer` | RL training orchestration | PPO-based agent improvement |
 
-### 3. Training Process Details
-
-1. **Rollout Phase**: Agents attempt problems and generate solution attempts
-2. **Reward Computation**: Solutions are evaluated against ground truth answers
-3. **Advantage Estimation**: Determine which actions led to better outcomes
-4. **Policy Update**: Adjust model parameters to increase probability of successful actions
-5. **Validation**: Test improved agent on held-out problems
-
 ## Next Steps
 
-Now that you understand the basics, you can:
-
-1. **Modify the Agent**: Add new tools or change reasoning strategies
-2. **Custom Datasets**: Prepare your own datasets for specific domains
-3. **Hyperparameter Tuning**: Adjust training parameters for better performance
-4. **Multi-Agent Systems**: Explore collaborative agent scenarios
-
-For more advanced topics, see:
-- [Agent Architecture Guide](../concepts/agents.md)
-- [Environment Configuration](../concepts/environments.md)  
-- [Training Configuration](../training/configuration.md)
-- [Custom Tools Development](../tools/custom-tools.md)
-
-## Troubleshooting
-
-**Common Issues:**
-- **OOM Errors**: Reduce batch size or sequence length
-- **Slow Training**: Increase `n_parallel_agents` or use more GPUs
-- **Poor Performance**: Check reward function and dataset quality
-- **Connection Errors**: Verify model server is running on correct port
-
-**Performance Tips:**
-- Use `hybrid_engine=True` for better memory efficiency
-- Enable gradient checkpointing for large models
-- Adjust `gpu_memory_utilization` based on your hardware
+Congratulations! You've successfully used rLLM to run and train a ToolAgent for math problem solving. For a deeper dive into rLLM's main components, check out [Core Concepts in rLLM](../core-concepts/overview.md).
