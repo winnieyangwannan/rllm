@@ -33,73 +33,28 @@ def load_search_data(n=1, train_size=3000, test_size=100):
     nq_subset = nq_train.select(range(min(train_size // 2, len(nq_train))))
     
     def process_hotpot_example(example, idx, split):
-        question = example["question"]
-        ground_truth = example["answer"]
-        data_source = "hotpotqa"
-        
-        task = {
-            "question": question,
-            "ground_truth": ground_truth,
-            "data_source": data_source
-        }
-        
         return {
-            "data_source": data_source,
-            "prompt": [{
-                "role": "user", 
-                "content": f"Please answer the following question by searching for relevant information: {question}"
-            }],
-            "ability": "multi-hop-reasoning",
-            "reward_model": {
-                "style": "rule",
-                "ground_truth": ground_truth
-            },
-            "extra_info": {
-                "split": split,
-                "index": idx,
-                "task": task,
-                "tools": ["google_search"],
-                "uid": f"hotpot_{example.get('id', idx)}",
-                "question_type": example.get("type", "bridge"),
-                "level": example.get("level", "medium")
-            },
-            "task": task,
-            "uid": f"hotpot_{example.get('id', idx)}"
+            "question": example["question"],
+            "ground_truth": example["answer"], 
+            "data_source": "hotpotqa",
+            "uid": f"hotpot_{example.get('id', idx)}",
+            "split": split,
+            "index": idx,
+            "question_type": example.get("type", "bridge"),
+            "level": example.get("level", "medium")
         }
     
     def process_nq_example(example, idx, split):
-        question = example["query"]
         ground_truth = example["answer"][:200] + "..." if len(example["answer"]) > 200 else example["answer"]
-        data_source = "natural_questions"
-        
-        task = {
-            "question": question,
-            "ground_truth": ground_truth,
-            "data_source": data_source
-        }
-        
         return {
-            "data_source": data_source,
-            "prompt": [{
-                "role": "user", 
-                "content": f"Please answer the following question by searching for relevant information: {question}"
-            }],
-            "ability": "fact-retrieval",
-            "reward_model": {
-                "style": "rule",
-                "ground_truth": ground_truth
-            },
-            "extra_info": {
-                "split": split,
-                "index": idx,
-                "task": task,
-                "tools": ["google_search"],
-                "uid": f"nq_{idx}",
-                "question_type": "factual",
-                "level": "easy"
-            },
-            "task": task,
-            "uid": f"nq_{idx}"
+            "question": example["query"],
+            "ground_truth": ground_truth,
+            "data_source": "natural_questions",
+            "uid": f"nq_{idx}",
+            "split": split,
+            "index": idx,
+            "question_type": "factual",
+            "level": "easy"
         }
     
     print("Processing HotpotQA training data...")
