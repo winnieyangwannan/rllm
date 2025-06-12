@@ -1,14 +1,14 @@
 # Agent and Environment
 
-This guide explains how agents and environments work together in rLLM to create interactive AI systems. You'll learn about the core interfaces, interaction patterns, and how to implement your own custom components.
+This guide explains how the two main components in rLLM work together: **agents** and **environments**. You'll learn about their core interfaces, interaction patterns, and how to implement your own custom agents and environments.
 
 ## Overview
 
-rLLM uses a structured approach to AI interactions where **agents** act as intelligent decision-makers and **environments** provide tasks and feedback. This separation allows for:
+rLLM uses a modular approach where agents act as intelligent decision-makers and environments provide tasks and feedback. This separation enables:
 
-- **Modular design**: Agents and environments can be developed and tested independently
-- **Reusability**: The same agent can work across different environments, and vice versa
-- **Standardized interface**: Consistent interaction patterns across all components
+- **Modular development**: Components can be built and tested independently
+- **Flexible reuse**: The same agent can work across different environments
+- **Consistent patterns**: Standardized interfaces ensure compatibility
 
 ## Agents
 
@@ -337,3 +337,9 @@ Let's trace through how the MathAgent and MathEnv handle a complete interaction 
 
 This walkthrough demonstrates how the standardized interface enables complex behaviors like self-correction while maintaining clean separation of concerns between agent and environment.
 
+
+## Next Steps
+
+Now that you understand how agents and environments work together, explore these related topics:
+
+- **[Execution Engine](execution-engine.md)**: Learn how to orchestrate parallel agent-environment interactions for efficient batch processing

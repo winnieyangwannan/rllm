@@ -1,6 +1,5 @@
 import asyncio
 
-import numpy as np
 from transformers import AutoTokenizer
 
 from rllm.agents.frozenlake_agent import FrozenLakeAgent
@@ -8,7 +7,8 @@ from rllm.data.dataset import DatasetRegistry
 from rllm.engine.async_agent_execution_engine import AsyncAgentExecutionEngine
 from rllm.environments.frozenlake.frozenlake import FrozenLakeEnv
 from rllm.utils import compute_pass_at_k
-from prepare_frozenlake_data import prepare_frozenlake_data
+
+from .prepare_frozenlake_data import prepare_frozenlake_data
 
 
 def load_frozenlake_data():

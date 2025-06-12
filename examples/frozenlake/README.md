@@ -1,6 +1,6 @@
 # FrozenLake Agent Examples
 
-This directory contains examples for training and running FrozenLake RL agents using the RLLM framework. The FrozenLake agent learns to navigate a slippery grid world environment to reach a goal while avoiding holes.
+This directory contains examples for training and running FrozenLake RL agents using the rLLM framework. The FrozenLake agent learns to navigate a slippery grid world environment to reach a goal while avoiding holes.
 
 Our examples use the following:
 * Qwen3-4B as the base model

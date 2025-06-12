@@ -2,74 +2,42 @@
 
 The Agent Execution Engine is the central orchestrator in rLLM that manages interactions between agents and environments. It handles batched execution, trajectory collection, and provides both synchronous and asynchronous execution modes for scalable RL training.
 
-## Overview
+## Batch Trajectory Generation with `execute_tasks`
 
-The Agent Execution Engine serves as the runtime coordinator that:
+The `AgentExecutionEngine` provides a method called `execute_tasks` for performing offline batch inference. Each task is a dictionary containing either a dataset entry (e.g., AIME problems) or necessary information (e.g., random seed) to construct an environment instance from the environment class. 
 
-- **Orchestrates interactions** between multiple agent-environment pairs
-- **Manages trajectories** by collecting step-by-step interaction data
-- **Handles parallelization** for efficient batch processing
-- **Supports multiple output formats** for different use cases
-- **Provides retry mechanisms** for robust execution
+Here's how the workflow operates:
 
-## Using `AgentExecutionEngine` for offline inference
+1. **Initialization**: The `AgentExecutionEngine` initializes `N=n_parallel_agents` agent-environment pairs. For each agent, it initializes using `agent_args`, and for each environment, it uses the `env_class.from_json({**env_args, **task})` method to merge both task information and environment arguments when creating the environment instance.
+
+2. **Parallel Execution**: Each agent-environment pair performs trajectory generation asynchronously. rLLM supports the OpenAI Completions interface for LLM inference and structures requests sent to the inference engine endpoint.
+
+3. **Task Queue Management**: After each agent-environment pair completes its task, the `AgentExecutionEngine` initializes a new agent-environment pair to process the next task from the queue. This process continues until all tasks are processed.
+
+
+### Basic Usage
 
 ```python
 import asyncio
-
-from transformers import AutoTokenizer
-
-from rllm.agents.math_agent import MathAgent
-from rllm.data.dataset import DatasetRegistry
 from rllm.engine.async_agent_execution_engine import AsyncAgentExecutionEngine
-from rllm.environments.base.single_turn_env import SingleTurnEnvironment
-from rllm.rewards.reward_fn import math_reward_fn
-from rllm.utils import compute_pass_at_k
 
-if __name__ == "__main__":
-    import os
-
-    os.environ["TOKENIZERS_PARALLELISM"] = "true"
-
-    n_parallel_agents = 256
-
-    model_name = "Qwen/Qwen3-4B"
-
-    tokenizer = AutoTokenizer.from_pretrained(model_name)
-
-    reward_fn = math_reward_fn
-
-    env_args = {
-        "reward_fn": reward_fn,
+# Initialize async engine
+engine = AsyncAgentExecutionEngine(
+    agent_class=CustomAgent,
+    env_class=CustonEnvironment,
+    engine_name="openai",  # or "verl"
+    tokenizer=tokenizer,
+    n_parallel_agents=64,
+    max_steps=10,
+    max_response_length=4096,
+    max_prompt_length=2048,
+    sampling_params={"temperature": 0.7, "top_p": 0.9},
+    rollout_engine_args={
+        "base_url": "http://localhost:8000/v1",
+        "api_key": "your_api_key"
     }
+)
 
-    sampling_params = {"temperature": 0.6, "top_p": 0.95, "model": model_name}
-
-    engine = AsyncAgentExecutionEngine(
-        agent_class=MathAgent,
-        env_class=SingleTurnEnvironment,
-        agent_args={},
-        env_args=env_args,
-        engine_name="openai",
-        tokenizer=tokenizer,
-        sampling_params=sampling_params,
-        rollout_engine_args={
-            "base_url": "http://localhost:30000/v1",
-            "api_key": "None",
-        },
-        max_response_length=32768,
-        max_prompt_length=2048,
-        n_parallel_agents=n_parallel_agents,
-    )
-
-    test_dataset = DatasetRegistry.load_dataset("aime2024", "test")
-    if test_dataset is None:
-        print("Dataset not found, preparing dataset...")
-        from .prepare_math_data import prepare_math_data
-        _, test_dataset = prepare_math_data()
-    
-    tasks = test_dataset.repeat(n=16)  # repeat to evaluate pass@k
-
-    results = asyncio.run(engine.execute_tasks(tasks))
-    compute_pass_at_k(results)
+# Execute tasks asynchronously
+results = await engine.execute_tasks(tasks)
 ```

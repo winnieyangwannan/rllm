@@ -5,6 +5,7 @@ import time
 import traceback
 import uuid
 from concurrent.futures import ThreadPoolExecutor
+from typing import Dict, List
 
 import openai
 import torch
@@ -481,7 +482,7 @@ class AsyncAgentExecutionEngine(AgentExecutionEngine):
         
         self.executor.shutdown(wait=False)
 
-    async def execute_tasks(self, tasks):
+    async def execute_tasks(self, tasks: List[Dict]):
         """
         Run asynchronous interactions between the agent and environment where each agent
         has its own environment instance and can proceed independently.

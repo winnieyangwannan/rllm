@@ -63,4 +63,4 @@ python3 -m examples.frozenlake.train_frozenlake_agent \
     trainer.default_hdfs_dir=null \
     agent.max_steps=10 \
     agent.async_engine=True \
-    trainer.total_epochs=100
+    trainer.total_epochs=10
