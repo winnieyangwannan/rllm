@@ -6,6 +6,7 @@ from typing import List
 import torch
 import vertexai
 import openai
+import os
 
 from google.cloud.aiplatform_v1beta1.types.content import SafetySetting
 from sentence_transformers import SentenceTransformer, util
@@ -208,3 +209,10 @@ class RAG:
                 'idx': int(idx),
             })
         return results
+
+def save_trajectories(results, save_dir="./trajectories/sample_trajectories", filename="trajectories.pt"):
+    os.makedirs(save_dir, exist_ok=True)
+    save_path = os.path.join(save_dir, filename)
+    torch.save(results, save_path)
+    print(f"Trajectories saved to {save_path}")
+    return save_path

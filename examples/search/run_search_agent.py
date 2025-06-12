@@ -11,6 +11,7 @@ from rllm.engine.async_agent_execution_engine import AsyncAgentExecutionEngine
 from rllm.environments.tools.tool_env import ToolEnvironment
 from rllm.rewards.search_reward import rllm_reward_fn_search_boxed
 from rllm.agents.system_prompts import SEARCH_SYSTEM_PROMPT
+from rllm.utils import save_trajectories
 
 def load_search_data(n=1, train_size=3000, test_size=100):
     if DatasetRegistry.dataset_exists("hotpotqa_combined", "test"):
@@ -132,4 +133,6 @@ if __name__ == "__main__":
 
     tasks = load_search_data(n=1)
 
-    results = asyncio.run(engine.execute_tasks(tasks)) 
+    results = asyncio.run(engine.execute_tasks(tasks))
+    
+    save_trajectories(results, filename="search_trajectories.pt")
