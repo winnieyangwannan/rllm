@@ -19,7 +19,7 @@ def main(config):
     tool_map = {"local_search": LocalRetrievalTool}
     
     env_args = {
-        "max_steps": 10, 
+        "max_steps": 20, 
         "tool_map": tool_map,
         "reward_fn": rllm_reward_fn_search_boxed,
     }

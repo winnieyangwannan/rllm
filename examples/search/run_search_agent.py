@@ -11,6 +11,7 @@ from rllm.data.dataset import DatasetRegistry
 from rllm.engine.async_agent_execution_engine import AsyncAgentExecutionEngine
 from rllm.environments.tools.tool_env import ToolEnvironment
 from rllm.rewards.search_reward import rllm_reward_fn_search_boxed
+from rllm.utils import save_trajectories
 
 
 def load_search_data(train_size=3000, test_size=100):
@@ -73,4 +74,6 @@ if __name__ == "__main__":
 
     tasks = load_search_data()
 
-    results = asyncio.run(engine.execute_tasks(tasks)) 
+    results = asyncio.run(engine.execute_tasks(tasks))
+    
+    save_trajectories(results, filename="search_trajectories.pt")
