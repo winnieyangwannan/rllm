@@ -55,11 +55,7 @@ class RewardSearchFn:
     def exact_match_score(self, prediction: str, ground_truth: str) -> bool:
         """Calculate exact match score"""
         return self.normalize_answer(prediction) == self.normalize_answer(ground_truth)
-    
-    def normalize_text(self, text: str) -> str: 
-        # Keep for backward compatibility, but use normalize_answer instead
-        return self.normalize_answer(text)
-    
+        
     def extract_answer_from_response(self, response: str) -> str:
         response = response.strip()
         
@@ -70,14 +66,30 @@ class RewardSearchFn:
         if not response:
             return ""
         
-        # 1. HIGHEST PRIORITY: Look for \boxed{} content
-        boxed_pattern = r'\\boxed\{([^}]+)\}'
-        boxed_matches = re.findall(boxed_pattern, response)
-        if boxed_matches:
-            # Return the last boxed answer (in case there are multiple)
-            return boxed_matches[-1].strip()
+        # 1. HIGHEST PRIORITY: Look for \boxed{} or \boxed[] content
+        def unbox(s: str) -> str:
+            """Extract content from \boxed{} with proper nesting support"""
+            try:
+                i = s.find("boxed{")
+                if i == -1:
+                    return None
+                i += 6  # 6 == len("boxed{")
+                depth = 1
+                j = i
+                while depth and j < len(s):
+                    depth += (s[j] == "{") - (s[j] == "}")
+                    j += 1
+                if depth:
+                    return None  # unbalanced braces
+                return s[i:j-1]
+            except:
+                return None
+                
+        boxed_content = unbox(response)
         
-        # 2. Look for bolded/emphasized answers (common in our agent responses)
+        if boxed_content is not None:
+            return boxed_content.strip()
+        
         bold_patterns = [
             r'\*\*([^*]+)\*\*',  
             r'\*([^*]+)\*',      
@@ -260,42 +272,3 @@ class RewardSearchFn:
             is_correct=is_correct,
             metadata=metadata
         )
-
-
-def rllm_reward_fn_search(data_source: str, llm_solution: str, ground_truth: Union[str, List[str]], extra_info: Dict = None, **kwargs) -> RewardOutput:
-    reward_config = RewardConfig()
-    reward_fn = RewardSearchFn(reward_config)
-    
-    metadata = {"ground_truth": ground_truth}
-    if extra_info:
-        metadata.update(extra_info)
-    
-    reward_response = reward_fn(RewardInput(
-        task_info=metadata,
-        action=llm_solution
-    ))
-    
-    return reward_response
-
-
-def rllm_reward_fn_search_boxed(*args, task_info=None, action=None, data_source=None, llm_solution=None, ground_truth=None, extra_info=None, **kwargs) -> RewardOutput:
-    if len(args) >= 3:
-        data_source, llm_solution, ground_truth = args[0], args[1], args[2]
-        if len(args) > 3:
-            extra_info = args[3]
-        return rllm_reward_fn_search(data_source, llm_solution, ground_truth, extra_info, **kwargs)
-    
-    elif task_info is not None and action is not None:
-        nested_task = task_info.get("task", {})
-        extracted_data_source = nested_task.get("data_source", task_info.get("data_source", "unknown"))
-        extracted_ground_truth = nested_task.get("ground_truth", task_info.get("ground_truth", ""))
-        
-        return rllm_reward_fn_search(extracted_data_source, action, extracted_ground_truth, extra_info, **kwargs)
-    
-    elif data_source is not None and llm_solution is not None and ground_truth is not None:
-        return rllm_reward_fn_search(data_source, llm_solution, ground_truth, extra_info, **kwargs)
-    
-    else:
-        raise ValueError("rllm_reward_fn_search_boxed requires either:\n"
-                       "- Positional args: func(data_source, llm_solution, ground_truth)\n"
-                       "- Named args: func(task_info=..., action=...) or func(data_source=..., llm_solution=..., ground_truth=...)") 
