@@ -1,10 +1,8 @@
-import json
 from typing import Dict, Protocol, runtime_checkable
 
-from rllm.data.dataset_types import TestDataset, TrainDataset
-from rllm.rewards.code_reward import RewardCodeFn
+# from rllm.rewards.code_reward import RewardCodeFn
 from rllm.rewards.math_reward import RewardMathFn
-from rllm.rewards.reward_types import RewardOutput, RewardConfig, RewardType
+from rllm.rewards.reward_types import RewardConfig, RewardOutput
 
 
 @runtime_checkable
@@ -40,22 +38,6 @@ def zero_reward(task_info: Dict, action: str) -> RewardOutput:
     return RewardOutput(reward=0.0, metadata={})
 
 
-def code_reward_fn(task_info: Dict, action: str) -> RewardOutput:
-    """
-    A reward function for code tasks that implements the RewardFunction protocol.
-    
-    Args:
-        task: The task dictionary containing data_source, ground_truth and other metadata
-        action: The agent's response/solution
-        
-    Returns:
-        float: The calculated reward value based on code execution results
-    """
-    reward_config = RewardConfig()
-    reward_fn = RewardCodeFn(reward_config)
-    return reward_fn(task_info, action)
-
-
 def math_reward_fn(task_info: Dict, action: str) -> RewardOutput:
     """
     A reward function for math tasks that implements the RewardFunction protocol.
@@ -70,3 +52,19 @@ def math_reward_fn(task_info: Dict, action: str) -> RewardOutput:
     reward_config = RewardConfig()
     reward_fn = RewardMathFn(reward_config)
     return reward_fn(task_info, action)
+
+
+# def code_reward_fn(task_info: Dict, action: str) -> RewardOutput:
+#     """
+#     A reward function for code tasks that implements the RewardFunction protocol.
+    
+#     Args:
+#         task: The task dictionary containing data_source, ground_truth and other metadata
+#         action: The agent's response/solution
+        
+#     Returns:
+#         float: The calculated reward value based on code execution results
+#     """
+#     reward_config = RewardConfig()
+#     reward_fn = RewardCodeFn(reward_config)
+#     return reward_fn(task_info, action)

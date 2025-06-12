@@ -34,6 +34,7 @@ def train_agent(config, agent_class=None, env_class=None, agent_args=None, env_a
     # print initial config
     from pprint import pprint
     from omegaconf import OmegaConf
+    print("config:!!!!!!!!!!!!!!1")
     pprint(OmegaConf.to_container(config, resolve=True))  # resolve=True will eval symbol values
     OmegaConf.resolve(config)
 

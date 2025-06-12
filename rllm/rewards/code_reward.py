@@ -572,3 +572,18 @@ if __name__ == "__main__":
     reward_response = reward_fn(task_info, llm_solution)
     return reward_response
   
+
+def code_reward(task_info: Dict, action: str) -> RewardOutput:
+    """
+    A reward function for code tasks that implements the RewardFunction protocol.
+    
+    Args:
+        task: The task dictionary containing data_source, ground_truth and other metadata
+        action: The agent's response/solution
+        
+    Returns:
+        float: The calculated reward value based on code execution results
+    """
+    reward_config = RewardConfig()
+    reward_fn = RewardCodeFn(reward_config)
+    return reward_fn(task_info, action)

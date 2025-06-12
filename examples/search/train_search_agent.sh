@@ -36,7 +36,7 @@ python3 -m examples.search.train_search_agent \
     actor_rollout_ref.rollout.mode="async" \
     actor_rollout_ref.rollout.chat_scheduler=verl.schedulers.completions_scheduler.CompletionsScheduler \
     actor_rollout_ref.rollout.enforce_eager=False \
-    actor_rollout_ref.rollout.enable_log_prob=False \
+    +actor_rollout_ref.rollout.enable_log_prob=False \
     actor_rollout_ref.rollout.temperature=0.7 \
     actor_rollout_ref.rollout.gpu_memory_utilization=0.85 \
     actor_rollout_ref.rollout.n=8 \
@@ -63,8 +63,4 @@ python3 -m examples.search.train_search_agent \
     trainer.default_hdfs_dir=null \
     agent.max_steps=10 \
     agent.async_engine=True \
-    +agent.agent_args.tools=["google_search"] \
-    +agent.agent_args.model_name="Qwen/Qwen3-4B" \
-    +agent.agent_args.parser_name="qwen" \
-    +env.env_args.tools=["google_search"] \
     trainer.total_epochs=100 

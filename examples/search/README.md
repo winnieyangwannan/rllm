@@ -11,11 +11,6 @@ pip install faiss-gpu sentence-transformers rank-bm25 flask
 ### 1. Download Data
 
 ```bash
-
-# From the RLLM root directory
-python examples/search/data/download_search_data.py --data_dir ./search_data
-
-# OR, change to search directory first
 cd examples/search
 python data/download_search_data.py --data_dir ./search_data
 ```
@@ -27,15 +22,16 @@ This downloads:
 
 ### 3. Build Retrieval Indices
 
+First need to install additional dependencies:
 ```bash
-# From the RLLM root directory
-python examples/search/retrieval/build_index.py \
-    --corpus_file ./search_data/wikipedia/wiki-18.jsonl \
-    --output_dir ./indices \
-    --max_docs 100000  # Limit for faster testing
+## install the gpu version faiss to guarantee efficient RL rollout
+conda install -c pytorch -c nvidia faiss-gpu=1.8.0
 
-# OR, from examples/search directory
-cd examples/search
+pip install uvicorn fastapi
+```
+
+Then build retrival indices with the following command:
+```bash
 python retrieval/build_index.py \
     --corpus_file ./search_data/wikipedia/wiki-18.jsonl \
     --output_dir ./indices \
@@ -50,11 +46,6 @@ This creates:
 ### 4. Launch Retrieval Server
 
 ```bash
-# From the RLLM root directory
-bash examples/search/retrieval/launch_server.sh ./indices 8500
-
-# OR, from examples/search directory
-cd examples/search
 bash retrieval/launch_server.sh ./indices 8500
 ```
 
@@ -65,14 +56,8 @@ The server provides REST API endpoints:
 ### 5. Run Training with Local Retrieval
 
 ```bash
-# From the RLLM root directory
 export RETRIEVAL_SERVER_URL="http://127.0.0.1:8000"
-python examples/search/train_search_agent.py
-
-# OR, from examples/search directory
-cd examples/search
-export RETRIEVAL_SERVER_URL="http://127.0.0.1:8000"
-python train_search_agent.py
+bash train_search_agent.sh
 ```
 
 ## Training Script Details
@@ -94,13 +79,6 @@ Control search behavior via environment variables:
 ```bash
 export RETRIEVAL_SERVER_URL="http://127.0.0.1:8000"  # Local server
 export MAX_SEARCH_RESULTS=10                         # Results per query
-```
-
-### Training Configuration
-Use standard RLLM training configuration:
-
-```bash
-python train_search_agent.py
 ```
 
 ## API Reference

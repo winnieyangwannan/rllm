@@ -257,14 +257,13 @@ ray_init:
 
 # RLLM Agent Config
 env:
-  name: browsergym
+  name: custom
   env_args: {}
 
 agent:
   name: webagent
   max_steps: 20
   async_engine: True
-  n_parallel_agents: null
   trajectory_timeout: null
   normalize_step_advantage: False
   use_stepwise_advantage: False

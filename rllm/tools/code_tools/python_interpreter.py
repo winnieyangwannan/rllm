@@ -100,7 +100,7 @@ class PythonInterpreter(CodeTool):
                     "properties": {
                         "code": {
                             "type": "string",
-                            "description": f"Python code to execute in the {self.backend_type} sandbox environment.",
+                            "description": "Execute Python code in a sandboxed environment. Returns results and standard output/error.",
                         },
                         "timeout": {
                             "type": "integer",

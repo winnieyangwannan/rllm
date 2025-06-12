@@ -1,15 +1,37 @@
-from typing import List
+from typing import List, Dict, Union, Optional, Type
 
-from rllm.tools.tool_base import Tool, ToolOutput
 from rllm.tools import tool_registry
+from rllm.tools.tool_base import Tool, ToolOutput
+
 
 class MultiTool(Tool):
-    def __init__(self, tools: List[str]):
-        # Check if all tools are in the registry
-        assert all(tool in tool_registry for tool in tools), "All tools must be in the registry"
-        self.tools = tools
-        # Initialize the tool map
-        self.tool_map = {tool: tool_registry.instantiate(tool) for tool in tools}
+    def __init__(self, tools: Optional[List[str]] = None, tool_map: Optional[Dict[str, Type[Tool]]] = None):
+        """
+        Initialize MultiTool with either tool names or a tool_map directly.
+        
+        Args:
+            tools: List of tool names to look up in the registry (legacy behavior)
+            tool_map: Dictionary mapping tool names to Tool classes (new behavior)
+        """
+        if tool_map is not None and tools is not None:
+            raise ValueError("Cannot specify both 'tools' and 'tool_map' parameters")
+        
+        if tool_map is not None:
+            # New behavior: use provided tool_map with tool classes
+            self.tools = list(tool_map.keys())
+            # Instantiate tool classes with the name parameter
+            self.tool_map = {}
+            for name, tool_cls in tool_map.items():
+                self.tool_map[name] = tool_cls(name=name)
+        elif tools is not None:
+            # Legacy behavior: look up tools in registry
+            assert all(tool in tool_registry for tool in tools), "All tools must be in the registry"
+            self.tools = tools
+            self.tool_map = {tool: tool_registry.instantiate(tool) for tool in tools}
+        else:
+            # Default to empty
+            self.tools = []
+            self.tool_map = {}
 
     @property
     def json(self):

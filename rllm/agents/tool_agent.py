@@ -1,12 +1,13 @@
 import json
 import logging
 import uuid
-from typing import Any, Dict, List
+from typing import Any, Dict, List, Optional, Type
 
 from rllm.agents.agent import BaseAgent, Step, Trajectory
 from rllm.agents.system_prompts import TOOL_SYSTEM_PROMPT
 from rllm.parser import get_tool_parser
 from rllm.tools.multi_tool import MultiTool
+from rllm.tools.tool_base import Tool
 
 logger = logging.getLogger(__name__)
 
@@ -15,17 +16,29 @@ class ToolAgent(BaseAgent):
     An tool agent that can use tools to interact with the environment,
     refactored to follow the BaseAgent abstraction.
     """
-    def __init__(self, system_prompt=TOOL_SYSTEM_PROMPT, parser_name="qwen", tools=[]):
+    def __init__(self, system_prompt=TOOL_SYSTEM_PROMPT, parser_name="qwen", tools: Optional[List[str]] = None, tool_map: Optional[Dict[str, Type[Tool]]] = None):
         """
         Initialize the ToolAgent.
         
         Args:
-            model_name: Name of the model to use.
+            system_prompt: System prompt for the agent.
             parser_name: Name of the parser to use for tool calls.
-            tools: List of tools available to the agent.
+            tools: List of tool names available to the agent (legacy behavior).
+            tool_map: Dictionary mapping tool names to Tool classes (new behavior).
         """
+        if tool_map is not None and tools is not None:
+            raise ValueError("Cannot specify both 'tools' and 'tool_map' parameters")
+        
         self.system_prompt = system_prompt
-        self.tools = MultiTool(tools)
+        
+        # Initialize MultiTool with either tools or tool_map
+        if tool_map is not None:
+            self.tools = MultiTool(tool_map=tool_map)
+        elif tools is not None:
+            self.tools = MultiTool(tools=tools)
+        else:
+            self.tools = MultiTool(tools=[])
+            
         parser_class = get_tool_parser(parser_name=parser_name)
         self.tool_parser = parser_class()
 

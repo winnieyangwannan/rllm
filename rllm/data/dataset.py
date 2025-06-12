@@ -129,8 +129,8 @@ class DatasetRegistry:
     """A registry for datasets that manages storage and retrieval."""
     
     # Path to the registry file mapping dataset names to their files
-    _REGISTRY_DIR = os.path.join(os.path.dirname(os.path.realpath(__file__)), "registry")
-    _REGISTRY_FILE = os.path.join(_REGISTRY_DIR, "registry.json")
+    _REGISTRY_DIR = os.path.join(os.path.dirname(os.path.dirname(os.path.realpath(__file__))), "registry")
+    _REGISTRY_FILE = os.path.join(_REGISTRY_DIR, "dataset_registry.json")
     _DATASET_DIR = os.path.join(os.path.dirname(os.path.realpath(__file__)), "datasets")
     
     @classmethod

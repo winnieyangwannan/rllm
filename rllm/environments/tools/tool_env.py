@@ -1,10 +1,11 @@
 import json
 import warnings
-from typing import Dict, List, Optional, Union
+from typing import Dict, List, Optional, Union, Type
 
 from rllm.environments.base.base_env import BaseEnv
 from rllm.rewards.reward_fn import RewardFunction, zero_reward
 from rllm.tools.multi_tool import MultiTool
+from rllm.tools.tool_base import Tool
 
 
 class ToolEnvironment(BaseEnv):
@@ -12,11 +13,31 @@ class ToolEnvironment(BaseEnv):
     A simple environment for tool-based agents that provides questions and evaluates responses.
     """
     
-    def __init__(self, task: Optional[Dict] = None, tools: List[str] = [], reward_fn: Optional[RewardFunction] = None, max_steps=10):
+    def __init__(self, task: Optional[Dict] = None, tools: Optional[List[str]] = None, tool_map: Optional[Dict[str, Type[Tool]]] = None, reward_fn: Optional[RewardFunction] = None, max_steps=10):
+        """
+        Initialize the ToolEnvironment.
+        
+        Args:
+            task: Task information for the environment.
+            tools: List of tool names to look up in the registry (legacy behavior).
+            tool_map: Dictionary mapping tool names to Tool classes (new behavior).
+            reward_fn: Reward function to use for evaluation.
+            max_steps: Maximum number of steps allowed in the environment.
+        """
+        if tool_map is not None and tools is not None:
+            raise ValueError("Cannot specify both 'tools' and 'tool_map' parameters")
+        
         self.step_count = 0
         self.max_steps = max_steps
 
-        self.tools = MultiTool(tools)
+        # Initialize MultiTool with either tools or tool_map
+        if tool_map is not None:
+            self.tools = MultiTool(tool_map=tool_map)
+        elif tools is not None:
+            self.tools = MultiTool(tools=tools)
+        else:
+            self.tools = MultiTool(tools=[])
+            
         self.task = task
         self.reward_fn = reward_fn
         if reward_fn is None:
@@ -112,7 +133,8 @@ class ToolEnvironment(BaseEnv):
     
     @staticmethod
     def from_dict(env_args: Dict) -> "ToolEnvironment":
-        tools = env_args.pop('tools', [])
+        tools = env_args.pop('tools', None)
+        tool_map = env_args.pop('tool_map', None)
         reward_fn = env_args.pop('reward_fn', None)
         max_steps = env_args.pop('max_steps', 10)
-        return ToolEnvironment(task=env_args, tools=tools, max_steps=max_steps, reward_fn=reward_fn)
+        return ToolEnvironment(task=env_args, tools=tools, tool_map=tool_map, max_steps=max_steps, reward_fn=reward_fn)

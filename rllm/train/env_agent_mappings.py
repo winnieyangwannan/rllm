@@ -46,6 +46,6 @@ def setup_environment(config):
             return
         elif config.env.env_args.subtask == 'webarena':
             return
-    elif config.env.name in ['frozenlake', 'swe', 'math', 'code', 'tool', 'competition_coding', 'browsergym_cloud']:
+    elif config.env.name in ['frozenlake', 'swe', 'math', 'code', 'tool', 'competition_coding', 'browsergym_cloud', 'custom']:
         return
     raise ValueError(f"Environment subtask not supported, env: {config.env.name}")
