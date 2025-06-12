@@ -10,7 +10,7 @@ class MathAgent(BaseAgent):
         """
         Initialize the MathAgent.
         """
-        self.instruction = "Let's think step by step and put the final answer within \\boxed{}."
+        self.instruction = "Let's think step by step. The reasoning process MUST BE enclosed within <think> </think> tags. The final answer MUST BE put in \\boxed{}."
         self._trajectory = Trajectory()
         self.messages = []
         self.step = 0
@@ -63,6 +63,7 @@ class MathAgent(BaseAgent):
         # Update the current step in the trajectory
         cur_step = self.get_current_state()
         cur_step.model_response = response
+        cur_step.action = response
 
         if not self.accumulate_thinking:
             _, sep, after = response.partition("</think>")
@@ -88,3 +89,8 @@ class MathAgent(BaseAgent):
     def trajectory(self) -> Trajectory:
         """Return complete interaction trajectory."""
         return self._trajectory
+
+    def get_current_state(self) -> Step:
+        """Returns the current step/state of the agent."""
+        assert self._trajectory.steps, "Trajectory should not be empty when get_current_state is called."
+        return self._trajectory.steps[-1]

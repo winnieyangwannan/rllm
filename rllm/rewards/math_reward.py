@@ -45,6 +45,11 @@ class RewardMathFn:
         problem = task_info.get('problem', '')
         model_response = action
         
+        # Handle None or empty response
+        if model_response is None or model_response == "":
+            print("DEBUG: Empty or None response")
+            return RewardOutput(reward=self.config.format_error_reward, is_correct=False)
+        
         # Extract solution.
         if THOUGHT_DELIMITER_END in model_response:
             model_solution = model_response.split(THOUGHT_DELIMITER_END)[1]
