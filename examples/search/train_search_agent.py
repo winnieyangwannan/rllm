@@ -30,18 +30,22 @@ def main(config):
     config.critic.ppo_micro_batch_size_per_gpu = 1
     config.critic.loss_agg_mode = "seq-mean-token-sum"
     
-    config.reward_model.model.input_tokenizer = "Qwen/Qwen2.5-3B-Instruct"
+    config.reward_model.model.input_tokenizer = "Qwen/Qwen3-4B"
     config.reward_model.micro_batch_size_per_gpu = 1
+    
+    config.data.max_response_length = 8192
+    
+    config.trainer.logger = ["console"]
     
     config.trainer.n_gpus_per_node = 1
     
     config.env.name = "tool"
-    config.env.env_args.max_steps = 10
+    config.env.env_args.max_steps = 20
     config.env.env_args.tools = ["local_search"]
     config.env.env_args.retrieval_server_url = os.environ.get("RETRIEVAL_SERVER_URL", "http://127.0.0.1:9000")
     
     config.agent.name = "tool_agent"
-    config.agent.max_steps = 10
+    config.agent.max_steps = 20
     config.agent.async_engine = False
     config.agent.agent_args = {}
 
@@ -53,7 +57,7 @@ def main(config):
     val_dataset = DatasetRegistry.load_dataset("hotpotqa_combined", "test")
 
     env_args = {
-        "max_steps": 10, 
+        "max_steps": 20, 
         "tools": ["local_search"],
         "reward_fn": rllm_reward_fn_search_boxed,
     }
