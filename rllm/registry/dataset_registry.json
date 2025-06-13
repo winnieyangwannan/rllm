@@ -1,8 +1,0 @@
-{
-  "deepscaler_math": {
-    "train": "/home/manan/rllm-internal/rllm/data/datasets/deepscaler_math/train.parquet"
-  },
-  "aime2024": {
-    "test": "/home/manan/rllm-internal/rllm/data/datasets/aime2024/test.parquet"
-  }
-}
