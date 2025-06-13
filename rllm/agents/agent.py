@@ -85,7 +85,6 @@ class BaseAgent(ABC):
         """
         return 
     
-    @abstractmethod
     def get_current_state(self) -> Step:
         """
         Returns the agent's current state as a dictionary.

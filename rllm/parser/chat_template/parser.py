@@ -1,12 +1,51 @@
 import json
 
+from .utils import PARSER_TEST_MESSAGES
+
+
 class ChatTemplateParser:
     def __init__(self, tokenizer):
         self.tokenizer = tokenizer
         self.assistant_token = ""
 
-    def parse(self, messages, add_generation_prompt=False, **kwargs):
+    def parse(self, messages, add_generation_prompt=False, **kwargs) -> str:
         return self.tokenizer.apply_chat_template(messages, tokenize=False, add_generation_prompt=add_generation_prompt)
+
+    def verify_equivalence(self, messages, verbose=True):
+        """Verify that parsing messages together is equivalent to parsing them individually.
+        
+        Args:
+            messages (list): List of message dictionaries to test
+            verbose (bool): Whether to print detailed information about the test
+            
+        Returns:
+            bool: True if the equivalence check passes, False otherwise
+            
+        Raises:
+            AssertionError: If the equivalence check fails and verbose is True
+        """
+        # Parse all messages together
+        batch_result = self.parse(messages)
+        
+        # Parse each message individually and concatenate
+        individual_results = []
+        for message in messages:
+            individual_results.append(self.parse([message]))
+        
+        concatenated_result = "".join(individual_results)
+        
+        # Check if results are equivalent
+        is_equivalent = batch_result == concatenated_result
+        
+        if verbose and not is_equivalent:
+            print("Equivalence check failed!")
+            print("Batch parsing result:")
+            print(batch_result)
+            print("\nConcatenated individual parsing result:")
+            print(concatenated_result)
+            raise AssertionError("Parser failed equivalence check. See above for details.")
+        
+        return is_equivalent
 
     @classmethod
     def get_parser(cls, tokenizer, disable_thinking=False):
@@ -40,6 +79,7 @@ class ChatTemplateParser:
         # Default to the standard parser if no specific match
         parser = ChatTemplateParser(tokenizer)
         print(f"No custom parser found. Using default ChatTemplateParser for {tokenizer.name_or_path}")
+        assert parser.verify_equivalence(PARSER_TEST_MESSAGES), "Parser failed equivalence check"
         return parser
     
 
@@ -133,25 +173,7 @@ class QwenChatTemplateParser(ChatTemplateParser):
         return self.user_token + message['content'] + self.eot_token
     
     def parse_assistant(self, message):
-        result = self.assistant_token + message['content']
-        if 'tool_calls' in message:
-            for tool_call in message['tool_calls']:
-                tool_json = {
-                    "name": tool_call['function']['name'],
-                    "arguments": tool_call['function']['arguments']
-                }
-                arguments = tool_call['function']['arguments']
-                if isinstance(arguments, str):
-                    try:
-                        # If arguments is already a JSON string, parse it to avoid double encoding
-                        parsed_args = json.loads(arguments)
-                        tool_json["arguments"] = parsed_args
-                    except json.JSONDecodeError:
-                        # If not valid JSON, keep as is
-                        pass
-                
-                result += self.tool_start_token + json.dumps(tool_json, ensure_ascii=False) + self.tool_end_token
-        result += self.eot_token
+        result = self.assistant_token + message['content'] + self.eot_token
         return result
     
     def parse_tool(self, message):

@@ -8,7 +8,6 @@ from rllm.engine.async_agent_execution_engine import AsyncAgentExecutionEngine
 from rllm.environments.tools.tool_env import ToolEnvironment
 from rllm.rewards.reward_fn import math_reward_fn
 from rllm.utils import compute_pass_at_k
-    
 
 if __name__ == "__main__":
     import os
@@ -24,7 +23,7 @@ if __name__ == "__main__":
     agent_args = {
         "tools": ["python"],
         "parser_name": "qwen",
-        "tool_system_prompt": "You are a math assistant that can write python to solve math problems."
+        "system_prompt": "You are a math assistant that can write python to solve math problems."
     }
     env_args = {
         "tools": ["python"],

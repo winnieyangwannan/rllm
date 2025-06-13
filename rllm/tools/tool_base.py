@@ -15,10 +15,6 @@ class ToolCall:
             "name": self.name,
             "arguments": self.arguments
         }
-
-@dataclass
-class ToolInputs:
-    inputs: List[ToolCall]
     
 @dataclass
 class ToolOutput:
@@ -47,10 +43,6 @@ class ToolOutput:
             result_string = tool_output.to_string()
         """
         return str(self)
-
-@dataclass
-class ToolOutputs:
-    outputs: List[ToolOutput]
 
 class Tool(ABC):
     """

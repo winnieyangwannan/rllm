@@ -1,12 +1,13 @@
 import json
-from typing import List, Dict, Union
+from typing import Dict, List
 
-from rllm.tools.tool_base import ToolCall, ToolInputs, ToolOutputs, ToolOutput
-from rllm.parser.tool_parser_base import ToolParser
+from rllm.parser.tool_parser.tool_parser_base import ToolParser
+from rllm.tools.tool_base import ToolCall
+
 
 class QwenToolParser(ToolParser):
     
-    def __init__(self, model: str = 'Qwen/Qwen2.5-7B'):
+    def __init__(self):
         """Initialize the parser with specified type and model.
         
         Args:
@@ -17,9 +18,8 @@ class QwenToolParser(ToolParser):
         self.tool_call_end = "</tool_call>"
         self.tool_output_begin = "<tool_response>"
         self.tool_output_end = "</tool_response>"
-        super().__init__(model)
 
-    def parse_input(self, model_output: str) -> ToolInputs:
+    def parse(self, model_response: str) -> List[ToolCall]:
         """Parse tool calls from model output.
         
         Args:
@@ -28,36 +28,9 @@ class QwenToolParser(ToolParser):
         Returns:
             ToolInputs: Parsed tool calls
         """
-        tool_calls_dicts = self.parse_qwen_tool_calls(model_output)
-        
-        # Convert dictionaries to ToolCall objects
+        tool_calls_dicts = self.parse_qwen_tool_calls(model_response)
         tool_calls = [ToolCall(name=tc["name"], arguments=tc["arguments"]) for tc in tool_calls_dicts]
-        return ToolInputs(inputs=tool_calls)
-
-    def parse_output(self, tool_outputs: Union[ToolOutput, ToolOutputs]) -> str:
-        """Parse tool outputs from model output.
-        
-        Args:
-            model_output (str): Text containing tool outputs
-            
-        Returns:
-            ToolOutputs: Parsed tool outputs
-        """
-        if isinstance(tool_outputs, ToolOutput):
-            tool_outputs = ToolOutputs(outputs=[tool_outputs])
-        try:
-            results = [
-                {
-                    "role": "tool",
-                    "name": o.name,
-                    "content": json.dumps(o.output)
-                }
-                for o in tool_outputs.outputs
-            ]
-        except json.JSONDecodeError:
-            raise ValueError(f"Tool output {tool_outputs.outputs} is not a valid JSON object")
-        
-        return self.tokenizer.apply_chat_template(results, tokenize=False, special_tokens=False)
+        return tool_calls
         
     def parse_qwen_tool_calls(self, text: str) -> List[Dict]:
         """Parse tool calls from text using a simple token format.
@@ -94,14 +67,15 @@ class QwenToolParser(ToolParser):
                 })
             except json.JSONDecodeError:
                 print(f"Error parsing tool call: {json_content}")
-                break
+                text = text[end + len(self.tool_call_end):]
+                continue
                 
             # Move to next potential tool call
             text = text[end + len(self.tool_call_end):]
         
         return tool_calls
     
-    def get_tool_prompt(self, tools_schema):
+    def get_tool_prompt(self, tools_schema: str) -> str:
         return f"""
 You are provided with function signatures within <tools></tools> XML tags:
 <tools>
@@ -113,32 +87,3 @@ For each function call, return a json object with function name and arguments wi
 {{"name": <function-name>, "arguments": <args-json-object>}}
 </tool_call><|im_end|>
 """
-
-
-def main():
-    # Initialize the parser
-    parser = QwenToolParser()
-    
-    # Example model output with tool calls
-    model_output = """
-    I'll help you find the weather information for New York.
-    
-    <tool_call>{"name": "get_weather", "arguments": {"location": "New York", "unit": "celsius"}}</tool_call>
-    
-    I'll also search for restaurants in the area.
-    
-    <tool_call>{"name": "search_restaurants", "arguments": {"location": "New York", "cuisine": "Italian", "price_range": "moderate"}}</tool_call>
-    """
-    
-    # Parse the tool calls
-    tool_outputs = parser.parse_input(model_output)
-    
-    # Access the parsed tool calls
-    print(f"Found {len(tool_outputs.inputs)} tool calls:")
-    for i, tool_call in enumerate(tool_outputs.inputs, 1):
-        print(f"\nTool call {i}:")
-        print(f"Name: {tool_call.name}")
-        print(f"Parameters: {tool_call.parameters}")
-
-if __name__ == "__main__":
-    main()

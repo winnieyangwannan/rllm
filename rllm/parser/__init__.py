@@ -1,11 +1,9 @@
-from rllm.parser.tool_parser_base import ToolParser
-from rllm.parser.r1_tool_parser import R1ToolParser
-from rllm.parser.qwen_tool_parser import QwenToolParser
-from rllm.parser.deepscaler_tool_parser import DeepScalerToolParser
+from rllm.parser.tool_parser.tool_parser_base import ToolParser
+from rllm.parser.tool_parser.r1_tool_parser import R1ToolParser
+from rllm.parser.tool_parser.qwen_tool_parser import QwenToolParser
 
 
 PARSER_REGISTRY = {
-    "deepscaler": DeepScalerToolParser,
     "r1": R1ToolParser,
     "qwen": QwenToolParser,
 }
@@ -17,7 +15,6 @@ def get_tool_parser(parser_name: str) -> ToolParser:
 __all__ = [
     "R1ToolParser",
     "QwenToolParser",
-    "DeepScalerToolParser",
     "ToolParser",
     "get_tool_parser",
     "PARSER_REGISTRY",

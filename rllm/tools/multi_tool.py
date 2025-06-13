@@ -1,4 +1,4 @@
-from typing import List, Dict, Union, Optional, Type
+from typing import Dict, List, Optional, Type
 
 from rllm.tools import tool_registry
 from rllm.tools.tool_base import Tool, ToolOutput
