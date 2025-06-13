@@ -4,7 +4,7 @@ from rllm.agents.system_prompts import SEARCH_SYSTEM_PROMPT
 from rllm.agents.tool_agent import ToolAgent
 from rllm.data import DatasetRegistry
 from rllm.environments.tools.tool_env import ToolEnvironment
-from rllm.rewards.search_reward import rllm_reward_fn_search_boxed
+from rllm.rewards.reward_fn import search_reward_fn
 from rllm.tools.registry import ToolRegistry
 from rllm.train.agent_trainer import AgentTrainer
 
@@ -21,7 +21,7 @@ def main(config):
     env_args = {
         "max_steps": 20, 
         "tool_map": tool_map,
-        "reward_fn": rllm_reward_fn_search_boxed,
+        "reward_fn": search_reward_fn,
     }
     
     agent_args = {

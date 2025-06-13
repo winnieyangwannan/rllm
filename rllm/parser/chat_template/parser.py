@@ -69,9 +69,13 @@ class ChatTemplateParser:
                 parser = DeepseekQwenChatTemplateParser(tokenizer)
                 print(f"Using DeepseekQwenChatTemplateParser for {tokenizer.name_or_path}")
                 return parser
-            elif "qwen" in model_name or 'r2egym' in model_name:
+            elif "qwen" in model_name or 'r2egym' in model_name or 'deepscaler' in model_name:
                 parser = QwenChatTemplateParser(tokenizer, disable_thinking=disable_thinking)
                 print(f"Using QwenChatTemplateParser for {tokenizer.name_or_path}")
+                return parser
+            elif "llama" in model_name:
+                parser = LlamaChatTemplateParser(tokenizer)
+                print(f"Using LlamaChatTemplateParser for {tokenizer.name_or_path}")
                 return parser
             else:
                 raise ValueError(f"Unsupported model: {tokenizer.name_or_path}")
@@ -89,8 +93,8 @@ class DeepseekQwenChatTemplateParser(ChatTemplateParser):
         self.bos_token = tokenizer.bos_token
         self.eos_token = tokenizer.eos_token
         self.system_token = ''
-        self.user_token = '<｜User｜>'
-        self.assistant_token = '<｜Assistant｜>'
+        self.user_token = ' '
+        self.assistant_token = ' '
         self.generation_prompt = self.assistant_token
 
     def parse(self, messages, add_generation_prompt=False, is_first_msg=False):
@@ -178,3 +182,42 @@ class QwenChatTemplateParser(ChatTemplateParser):
     
     def parse_tool(self, message):
         return self.user_token + self.tool_response_start_token + message['content'] + self.tool_response_end_token + self.eot_token
+    
+class LlamaChatTemplateParser(ChatTemplateParser):
+    def __init__(self, tokenizer):
+        super().__init__(tokenizer)
+        self.bos_token = "<|begin_of_text|>"
+        self.system_token = "<|start_header_id|>system<|end_header_id|>\n\n"
+        self.user_token = "<|start_header_id|>user<|end_header_id|>\n\n"
+        self.assistant_token = "<|start_header_id|>assistant<|end_header_id|>\n\n"
+        self.eot_token = "<|eot_id|>"
+        self.generation_prompt = self.assistant_token
+
+    def parse(self, messages, add_generation_prompt=False, is_first_msg=False):
+        result = ''
+
+        if is_first_msg:
+            result += self.bos_token
+
+        for message in messages:
+            if message["role"] == "system":
+                result += self.parse_system(message)
+            elif message["role"] == "user":
+                result += self.parse_user(message)
+            elif message["role"] == "assistant":
+                result += self.parse_assistant(message)
+            else:
+                raise NotImplementedError(f"Unsupported message role: {message['role']}")
+
+        if add_generation_prompt:
+            result += self.generation_prompt
+        return result
+
+    def parse_system(self, message):
+        return self.system_token + message['content'] + self.eot_token
+    
+    def parse_user(self, message):
+        return self.user_token + message['content'] + self.eot_token
+    
+    def parse_assistant(self, message):
+        return self.assistant_token + message['content'] + self.eot_token

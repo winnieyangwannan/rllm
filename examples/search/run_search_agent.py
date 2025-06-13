@@ -10,7 +10,7 @@ from rllm.agents.tool_agent import ToolAgent
 from rllm.data.dataset import DatasetRegistry
 from rllm.engine.async_agent_execution_engine import AsyncAgentExecutionEngine
 from rllm.environments.tools.tool_env import ToolEnvironment
-from rllm.rewards.search_reward import rllm_reward_fn_search_boxed
+from rllm.rewards.reward_fn import search_reward_fn
 from rllm.utils import save_trajectories
 
 
@@ -56,7 +56,7 @@ if __name__ == "__main__":
         env_class=ToolEnvironment,
         env_args={
             "tool_map": tool_map,
-            "reward_fn": rllm_reward_fn_search_boxed
+            "reward_fn": search_reward_fn
         },
         rollout_engine=None,
         engine_name="openai",

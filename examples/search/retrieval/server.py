@@ -23,8 +23,9 @@ from rank_bm25 import BM25Okapi
 class LocalRetriever:
     """Local retrieval system with dense and sparse retrieval."""
     
-    def __init__(self, index_dir: str):
+    def __init__(self, index_dir: str, prebuilt_dense_index: str = None):
         self.index_dir = Path(index_dir)
+        self.prebuilt_dense_index = prebuilt_dense_index
         self.corpus = []
         self.dense_index = None
         self.sparse_index = None
@@ -45,9 +46,15 @@ class LocalRetriever:
         else:
             raise FileNotFoundError(f"Corpus file not found: {corpus_file}")
         
-        # Load dense index
-        dense_index_file = self.index_dir / "dense_index.faiss"
+        # Load dense index - use prebuilt if specified, otherwise use regular location
+        if self.prebuilt_dense_index and Path(self.prebuilt_dense_index).exists():
+            dense_index_file = Path(self.prebuilt_dense_index)
+            print(f"Using prebuilt dense index: {dense_index_file}")
+        else:
+            dense_index_file = self.index_dir / "dense_index.faiss"
+        
         if dense_index_file.exists():
+            print(f"Loading dense index from: {dense_index_file}")
             self.dense_index = faiss.read_index(str(dense_index_file))
             print(f"Loaded dense index with {self.dense_index.ntotal} vectors")
         else:
@@ -209,8 +216,8 @@ def retrieve():
             return jsonify({"error": "Missing 'query' in request"}), 400
         
         query = data['query']
-        method = data.get('method', 'hybrid')
-        k = data.get('k', 10)
+        method = data.get('retriever_type', data.get('method', 'hybrid'))  # Support both parameter names
+        k = data.get('top_k', data.get('k', 10))  # Support both parameter names
         dense_weight = data.get('dense_weight', 0.7)
         
         # Perform search
@@ -221,11 +228,20 @@ def retrieve():
             dense_weight=dense_weight
         )
         
+        # Format results for the tool
+        formatted_results = []
+        for i, result in enumerate(results, 1):
+            formatted_results.append({
+                "id": f"doc_{i}",
+                "content": result["content"],
+                "score": result["score"]
+            })
+        
         return jsonify({
             "query": query,
             "method": method,
-            "results": results,
-            "num_results": len(results)
+            "results": formatted_results,
+            "num_results": len(formatted_results)
         })
         
     except Exception as e:
@@ -235,6 +251,7 @@ def retrieve():
 def main():
     parser = argparse.ArgumentParser(description="Local retrieval server")
     parser.add_argument("--index_dir", default="./indices", help="Directory containing indices")
+    parser.add_argument("--prebuilt_dense_index", help="Path to prebuilt dense index file (e.g., e5_Flat.index)")
     parser.add_argument("--host", default="127.0.0.1", help="Host to bind to")
     parser.add_argument("--port", type=int, default=8000, help="Port to bind to")
     parser.add_argument("--debug", action="store_true", help="Enable debug mode")
@@ -244,7 +261,7 @@ def main():
     # Initialize retriever
     global retriever
     try:
-        retriever = LocalRetriever(args.index_dir)
+        retriever = LocalRetriever(args.index_dir, args.prebuilt_dense_index)
         print(f"Retrieval server initialized with {len(retriever.corpus)} documents")
     except Exception as e:
         print(f"Failed to initialize retriever: {e}")

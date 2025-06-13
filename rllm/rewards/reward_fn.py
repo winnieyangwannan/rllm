@@ -2,7 +2,8 @@ from typing import Dict, Protocol, runtime_checkable
 
 # from rllm.rewards.code_reward import RewardCodeFn
 from rllm.rewards.math_reward import RewardMathFn
-from rllm.rewards.reward_types import RewardConfig, RewardOutput
+from rllm.rewards.search_reward import RewardSearchFn
+from rllm.rewards.reward_types import RewardConfig, RewardOutput, RewardInput
 
 
 @runtime_checkable
@@ -52,6 +53,29 @@ def math_reward_fn(task_info: Dict, action: str) -> RewardOutput:
     reward_config = RewardConfig()
     reward_fn = RewardMathFn(reward_config)
     return reward_fn(task_info, action)
+
+
+def search_reward_fn(task_info: Dict, action: str) -> RewardOutput:
+    """
+    A reward function for search tasks that implements the RewardFunction protocol.
+    
+    Args:
+        task_info: The task dictionary containing data_source, ground_truth and other metadata
+        action: The agent's response/solution
+        
+    Returns:
+        RewardOutput: The calculated reward value based on search evaluation
+    """
+    reward_config = RewardConfig()
+    reward_fn = RewardSearchFn(reward_config)
+    
+    # Create RewardInput from task_info and action
+    reward_input = RewardInput(
+        task_info=task_info,
+        action=action
+    )
+    
+    return reward_fn(reward_input)
 
 
 # def code_reward_fn(task_info: Dict, action: str) -> RewardOutput:
