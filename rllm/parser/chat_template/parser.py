@@ -192,6 +192,12 @@ class LlamaChatTemplateParser(ChatTemplateParser):
         self.assistant_token = "<|start_header_id|>assistant<|end_header_id|>\n\n"
         self.eot_token = "<|eot_id|>"
         self.generation_prompt = self.assistant_token
+        
+        # took tokens 
+        self.tool_start_token = "<|start_header_id|>tool<|end_header_id|>\n\n"
+        self.tool_end_token = "<|eot_id|>"
+        self.tool_response_start_token = "<|start_header_id|>tool_response<|end_header_id|>\n\n"
+        self.tool_response_end_token = "<|eot_id|>"
 
     def parse(self, messages, add_generation_prompt=False, is_first_msg=False):
         result = ''
@@ -206,6 +212,8 @@ class LlamaChatTemplateParser(ChatTemplateParser):
                 result += self.parse_user(message)
             elif message["role"] == "assistant":
                 result += self.parse_assistant(message)
+            elif message["role"] == "tool":
+                result += self.parse_tool(message)
             else:
                 raise NotImplementedError(f"Unsupported message role: {message['role']}")
 
@@ -221,3 +229,6 @@ class LlamaChatTemplateParser(ChatTemplateParser):
     
     def parse_assistant(self, message):
         return self.assistant_token + message['content'] + self.eot_token
+    
+    def parse_tool(self, message):
+        return self.user_token + self.tool_response_start_token + message['content'] + self.tool_response_end_token + self.eot_token
