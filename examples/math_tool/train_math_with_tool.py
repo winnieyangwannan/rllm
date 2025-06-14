@@ -3,8 +3,9 @@ import hydra
 from rllm.agents import ToolAgent
 from rllm.data.dataset import DatasetRegistry
 from rllm.environments.tools.tool_env import ToolEnvironment
-from rllm.train.agent_trainer import AgentTrainer
 from rllm.rewards.reward_fn import math_reward_fn
+from rllm.train.agent_trainer import AgentTrainer
+
 
 @hydra.main(config_path="pkg://rllm.train.config", config_name="ppo_trainer", version_base=None)
 def main(config):

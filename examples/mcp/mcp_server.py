@@ -1,13 +1,9 @@
 #!/usr/bin/env python3
-import asyncio
-import inspect
 import logging
 import os
-import sys
 import subprocess
+import sys
 import tempfile
-import traceback
-from typing import Any, Dict, List, Optional, Union, TypeVar
 
 from mcp.server.fastmcp import FastMCP
 
@@ -22,9 +18,8 @@ logger = logging.getLogger(__name__)
 logger.info("MCP Server Script Starting Up...")
 
 
-from rllm.tools import TOOL_REGISTRY
+from rllm.tools import tool_registry
 from rllm.tools.tool_base import ToolOutput
-
 
 mcp = FastMCP("rllm_tools")
 
@@ -40,27 +35,11 @@ def format_tool_output(tool_output: ToolOutput) -> str:
     else:
         return str(tool_output.output)
 
-calculator = TOOL_REGISTRY['calculator']()
-lcb_python_interpreter = TOOL_REGISTRY['python']() 
-local_python_interpreter = TOOL_REGISTRY['local_python']()
-google_search = TOOL_REGISTRY['google_search']()
-firecrawl = TOOL_REGISTRY['firecrawl']()
-tavily = TOOL_REGISTRY['tavily']()
-# audio2text = TOOL_REGISTRY['audio2text']()
-# ask_question_about_audio = TOOL_REGISTRY['ask_question_about_audio']()
-# extract_excel_content = TOOL_REGISTRY['extract_excel_content']()
-# image_to_text = TOOL_REGISTRY['image_to_text']()
-# ask_question_about_image = TOOL_REGISTRY['ask_question_about_image']()
-# search_wiki = TOOL_REGISTRY['search_wiki']()
-# search_google = TOOL_REGISTRY['search_google']()
-# ask_video = TOOL_REGISTRY['ask_video']()
-# browse_url = TOOL_REGISTRY['browse_url']()
-# execute_code = TOOL_REGISTRY['execute_code']()
+python_interpreter = tool_registry.instantiate('python') 
+google_search = tool_registry.instantiate('google_search')
+# firecrawl = tool_registry.instantiate('firecrawl')
+# tavily = tool_registry.get_tool('tavily')
 
-@mcp.tool()
-async def calculator_tool(expression: str) -> str:
-    result = await calculator(expression, use_async=True)
-    return format_tool_output(result)
 
 def execute_python_locally(code: str) -> str:
     try:

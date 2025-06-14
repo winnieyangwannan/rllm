@@ -8,6 +8,7 @@ from rllm.agents.system_prompts import TOOL_SYSTEM_PROMPT
 from rllm.parser import get_tool_parser
 from rllm.tools.multi_tool import MultiTool
 from rllm.tools.tool_base import Tool
+from rllm.tools.mcp_tool import MCPTool
 
 logger = logging.getLogger(__name__)
 
@@ -185,3 +186,22 @@ class ToolAgent(BaseAgent):
     def trajectory(self) -> Trajectory:
         """Returns the trajectory recorded so far."""
         return self._trajectory
+    
+
+class MCPToolAgent(ToolAgent):
+    def __init__(self, system_prompt=TOOL_SYSTEM_PROMPT, parser_name="qwen", tool_map=List[MCPTool]):
+        self.system_prompt = system_prompt
+        self.tool_map = tool_map
+
+        parser_class = get_tool_parser(parser_name=parser_name)
+        self.tool_parser = parser_class()
+
+        tools_json = [tool.json for tool in self.tool_map.values()]
+        self.tools_prompt = self.tool_parser.get_tool_prompt(
+            json.dumps(tools_json, indent=2)
+        )
+
+        self._trajectory = Trajectory()
+        self.messages = []
+        self.step = 0
+        self.reset()

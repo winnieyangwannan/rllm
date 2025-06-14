@@ -29,8 +29,8 @@ logger = logging.getLogger(__name__)
 class AsyncAgentExecutionEngine(AgentExecutionEngine):
     def __init__(
         self,
-        engine_name,
-        tokenizer,
+        engine_name="openai",
+        tokenizer=None,
         rollout_engine=None,
         config=None,
         model_path="",

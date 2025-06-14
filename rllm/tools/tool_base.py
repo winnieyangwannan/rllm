@@ -117,10 +117,11 @@ class Tool(ABC):
             except Exception as e:
                 return ToolOutput(name=self.name, error=f"{type(e).__name__} - {str(e)}")
         else:
-            raise NotImplementedError(
-                "Tool must implement either forward() or async_forward(). "
-                "This tool has not implemented the synchronous forward() method."
-            )
+            pass
+            # raise NotImplementedError(
+            #     "Tool must implement either forward() or async_forward(). "
+            #     "This tool has not implemented the synchronous forward() method."
+            # )
 
     async def async_forward(self, *args, **kwargs) -> ToolOutput:
         """
