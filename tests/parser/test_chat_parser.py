@@ -4,6 +4,7 @@ from rllm.parser.chat_template.parser import (
     ChatTemplateParser,
     DeepseekQwenChatTemplateParser,
     QwenChatTemplateParser,
+    LlamaChatTemplateParser,
 )
 from rllm.parser.chat_template.utils import PARSER_TEST_MESSAGES
 
@@ -34,6 +35,21 @@ def test_deepseek_qwen_chat_template_parser():
     result = parser.parse(PARSER_TEST_MESSAGES)
     assert isinstance(result, str)
     assert len(result) > 0
+
+def test_llama_chat_template_parser():
+    # Use a public Llama model instead of gated Meta-Llama
+    tokenizer = AutoTokenizer.from_pretrained("TinyLlama/TinyLlama-1.1B-Chat-v1.0")
+    parser = LlamaChatTemplateParser(tokenizer)
+
+    # Test equivalence check
+    assert parser.verify_equivalence(PARSER_TEST_MESSAGES)
+
+    # Test basic parsing
+    result = parser.parse(PARSER_TEST_MESSAGES)
+    assert isinstance(result, str)
+    assert len(result) > 0
+    assert parser.assistant_token in result
+
 
 def test_parser_factory():
     # Test Qwen model
