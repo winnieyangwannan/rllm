@@ -1,35 +1,31 @@
 # rLLM: Reinforcement Learning for Language Agents
 
-rLLM is a library for training and deploying LLM agents using reinforcement learning. It provides a comprehensive framework to create, train, and evaluate LLM-based agents across a variety of tasks and environments.
+rLLM is a comprehensive framework for training language agents using reinforcement learning. It enables you to easily define custom language agents and environments, collect agent trajectories, and perform RL training to continuously improve your agents' performance.
 
 ## Key Features
 
-- **Modular Architecture**: Easily create custom agents and environments.
-- **Multi-domain Support**: Train agents for math, code, web browsing, and more.
-- **Flexible Reward Systems**: Define custom reward functions for diverse tasks.
-- **Scalable Training**: Distributed training with efficient rollout engines. 
-- **Advanced Tool Usage**: Enable LLMs to use tools and external APIs.
-- **Evaluation Framework**: Robust evaluation pipelines to measure agent performance.
-
-## Why rLLM?
+rLLM provides:
+- **Simple abstractions for building custom agents**: rLLM decouples agent and environment abstractions from the underlying training infrastructure. Users can easily define custom agents and train them with RL without getting entangled in the complexities of the underlying training engine.
+- **Unified interface for agent inference & training**: Training and deploying LLM agents traditionally requires two separate sets of tooling and infrastructure. rLLM provides a unified interface for both training and deploying language agents, enabling continuous evolution and training of agents to "learn from experience."
+- **Efficient trajectory generation & scalable RL training**: rLLM's execution engine supports asynchronous and parallelized generation of agent trajectories. For RL training, rLLM integrates `verl` as its training backend, which supports scalable RL training for language models. Together, rLLM delivers efficient and scalable training for language agents.
 
 
 ## Getting Started
 
 To get started with rLLM, check out the [Installation Guide](getting-started/installation.md) and [Quick Start Tutorial](getting-started/quick-start.md).
 
-## Use Cases
+## Built-in Agents
 
-rLLM currently supports a wide range of applications:
-- **Competition Math/Coding** Train reasoning models for math and coding like DeepScaleR and DeepCoder
-- **SWEAgent**: Create agents that can write and debug code
-- **Web Agents**: Train LLMs to navigate websites and perform web tasks like Miniwob and Frozenlake.
-- **General Tool-Using Agents**: Enable LLMs to effectively use external tools and APIs
+rLLM currently supports a variety of built-in agents:
+- **Math/Coding Agents**: Train single-turn reasoning models for competition math and coding (like DeepScaleR and DeepCoder), or multi-turn math/coding agents that can iteratively refine their previous answers.
+- **SWEAgent and SWEEnv**: Train SWEAgents that can write software patches and resolve real-world GitHub issues.
+- **Web Agents**: Train LLMs to navigate websites and perform complex web tasks.
+- **General Tool-Using Agents & MCP Environment**: Connect to any MCP servers and train language agents to effectively use tools from the Model Context Protocol (MCP).
+
+## Build Your Own Agents & Environments
+
+Walk through our documentation and examples to understand the fundamentals of rLLM and build your own custom agents and environments tailored to your specific use cases.
 
 ## Community & Support
 
 rLLM is an open-source project under active development. We welcome contributions, bug reports, and feature requests from the community.
-
-## Commands
-
-*

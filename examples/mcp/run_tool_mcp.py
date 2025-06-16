@@ -14,7 +14,6 @@ from rllm.utils import compute_pass_at_k
 load_dotenv()
 
 
-
 async def main():
     if len(sys.argv) < 2:
         print("Usage: python mcp_client.py <path_to_mcp_server.py>")

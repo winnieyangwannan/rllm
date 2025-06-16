@@ -14,25 +14,29 @@ The AgentTrainer orchestrates several key components:
 
 1. **Agent**: The learning policy that generates actions based on observations
 2. **Environment**: The task environment that provides observations and rewards
-3. **PPO Trainer**: The underlying reinforcement learning algorithm implementation
-4. **Ray Distributed System**: Handles parallel execution and resource management
-5. **Reward Functions**: Compute rewards for agent actions and trajectories
+3. **RL Trainer**: The underlying reinforcement learning algorithm implementation
 
 ### Training Flow
 
-```mermaid
-graph TD
-    A[Initialize AgentTrainer] --> B[Load Configuration]
-    B --> C[Setup Ray Workers]
-    C --> D[Initialize Environment & Agent]
-    D --> E[Generate Trajectories]
-    E --> F[Compute Rewards]
-    F --> G[Calculate Advantages]
-    G --> H[Update Policy with PPO]
-    H --> I{Training Complete?}
-    I -->|No| E
-    I -->|Yes| J[Save Model]
-```
+The AgentTrainer serves as a wrapper over the training engine `verl`. When `trainer.train()` is called, the following process occurs:
+
+1. **Initialization**: The system initializes the `AgentPPOTrainer`, which inherits from `verl`'s `RayPPOTrainer`. We replace the original trajectory generation logic with rLLM's AgentExecutionEngine.
+
+2. **Setup Phase**: The `AgentPPOTrainer` performs the following setup:
+   - Sets up Ray workers for distributed model training
+   - Initializes the AgentExecutionEngine
+   - Loads the dataset and splits it into mini-batches
+
+3. **Training Loop**: For each mini-batch:
+   - Data is passed to rLLM's AgentExecutionEngine
+   - The engine initializes agent-environment pairs to process the mini-batch in parallel
+   - Agent trajectories are collected through environment interactions
+
+4. **Update Phase**: After a mini-batch is sampled:
+   - The trainer transforms trajectories into `verl`'s format
+   - Gradient updates are performed using the collected trajectories
+
+For more details, reference `rllm/trainer/agent_ppo_trainer.py`, where we implement our custom RL training flow for agents.
 
 ## Basic Usage
 
@@ -66,41 +70,17 @@ def main(config):
     trainer.train()
 ```
 
-### Advanced Configuration
-
-For more complex scenarios, you can provide custom arguments to agents and environments:
-
-```python
-trainer = AgentTrainer(
-    agent_class=ToolAgent,
-    env_class=ToolEnvironment,
-    agent_args={
-        "system_prompt": "You are a helpful assistant",
-        "tools": ["python", "search"],
-        "parser_name": "qwen"
-    },
-    env_args={
-        "max_steps": 10,
-        "tools": ["python", "search"],
-        "reward_fn": custom_reward_function,
-    },
-    config=config,
-    train_dataset=train_dataset,
-    val_dataset=val_dataset,
-)
-```
-
 ## Configuration
 
 ### Main Configuration File
 
-The training behavior is controlled through YAML configuration files. The main configuration is `ppo_trainer.yaml` from `verl`:
+rLLM adopts the same configuration structure as verl's `ppo_trainer.yaml`, with additional rLLM-specific configurations for our AgentExecutionEngine.
 
 #### Agent-Specific Configuration
 ```yaml
 agent:
-  max_steps: 10
-  n_parallel_agents: 8
-  use_stepwise_advantage: true
-  trajectory_timeout: 300
+  max_steps: 10              # Maximum steps per episode
+  n_parallel_agents: 8       # Number of parallel agent instances
+  use_stepwise_advantage: true  # Enable step-wise advantage calculation
+  trajectory_timeout: 300    # Timeout for trajectory collection (seconds)
 ```
