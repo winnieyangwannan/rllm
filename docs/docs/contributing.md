@@ -4,30 +4,6 @@ We welcome contributions to rLLM! This guide will help you get started with the 
 
 ## Getting Started
 
-### Prerequisites
-
-- Python 3.8 or higher
-- Git
-- pip (Python package installer)
-- CUDA-compatible GPU (recommended for development)
-
-### Setting Up Development Environment
-
-1. Fork the repository on GitHub
-2. Clone your fork:
-   ```bash
-   git clone --recurse-submodules https://github.com/YOUR-USERNAME/rllm-internal.git
-   cd rllm
-   ```
-
-3. Install development dependencies:
-   ```bash
-   pip install -e ./verl[vllm,gpu,sglang]
-   pip install -e .
-   pip install -r requirements.txt
-   pip install -r requirements-dev.txt  # Additional development dependencies
-   ```
-
 ## Development Workflow
 
 ### Creating a New Feature
@@ -60,38 +36,20 @@ pytest tests/test_specific_file.py
 
 ### Code Style
 
-We use ruff for code style checking and formatting. To check your code:
-
-```bash
-ruff check .
-```
-
-To automatically format your code:
-
-```bash
-ruff format .
-```
-
-## Project Structure
-
-Understanding the project structure will help you contribute effectively:
+We use pre-commit to perform code formatting and linting with Ruff:
+We use pre-commit to help improve code quality. To initialize pre-commit, run:
 
 ```
-rllm/
-├── agents/              # Agent implementations
-├── data/                # Data handling utilities
-├── engine/              # Execution engines
-├── environments/        # Environment implementations
-├── models/              # Model definitions and utilities
-├── parser/              # Parsers for processing text
-├── rewards/             # Reward functions
-├── router/              # Routing utilities for distributed training
-├── tools/               # Tool implementations
-├── train/               # Training utilities
-└── utils.py             # General utilities
+pip install pre-commit
+pre-commit install
 ```
 
-## Adding New Components
+To resolve CI errors locally, you can manually run pre-commit by:
+```
+pre-commit run
+```
+
+<!-- ## Adding New Components
 
 ### Adding a New Agent
 
@@ -113,25 +71,16 @@ rllm/
 1. Create a new file in `rllm/rewards/` (e.g., `my_reward.py`)
 2. Implement your reward function
 3. Register your reward function in `rllm/rewards/__init__.py`
-4. Add tests in `tests/rewards/`
-
-## Documentation
-
-When adding new features, please also update the documentation:
-
-1. Add docstrings to your code following the Google Python Style Guide
-2. Update or create relevant documentation files in the `docs/` directory
-3. If adding a new feature, add an example to the examples section
+4. Add tests in `tests/rewards/` -->
 
 ## Submitting a Pull Request
 
 When you're ready to submit your changes:
 
 1. Make sure your branch is up-to-date with the main branch
-2. Ensure all tests pass
-3. Check that your code follows the style guidelines
-4. Create a pull request with a descriptive title and detailed description
-5. Link any relevant issues in your pull request description
+2. Ensure all tests pass and pre-commit check passes
+3. Create a pull request with a descriptive title and detailed description
+4. Link any relevant issues in your pull request description
 
 ## Code Review
 

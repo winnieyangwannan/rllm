@@ -45,9 +45,6 @@ class BaseAgent(ABC):
         """
         Updates the agent's internal state after an environment step.
 
-        This function is called during environment interaction to incorporate the latest action's
-        outcome into the agent's learning process.
-
         Args:
             observation (Any): The observation after stepping through environment.
             reward (float): The reward received after taking the action.
@@ -59,10 +56,7 @@ class BaseAgent(ABC):
     @abstractmethod
     def update_from_model(self, response: str, **kwargs):
         """
-        Updates the agent's internal state after an environment step.
-
-        This function is called during environment interaction to incorporate the latest action's
-        outcome into the agent's learning process.
+        Updates the agent's internal state after the model generates a response.
 
         Args:
             response (str): The response from the model.

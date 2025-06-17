@@ -84,8 +84,12 @@ class ToolEnvironment(BaseEnv):
                     if tool_call.get('function', {}).get('name') == 'finish':
                         finish_action = tool_call
                         break
-                arguments = finish_action.get('function', {}).get('arguments', {})
-                llm_response = arguments.get('response', '')
+                if finish_action:
+                    arguments = finish_action.get('function', {}).get('arguments', {})
+                    llm_response = arguments.get('response', '')
+                else:
+                    # No finish tool call found, use the action itself
+                    llm_response = str(action)
             
             reward_output = self.reward_fn(task_info=self.task, action=llm_response)
             return {}, reward_output.reward, done, {"response": action, "metadata": reward_output.metadata}
