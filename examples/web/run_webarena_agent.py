@@ -74,18 +74,12 @@ if __name__ == "__main__":
         if not os.path.exists(save_dir + f"_{i}"):
             os.makedirs(save_dir + f"_{i}", exist_ok=True)
         files = os.listdir(save_dir + f"_{i}")
-        finished_tasks = set(
-            [int(f.split(".")[0].split("_")[1]) for f in files if f.endswith(".json")]
-        )
+        finished_tasks = set([int(f.split(".")[0].split("_")[1]) for f in files if f.endswith(".json")])
 
         # tasks_to_run_full = set(range(600, 650)) | set(range(681, 689))
         tasks_to_run_full = set(range(812))
 
-        tasks = [
-            i
-            for i in tasks_to_run_full
-            if i not in finished_tasks
-        ]
+        tasks = [i for i in tasks_to_run_full if i not in finished_tasks]
         tasks = [
             {
                 "env_id": f"browsergym_async/webarena.{i}",

@@ -2,7 +2,7 @@ import base64
 import io
 import logging
 import re
-from typing import Any, Dict, List
+from typing import Any
 
 import numpy as np
 from browsergym.core.action.highlevel import HighLevelActionSet
@@ -13,6 +13,7 @@ from rllm.agents.agent import BaseAgent, Step, Trajectory
 from rllm.agents.system_prompts import *
 
 logger = logging.getLogger(__name__)
+
 
 def image_to_jpg_base64_url(image: np.ndarray | Image.Image):
     """Convert a numpy array to a base64 encoded image url."""
@@ -44,7 +45,7 @@ class WebAgent(BaseAgent):
             demo_mode=False,  # add visual effects
         )
 
-        self.action_history = [] # all are in string
+        self.action_history = []  # all are in string
 
         # for interface compliance
         self._trajectory = Trajectory()
@@ -56,7 +57,7 @@ class WebAgent(BaseAgent):
         self.cot_prompt = False
         self.full_conversation = False
 
-    def update_from_env(self, observation: Any, reward: float, done: bool, info: Dict, **kwargs):
+    def update_from_env(self, observation: Any, reward: float, done: bool, info: dict, **kwargs):
         """
         Updates the agent's internal state after an environment step.
         Includes logic to check if the observation changed from the previous step.
@@ -68,10 +69,7 @@ class WebAgent(BaseAgent):
         # initial state
         if not self.messages:
             self.messages.append(
-                {
-                    "role": "system", 
-                    "content": self._format_msgs_as_str(self.get_system_msgs(obs))
-                },
+                {"role": "system", "content": self._format_msgs_as_str(self.get_system_msgs(obs))},
             )
 
         # Update the last step in the trajectory with the outcome (next_observation, reward, done, info)
@@ -84,22 +82,16 @@ class WebAgent(BaseAgent):
             prior_step.info = info
 
         # Add the user message for the *next* interaction turn
-        self.messages.append({
-            "role": "user",
-            "content": user_prompt_content
-        })
+        self.messages.append({"role": "user", "content": user_prompt_content})
 
         # Create a new step for the current state (with the observation that resulted from the last action)
         # This step's action, reward, etc., will be filled in by subsequent update_from_model and update_from_env calls
         if done:
             return
-        
-        cur_step = Step(
-            observation=observation, 
-            step=self.step
-        )
+
+        cur_step = Step(observation=observation, step=self.step)
         self._trajectory.steps.append(cur_step)
-        
+
     def update_from_model(self, response: str, **kwargs):
         content = response
         if not self.accumulate_thinking:
@@ -121,19 +113,19 @@ class WebAgent(BaseAgent):
         self.step += 1
 
     @property
-    def chat_completions(self) -> List[Dict[str, str]]:
+    def chat_completions(self) -> list[dict[str, str]]:
         return self.messages
-    
+
     @property
-    def prompt(self) -> List[Dict[str, str]]:
+    def prompt(self) -> list[dict[str, str]]:
         if self.full_conversation:
             return self.messages
 
-        latest_msgs = [self.messages[0]] # system message
+        latest_msgs = [self.messages[0]]  # system message
         has_assistant_msg = False
         for i in range(len(self.messages) - 1, -1, -1):
             if self.messages[i].get("role") == "assistant":
-                latest_msgs += self.messages[i + 1:] 
+                latest_msgs += self.messages[i + 1 :]
                 has_assistant_msg = True
                 break
         if not has_assistant_msg:
@@ -154,43 +146,26 @@ class WebAgent(BaseAgent):
             raise ValueError("get_current_state called before the first observation was processed.")
         return self._trajectory.steps[-1]
 
-
     def get_system_msgs(self, obs):
         system_msgs = []
-        system_msgs.append({
-            "type": "text",
-            "text": self._get_system_prompt()
-        })
+        system_msgs.append({"type": "text", "text": self._get_system_prompt()})
 
         # Add goal information
-        system_msgs.append({
-            "type": "text",
-            "text": "\n # Goal (Below is the goal you want to accomplish)\n"
-        })
-        system_msgs.extend(obs["goal_object"])  
+        system_msgs.append({"type": "text", "text": "\n # Goal (Below is the goal you want to accomplish)\n"})
+        system_msgs.extend(obs["goal_object"])
         return system_msgs
 
     def get_user_msgs(self, user_obs):
         user_msgs = []
         # Add open tabs information
-        user_msgs.extend(self._format_open_tabs(
-            user_obs["open_pages_urls"],
-            user_obs["open_pages_titles"],
-            user_obs["active_page_index"]
-        ))
+        user_msgs.extend(self._format_open_tabs(user_obs["open_pages_urls"], user_obs["open_pages_titles"], user_obs["active_page_index"]))
 
         # Add page information based on settings
         if self.use_axtree:
-            user_msgs.append({
-                "type": "text",
-                "text": f"# Current page Accessibility Tree\n\n{user_obs['axtree_txt']}\n\n"
-            })
+            user_msgs.append({"type": "text", "text": f"# Current page Accessibility Tree\n\n{user_obs['axtree_txt']}\n\n"})
 
         if self.use_html:
-            user_msgs.append({
-                "type": "text",
-                "text": f"# Current page DOM\n\n{user_obs['pruned_html']}\n\n"
-            })
+            user_msgs.append({"type": "text", "text": f"# Current page DOM\n\n{user_obs['pruned_html']}\n\n"})
 
         if self.use_screenshot:
             user_msgs.extend(self._format_screenshot(user_obs["screenshot"]))
@@ -209,19 +184,17 @@ class WebAgent(BaseAgent):
             )
 
         # Add action space description
-        user_msgs.append({
-            "type": "text",
-            "text": self._get_action_space_description()
-        })
+        user_msgs.append({"type": "text", "text": self._get_action_space_description()})
 
         # Add next action prompt
-        user_msgs.append({
-            "type": "text",
-            "text": "# Next action\nYou will now think step by step and produce your next best action. Reflect on your past actions, any resulting error message, and the current state of the page before deciding on your next action. MAKE SURE TO WRAP YOU FINAL ACTION in ```action``` YOU MUST PUT IN THIS EXACT STYLE FOR THE ACTION TO BE VALID. The content must be in the same format as shown before in the Action Space. Only 1 action is needed."
-        })
+        user_msgs.append(
+            {
+                "type": "text",
+                "text": "# Next action\nYou will now think step by step and produce your next best action. Reflect on your past actions, any resulting error message, and the current state of the page before deciding on your next action. MAKE SURE TO WRAP YOU FINAL ACTION in ```action``` YOU MUST PUT IN THIS EXACT STYLE FOR THE ACTION TO BE VALID. The content must be in the same format as shown before in the Action Space. Only 1 action is needed.",
+            }
+        )
 
         return user_msgs
-    
 
     def _preproc_obs(self, obs: dict) -> dict:
         return {
@@ -237,33 +210,27 @@ class WebAgent(BaseAgent):
             "pruned_html": prune_html(flatten_dom_to_str(obs["dom_object"])),
         }
 
-
     def _get_system_prompt(self):
         return SYSTEM_WEB_PROMPT
-
 
     def _format_open_tabs(self, urls: list, titles: list, active_index: int) -> list:
         messages = [{"type": "text", "text": "# Currently open tabs (This is the current active tabs)\n"}]
 
         for idx, (url, title) in enumerate(zip(urls, titles, strict=False)):
             active_marker = " (active tab)" if idx == active_index else ""
-            messages.append({
-                "type": "text",
-                "text": f"Tab {idx}{active_marker}\n  Title: {title}\n  URL: {url}\n"
-            })
+            messages.append({"type": "text", "text": f"Tab {idx}{active_marker}\n  Title: {title}\n  URL: {url}\n"})
         return messages
-
 
     def _format_screenshot(self, screenshot: np.ndarray):
         messages = []
         messages.append(
-                {
-                    "type": "text",
-                    "text": """\
+            {
+                "type": "text",
+                "text": """\
 # Current page Screenshot
 """,
-                }
-            )
+            }
+        )
         messages.append(
             {
                 "type": "image_url",
@@ -274,7 +241,6 @@ class WebAgent(BaseAgent):
             }
         )
         return messages
-
 
     def _get_action_space_description(self):
         if self.cot_prompt:
@@ -304,24 +270,19 @@ Action: ```send_msg_to_user("The price for a 15\\" laptop is 1499 USD.")```
                     if isinstance(message["image_url"], dict):
                         image_url = image_url["url"]
                     if image_url.startswith("data:image"):
-                        prompt_text_strings.append(
-                            "image_url: " + image_url[:30] + "... (truncated)"
-                        )
+                        prompt_text_strings.append("image_url: " + image_url[:30] + "... (truncated)")
                     else:
                         prompt_text_strings.append("image_url: " + image_url)
                 case _:
-                    raise ValueError(
-                        f"Unknown message type {repr(message['type'])} in the task goal."
-                    )
+                    raise ValueError(f"Unknown message type {repr(message['type'])} in the task goal.")
         return " ".join(prompt_text_strings)
-
 
     def _parse_model_response(self, response):
         """
         Extracts the last content enclosed within triple backticks (``` ```) from the response.
 
-        If the response contains multiple segments wrapped in triple backticks, 
-        this function returns the content of the **last** occurrence. 
+        If the response contains multiple segments wrapped in triple backticks,
+        this function returns the content of the **last** occurrence.
         If no such formatting is found, it returns the entire response unmodified.
 
         Args:
@@ -333,17 +294,17 @@ Action: ```send_msg_to_user("The price for a 15\\" laptop is 1499 USD.")```
                   or the full response if no match is found)
                 - The processed response
         """
-        matches = re.findall(r'```(.*?)```', response, re.DOTALL)  # Find all occurrences
+        matches = re.findall(r"```(.*?)```", response, re.DOTALL)  # Find all occurrences
         if matches:
-            return matches[-1], response 
-        return response, response 
+            return matches[-1], response
+        return response, response
 
     def compute_training_reward(self, trajectory: Trajectory) -> float:
         if not trajectory:
             return 0
 
         reward = trajectory.steps[-1].reward
-        reward_penalty = 0    
+        reward_penalty = 0
         # for step in trajectory.steps:
         #     if not self.validate_step(step):
         #         reward_penalty = -0.5

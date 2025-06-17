@@ -1,13 +1,14 @@
 import logging
 import random
 import time
-from typing import Dict
-from rllm.environments.base.base_env import BaseEnv
 
 from browser_pilot.entrypoint.client import CloudClient
 from browser_pilot.entrypoint.env import CloudEnv
 
+from rllm.environments.base.base_env import BaseEnv
+
 logger = logging.getLogger(__name__)
+
 
 def with_retry(num_retries=3):
     max_wait = 16
@@ -19,9 +20,7 @@ def with_retry(num_retries=3):
                 try:
                     return func(*args, **kwargs)
                 except Exception as e:
-                    logger.warning(
-                        f"Error in {func.__name__}: {e}, retrying in {cur_wait} seconds."
-                    )
+                    logger.warning(f"Error in {func.__name__}: {e}, retrying in {cur_wait} seconds.")
                     time.sleep(cur_wait)
                     cur_wait *= 1 + random.random()
                     cur_wait = min(cur_wait, max_wait)
@@ -49,13 +48,14 @@ class BrowserGymCloud(BaseEnv):
         self.slow_mo = slow_mo
         self.url = url
 
-        
     @with_retry(num_retries=5)
-    def reset(self, task: Dict = {}):
+    def reset(self, task: dict = None):
+        if task is None:
+            task = {}
         if self.env is not None:
             self.env.close()
             self.env = None
-        
+
         self.env = CloudEnv(
             url=self.url,
             id=self.env_id,  # "browsergym_async/webarena.{id}"
@@ -65,7 +65,7 @@ class BrowserGymCloud(BaseEnv):
         )
         print(f"try reset url: {self.url}, {self.env_id}, {self.client}, {self.timeout}, {self.slow_mo}")
         return self.env.reset()
-        
+
         # # clean up old env
         # task = task.copy()
         # env_id = task.pop("env_id", self.env_id)
@@ -80,7 +80,7 @@ class BrowserGymCloud(BaseEnv):
         #     self.env = None
 
         # logger.debug(f"Resetting env {env_id} with task {task} and env_kwargs {env_kwargs}")
-        
+
         # self.env = CloudEnv(
         #     url=self.url,
         #     id=env_id,  # "browsergym_async/webarena.{id}"
@@ -108,9 +108,11 @@ class BrowserGymCloud(BaseEnv):
         logger.debug("Successfully closed env")
 
     @staticmethod
-    def from_json(extra_info_json={}) -> "BrowserGymCloud":
-        env_id = extra_info_json['env_id']
-        url = extra_info_json['url']
+    def from_json(extra_info_json=None) -> "BrowserGymCloud":
+        if extra_info_json is None:
+            extra_info_json = {}
+        env_id = extra_info_json["env_id"]
+        url = extra_info_json["url"]
         return BrowserGymCloud(env_id=env_id, url=url)
 
     @staticmethod

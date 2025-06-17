@@ -17,30 +17,19 @@ from mcp.server.stdio import stdio_server
 # Create the server instance
 server = Server("math-tools")
 
+
 @server.list_tools()
 async def handle_list_tools() -> list[types.Tool]:
     """List available tools."""
     return [
-        types.Tool(
-            name="python",
-            description="Execute Python code and return the result",
-            inputSchema={
-                "type": "object",
-                "properties": {
-                    "code": {
-                        "type": "string",
-                        "description": "Python code to execute"
-                    }
-                },
-                "required": ["code"]
-            }
-        ),
+        types.Tool(name="python", description="Execute Python code and return the result", inputSchema={"type": "object", "properties": {"code": {"type": "string", "description": "Python code to execute"}}, "required": ["code"]}),
     ]
+
 
 @server.call_tool()
 async def handle_call_tool(name: str, arguments: dict) -> list[types.TextContent]:
     """Handle tool execution."""
-    
+
     if name == "python":
         return await execute_python(arguments.get("code", ""))
     elif name == "finish":
@@ -49,14 +38,15 @@ async def handle_call_tool(name: str, arguments: dict) -> list[types.TextContent
     else:
         raise ValueError(f"Unknown tool: {name}")
 
+
 async def execute_python(code: str) -> list[types.TextContent]:
     """Execute Python code in a subprocess and return the result."""
     try:
         # Create a temporary file to write the code
-        with tempfile.NamedTemporaryFile(mode='w', suffix='.py', delete=False) as f:
+        with tempfile.NamedTemporaryFile(mode="w", suffix=".py", delete=False) as f:
             f.write(code)
             temp_file = f.name
-        
+
         try:
             # Execute the Python code
             result = subprocess.run(
@@ -64,9 +54,9 @@ async def execute_python(code: str) -> list[types.TextContent]:
                 capture_output=True,
                 text=True,
                 timeout=30,  # 30 second timeout
-                cwd=tempfile.gettempdir()
+                cwd=tempfile.gettempdir(),
             )
-            
+
             output = ""
             if result.stdout:
                 output += f"STDOUT:\n{result.stdout}\n"
@@ -74,23 +64,24 @@ async def execute_python(code: str) -> list[types.TextContent]:
                 output += f"STDERR:\n{result.stderr}\n"
             if result.returncode != 0:
                 output += f"Return code: {result.returncode}\n"
-            
+
             if not output:
                 output = "Code executed successfully with no output."
-                
+
             return [types.TextContent(type="text", text=output)]
-            
+
         finally:
             # Clean up the temporary file
             try:
                 os.unlink(temp_file)
             except OSError:
                 pass
-                
+
     except subprocess.TimeoutExpired:
         return [types.TextContent(type="text", text="Error: Code execution timed out after 30 seconds")]
     except Exception as e:
         return [types.TextContent(type="text", text=f"Error executing Python code: {str(e)}")]
+
 
 async def main():
     # Run the server using stdio
@@ -108,5 +99,6 @@ async def main():
             ),
         )
 
+
 if __name__ == "__main__":
-    asyncio.run(main()) 
+    asyncio.run(main())

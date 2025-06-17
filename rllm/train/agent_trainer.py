@@ -1,4 +1,4 @@
-from typing import Any, Dict, List, Optional, Type, Union
+from typing import Any
 
 import ray
 
@@ -11,20 +11,20 @@ class AgentTrainer:
     A wrapper class that allows users to easily train custom agents with custom environments
     without having to directly interact with the underlying training infrastructure.
     """
-    
+
     def __init__(
         self,
-        agent_class: Type,
-        env_class: Type,
-        agent_args: Optional[Dict[str, Any]] = None,
-        env_args: Optional[Dict[str, Any]] = None,
-        config: Optional[Union[Dict[str, Any], List[str]]] = None,
-        train_dataset: Optional[Dataset] = None,
-        val_dataset: Optional[Dataset] = None,
+        agent_class: type,
+        env_class: type,
+        agent_args: dict[str, Any] | None = None,
+        env_args: dict[str, Any] | None = None,
+        config: dict[str, Any] | list[str] | None = None,
+        train_dataset: Dataset | None = None,
+        val_dataset: Dataset | None = None,
     ):
         """
         Initialize the AgentTrainer.
-        
+
         Args:
             agent_class: The custom agent class to use for training
             env_class: The custom environment class to use for training
@@ -46,17 +46,10 @@ class AgentTrainer:
         if train_dataset is not None:
             self.config.data.train_files = train_dataset.get_verl_data_path()
         if val_dataset is not None:
-            self.config.data.val_files= val_dataset.get_verl_data_path()
-
+            self.config.data.val_files = val_dataset.get_verl_data_path()
 
     def train(self):
         if not ray.is_initialized():
-            ray.init(runtime_env={'env_vars': {'TOKENIZERS_PARALLELISM': 'true', 'NCCL_DEBUG': 'WARN'}})
+            ray.init(runtime_env={"env_vars": {"TOKENIZERS_PARALLELISM": "true", "NCCL_DEBUG": "WARN"}})
 
-        ray.get(train_agent.remote(
-            self.config, 
-            self.agent_class, 
-            self.env_class, 
-            self.agent_args, 
-            self.env_args
-        ))
+        ray.get(train_agent.remote(self.config, self.agent_class, self.env_class, self.agent_args, self.env_args))

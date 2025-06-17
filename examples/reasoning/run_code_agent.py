@@ -1,12 +1,11 @@
 import asyncio
-import json
 from copy import deepcopy
 
 from transformers import AutoTokenizer
 
 from rllm.agents.code_agent import CompetitionCodingAgent
-from rllm.data.dataset_types import TestDataset, TrainDataset
 from rllm.data import Dataset
+from rllm.data.dataset_types import TestDataset, TrainDataset
 from rllm.engine.async_agent_execution_engine import AsyncAgentExecutionEngine
 from rllm.environments.code.competition_coding import CompetitionCodingEnv
 
@@ -15,17 +14,17 @@ def load_data(n=1, dataset_enum=None):
     """Load data using the new Dataset interface."""
     # Determine the split based on the dataset_enum type
     split = "train" if isinstance(dataset_enum, TrainDataset) else "test"
-    
+
     # Load dataset using the new Dataset class
     dataset_obj = Dataset(dataset_name=dataset_enum, split=split)
-    
+
     # Data is already processed by the Dataset class
     data = []
     for i in range(n):
         # Duplicate each example n times
         for example in dataset_obj:
             data.append(deepcopy(example))
-    
+
     return data
 
 
@@ -50,10 +49,7 @@ def evaluate_results(results):
     # Calculate pass@1 and pass@16
     total_problems = len(problem_correct_map)
     pass_at_1 = sum(problem_correct_map.values()) / sum(problem_total_map.values())
-    pass_at_k = (
-        sum(1 for problem, correct in problem_correct_map.items() if correct > 0)
-        / total_problems
-    )
+    pass_at_k = sum(1 for problem, correct in problem_correct_map.items() if correct > 0) / total_problems
 
     print("Total unique problems:", total_problems)
     print("Average Pass@1 Accuracy:", pass_at_1)
@@ -74,10 +70,7 @@ if __name__ == "__main__":
 
     envs = [CompetitionCodingEnv(max_turns=2) for _ in range(n_parallel_agents)]
 
-    agents = [
-        CompetitionCodingAgent(remove_thinking=False, max_tests=2)
-        for i in range(n_parallel_agents)
-    ]
+    agents = [CompetitionCodingAgent(remove_thinking=False, max_tests=2) for i in range(n_parallel_agents)]
 
     sampling_params = {"temperature": 0.6, "top_p": 0.95, "model": model_name}
 

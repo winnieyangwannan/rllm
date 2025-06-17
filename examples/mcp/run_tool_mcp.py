@@ -21,11 +21,12 @@ async def main():
         sys.exit(1)
 
     import os
+
     os.environ["TOKENIZERS_PARALLELISM"] = "true"
 
     n_parallel_agents = 8  # Reduced due to MCP connection overhead
     model_name = "Qwen/Qwen3-4B"
-    
+
     tokenizer = AutoTokenizer.from_pretrained(model_name)
 
     # Create a temporary connection manager to discover available tools
@@ -36,13 +37,9 @@ async def main():
         mcp_tool_map = temp_manager.tool_map
     finally:
         temp_manager.stop()
-    
-    agent_args = {
-        "parser_name": "qwen",
-        "system_prompt": "You are a math assistant that can use tools to solve math problems. Use the available tools to help solve the problem step by step.",
-        "tool_map": mcp_tool_map
-    }
-    
+
+    agent_args = {"parser_name": "qwen", "system_prompt": "You are a math assistant that can use tools to solve math problems. Use the available tools to help solve the problem step by step.", "tool_map": mcp_tool_map}
+
     env_args = {
         "mcp_server_command": sys.argv[1],
         "mcp_server_args": [],
@@ -50,18 +47,14 @@ async def main():
         "reward_fn": math_reward_fn,
     }
 
-    sampling_params = {
-        "temperature": 0.6,
-        "top_p": 0.95,
-        "model": model_name
-    }
+    sampling_params = {"temperature": 0.6, "top_p": 0.95, "model": model_name}
 
     engine = AsyncAgentExecutionEngine(
         agent_class=MCPToolAgent,
         env_class=MCPEnvironment,
         agent_args=agent_args,
         env_args=env_args,
-        engine_name="openai", 
+        engine_name="openai",
         rollout_engine_args={"base_url": "http://localhost:30000/v1", "api_key": "None"},
         tokenizer=tokenizer,
         sampling_params=sampling_params,
@@ -75,7 +68,7 @@ async def main():
 
     # Limit to first few problems for testing
     tasks = tasks[:1]  # Remove this line to run on full dataset
-    
+
     try:
         results = await engine.execute_tasks(tasks)
         print(results)
@@ -86,4 +79,4 @@ async def main():
 
 
 if __name__ == "__main__":
-    asyncio.run(main()) 
+    asyncio.run(main())

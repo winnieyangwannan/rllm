@@ -48,4 +48,9 @@ ignore = [
     "UP032",
     # `.log()` statement uses f-string
     "G004",
+    # equality check using x == True
+    "E712", 
 ]
+
+[tool.ruff.lint.per-file-ignores]
+"rllm/rewards/code_utils/**" = ["ALL"]

@@ -1,37 +1,31 @@
 # Taken from https://github.com/LiveCodeBench/LiveCodeBench/blob/998c52d394b836f15fff3b9a29866191108ff81b/lcb_runner/evaluation/testing_util.py
 import ast
-import json
-import sys
 import faulthandler
+import json
 import platform
-import multiprocessing
-import queue
-
-# used for debugging to time steps
-from datetime import datetime
 
 # to run the solution files we're using a timing based approach
 import signal
+import sys
+import time
 
-import numpy as np
-
+# used for debugging to time steps
+from datetime import datetime
+from decimal import Decimal
+from enum import Enum
 from io import StringIO
-
-# used for testing the code that reads from input
-from unittest.mock import patch, mock_open
 
 # from pyext import RuntimeModule
 from types import ModuleType
 
-from enum import Enum
-from decimal import Decimal
-import time
+# used for testing the code that reads from input
+from unittest.mock import mock_open, patch
 
 from .utils import BASE_IMPORTS
 
 import_string = BASE_IMPORTS
- 
-#"from string import *\nfrom re import *\nfrom datetime import *\nfrom collections import *\nfrom heapq import *\nfrom bisect import *\nfrom copy import *\nfrom math import *\nfrom random import *\nfrom statistics import *\nfrom itertools import *\nfrom functools import *\nfrom operator import *\nfrom io import *\nfrom sys import *\nfrom json import *\nfrom builtins import *\nfrom typing import *\nimport string\nimport re\nimport datetime\nimport collections\nimport heapq\nimport bisect\nimport copy\nimport math\nimport random\nimport statistics\nimport itertools\nimport functools\nimport operator\nimport io\nimport sys\nimport json\nsys.setrecursionlimit(50000)\n"
+
+# "from string import *\nfrom re import *\nfrom datetime import *\nfrom collections import *\nfrom heapq import *\nfrom bisect import *\nfrom copy import *\nfrom math import *\nfrom random import *\nfrom statistics import *\nfrom itertools import *\nfrom functools import *\nfrom operator import *\nfrom io import *\nfrom sys import *\nfrom json import *\nfrom builtins import *\nfrom typing import *\nimport string\nimport re\nimport datetime\nimport collections\nimport heapq\nimport bisect\nimport copy\nimport math\nimport random\nimport statistics\nimport itertools\nimport functools\nimport operator\nimport io\nimport sys\nimport json\nsys.setrecursionlimit(50000)\n"
 
 
 def truncatefn(s, length=300):
@@ -87,7 +81,7 @@ def clean_if_name(code: str) -> str:
                 code = (
                     ast.unparse(astree.body[:-1]) + "\n" + ast.unparse(last_block.body)  # type: ignore
                 )
-    except:
+    except Exception:
         pass
 
     return code
@@ -99,16 +93,14 @@ def make_function(code: str) -> str:
         all_other_stmts = []
         astree = ast.parse(code)
         for stmt in astree.body:
-            if isinstance(stmt, (ast.Import, ast.ImportFrom)):
+            if isinstance(stmt, ast.Import | ast.ImportFrom):
                 import_stmts.append(stmt)
             else:
                 all_other_stmts.append(stmt)
 
         function_ast = ast.FunctionDef(
             name="wrapped_function",
-            args=ast.arguments(
-                posonlyargs=[], args=[], kwonlyargs=[], kw_defaults=[], defaults=[]
-            ),
+            args=ast.arguments(posonlyargs=[], args=[], kwonlyargs=[], kw_defaults=[], defaults=[]),
             body=all_other_stmts,
             decorator_list=[],
             lineno=-1,
@@ -121,12 +113,11 @@ def make_function(code: str) -> str:
             + ast.unparse(function_ast)  # type: ignore
         )
         return main_code
-    except Exception as e:
+    except Exception:
         return code
 
 
 def call_method(method, inputs):
-
     if isinstance(inputs, list):
         inputs = "\n".join(inputs)
 
@@ -144,7 +135,7 @@ def call_method(method, inputs):
     def _inner_call_method(_method):
         try:
             return _method()
-        except SystemExit as e:
+        except SystemExit:
             pass
         finally:
             pass
@@ -156,7 +147,7 @@ def get_function(compiled_sol, fn_name: str):  # type: ignore
     try:
         assert hasattr(compiled_sol, fn_name)
         return getattr(compiled_sol, fn_name)
-    except Exception as e:
+    except Exception:
         return
 
 
@@ -185,7 +176,7 @@ def compile_code(code: str, timeout: int):
 def convert_line_to_decimals(line: str) -> tuple[bool, list[Decimal]]:
     try:
         decimal_line = [Decimal(elem) for elem in line.split()]
-    except:
+    except (ValueError, TypeError):
         return False, []
     return True, decimal_line
 
@@ -197,9 +188,7 @@ def get_stripped_lines(val: str):
     return [val_line.strip() for val_line in val.split("\n")]
 
 
-def grade_call_based(
-    code: str, all_inputs: list, all_outputs: list, fn_name: str, timeout: int
-):
+def grade_call_based(code: str, all_inputs: list, all_outputs: list, fn_name: str, timeout: int):
     # call-based clean up logic
     # need to wrap in try-catch logic after to catch the correct errors, but for now this is fine.
     code = import_string + "\n\n" + code
@@ -213,15 +202,13 @@ def grade_call_based(
     if method is None:
         return
 
-    all_inputs = [
-        [json.loads(line) for line in inputs.split("\n")] if isinstance(inputs, str) else inputs for inputs in all_inputs
-    ]
-    
+    all_inputs = [[json.loads(line) for line in inputs.split("\n")] if isinstance(inputs, str) else inputs for inputs in all_inputs]
+
     all_outputs = [json.loads(output) if isinstance(output, str) else output for output in all_outputs]
 
     total_execution = 0
     all_results = []
-    for idx, (gt_inp, gt_out) in enumerate(zip(all_inputs, all_outputs)):
+    for idx, (gt_inp, gt_out) in enumerate(zip(all_inputs, all_outputs, strict=False)):
         signal.alarm(timeout)
         faulthandler.enable()
         try:
@@ -301,7 +288,7 @@ def grade_stdio(
 
     all_results = []
     total_execution_time = 0
-    for idx, (gt_inp, gt_out) in enumerate(zip(all_inputs, all_outputs)):
+    for idx, (gt_inp, gt_out) in enumerate(zip(all_inputs, all_outputs, strict=False)):
         signal.alarm(timeout)
         faulthandler.enable()
 
@@ -360,10 +347,8 @@ def grade_stdio(
         for output_line_idx, (
             stripped_prediction_line,
             stripped_gt_out_line,
-        ) in enumerate(zip(stripped_prediction_lines, stripped_gt_out_lines)):
-            WA_send_args["error_message"] = (
-                f"Wrong answer at {output_line_idx=}: {truncatefn(stripped_prediction_line)} != {truncatefn(stripped_gt_out_line)}"
-            )
+        ) in enumerate(zip(stripped_prediction_lines, stripped_gt_out_lines, strict=False)):
+            WA_send_args["error_message"] = f"Wrong answer at {output_line_idx=}: {truncatefn(stripped_prediction_line)} != {truncatefn(stripped_gt_out_line)}"
 
             ## CASE 1: exact match
             if stripped_prediction_line == stripped_gt_out_line:
@@ -375,9 +360,7 @@ def grade_stdio(
             ## otherwise gotcha: np.isclose(50000000000000000, 50000000000000001) = True
             ## note that we should always be able to convert to decimals
 
-            success, decimal_prediction_line = convert_line_to_decimals(
-                stripped_prediction_line
-            )
+            success, decimal_prediction_line = convert_line_to_decimals(stripped_prediction_line)
             if not success:
                 all_results.append(-2)
                 return all_results, WA_send_args
@@ -428,11 +411,10 @@ def run_test(sample, test=None, debug=False, timeout=6):
         print(f"loaded input_output = {datetime.now().time()}")
 
     if test is None:
-        assert False, "should not happen: test code is none"
+        raise AssertionError("should not happen: test code is none")
         return in_outs, {"error": "no test code provided"}
     elif test is not None:
         results = []
-        sol = import_string
         if debug:
             print(f"loading test code = {datetime.now().time()}")
 
@@ -491,16 +473,10 @@ def reliability_guard(maximum_memory_bytes=None):
     if maximum_memory_bytes is not None:
         import resource
 
-        resource.setrlimit(
-            resource.RLIMIT_AS, (maximum_memory_bytes, maximum_memory_bytes)
-        )
-        resource.setrlimit(
-            resource.RLIMIT_DATA, (maximum_memory_bytes, maximum_memory_bytes)
-        )
+        resource.setrlimit(resource.RLIMIT_AS, (maximum_memory_bytes, maximum_memory_bytes))
+        resource.setrlimit(resource.RLIMIT_DATA, (maximum_memory_bytes, maximum_memory_bytes))
         if not platform.uname().system == "Darwin":
-            resource.setrlimit(
-                resource.RLIMIT_STACK, (maximum_memory_bytes, maximum_memory_bytes)
-            )
+            resource.setrlimit(resource.RLIMIT_STACK, (maximum_memory_bytes, maximum_memory_bytes))
 
     faulthandler.disable()
 

@@ -78,6 +78,7 @@ class TestQwenToolParser:
         assert tools_schema in prompt
         assert "<tool_call>" in prompt
 
+
 class TestR1ToolParser:
     @pytest.fixture
     def parser(self):

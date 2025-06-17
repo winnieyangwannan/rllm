@@ -1,6 +1,5 @@
 import json
 import warnings
-from typing import Dict, List, Optional, Union, Type
 
 from rllm.environments.base.base_env import BaseEnv
 from rllm.rewards.reward_fn import RewardFunction, zero_reward
@@ -12,11 +11,11 @@ class ToolEnvironment(BaseEnv):
     """
     A simple environment for tool-based agents that provides questions and evaluates responses.
     """
-    
-    def __init__(self, task: Optional[Dict] = None, tools: Optional[List[str]] = None, tool_map: Optional[Dict[str, Type[Tool]]] = None, reward_fn: Optional[RewardFunction] = None, max_steps=10):
+
+    def __init__(self, task: dict | None = None, tools: list[str] | None = None, tool_map: dict[str, type[Tool]] | None = None, reward_fn: RewardFunction | None = None, max_steps=10):
         """
         Initialize the ToolEnvironment.
-        
+
         Args:
             task: Task information for the environment.
             tools: List of tool names to look up in the registry (legacy behavior).
@@ -26,7 +25,7 @@ class ToolEnvironment(BaseEnv):
         """
         if tool_map is not None and tools is not None:
             raise ValueError("Cannot specify both 'tools' and 'tool_map' parameters")
-        
+
         self.step_count = 0
         self.max_steps = max_steps
 
@@ -37,40 +36,40 @@ class ToolEnvironment(BaseEnv):
             self.tools = MultiTool(tools=tools)
         else:
             self.tools = MultiTool(tools=[])
-            
+
         self.task = task
         self.reward_fn = reward_fn
         if reward_fn is None:
-            warnings.warn("No reward function specified, will get 0 reward.")
+            warnings.warn("No reward function specified, will get 0 reward.", stacklevel=2)
             self.reward_fn = zero_reward
-    
+
     def reset(self):
         """Reset the environment and return initial observations."""
         self.step_count = 0
-        
+
         return self.task, {}
-    
-    def step(self, action: Union[List[Dict], str, Dict]):
+
+    def step(self, action: list[dict] | str | dict):
         """
         Take a step in the environment based on the action.
-        
+
         Args:
             actions: List containing a single action string from the agent
-            
+
         Returns:
             next_observations, rewards, terminateds, infos
         """
         if isinstance(action, dict):
             action = [action]
         self.step_count += 1
-        
+
         reward = 0
         # Check if we should terminate
         done = self.step_count >= self.max_steps or isinstance(action, str)
         # Check if action contains a "finish" tool call
         if isinstance(action, list) and action:
             for tool_call in action:
-                if tool_call.get('function', {}).get('name') == 'finish':
+                if tool_call.get("function", {}).get("name") == "finish":
                     done = True
                     break
         if done:
@@ -81,16 +80,16 @@ class ToolEnvironment(BaseEnv):
                 # Find the finish tool call
                 finish_action = None
                 for tool_call in action:
-                    if tool_call.get('function', {}).get('name') == 'finish':
+                    if tool_call.get("function", {}).get("name") == "finish":
                         finish_action = tool_call
                         break
                 if finish_action:
-                    arguments = finish_action.get('function', {}).get('arguments', {})
-                    llm_response = arguments.get('response', '')
+                    arguments = finish_action.get("function", {}).get("arguments", {})
+                    llm_response = arguments.get("response", "")
                 else:
                     # No finish tool call found, use the action itself
                     llm_response = str(action)
-            
+
             reward_output = self.reward_fn(task_info=self.task, action=llm_response)
             return {}, reward_output.reward, done, {"response": action, "metadata": reward_output.metadata}
 
@@ -100,8 +99,8 @@ class ToolEnvironment(BaseEnv):
 
         # Return results as lists with single items to maintain batch structure
         return next_obs, reward, done, {"response": action, "metadata": {}}
-    
-    def _execute_tool_calls(self, tool_calls: List[Dict]):
+
+    def _execute_tool_calls(self, tool_calls: list[dict]):
         import queue
         import threading
 
@@ -111,12 +110,12 @@ class ToolEnvironment(BaseEnv):
         threads = []
 
         def execute_tool(tool_call):
-            tool_name = tool_call['function']['name']
-            tool_args = json.loads(tool_call['function']['arguments'])
+            tool_name = tool_call["function"]["name"]
+            tool_args = json.loads(tool_call["function"]["arguments"])
             tool_output = self.tools(tool_name=tool_name, **tool_args)
             tool_output_str = tool_output.to_string()
 
-            output_queue.put((tool_call['id'], tool_output_str))
+            output_queue.put((tool_call["id"], tool_output_str))
 
         # Create and start a thread for each tool call
         for idx, tool_call in enumerate(tool_calls):
@@ -134,11 +133,11 @@ class ToolEnvironment(BaseEnv):
             tool_outputs[tool_call_id] = output_str
 
         return tool_outputs
-    
+
     @staticmethod
-    def from_dict(env_args: Dict) -> "ToolEnvironment":
-        tools = env_args.pop('tools', None)
-        tool_map = env_args.pop('tool_map', None)
-        reward_fn = env_args.pop('reward_fn', None)
-        max_steps = env_args.pop('max_steps', 10)
+    def from_dict(env_args: dict) -> "ToolEnvironment":
+        tools = env_args.pop("tools", None)
+        tool_map = env_args.pop("tool_map", None)
+        reward_fn = env_args.pop("reward_fn", None)
+        max_steps = env_args.pop("max_steps", 10)
         return ToolEnvironment(task=env_args, tools=tools, tool_map=tool_map, max_steps=max_steps, reward_fn=reward_fn)

@@ -225,7 +225,7 @@ Follow these steps to resolve the issue:
 """
 
 
-TOOL_SYSTEM_PROMPT= """You are a tool agent. You are given a task to complete. You have a set of tools at your disposal. Before you use the tools, outputting your thoughts before calling the tools. 
+TOOL_SYSTEM_PROMPT = """You are a tool agent. You are given a task to complete. You have a set of tools at your disposal. Before you use the tools, outputting your thoughts before calling the tools. 
 """
 
 SEARCH_SYSTEM_PROMPT = """You are a helpful AI assistant that can search for information to answer questions accurately.

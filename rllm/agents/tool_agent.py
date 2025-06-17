@@ -1,7 +1,7 @@
 import json
 import logging
 import uuid
-from typing import Any, Dict, List, Optional, Type
+from typing import Any
 
 from rllm.agents.agent import BaseAgent, Step, Trajectory
 from rllm.agents.system_prompts import TOOL_SYSTEM_PROMPT
@@ -23,8 +23,8 @@ class ToolAgent(BaseAgent):
         self,
         system_prompt=TOOL_SYSTEM_PROMPT,
         parser_name="qwen",
-        tools: Optional[List[str]] = None,
-        tool_map: Optional[Dict[str, Type[Tool]]] = None,
+        tools: list[str] | None = None,
+        tool_map: dict[str, type[Tool]] | None = None,
     ):
         """
         Initialize the ToolAgent.
@@ -51,9 +51,7 @@ class ToolAgent(BaseAgent):
         parser_class = get_tool_parser(parser_name=parser_name)
         self.tool_parser = parser_class()
 
-        self.tools_prompt = self.tool_parser.get_tool_prompt(
-            json.dumps(self.tools.json, indent=2)
-        )
+        self.tools_prompt = self.tool_parser.get_tool_prompt(json.dumps(self.tools.json, indent=2))
 
         # Initialize state according to BaseAgent
         self._trajectory = Trajectory()
@@ -61,7 +59,7 @@ class ToolAgent(BaseAgent):
         self.step = 0
         self.reset()  # Call reset to set initial state
 
-    def _format_observation_as_messages(self, obs: Any) -> List[Dict]:
+    def _format_observation_as_messages(self, obs: Any) -> list[dict]:
         """Helper to format observation into messages."""
         messages = []
         if isinstance(obs, dict):
@@ -84,9 +82,7 @@ class ToolAgent(BaseAgent):
 
         return messages
 
-    def update_from_env(
-        self, observation: Any, reward: float, done: bool, info: Dict, **kwargs
-    ):
+    def update_from_env(self, observation: Any, reward: float, done: bool, info: dict, **kwargs):
         """
         Updates the agent's state based on environment feedback.
         Formats observation and updates the trajectory.
@@ -139,9 +135,7 @@ class ToolAgent(BaseAgent):
             # Ensure arguments within tool_calls_dict are strings if needed by downstream processing
             for call in tool_calls_dict:
                 if isinstance(call.get("function", {}).get("arguments"), dict):
-                    call["function"]["arguments"] = json.dumps(
-                        call["function"]["arguments"]
-                    )
+                    call["function"]["arguments"] = json.dumps(call["function"]["arguments"])
         else:
             tool_calls_dict = [
                 {
@@ -172,13 +166,11 @@ class ToolAgent(BaseAgent):
     def reset(self):
         """Resets the agent's state for a new episode."""
         self._trajectory = Trajectory()
-        self.messages = [
-            {"role": "system", "content": self.system_prompt + self.tools_prompt}
-        ]
+        self.messages = [{"role": "system", "content": self.system_prompt + self.tools_prompt}]
         self.step = 0
 
     @property
-    def chat_completions(self) -> List[Dict[str, str]]:
+    def chat_completions(self) -> list[dict[str, str]]:
         """Returns the current message history for the model."""
         return self.messages
 
@@ -186,10 +178,10 @@ class ToolAgent(BaseAgent):
     def trajectory(self) -> Trajectory:
         """Returns the trajectory recorded so far."""
         return self._trajectory
-    
+
 
 class MCPToolAgent(ToolAgent):
-    def __init__(self, system_prompt=TOOL_SYSTEM_PROMPT, parser_name="qwen", tool_map=List[MCPTool]):
+    def __init__(self, system_prompt=TOOL_SYSTEM_PROMPT, parser_name="qwen", tool_map=list[MCPTool]):
         self.system_prompt = system_prompt
         self.tool_map = tool_map
 
@@ -197,9 +189,7 @@ class MCPToolAgent(ToolAgent):
         self.tool_parser = parser_class()
 
         tools_json = [tool.json for tool in self.tool_map.values()]
-        self.tools_prompt = self.tool_parser.get_tool_prompt(
-            json.dumps(tools_json, indent=2)
-        )
+        self.tools_prompt = self.tool_parser.get_tool_prompt(json.dumps(tools_json, indent=2))
 
         self._trajectory = Trajectory()
         self.messages = []

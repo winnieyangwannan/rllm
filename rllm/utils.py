@@ -1,24 +1,20 @@
-import random
-import socket
+import os
 import time
-from typing import List
 
+import openai
 import torch
 import vertexai
-import openai
-import os
-
 from google.cloud.aiplatform_v1beta1.types.content import SafetySetting
 from sentence_transformers import SentenceTransformer, util
 from vertexai.generative_models import GenerationConfig, GenerativeModel, HarmBlockThreshold, HarmCategory
 
+from rllm.globals import GCP_LOCATION, GCP_PROJECT_ID, GEMINI_MODEL, OAI_RM_MODEL
 
-from rllm.globals import GCP_PROJECT_ID, GCP_LOCATION, GEMINI_MODEL, OAI_RM_MODEL
 
 def compute_pass_at_k(results):
-    from collections import defaultdict
-    import json
     import hashlib
+    import json
+    from collections import defaultdict
 
     # Create a map to store correct answers per problem
     problem_correct_map = defaultdict(int)
@@ -27,7 +23,7 @@ def compute_pass_at_k(results):
     # Count correct answers for each problem
     for trajectory in results:
         problem = trajectory.steps[0].observation
-        
+
         # Generate hash of problem dict/string
         if isinstance(problem, dict):
             problem_str = json.dumps(problem, sort_keys=True)
@@ -43,10 +39,7 @@ def compute_pass_at_k(results):
     # Calculate pass@1 and pass@16
     total_problems = len(problem_correct_map)
     pass_at_1 = sum(problem_correct_map.values()) / sum(problem_total_map.values())
-    pass_at_k = (
-        sum(1 for problem, correct in problem_correct_map.items() if correct > 0)
-        / total_problems
-    )
+    pass_at_k = sum(1 for problem, correct in problem_correct_map.items() if correct > 0) / total_problems
 
     print("Total unique problems:", total_problems)
     print("Average Pass@1 Accuracy:", pass_at_1)
@@ -59,16 +52,15 @@ def call_oai_rm_llm(
     n: int = 1,
     temperature: float = 1.0,
     model_id: str = OAI_RM_MODEL,
-
     retry_count: int = 1e9,
-) -> List[str]:
+) -> list[str]:
     client = openai.OpenAI()
 
     backoff = 1
     retry_count = int(retry_count)
-    
+
     for attempt in range(retry_count):
-        try: 
+        try:
             response = client.chat.completions.create(
                 model=model_id,
                 messages=[{"role": "system", "content": system_prompt}, {"role": "user", "content": prompt}],
@@ -100,10 +92,10 @@ def call_gemini_llm(
     location: str = GCP_LOCATION,
     model_id: str = GEMINI_MODEL,
     retry_count: int = 1e9,
-) -> List[str]:
+) -> list[str]:
     """
     Calls a Gemini LLM on Vertex AI to generate n responses at a given temperature.
-    
+
     Args:
         prompt (str): The text prompt to send to the LLM.
         system_prompt (str): System instruction or system prompt to send to the model.
@@ -113,7 +105,7 @@ def call_gemini_llm(
         location (str): The region to use (e.g., us-central1).
         model_id (str): The specific Gemini model resource name.
         retry_count (int): Number of times to retry on rate-limit errors.
-    
+
     Returns:
         List[str]: A list of response texts from the Gemini model.
     """
@@ -147,14 +139,7 @@ def call_gemini_llm(
     for attempt in range(retry_count):
         try:
             # Request multiple candidates by specifying n (candidate_count)
-            response = model.generate_content(
-                [prompt],
-                generation_config=generation_config,
-                safety_settings=[
-                    SafetySetting(category=h, threshold=HarmBlockThreshold.BLOCK_NONE)
-                    for h in HARM_CATEGORIES
-                ]
-            )
+            response = model.generate_content([prompt], generation_config=generation_config, safety_settings=[SafetySetting(category=h, threshold=HarmBlockThreshold.BLOCK_NONE) for h in HARM_CATEGORIES])
             # Once successful, break out of the retry loop
             break
         except Exception as e:
@@ -166,13 +151,13 @@ def call_gemini_llm(
                 continue
             elif "403" in str(e):
                 print("NO ACCESS TO ENDPOINT", e)
-                raise NotImplementedError
+                raise NotImplementedError from None
             else:
                 print("Exception: ", e)
                 return []  # or raise an exception if desired
 
     # Collect the texts from all returned candidates
-    # Depending on the library version, this might need to be adjusted 
+    # Depending on the library version, this might need to be adjusted
     # if the `response` shape is different
 
     try:
@@ -185,9 +170,9 @@ def call_gemini_llm(
         print("Error extracting text from response:", e)
         return []
 
-class RAG:
 
-    def __init__(self, docs: List[str], model: str = "sentence-transformers/all-MiniLM-L6-v2"):
+class RAG:
+    def __init__(self, docs: list[str], model: str = "sentence-transformers/all-MiniLM-L6-v2"):
         """
         Args:
             docs (List[str]): A list of documents to encode.
@@ -198,7 +183,7 @@ class RAG:
         self.docs = docs
         # Compute embeddings
         self.embeddings = self.model.encode(docs, convert_to_tensor=True)
-    
+
     def top_k(self, query, k=1):
         # Create embedding for the query
         query_embedding = self.model.encode(query, convert_to_tensor=True)
@@ -211,13 +196,16 @@ class RAG:
 
         # Prepare a list of (score, problem_text)
         results = []
-        for score, idx in zip(top_results.values, top_results.indices):
-            results.append({
-                'score': score,
-                'text': self.docs[int(idx)],
-                'idx': int(idx),
-            })
+        for score, idx in zip(top_results.values, top_results.indices, strict=False):
+            results.append(
+                {
+                    "score": score,
+                    "text": self.docs[int(idx)],
+                    "idx": int(idx),
+                }
+            )
         return results
+
 
 def save_trajectories(results, save_dir="./trajectories/sample_trajectories", filename="trajectories.pt"):
     os.makedirs(save_dir, exist_ok=True)

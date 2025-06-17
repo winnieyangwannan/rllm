@@ -5,7 +5,6 @@ import time
 import traceback
 import uuid
 from concurrent.futures import ThreadPoolExecutor
-from typing import Dict, List
 
 import openai
 import torch
@@ -26,6 +25,7 @@ from rllm.router.router import Router
 
 logger = logging.getLogger(__name__)
 
+
 class AsyncAgentExecutionEngine(AgentExecutionEngine):
     def __init__(
         self,
@@ -44,13 +44,20 @@ class AsyncAgentExecutionEngine(AgentExecutionEngine):
         max_prompt_length=1024,
         agent_class=None,
         env_class=None,
-        agent_args={},
-        rollout_engine_args={},
-        env_args={},
+        agent_args=None,
+        rollout_engine_args=None,
+        env_args=None,
         max_workers=64,
         enforce_max_prompt_length=False,  # If enabled, applies max_prompt check per step
         **kwargs,
     ):
+        if agent_args is None:
+            agent_args = {}
+        if rollout_engine_args is None:
+            rollout_engine_args = {}
+        if env_args is None:
+            env_args = {}
+
         self.config = config
         self.rollout_engine = rollout_engine
         self.tokenizer = tokenizer
@@ -74,7 +81,7 @@ class AsyncAgentExecutionEngine(AgentExecutionEngine):
 
         self.agents = [None for _ in range(n_parallel_agents)]
         self.envs = [None for _ in range(n_parallel_agents)]
-        
+
         self.trajectory_timeout = trajectory_timeout
         if not trajectory_timeout:
             self.trajectory_timeout = int(1e9)
@@ -89,6 +96,7 @@ class AsyncAgentExecutionEngine(AgentExecutionEngine):
         assert self.engine_name in ["openai", "verl"], "Currently only openai and verl are supported as rollout engine"
         if self.engine_name == "openai":
             from openai import AsyncOpenAI
+
             self.client = AsyncOpenAI(**self.rollout_engine_args)
             # Disable httpx INFO logs that show HTTP requests
             logging.getLogger("httpx").setLevel(logging.WARNING)
@@ -105,18 +113,18 @@ class AsyncAgentExecutionEngine(AgentExecutionEngine):
     async def get_model_response(self, prompt, application_id, **kwargs):
         """
         Compute model response asynchronously based on the engine type.
-        
+
         This function is multithread safe and routes the request to the appropriate
         engine-specific handler.
-        
+
         Args:
             prompt: The input prompt to send to the model
             application_id: Unique identifier for the application
             **kwargs: Additional arguments to pass to the model
-            
+
         Returns:
             The model's response text
-            
+
         Raises:
             NotImplementedError: If the engine type is not supported
         """
@@ -129,13 +137,13 @@ class AsyncAgentExecutionEngine(AgentExecutionEngine):
 
     async def _get_verl_async(self, prompt, application_id, **kwargs):
         batch = self._convert_prompt_verl([prompt], **kwargs)
-    
-        if 'max_tokens' in kwargs:
-            batch.meta_info['max_tokens'] = kwargs['max_tokens']
+
+        if "max_tokens" in kwargs:
+            batch.meta_info["max_tokens"] = kwargs["max_tokens"]
 
         output = await self.router.generate_sequences(batch, application_id=application_id, **kwargs)
-        
-        attn = output.batch["attention_mask"][0, self.max_prompt_length:]
+
+        attn = output.batch["attention_mask"][0, self.max_prompt_length :]
         tokens = output.batch["responses"][0]
 
         # Find last index where attention == 1
@@ -144,7 +152,7 @@ class AsyncAgentExecutionEngine(AgentExecutionEngine):
             trimmed = tokens[:0]  # empty
         else:
             last_valid_idx = non_pad_indices[-1].item()
-            trimmed = tokens[:last_valid_idx + 1]  # include the last valid token
+            trimmed = tokens[: last_valid_idx + 1]  # include the last valid token
 
         response = self.tokenizer.decode(trimmed, skip_special_tokens=False)
 
@@ -156,15 +164,16 @@ class AsyncAgentExecutionEngine(AgentExecutionEngine):
     async def _get_openai_async(self, prompt, _, **kwargs):
         """
         Get action from OpenAI API asynchronously with retry logic.
-        
+
         Args:
             prompt: The input prompt in text format for completions API
             application_id: Unique identifier for the application (unused for OpenAI)
             **kwargs: Additional arguments to pass to the OpenAI API
-            
+
         Returns:
             The response from OpenAI API
         """
+
         async def get_response(prompt_text: str):
             retries = self.api_retries
             while retries > 0:
@@ -196,10 +205,7 @@ class AsyncAgentExecutionEngine(AgentExecutionEngine):
             response = response.choices[0].text
         return response
 
-
-    async def run_agent_trajectory_async(
-        self, idx, application_id, seed=0, mode="Text", **kwargs
-    ):
+    async def run_agent_trajectory_async(self, idx, application_id, seed=0, mode="Text", **kwargs):
         """Run a single agent's trajectory asynchronously"""
         agent = self.agents[idx]
         env = self.envs[idx]
@@ -221,7 +227,7 @@ class AsyncAgentExecutionEngine(AgentExecutionEngine):
         # Reset environment with the task using the executor
         loop = asyncio.get_event_loop()
         observation, info = await loop.run_in_executor(self.executor, env.reset)
-        info['max_steps'] = self.max_steps
+        info["max_steps"] = self.max_steps
 
         # Reset agent
         agent.reset()
@@ -233,18 +239,12 @@ class AsyncAgentExecutionEngine(AgentExecutionEngine):
             info=info,
         )
         messages = agent.chat_completions
-        prompt_tokens, _ = convert_messages_to_tokens_and_masks(messages,
-                                                                tokenizer=self.tokenizer,
-                                                                parser=self.chat_template_parser,
-                                                                contains_first_msg=True,
-                                                                contains_generation_msg=True)
+        prompt_tokens, _ = convert_messages_to_tokens_and_masks(messages, tokenizer=self.tokenizer, parser=self.chat_template_parser, contains_first_msg=True, contains_generation_msg=True)
         prompt_token_len = len(prompt_tokens)
         # Note, this should never happen!
         if prompt_token_len > self.max_prompt_length:
             agent.reset()
-            raise Exception(
-                f"Trajectory {idx}: initial prompt length already exceeded max_prompt_length, retrying"
-            )
+            raise Exception(f"Trajectory {idx}: initial prompt length already exceeded max_prompt_length, retrying")
 
         for step_idx in range(self.max_steps):
             # Get action from agent
@@ -262,15 +262,11 @@ class AsyncAgentExecutionEngine(AgentExecutionEngine):
                 if prompt_len > self.max_prompt_length:
                     termination_reason = "PROMPT_TRUNCATION"
                     break
-                
-            kwargs['max_tokens'] = max_tokens
-            
+
+            kwargs["max_tokens"] = max_tokens
+
             start_time = time.time()
-            response = await self.get_model_response(
-                prompt_messages,
-                application_id,
-                **kwargs
-            )
+            response = await self.get_model_response(prompt_messages, application_id, **kwargs)
 
             # Update steps
             prompt_response_pair = {
@@ -290,7 +286,7 @@ class AsyncAgentExecutionEngine(AgentExecutionEngine):
             start_time = time.time()
             next_observation, reward, done, info = await loop.run_in_executor(self.executor, env.step, action)
             total_time += time.time() - start_time
-            info['max_steps'] = self.max_steps
+            info["max_steps"] = self.max_steps
             # Update agent internal state.
             agent.update_from_env(
                 observation=next_observation,
@@ -302,16 +298,8 @@ class AsyncAgentExecutionEngine(AgentExecutionEngine):
             chat_completions_messages = agent.chat_completions
             assistant_message, env_messages = get_recent_assistant_user_messages(chat_completions_messages)
 
-            assistant_msg_tokens, assistant_msg_masks = convert_messages_to_tokens_and_masks([assistant_message],
-                                                                                            tokenizer= self.tokenizer,
-                                                                                            parser=self.chat_template_parser,
-                                                                                            contains_first_msg=False,
-                                                                                            contains_generation_msg=False)
-            env_msg_tokens, env_msg_masks = convert_messages_to_tokens_and_masks(env_messages,
-                                                                                tokenizer=self.tokenizer,
-                                                                                parser=self.chat_template_parser,
-                                                                                contains_first_msg=False,
-                                                                                contains_generation_msg=True)
+            assistant_msg_tokens, assistant_msg_masks = convert_messages_to_tokens_and_masks([assistant_message], tokenizer=self.tokenizer, parser=self.chat_template_parser, contains_first_msg=False, contains_generation_msg=False)
+            env_msg_tokens, env_msg_masks = convert_messages_to_tokens_and_masks(env_messages, tokenizer=self.tokenizer, parser=self.chat_template_parser, contains_first_msg=False, contains_generation_msg=True)
             # Update repsonse token length
             response_token_len += len(assistant_msg_tokens) + len(env_msg_tokens)
             # Reached maximum number of tokens for the trajectory
@@ -320,22 +308,18 @@ class AsyncAgentExecutionEngine(AgentExecutionEngine):
                 truncation_length = self.max_response_length - response_token_len
                 # Truncate the response and masks
                 if truncation_length < 0:
-                    truncated_response_tokens = (assistant_msg_tokens + env_msg_tokens)[
-                        :truncation_length
-                    ]
-                    truncated_response_masks = (assistant_msg_masks + env_msg_masks)[
-                        :truncation_length
-                    ]
+                    truncated_response_tokens = (assistant_msg_tokens + env_msg_tokens)[:truncation_length]
+                    truncated_response_masks = (assistant_msg_masks + env_msg_masks)[:truncation_length]
                 else:
                     # Edge case where the response is exactly the max response length.
-                    truncated_response_tokens = (assistant_msg_tokens + env_msg_tokens)
-                    truncated_response_masks = (assistant_msg_masks + env_msg_masks)
+                    truncated_response_tokens = assistant_msg_tokens + env_msg_tokens
+                    truncated_response_masks = assistant_msg_masks + env_msg_masks
                 # Update token collections
                 response_tokens.extend(truncated_response_tokens)
                 response_masks.extend(truncated_response_masks)
 
                 cur_step = agent.get_current_state()
-                if response_token_len - len(env_msg_tokens) > self.max_response_length and not hasattr(env, 'compute_final_reward'):
+                if response_token_len - len(env_msg_tokens) > self.max_response_length and not hasattr(env, "compute_final_reward"):
                     cur_step.reward = 0.0
                 cur_step.done = True
                 termination_reason = "TRUNCATION"
@@ -354,7 +338,6 @@ class AsyncAgentExecutionEngine(AgentExecutionEngine):
                 cur_step.done = done
                 break
 
-
             # Check if episode is done
             if done:
                 termination_reason = "ENV_DONE"
@@ -366,7 +349,7 @@ class AsyncAgentExecutionEngine(AgentExecutionEngine):
             if step_idx == self.max_steps - 1:
                 termination_reason = "MAX_STEPS"
 
-        if hasattr(env, 'compute_final_reward'):
+        if hasattr(env, "compute_final_reward"):
             cur_step = agent.get_current_state()
             reward = await loop.run_in_executor(self.executor, env.compute_final_reward)
             cur_step.reward = reward
@@ -381,7 +364,7 @@ class AsyncAgentExecutionEngine(AgentExecutionEngine):
                 f"Trajectory {idx} completed due to: {termination_reason}. Reward is {reward}. \n",
                 color,
             )
-        trajectory = agent.trajectory 
+        trajectory = agent.trajectory
         # Aggregate final trajectory statistics
         compute_trajectory_reward(trajectory)
         compute_mc_return(trajectory, gamma=self.gamma)
@@ -406,31 +389,23 @@ class AsyncAgentExecutionEngine(AgentExecutionEngine):
                 "training_reward": agent.compute_training_reward(trajectory) if hasattr(agent, "compute_training_reward") else trajectory.steps[-1].reward,
                 "environment_reward": trajectory.reward,
                 "idx": env.idx,
-                "mc_returns": [step.mc_return for step in trajectory.steps][:len(episode_steps)],
-            }            
+                "mc_returns": [step.mc_return for step in trajectory.steps][: len(episode_steps)],
+            }
             return steps_result
 
-    async def run_agent_trajectory_with_retry(
-        self, idx, application_id, seed=0, mode="Text", **kwargs
-    ):
+    async def run_agent_trajectory_with_retry(self, idx, application_id, seed=0, mode="Text", **kwargs):
         for _ in range(self.retry_limit):
             try:
-                return await self.run_agent_trajectory_async(
-                    idx, application_id=application_id, seed=seed, mode=mode, **kwargs
-                )
+                return await self.run_agent_trajectory_async(idx, application_id=application_id, seed=seed, mode=mode, **kwargs)
             except Exception:
                 traceback.print_exc()
                 continue
         traceback.print_exc()
         raise Exception(f"Trajectory {idx} cannot complete. Please check the log message")
 
-    async def trajectory_generator(
-        self,
-        reset_seed=0,
-        timing_raw={},
-        mode="Text",
-        **kwargs
-    ):
+    async def trajectory_generator(self, reset_seed=0, timing_raw=None, mode="Text", **kwargs):
+        if timing_raw is None:
+            timing_raw = {}
         assert all(type(env).is_multithread_safe() for env in self.envs), "All environments must be multithread safe for async engine"
         self.is_last_trajectory = False
         max_concurrency = self.n_parallel_agents
@@ -439,31 +414,31 @@ class AsyncAgentExecutionEngine(AgentExecutionEngine):
         if self.engine_name == "verl":
             self.rollout_engine.wake_up()
 
-        #semaphore = asyncio.Semaphore(max_concurrency)
+        # semaphore = asyncio.Semaphore(max_concurrency)
         async def launch_one_trajectory_task(env_idx: int):
             try:
-                #await semaphore.acquire()
-                #await asyncio.sleep(0.15 * env_idx)
+                # await semaphore.acquire()
+                # await asyncio.sleep(0.15 * env_idx)
 
-                application_id = str(uuid.uuid4())                
+                application_id = str(uuid.uuid4())
                 result = await self.run_agent_trajectory_with_retry(
                     idx=env_idx,
                     application_id=application_id,
-                    seed=reset_seed, # or current_seed
+                    seed=reset_seed,  # or current_seed
                     mode=mode,
                     **kwargs,
                 )
-                #semaphore.release()
+                # semaphore.release()
             except Exception as e:
                 import traceback
+
                 traceback.print_exc()
                 raise e
             return result
+
         # Create all N conceptual tasks. Their execution will be throttled by the semaphore
         # and the availability of agent/env indices.
-        tasks_to_run = [
-            launch_one_trajectory_task(i) for i in range(len(self.envs))
-        ]
+        tasks_to_run = [launch_one_trajectory_task(i) for i in range(len(self.envs))]
 
         tasks_completed = 0
         for coro in asyncio.as_completed(tasks_to_run):
@@ -471,35 +446,35 @@ class AsyncAgentExecutionEngine(AgentExecutionEngine):
                 result = await coro
                 tasks_completed += 1
                 colorful_print(f"Number of Trajectories {tasks_completed}/{len(self.envs)} completed", "cyan")
-                if tasks_completed == len(self.envs)-2:
+                if tasks_completed == len(self.envs) - 2:
                     self.is_last_trajectory = True
                 yield result
             except Exception as e:
                 raise e
-        
+
         if self.engine_name == "verl":
             self.rollout_engine.sleep()
-        
+
         self.executor.shutdown(wait=False)
 
-    async def execute_tasks(self, tasks: List[Dict]):
+    async def execute_tasks(self, tasks: list[dict]):
         """
         Run asynchronous interactions between the agent and environment where each agent
         has its own environment instance and can proceed independently.
-        
+
         Args:
             tasks: List of tasks to process
             max_concurrent: Maximum number of concurrent tasks to process (defaults to self.n_parallel_agents)
-            
+
         Returns:
             A list of trajectories, one for each task.
         """
 
         max_concurrent = self.n_parallel_agents
-        
+
         # Initialize results list to store trajectories for all tasks
         all_trajectories = {}
-        
+
         # Create a queue of tasks to process
         task_queue = list(enumerate(tasks))
         semaphore = asyncio.Semaphore(max_concurrent)
@@ -526,12 +501,12 @@ class AsyncAgentExecutionEngine(AgentExecutionEngine):
                 finally:
                     # Put the index back in the queue when done
                     await index_queue.put(index)
-        
+
         # Create a queue of tasks to process
         task_queue = list(enumerate(tasks))
         # Run all tasks concurrently
         results = await asyncio.gather(*[sem_wrapper(task_id, task) for task_id, task in task_queue])
-        
+
         all_trajectories = {task_id: trajectory for task_id, trajectory in results}
         ordered_trajectories = [all_trajectories[i] for i in range(len(all_trajectories))]
         return ordered_trajectories

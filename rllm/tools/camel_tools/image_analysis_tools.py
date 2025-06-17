@@ -6,17 +6,16 @@ except ImportError as e:
 
 from rllm.tools.camel_tools.camel_tool_base import CamelTool
 
+
 class ImageToTextCamel(CamelTool):
     def __init__(self):
-        super().__init__(
-            function_tool=FunctionTool(ImageAnalysisToolkit().image_to_text)
-        )
+        super().__init__(function_tool=FunctionTool(ImageAnalysisToolkit().image_to_text))
+
 
 class AskQuestionAboutImageCamel(CamelTool):
     def __init__(self):
-        super().__init__(
-            function_tool=FunctionTool(ImageAnalysisToolkit().ask_question_about_image)
-        )
+        super().__init__(function_tool=FunctionTool(ImageAnalysisToolkit().ask_question_about_image))
+
 
 if __name__ == "__main__":
     # Test ImageToTextCamel
@@ -29,8 +28,5 @@ if __name__ == "__main__":
     question = "What is shown in this image?"
     print("\nTesting AskQuestionAboutImageCamel with file:", image_file)
     print("Question:", question)
-    result = AskQuestionAboutImageCamel()(**{
-        "image_path": image_file,
-        "question": question
-    })
-    print("AskQuestionAboutImageCamel result:", result) 
+    result = AskQuestionAboutImageCamel()(**{"image_path": image_file, "question": question})
+    print("AskQuestionAboutImageCamel result:", result)

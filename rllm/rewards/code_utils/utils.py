@@ -36,7 +36,6 @@ import io, os
 """
 
 
-
 BASE_LEETCODE_IMPORTS = """
 # Leetcode specials
 class ListNode:

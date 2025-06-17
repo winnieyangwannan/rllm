@@ -1,7 +1,6 @@
 import json
 import logging
 import re
-from typing import Tuple
 
 from r2egym.agenthub.action import Action
 
@@ -20,16 +19,14 @@ def parse_oai_response(response):
         thought = ""
     try:
         function_name = response.choices[0].message.tool_calls[0].function.name
-        parameters = json.loads(
-            response.choices[0].message.tool_calls[0].function.arguments
-        )
+        parameters = json.loads(response.choices[0].message.tool_calls[0].function.arguments)
         action = Action(function_name, parameters)
-    except:
+    except (json.JSONDecodeError, AttributeError, IndexError, TypeError):
         action = Action(function_name="", parameters={})
     return thought, action
 
 
-def parse_xml_response(response_text: str) -> Tuple[str, Action]:
+def parse_xml_response(response_text: str) -> tuple[str, Action]:
     """
     Extracts:
     - thought: everything before the first <function=...> block
@@ -57,29 +54,30 @@ def parse_xml_response(response_text: str) -> Tuple[str, Action]:
 
     return thought, action
 
+
 logger = logging.getLogger(__name__)
 
-class SWEAgent(BaseAgent):
 
+class SWEAgent(BaseAgent):
     def __init__(self, use_fn_calling: bool = False, format_model_response: bool = False):
         self.use_fn_calling = use_fn_calling
         self.format_model_response = format_model_response
-        
+
         self.system_prompt = SWE_SYSTEM_PROMPT_FN_CALL if use_fn_calling else SWE_SYSTEM_PROMPT
         self.user_prompt_template = SWE_USER_PROMPT_FN_CALL if use_fn_calling else SWE_USER_PROMPT
 
         self._trajectory = Trajectory()
         self.reset()
 
-    def process_model_response(self, response: str) -> Tuple[str, str]:
+    def process_model_response(self, response: str) -> tuple[str, str]:
         """
         Processes the model's response to extract thought and action components.
-        
+
         Parses the response using either function calling or XML parsing based on agent configuration.
-        
+
         Args:
             response (str): The raw text response from the model.
-            
+
         Returns:
             Tuple[str, str]: A tuple containing:
                 - The action string in XML format
@@ -89,14 +87,14 @@ class SWEAgent(BaseAgent):
             thought, action = parse_oai_response(response)
         else:
             thought, action = parse_xml_response(response)
-        
+
         action_str = action.to_xml_string()
         if self.format_model_response:
             response = f"{thought}\n\n{action_str}"
         return action.to_xml_string(), {
-            'thought': thought,
+            "thought": thought,
         }
-    
+
     def update_from_env(self, observation, reward, done, info):
         # If the first step in environment, we need to update the state from the environment
         if self._trajectory.steps:
@@ -105,7 +103,7 @@ class SWEAgent(BaseAgent):
             observation = str(observation)
             observation = self.user_prompt_template.format(problem_statement=observation)
 
-        max_steps = info.get('max_steps', None)
+        max_steps = info.get("max_steps", None)
         if max_steps:
             remaining_steps = max_steps - self.step
             if remaining_steps > 0:
@@ -120,14 +118,8 @@ class SWEAgent(BaseAgent):
             prior_step.done = done
             prior_step.info = info
 
-        self.messages.append({
-            "role": "user",
-            "content": observation
-        })
-        cur_step = Step(
-            observation=observation,
-            step=self.step
-        )
+        self.messages.append({"role": "user", "content": observation})
+        cur_step = Step(observation=observation, step=self.step)
         self._trajectory.steps.append(cur_step)
 
     def update_from_model(self, response: str, **kwargs):
@@ -149,30 +141,32 @@ class SWEAgent(BaseAgent):
             thought, action = parse_xml_response(response)
         action_str = action.to_xml_string()
         assert self._trajectory.steps, "Trajectory should not be empty when update_from_model is called."
-        
+
         # Update Trajectory
         cur_step = self._trajectory.steps[-1]
         cur_step.thought = thought
         cur_step.action = action_str
         cur_step.model_response = response
-        
+
         # Update Chat Completions
         if self.format_model_response:
-            self.messages.append({"role": "assistant", "content": f"{thought}\n\n{action_str}"}) 
+            self.messages.append({"role": "assistant", "content": f"{thought}\n\n{action_str}"})
         else:
             self.messages.append({"role": "assistant", "content": response})
-        self.step+=1
-    
+        self.step += 1
+
     def get_current_state(self) -> Step:
         assert self._trajectory.steps, "Trajectory should not be empty when get_current_state is called."
         return self._trajectory.steps[-1]
 
     def reset(self):
         self._trajectory = Trajectory()
-        self.messages = [{
-            'role': 'system',
-            'content': self.system_prompt,
-        }]
+        self.messages = [
+            {
+                "role": "system",
+                "content": self.system_prompt,
+            }
+        ]
         self.step = 0
 
     @property

@@ -12,23 +12,24 @@
 # limitations under the License.
 # ========= Copyright 2023-2024 @ CAMEL-AI.org. All Rights Reserved. =========
 
-from camel.toolkits.base import BaseToolkit
-from camel.toolkits.function_tool import FunctionTool
-from camel.toolkits import ImageAnalysisToolkit, ExcelToolkit
-from camel.utils import retry_on_error
-from camel.logger import get_logger
-from camel.models import BaseModelBackend
-from docx2markdown._docx_to_markdown import docx_to_markdown
-from chunkr_ai import Chunkr
-import requests
-import mimetypes
 import json
-from typing import List, Optional, Tuple, Literal
-from urllib.parse import urlparse
+import mimetypes
 import os
 import subprocess
-import xmltodict
+from typing import Literal
+from urllib.parse import urlparse
+
 import nest_asyncio
+import requests
+import xmltodict
+from camel.logger import get_logger
+from camel.models import BaseModelBackend
+from camel.toolkits import ExcelToolkit, ImageAnalysisToolkit
+from camel.toolkits.base import BaseToolkit
+from camel.toolkits.function_tool import FunctionTool
+from camel.utils import retry_on_error
+from chunkr_ai import Chunkr
+from docx2markdown._docx_to_markdown import docx_to_markdown
 
 from rllm.tools.camel_tools.camel_tool_base import CamelTool
 
@@ -43,9 +44,7 @@ class DocumentProcessingToolkit(BaseToolkit):
     This class provides method for processing docx, pdf, pptx, etc. It cannot process excel files.
     """
 
-    def __init__(
-        self, cache_dir: Optional[str] = None, model: Optional[BaseModelBackend] = None
-    ):
+    def __init__(self, cache_dir: str | None = None, model: BaseModelBackend | None = None):
         self.image_tool = ImageAnalysisToolkit(model=model)
         # self.audio_tool = AudioAnalysisToolkit()
         self.excel_tool = ExcelToolkit()
@@ -55,7 +54,7 @@ class DocumentProcessingToolkit(BaseToolkit):
             self.cache_dir = cache_dir
 
     @retry_on_error()
-    def extract_document_content(self, document_path: str) -> Tuple[bool, str]:
+    def extract_document_content(self, document_path: str) -> tuple[bool, str]:
         r"""Extract the content of a given document (or url) and return the processed text.
         It may filter out some information, resulting in inaccurate content.
 
@@ -65,11 +64,8 @@ class DocumentProcessingToolkit(BaseToolkit):
         Returns:
             Tuple[bool, str]: A tuple containing a boolean indicating whether the document was processed successfully, and the content of the document (if success).
         """
-        import asyncio
 
-        logger.debug(
-            f"Calling extract_document_content function with document_path=`{document_path}`"
-        )
+        logger.debug(f"Calling extract_document_content function with document_path=`{document_path}`")
 
         # if any(document_path.endswith(ext) for ext in [".jpg", ".jpeg", ".png"]):
         #     res = self.image_tool.ask_question_about_image(
@@ -90,20 +86,20 @@ class DocumentProcessingToolkit(BaseToolkit):
             return True, f"The extracted files are: {extracted_files}"
 
         if any(document_path.endswith(ext) for ext in ["json", "jsonl", "jsonld"]):
-            with open(document_path, "r", encoding="utf-8") as f:
+            with open(document_path, encoding="utf-8") as f:
                 content = json.load(f)
             f.close()
             return True, content
 
         if any(document_path.endswith(ext) for ext in ["py"]):
-            with open(document_path, "r", encoding="utf-8") as f:
+            with open(document_path, encoding="utf-8") as f:
                 content = f.read()
             f.close()
             return True, content
 
         if any(document_path.endswith(ext) for ext in ["xml"]):
             data = None
-            with open(document_path, "r", encoding="utf-8") as f:
+            with open(document_path, encoding="utf-8") as f:
                 content = f.read()
             f.close()
 
@@ -135,7 +131,7 @@ class DocumentProcessingToolkit(BaseToolkit):
                 docx_to_markdown(document_path, md_file_path)
 
                 # load content of md file
-                with open(md_file_path, "r") as f:
+                with open(md_file_path) as f:
                     extracted_text = f.read()
                 f.close()
                 return True, extracted_text
@@ -143,6 +139,7 @@ class DocumentProcessingToolkit(BaseToolkit):
                 # try using pypdf to extract text from pdf
                 try:
                     from PyPDF2 import PdfReader
+
                     # Open file in binary mode for PdfReader
                     f = open(document_path, "rb")
                     reader = PdfReader(f)
@@ -154,9 +151,7 @@ class DocumentProcessingToolkit(BaseToolkit):
                     return True, extracted_text
 
                 except Exception as pdf_error:
-                    logger.error(
-                        f"Error occurred while processing pdf: {pdf_error}"
-                    )
+                    logger.error(f"Error occurred while processing pdf: {pdf_error}")
                     return (
                         False,
                         f"Error occurred while processing pdf: {pdf_error}",
@@ -208,9 +203,7 @@ class DocumentProcessingToolkit(BaseToolkit):
         # result = chunkr.upload(document_path)
 
         if result.status == "Failed":
-            logger.error(
-                f"Error while processing document {document_path}: {result.message} using Chunkr."
-            )
+            logger.error(f"Error while processing document {document_path}: {result.message} using Chunkr.")
             return f"Error while processing document: {result.message}"
 
         # extract document name
@@ -228,7 +221,7 @@ class DocumentProcessingToolkit(BaseToolkit):
         else:
             return "Invalid output format."
 
-        with open(output_file_path, "r") as f:
+        with open(output_file_path) as f:
             extracted_text = f.read()
         f.close()
         return extracted_text
@@ -243,9 +236,7 @@ class DocumentProcessingToolkit(BaseToolkit):
 
         # app = FirecrawlApp(api_url="http://0.0.0.0:3002")
         print("STARTING CRAWL")
-        data = app.crawl_url(
-            url, params={"limit": 1, "scrapeOptions": {"formats": ["markdown"]}}
-        )
+        data = app.crawl_url(url, params={"limit": 1, "scrapeOptions": {"formats": ["markdown"]}})
         print("ENDING CRAWL")
         logger.debug(f"Extractred data from {url}: {data}")
         if len(data["data"]) == 0:
@@ -261,10 +252,10 @@ class DocumentProcessingToolkit(BaseToolkit):
         try:
             response = requests.get(url, stream=True)
             response.raise_for_status()
-            
+
             file_name = url.split("/")[-1]
-            content_type = response.headers.get('Content-Type', '')
-            ext = mimetypes.guess_extension(content_type.split(';')[0])
+            content_type = response.headers.get("Content-Type", "")
+            ext = mimetypes.guess_extension(content_type.split(";")[0])
             if ext and not file_name.endswith(ext):
                 file_name += ext
 
@@ -284,7 +275,7 @@ class DocumentProcessingToolkit(BaseToolkit):
 
         return time.strftime("%m%d%H%M")
 
-    def _unzip_file(self, zip_path: str) -> List[str]:
+    def _unzip_file(self, zip_path: str) -> list[str]:
         if not zip_path.endswith(".zip"):
             raise ValueError("Only .zip files are supported")
 
@@ -295,7 +286,7 @@ class DocumentProcessingToolkit(BaseToolkit):
         try:
             subprocess.run(["unzip", "-o", zip_path, "-d", extract_path], check=True)
         except subprocess.CalledProcessError as e:
-            raise RuntimeError(f"Failed to unzip file: {e}")
+            raise RuntimeError(f"Failed to unzip file: {e}") from e
 
         extracted_files = []
         for root, _, files in os.walk(extract_path):
@@ -304,7 +295,7 @@ class DocumentProcessingToolkit(BaseToolkit):
 
         return extracted_files
 
-    def get_tools(self) -> List[FunctionTool]:
+    def get_tools(self) -> list[FunctionTool]:
         r"""Returns a list of FunctionTool objects representing the functions in the toolkit.
 
         Returns:
@@ -314,14 +305,13 @@ class DocumentProcessingToolkit(BaseToolkit):
             FunctionTool(self.extract_document_content),
         ]  # Added closing triple quotes here
 
+
 class DocumentProcessingCamel(CamelTool):
     def __init__(self):
-        super().__init__(
-            function_tool=FunctionTool(DocumentProcessingToolkit().extract_document_content)
-        )
+        super().__init__(function_tool=FunctionTool(DocumentProcessingToolkit().extract_document_content))
+
 
 if __name__ == "__main__":
-
     document_path = "rllm-internal/rllm/data/train/web/gaia_files/67e8878b-5cef-4375-804e-e6291fdbe78a.pdf"
     tool = DocumentProcessingCamel()
     result = tool(**{"document_path": document_path})

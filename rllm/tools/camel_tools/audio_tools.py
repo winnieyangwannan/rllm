@@ -6,17 +6,16 @@ except ImportError as e:
 
 from rllm.tools.camel_tools.camel_tool_base import CamelTool
 
+
 class AskQuestionAboutAudioCamel(CamelTool):
     def __init__(self):
-        super().__init__(
-            function_tool=FunctionTool(AudioAnalysisToolkit().ask_question_about_audio)
-        )
+        super().__init__(function_tool=FunctionTool(AudioAnalysisToolkit().ask_question_about_audio))
+
 
 class Audio2TextCamel(CamelTool):
     def __init__(self):
-        super().__init__(
-            function_tool=FunctionTool(AudioAnalysisToolkit().audio2text)
-        )
+        super().__init__(function_tool=FunctionTool(AudioAnalysisToolkit().audio2text))
+
 
 if __name__ == "__main__":
     # Test Audio2TextCamel
@@ -29,9 +28,5 @@ if __name__ == "__main__":
     question = "What is the main topic being discussed?"
     print("\nTesting AskQuestionAboutAudioCamel with file:", audio_file)
     print("Question:", question)
-    result = AskQuestionAboutAudioCamel()(**{
-        "audio_path": audio_file,
-        "question": question
-    })
+    result = AskQuestionAboutAudioCamel()(**{"audio_path": audio_file, "question": question})
     print("AskQuestionAboutAudioCamel result:", result)
-

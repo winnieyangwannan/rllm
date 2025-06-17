@@ -1,24 +1,20 @@
+#!/usr/bin/env python3
+
 import base64
 import io
 import logging
 import re
-from typing import Any, Dict, List
+from dataclasses import dataclass, field
+from typing import Optional
 
 import numpy as np
-
-# from browsergym.utils.obs import flatten_axtree_to_str, flatten_dom_to_str, prune_html
+from browsergym.utils.obs import _process_bid
 from PIL import Image
 
 from rllm.agents.agent import BaseAgent, Step, Trajectory
 from rllm.agents.system_prompts import *
 
 logger = logging.getLogger(__name__)
-
-
-from dataclasses import dataclass, field
-from typing import Optional, Union
-
-from browsergym.utils.obs import _process_bid
 
 IGNORED_AXTREE_ROLES = ["LineBreak"]
 
@@ -82,21 +78,21 @@ class Node:
     role: str
     name: str = None
     value: Any = None
-    properties: List[str | Dict[str, Any]] = field(default_factory=list)
+    properties: list[str | dict[str, Any]] = field(default_factory=list)
     parent: Optional["Node"] = None
-    children: List["Node"] = field(default_factory=list)
-    bid: Optional[int] = None
+    children: list["Node"] = field(default_factory=list)
+    bid: int | None = None
     # visible: bool = True
 
-    def get_all_siblings(self) -> List["Node"]:
+    def get_all_siblings(self) -> list["Node"]:
         parent = self.parent
         if parent is None:
             return []
         return parent.children
 
 
-def from_axtree_construct_tree(tree_dict: Dict, return_id2node: bool = False) -> Node:
-    assert isinstance(tree_dict, Dict) and "nodes" in tree_dict
+def from_axtree_construct_tree(tree_dict: dict, return_id2node: bool = False) -> Node:
+    assert isinstance(tree_dict, dict) and "nodes" in tree_dict
     nodes = tree_dict["nodes"]
     node_id_to_idx = {}
     for idx, node in enumerate(nodes):
@@ -105,7 +101,7 @@ def from_axtree_construct_tree(tree_dict: Dict, return_id2node: bool = False) ->
     if return_id2node:
         id2node = {}
 
-    def dfs(d: Dict) -> Node:
+    def dfs(d: dict) -> Node:
         name = d["name"]["value"] if "name" in d else None
         role = d["role"]["value"]
         properties = d.get("properties", [])
@@ -203,8 +199,7 @@ def prune_axtree(
     remove_sibling_with_duplicate_name: bool = False,  # this might add some error into code rendering, but good for other websites
     remove_img_if_child_img: bool = True,
     merge_code_into_text: bool = True,  # replace the code block with markdown format text
-) -> List[Node]:
-
+) -> list[Node]:
     def dfs(
         node: Node,
         depth: int,
@@ -212,7 +207,6 @@ def prune_axtree(
         parent_node_name: str,
         ancestor_node_names: str,
     ) -> None:
-
         bid = node.bid
         role = node.role
         name = node.name
@@ -233,7 +227,7 @@ def prune_axtree(
             else:
                 has_attributes = True
 
-        if role in ignored_roles or name == None:
+        if role in ignored_roles or name is None:
             skip_node = True
 
         if (
@@ -257,12 +251,7 @@ def prune_axtree(
             skip_node = True
         elif role in ["listitem"]:
             skip_node = True
-        elif (
-            merge_code_into_text
-            and role == "code"
-            and not name.strip()
-            and node.properties == []
-        ):
+        elif merge_code_into_text and role == "code" and not name.strip() and node.properties == []:
             skip_node = True
             for child in node.children:
                 if child.role == "StaticText":
@@ -279,11 +268,7 @@ def prune_axtree(
                 skip_node = True
             elif remove_redundant_static_text and name in parent_node_name:
                 skip_node = True
-            elif (
-                remove_redundant_static_text
-                and remove_redundant_mode == "ancestor"
-                and name in ancestor_node_names
-            ):
+            elif remove_redundant_static_text and remove_redundant_mode == "ancestor" and name in ancestor_node_names:
                 skip_node = True
         else:
             filter_node, _ = _process_bid(
@@ -324,9 +309,7 @@ def prune_axtree(
                 if child.role == "StaticText":
                     if pre_is_text:
                         # TODO: this does not work well for website contain codes
-                        child_after_merge_consecutive_static_text[-1].name += (
-                            " " + child.name
-                        )
+                        child_after_merge_consecutive_static_text[-1].name += " " + child.name
                     else:
                         child_after_merge_consecutive_static_text.append(child)
                     pre_is_text = True
@@ -336,14 +319,10 @@ def prune_axtree(
             child_filtered = child_after_merge_consecutive_static_text
         # remove static text if there are siblings (might not be static text) have duplicate name
         if remove_sibling_with_duplicate_name:
-            child_names = " ".join(
-                [child.name for child in child_filtered if child.name]
-            )
+            child_names = " ".join([child.name for child in child_filtered if child.name])
             child_after_filter_redundant_static_text = []
             for child in child_filtered:
-                if not (
-                    child.role == "StaticText" and child_names.count(child.name) > 1
-                ):
+                if not (child.role == "StaticText" and child_names.count(child.name) > 1):
                     child_after_filter_redundant_static_text.append(child)
             child_filtered = child_after_filter_redundant_static_text
 
@@ -354,12 +333,7 @@ def prune_axtree(
             for child in child_filtered:
                 child.parent = node
             node.children = child_filtered
-            if (
-                child_filtered == []
-                and node.role == "img"
-                or node.name == "Image"
-                and remove_img_if_child_img
-            ):
+            if child_filtered == [] and node.role == "img" or node.name == "Image" and remove_img_if_child_img:
                 # if an img node has no non-img children, remove it
                 return []
             return [node]
@@ -370,7 +344,7 @@ def prune_axtree(
 
 
 def flatten_axtree(
-    root: Union[Node, List[Node]],
+    root: Node | list[Node],
     extra_properties: dict = None,
     with_visible: bool = False,
     with_clickable: bool = False,
@@ -388,7 +362,6 @@ def flatten_axtree(
     role_remap: dict[str, str] = ROLE_REMAP,
     hide_url: bool = True,
 ) -> str:
-
     str_list = []
 
     def dfs(node: Node, depth: int) -> None:
@@ -433,14 +406,7 @@ def flatten_axtree(
         if role in hide_bid_roles:
             # TODO: need list and table reformatingbid_str = ""
             bid_str = ""
-        elif not (
-            hide_all_bids
-            or bid is None
-            or (
-                hide_bid_if_invisible
-                and extra_properties.get(bid, {}).get("visibility", 0) < 0.5
-            )
-        ):
+        elif not (hide_all_bids or bid is None or (hide_bid_if_invisible and extra_properties.get(bid, {}).get("visibility", 0) < 0.5)):
             bid_str = f" [{bid}]"
         else:
             bid_str = ""
@@ -449,7 +415,7 @@ def flatten_axtree(
             node_str = f"{role_remap.get(role, role)}" + bid_str
         else:
             node_str = f"{role_remap.get(role, role)}{bid_str}"
-            if name != None and name.strip():
+            if name is not None and name.strip():
                 node_str += f" {repr(name)}"
 
         if value is not None:
@@ -511,7 +477,7 @@ def action_to_code(action: str, id2node: dict[str, Node]):
         return f"Error: action type {action_type} not in {all_action_types}"
     try:
         bid = action.split("[")[1].split("]")[0].strip()
-    except:
+    except IndexError:
         bid = None
 
     if action_type == "click":
@@ -555,11 +521,7 @@ def image_to_jpg_base64_url(image: np.ndarray | Image.Image):
 def is_valid_action(action_str: str, obs: str) -> bool:
     action_str = action_str.strip()
     try:
-        action = (
-            action_str.split("[")[0].strip()
-            if "[" in action_str
-            else action_str.split()[0].strip()
-        )
+        action = action_str.split("[")[0].strip() if "[" in action_str else action_str.split()[0].strip()
         match action:
             case "click":
                 match = re.search(r"click ?\[(\d+)\]", action_str)
@@ -573,15 +535,13 @@ def is_valid_action(action_str: str, obs: str) -> bool:
                 if not (action_str.endswith("[0]") or action_str.endswith("[1]")):
                     action_str += " [1]"
 
-                match = re.search(
-                    r"type ?\[(\d+)\] ?\[(.*)\] ?\[(\d+)\]", action_str, re.DOTALL
-                )
+                match = re.search(r"type ?\[(\d+)\] ?\[(.*)\] ?\[(\d+)\]", action_str, re.DOTALL)
                 if not match:
                     return False
-                element_id, text, enter_flag = (
+                element_id, _, enter_flag = (
                     match.group(1),
                     match.group(2),
-                    match.group(3),
+                    match.group(3) == " " or match.group(3) == "",
                 )
                 assert enter_flag == "0" or enter_flag == "1"
                 if element_id in obs:
@@ -674,9 +634,7 @@ class WebArenaAgent(BaseAgent):
         self.step = 0
         self.reset()
 
-    def update_from_env(
-        self, observation: Any, reward: float, done: bool, info: Dict, **kwargs
-    ):
+    def update_from_env(self, observation: Any, reward: float, done: bool, info: dict, **kwargs):
         """
         Updates the agent's internal state after an environment step.
         Includes logic to check if the observation changed from the previous step.
@@ -714,9 +672,7 @@ class WebArenaAgent(BaseAgent):
     def update_from_model(self, response: str, **kwargs):
         content = response
 
-        assert (
-            self._trajectory.steps
-        ), "Trajectory should not be empty when update_from_model is called."
+        assert self._trajectory.steps, "Trajectory should not be empty when update_from_model is called."
 
         self.messages.append({"role": "assistant", "content": content})
         result, action_code = self._parse_model_response(content)
@@ -755,7 +711,7 @@ class WebArenaAgent(BaseAgent):
         return SYSTEM_PROMPT
 
     @property
-    def chat_completions(self) -> List[Dict[str, str]]:
+    def chat_completions(self) -> list[dict[str, str]]:
         return self.messages[-2:]
 
     def get_prompt(self):
@@ -779,26 +735,20 @@ class WebArenaAgent(BaseAgent):
 
     def get_current_state(self) -> Step:
         if not self._trajectory.steps:
-            raise ValueError(
-                "get_current_state called before the first observation was processed."
-            )
+            raise ValueError("get_current_state called before the first observation was processed.")
         return self._trajectory.steps[-1]
 
     def _get_user_prompt(self, obs):
         assert self.objective is not None
         assert self.use_axtree, "Only axtree is supported for now"
-        self.interaction_history_str = self._get_interaction_history_str(
-            obs["axtree_txt"]
-        )
+        self.interaction_history_str = self._get_interaction_history_str(obs["axtree_txt"])
         if self.step == 0:
             user_prompt_template = """OBJECTIVE:
 {objective}
 CURRENT OBSERVATION:
 {observation}
 """
-            user_prompt = user_prompt_template.format(
-                objective=self.objective, observation=obs["axtree_txt"]
-            )
+            user_prompt = user_prompt_template.format(objective=self.objective, observation=obs["axtree_txt"])
         elif (not self.use_note) or self.notepad.is_empty():
             user_prompt_template = """OBJECTIVE:
 {objective}
@@ -833,9 +783,7 @@ CURRENT OBSERVATION:
     def _preproc_obs(self, obs: dict) -> dict:
         if "goal_object" in obs:
             self.objective = obs["goal_object"][0]["text"]
-        root, id2node = from_axtree_construct_tree(
-            obs["axtree_object"], return_id2node=True
-        )
+        root, id2node = from_axtree_construct_tree(obs["axtree_object"], return_id2node=True)
         root = clean_accesibility_tree(root)
         roots = prune_axtree(root)
         self.id2node = id2node
@@ -889,10 +837,8 @@ CURRENT OBSERVATION:
         for key in result:
             result[key] = "\n".join(result[key]).strip()
 
-        structure_correct = True
         for key in parts:
             if key not in result:
-                structure_correct = False
                 break
 
         action_str = result.get("ACTION", "")

@@ -1,10 +1,8 @@
-import os
-import signal
-import subprocess
-import resource
 import faulthandler
-from tempfile import TemporaryDirectory
+import os
 import platform
+import subprocess
+from tempfile import TemporaryDirectory
 
 from rllm.rewards.code_utils.utils import BASE_IMPORTS
 
@@ -16,13 +14,12 @@ _DEFAULT_TIMEOUT_SECONDS = 30
 
 def code_exec(code, test: str = None, timeout=_DEFAULT_TIMEOUT_SECONDS):
     env = os.environ.copy()
-    
+
     # Create a preexec_fn function to set resource limits
     def preexec_fn():
         reliability_guard()
 
-    if 'pytest' not in code:
-
+    if "pytest" not in code:
         code_to_run = f"""
 {BASE_IMPORTS}
 import pytest
@@ -36,7 +33,7 @@ if __name__ == "__main__":
 """
     else:
         code_to_run = code
-    
+
     # solution is in {tmpdir}/solution.py
     with TemporaryDirectory() as tmpdir:
         # Write the solution to a file
@@ -45,27 +42,18 @@ if __name__ == "__main__":
 
         with open(solution_path, "w") as f:
             f.write(code_to_run)
-            
+
         command = ["pytest", "--maxfail=1", solution_path]
-        
+
         try:
-            result = subprocess.run(
-                command,
-                cwd=tmpdir,
-                stdout=subprocess.PIPE,
-                stderr=subprocess.PIPE,
-                env=env,
-                check=False,
-                preexec_fn=preexec_fn,
-                timeout=timeout
-            )
-            
+            result = subprocess.run(command, cwd=tmpdir, stdout=subprocess.PIPE, stderr=subprocess.PIPE, env=env, check=False, preexec_fn=preexec_fn, timeout=timeout)
+
             stderr = result.stderr.decode().strip()
             stdout = result.stdout.decode()
             if result.returncode == 0:
                 return True, stdout
             return False, _ERROR_MSG_PREFIX + f"STDOUT:\n{stdout}\n\nSTDERR:\n{stderr}"
-            
+
         except subprocess.TimeoutExpired:
             return False, _ERROR_MSG_PREFIX + f"Execution timed out after {timeout} seconds."
         except Exception as e:

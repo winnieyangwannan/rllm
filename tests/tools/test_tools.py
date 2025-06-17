@@ -1,8 +1,6 @@
 #!/usr/bin/env python3
 import asyncio
-import os
-import json
-from typing import Dict, Any, Optional
+
 from rllm.tools import tool_registry
 from rllm.tools.tool_base import ToolOutput
 
@@ -22,7 +20,7 @@ print(f"Integer Division: {x // y}")
 print(f"Modulo: {x % y}")
 print(f"Power: {x ** y}")
 """,
-        "expected_stdout": "Testing basic arithmetic...\nAddition: 15\nSubtraction: 5\nMultiplication: 50\nDivision: 2.0\nInteger Division: 2\nModulo: 0\nPower: 100000"
+        "expected_stdout": "Testing basic arithmetic...\nAddition: 15\nSubtraction: 5\nMultiplication: 50\nDivision: 2.0\nInteger Division: 2\nModulo: 0\nPower: 100000",
     },
     {
         "name": "List Operations",
@@ -37,7 +35,7 @@ print(f"Min: {min(numbers)}")
 squared = [x**2 for x in numbers]
 print(f"Squared: {squared}")
 """,
-        "expected_stdout": "Testing list operations...\nOriginal list: [1, 2, 3, 4, 5]\nSum: 15\nAverage: 3.0\nMax: 5\nMin: 1\nSquared: [1, 4, 9, 16, 25]"
+        "expected_stdout": "Testing list operations...\nOriginal list: [1, 2, 3, 4, 5]\nSum: 15\nAverage: 3.0\nMax: 5\nMin: 1\nSquared: [1, 4, 9, 16, 25]",
     },
     {
         "name": "Error Handling",
@@ -52,7 +50,7 @@ try:
 except NameError as e:
     print(f"Caught error: {e}")
 """,
-        "expected_stdout": "Testing error handling...\nCaught error: division by zero\nCaught error: name 'undefined_var' is not defined"
+        "expected_stdout": "Testing error handling...\nCaught error: division by zero\nCaught error: name 'undefined_var' is not defined",
     },
     {
         "name": "File Operations",
@@ -68,8 +66,8 @@ import os
 os.remove(test_file)
 print("File deleted successfully")
 """,
-        "expected_stdout": "Testing file operations...\nFile content: Hello, World!\nFile deleted successfully"
-    }
+        "expected_stdout": "Testing file operations...\nFile content: Hello, World!\nFile deleted successfully",
+    },
 ]
 
 # Test code for async Python interpreter
@@ -89,7 +87,7 @@ print("Starting async test...")
 asyncio.run(count())
 print("Async test complete!")
 """,
-        "expected_stdout": "Starting async test...\nCount: 0\nCount: 1\nCount: 2\nAsync test complete!"
+        "expected_stdout": "Starting async test...\nCount: 0\nCount: 1\nCount: 2\nAsync test complete!",
     },
     {
         "name": "Multiple Async Tasks",
@@ -114,68 +112,25 @@ async def main():
 
 asyncio.run(main())
 """,
-        "expected_stdout": "Starting multiple tasks...\nTask A started\nTask B started\nTask C started\nTask A completed\nTask B completed\nTask C completed\nAll tasks completed!"
-    }
+        "expected_stdout": "Starting multiple tasks...\nTask A started\nTask B started\nTask C started\nTask A completed\nTask B completed\nTask C completed\nAll tasks completed!",
+    },
 ]
 
 # Test queries for search tools
 search_test_cases = {
-    "google_search": [
-        {
-            "name": "Basic Search",
-            "query": "What is Python programming?",
-            "expected_fields": ["title", "snippet", "link"]
-        },
-        {
-            "name": "Technical Search",
-            "query": "Python async await syntax example",
-            "expected_fields": ["title", "snippet", "link"]
-        }
-    ],
-    "tavily_search": [
-        {
-            "name": "News Search",
-            "query": "Latest developments in AI",
-            "expected_fields": ["title", "snippet", "url"]
-        },
-        {
-            "name": "Technical Search",
-            "query": "Python type hints tutorial",
-            "expected_fields": ["title", "snippet", "url"]
-        }
-    ],
-    "tavily_extract": [
-        {
-            "name": "Python.org",
-            "url": "https://www.python.org/about/",
-            "expected_fields": ["title", "text"]
-        },
-        {
-            "name": "Python Docs",
-            "url": "https://docs.python.org/3/tutorial/",
-            "expected_fields": ["title", "text"]
-        }
-    ],
-    "firecrawl": [
-        {
-            "name": "Python.org",
-            "url": "https://www.python.org",
-            "expected_fields": ["title", "text", "links"]
-        },
-        {
-            "name": "Python Docs",
-            "url": "https://docs.python.org/3/",
-            "expected_fields": ["title", "text", "links"]
-        }
-    ]
+    "google_search": [{"name": "Basic Search", "query": "What is Python programming?", "expected_fields": ["title", "snippet", "link"]}, {"name": "Technical Search", "query": "Python async await syntax example", "expected_fields": ["title", "snippet", "link"]}],
+    "tavily_search": [{"name": "News Search", "query": "Latest developments in AI", "expected_fields": ["title", "snippet", "url"]}, {"name": "Technical Search", "query": "Python type hints tutorial", "expected_fields": ["title", "snippet", "url"]}],
+    "tavily_extract": [{"name": "Python.org", "url": "https://www.python.org/about/", "expected_fields": ["title", "text"]}, {"name": "Python Docs", "url": "https://docs.python.org/3/tutorial/", "expected_fields": ["title", "text"]}],
+    "firecrawl": [{"name": "Python.org", "url": "https://www.python.org", "expected_fields": ["title", "text", "links"]}, {"name": "Python Docs", "url": "https://docs.python.org/3/", "expected_fields": ["title", "text", "links"]}],
 }
 
-def validate_tool_output(result: ToolOutput, expected_fields: Optional[list] = None) -> bool:
+
+def validate_tool_output(result: ToolOutput, expected_fields: list | None = None) -> bool:
     """Validate the tool output has the expected structure and content."""
     if result.error:
         print(f"Error in tool execution: {result.error}")
         return False
-    
+
     if expected_fields:
         if isinstance(result.output, dict):
             missing_fields = [field for field in expected_fields if field not in result.output]
@@ -185,99 +140,103 @@ def validate_tool_output(result: ToolOutput, expected_fields: Optional[list] = N
         else:
             print("Expected dictionary output with fields")
             return False
-    
+
     return True
+
 
 def test_python_tool():
     """Test the Python interpreter tool synchronously and asynchronously."""
     print("\nTesting Python interpreter tool...")
-    
+
     # Get the tool
-    python_tool = tool_registry['python']()
-    
+    python_tool = tool_registry["python"]()
+
     # Test sync cases
     print("\nTesting sync execution:")
     for test_case in python_test_cases:
         print(f"\nRunning test: {test_case['name']}")
         print("Code:")
-        print(test_case['code'])
-        
-        result = python_tool(test_case['code'])
+        print(test_case["code"])
+
+        result = python_tool(test_case["code"])
         print("Result:")
         print(f"Error: {result.error}")
         print(f"Output: {result.output}")
         print(f"Stdout: {result.stdout}")
         print(f"Stderr: {result.stderr}")
-        
-        if result.stdout.strip() == test_case['expected_stdout'].strip():
+
+        if result.stdout.strip() == test_case["expected_stdout"].strip():
             print("Test passed!")
         else:
             print("Test failed! Output doesn't match expected")
             print("Expected:")
-            print(test_case['expected_stdout'])
-    
+            print(test_case["expected_stdout"])
+
     # Test async cases
     print("\nTesting async execution:")
     for test_case in python_async_test_cases:
         print(f"\nRunning test: {test_case['name']}")
         print("Code:")
-        print(test_case['code'])
-        
-        result = asyncio.run(python_tool(test_case['code'], use_async=True))
+        print(test_case["code"])
+
+        result = asyncio.run(python_tool(test_case["code"], use_async=True))
         print("Result:")
         print(f"Error: {result.error}")
         print(f"Output: {result.output}")
         print(f"Stdout: {result.stdout}")
         print(f"Stderr: {result.stderr}")
-        
-        if result.stdout.strip() == test_case['expected_stdout'].strip():
+
+        if result.stdout.strip() == test_case["expected_stdout"].strip():
             print("Test passed!")
         else:
             print("Test failed! Output doesn't match expected")
             print("Expected:")
-            print(test_case['expected_stdout'])
+            print(test_case["expected_stdout"])
+
 
 def test_search_tool(tool_name: str):
     """Test a search tool with multiple test cases."""
     print(f"\nTesting {tool_name} tool...")
-    
+
     # Get the tool
     tool = tool_registry[tool_name]()
-    
+
     # Run test cases
     for test_case in search_test_cases[tool_name]:
         print(f"\nRunning test: {test_case['name']}")
         print(f"Query/URL: {test_case.get('query', test_case.get('url'))}")
-        
+
         # Execute tool
-        if 'query' in test_case:
-            result = tool(test_case['query'])
+        if "query" in test_case:
+            result = tool(test_case["query"])
         else:
-            result = tool(test_case['url'])
-        
+            result = tool(test_case["url"])
+
         print("Result:")
         print(f"Error: {result.error}")
         print(f"Output: {result.output}")
-        
+
         # Validate output
-        if validate_tool_output(result, test_case['expected_fields']):
+        if validate_tool_output(result, test_case["expected_fields"]):
             print("Test passed!")
         else:
             print("Test failed!")
+
 
 def main():
     print("=" * 50)
     print("RLLM TOOLS FUNCTIONAL TEST")
     print("=" * 50)
-    
+
     # Test Python tool
     try:
         test_python_tool()
     except Exception as e:
         print(f"Python tool test failed with error: {e}")
         import traceback
+
         traceback.print_exc()
-    
+
     # Test search tools
     for tool_name in search_test_cases.keys():
         try:
@@ -285,9 +244,11 @@ def main():
         except Exception as e:
             print(f"{tool_name} test failed with error: {e}")
             import traceback
+
             traceback.print_exc()
-    
+
     print("\nTest complete!")
+
 
 if __name__ == "__main__":
     main()

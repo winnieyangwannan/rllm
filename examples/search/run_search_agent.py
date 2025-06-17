@@ -23,9 +23,11 @@ def load_search_data(train_size=3000, test_size=100):
     if test_dataset is None:
         print("Dataset not found, preparing search dataset...")
         from prepare_search_data import prepare_search_data
+
         _, test_dataset = prepare_search_data(train_size=train_size, test_size=test_size)
-    
+
     return test_dataset.get_data()
+
 
 if __name__ == "__main__":
     os.environ["TOKENIZERS_PARALLELISM"] = "true"
@@ -38,26 +40,15 @@ if __name__ == "__main__":
 
     tokenizer = AutoTokenizer.from_pretrained(model_name)
 
-    sampling_params = {
-        "temperature": 0.6, 
-        "top_p": 0.95, 
-        "model": model_name
-    }
+    sampling_params = {"temperature": 0.6, "top_p": 0.95, "model": model_name}
 
     tool_map = {"local_search": LocalRetrievalTool}
 
     engine = AsyncAgentExecutionEngine(
         agent_class=ToolAgent,
-        agent_args={
-            "tool_map": tool_map,
-            "system_prompt": SEARCH_SYSTEM_PROMPT, 
-            "parser_name": "qwen"
-        },
+        agent_args={"tool_map": tool_map, "system_prompt": SEARCH_SYSTEM_PROMPT, "parser_name": "qwen"},
         env_class=ToolEnvironment,
-        env_args={
-            "tool_map": tool_map,
-            "reward_fn": search_reward_fn
-        },
+        env_args={"tool_map": tool_map, "reward_fn": search_reward_fn},
         rollout_engine=None,
         engine_name="openai",
         tokenizer=tokenizer,
@@ -75,5 +66,5 @@ if __name__ == "__main__":
     tasks = load_search_data()
 
     results = asyncio.run(engine.execute_tasks(tasks))
-    
+
     save_trajectories(results, filename="search_trajectories.pt")

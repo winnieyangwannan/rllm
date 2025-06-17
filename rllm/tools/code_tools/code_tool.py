@@ -1,22 +1,20 @@
+import dataclasses
 from abc import abstractmethod
-from typing import Any, Dict, Optional
+from typing import Any
 
 from rllm.tools.tool_base import Tool, ToolOutput
 
 
-import dataclasses
-
-
 @dataclasses.dataclass
 class CodeToolOutput(ToolOutput):
-    stdout: str = None # Standard output
-    stderr: str = None # Standard error
-    output: str = None # Result of the code execution (i.e. last line of code)
-    
+    stdout: str = None  # Standard output
+    stderr: str = None  # Standard error
+    output: str = None  # Result of the code execution (i.e. last line of code)
+
     def to_string(self) -> str:
         """
         Convert the code tool output to a string representation.
-        
+
         Returns:
             str: A string representation of the output, prioritizing output, then stdout, then stderr.
         """
@@ -29,16 +27,17 @@ class CodeToolOutput(ToolOutput):
         else:
             return ""
 
+
 class CodeTool(Tool):
     """Base class for Python code execution tools.
-    
+
     This abstract class defines a common interface for all Python code execution tools,
     whether they run code locally or in a remote sandbox like E2B.
     """
 
     def __init__(self, name: str, description: str, n_sandboxes: int = 1):
         """Initialize the Python code tool.
-        
+
         Args:
             name: The name of the tool
             description: Description of what the tool does
@@ -48,7 +47,7 @@ class CodeTool(Tool):
         super().__init__(name=name, description=description)
 
     @property
-    def json(self) -> Dict[str, Any]:
+    def json(self) -> dict[str, Any]:
         """Return the tool's information in the required format."""
         return {
             "type": "function",
@@ -66,7 +65,7 @@ class CodeTool(Tool):
                             "type": "integer",
                             "description": "Maximum execution time in seconds before timing out",
                             "default": 12,
-                        }
+                        },
                     },
                     "required": ["code"],
                 },
@@ -77,12 +76,12 @@ class CodeTool(Tool):
     def forward(self, code: str, timeout: int = 12, **kwargs) -> CodeToolOutput:
         """
         Execute Python code in the sandbox environment.
-        
+
         Args:
             code: Python code to execute
             timeout: Maximum execution time in seconds
             **kwargs: Additional parameters specific to the implementation
-            
+
         Returns:
             Dict containing execution results, stdout, and stderr
         """

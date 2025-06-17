@@ -5,7 +5,6 @@ from rllm.agents.tool_agent import ToolAgent
 from rllm.data import DatasetRegistry
 from rllm.environments.tools.tool_env import ToolEnvironment
 from rllm.rewards.reward_fn import search_reward_fn
-from rllm.tools.registry import ToolRegistry
 from rllm.train.agent_trainer import AgentTrainer
 
 from .local_retrieval_tool import LocalRetrievalTool
@@ -17,19 +16,15 @@ def main(config):
     val_dataset = DatasetRegistry.load_dataset("hotpotqa_combined", "test")
 
     tool_map = {"local_search": LocalRetrievalTool}
-    
+
     env_args = {
-        "max_steps": 20, 
+        "max_steps": 20,
         "tool_map": tool_map,
         "reward_fn": search_reward_fn,
     }
-    
-    agent_args = {
-        "system_prompt": SEARCH_SYSTEM_PROMPT,
-        "tool_map": tool_map,
-        "parser_name": "qwen"
-    }
-    
+
+    agent_args = {"system_prompt": SEARCH_SYSTEM_PROMPT, "tool_map": tool_map, "parser_name": "qwen"}
+
     # Use the registry-based approach (comment out the other approach)
     trainer = AgentTrainer(
         agent_class=ToolAgent,
@@ -40,8 +35,9 @@ def main(config):
         agent_args=agent_args,
         env_args=env_args,
     )
-    
+
     trainer.train()
+
 
 if __name__ == "__main__":
     main()

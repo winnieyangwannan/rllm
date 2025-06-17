@@ -15,8 +15,11 @@
 Note that we don't combine the main with ray_trainer as ray_trainer is used by other main.
 """
 
-import ray
 import hydra
+import ray
+
+from rllm.train.env_agent_mappings import AGENT_CLASS_MAPPING, ENV_CLASS_MAPPING, setup_environment
+from rllm.trainer.agent_trainer_pipeline import PipelineAgentPPOTrainer
 
 # Local application imports
 from verl.single_controller.ray import RayWorkerGroup
@@ -25,11 +28,7 @@ from verl.workers.fsdp_workers import ActorRolloutRefWorker
 from verl.workers.reward_manager import NaiveRewardManager
 
 
-from rllm.trainer.agent_trainer_pipeline import PipelineAgentPPOTrainer
-from rllm.train.env_agent_mappings import ENV_CLASS_MAPPING, AGENT_CLASS_MAPPING, setup_environment
-
-
-@hydra.main(config_path='config', config_name='ppo_trainer', version_base=None)
+@hydra.main(config_path="config", config_name="ppo_trainer", version_base=None)
 def main(config):
     run_ppo_agent_async(config)
 
@@ -37,17 +36,20 @@ def main(config):
 def run_ppo_agent_async(config, compute_score=None):
     if not ray.is_initialized():
         # this is for local ray cluster
-        ray.init(runtime_env={'env_vars': {'TOKENIZERS_PARALLELISM': 'true', 'NCCL_DEBUG': 'WARN'}})
+        ray.init(runtime_env={"env_vars": {"TOKENIZERS_PARALLELISM": "true", "NCCL_DEBUG": "WARN"}})
 
     ray.get(main_task.remote(config, compute_score))
 
 
 @ray.remote(num_cpus=1)  # please make sure main_task is not scheduled on head
 def main_task(config, compute_score=None):
-    from verl.utils.fs import copy_local_path_from_hdfs
     # print initial config
     from pprint import pprint
+
     from omegaconf import OmegaConf
+
+    from verl.utils.fs import copy_local_path_from_hdfs
+
     pprint(OmegaConf.to_container(config, resolve=True))  # resolve=True will eval symbol values
     OmegaConf.resolve(config)
 
@@ -56,10 +58,11 @@ def main_task(config, compute_score=None):
 
     # instantiate tokenizer
     from verl.utils import hf_tokenizer
+
     tokenizer = hf_tokenizer(local_path)
 
-    actor_pool_id = 'actor_pool'
-    rollout_pool_id = 'rollout_pool'
+    actor_pool_id = "actor_pool"
+    rollout_pool_id = "rollout_pool"
     num_training_gpus = config.trainer.n_training_gpus_per_node
     resource_pool_spec = {
         actor_pool_id: [num_training_gpus] * config.trainer.nnodes,
@@ -74,28 +77,18 @@ def main_task(config, compute_score=None):
     reward_fn = NaiveRewardManager(tokenizer=tokenizer, num_examine=0, compute_score=compute_score)
     val_reward_fn = NaiveRewardManager(tokenizer=tokenizer, num_examine=1, compute_score=compute_score)
 
-    role_worker_mapping = {
-        Role.Actor: ray.remote(ActorRolloutRefWorker),
-        Role.Rollout: ray.remote(max_concurrency=512)(ActorRolloutRefWorker)
-    }
-    
+    role_worker_mapping = {Role.Actor: ray.remote(ActorRolloutRefWorker), Role.Rollout: ray.remote(max_concurrency=512)(ActorRolloutRefWorker)}
+
     # Below are agent specific initialization
     env_class = ENV_CLASS_MAPPING[config.env.name]
     agent_class = AGENT_CLASS_MAPPING[config.agent.name]
-    setup_environment(config)      
+    setup_environment(config)
 
-    trainer = PipelineAgentPPOTrainer(config=config,
-                            tokenizer=tokenizer,
-                            role_worker_mapping=role_worker_mapping,
-                            resource_pool_manager=resource_pool_manager,
-                            ray_worker_group_cls=RayWorkerGroup,
-                            reward_fn=reward_fn,
-                            val_reward_fn=val_reward_fn,
-                            env_class=env_class,
-                            agent_class=agent_class)
-    
+    trainer = PipelineAgentPPOTrainer(config=config, tokenizer=tokenizer, role_worker_mapping=role_worker_mapping, resource_pool_manager=resource_pool_manager, ray_worker_group_cls=RayWorkerGroup, reward_fn=reward_fn, val_reward_fn=val_reward_fn, env_class=env_class, agent_class=agent_class)
+
     trainer.init_workers()
     trainer.fit_agent()
 
-if __name__ == '__main__':
+
+if __name__ == "__main__":
     main()

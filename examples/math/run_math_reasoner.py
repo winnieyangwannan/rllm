@@ -49,8 +49,9 @@ if __name__ == "__main__":
     if test_dataset is None:
         print("Dataset not found, preparing dataset...")
         from .prepare_math_data import prepare_math_data
+
         _, test_dataset = prepare_math_data()
-    
+
     tasks = test_dataset.repeat(n=16)  # repeat to evaluate pass@k
 
     results = asyncio.run(engine.execute_tasks(tasks))

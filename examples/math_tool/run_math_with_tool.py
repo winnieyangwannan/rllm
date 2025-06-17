@@ -17,31 +17,23 @@ if __name__ == "__main__":
     n_parallel_agents = 64
 
     model_name = "Qwen/Qwen3-4B"
-    
+
     tokenizer = AutoTokenizer.from_pretrained(model_name)
 
-    agent_args = {
-        "tools": ["python"],
-        "parser_name": "qwen",
-        "system_prompt": "You are a math assistant that can write python to solve math problems."
-    }
+    agent_args = {"tools": ["python"], "parser_name": "qwen", "system_prompt": "You are a math assistant that can write python to solve math problems."}
     env_args = {
         "tools": ["python"],
         "reward_fn": math_reward_fn,
     }
 
-    sampling_params = {
-        "temperature": 0.6,
-        "top_p": 0.95,
-        "model": model_name
-    }
+    sampling_params = {"temperature": 0.6, "top_p": 0.95, "model": model_name}
 
     engine = AsyncAgentExecutionEngine(
         agent_class=ToolAgent,
         agent_args=agent_args,
         env_class=ToolEnvironment,
         env_args=env_args,
-        engine_name="openai", 
+        engine_name="openai",
         rollout_engine_args={"base_url": "http://localhost:30000/v1", "api_key": "None"},
         tokenizer=tokenizer,
         sampling_params=sampling_params,
@@ -54,6 +46,7 @@ if __name__ == "__main__":
     if test_dataset is None:
         print("Dataset not found, preparing dataset...")
         from .prepare_math_data import prepare_math_data
+
         _, test_dataset = prepare_math_data()
 
     tasks = test_dataset.repeat(n=8)  # repeat to evaluate pass@k

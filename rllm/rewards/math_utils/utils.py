@@ -3,15 +3,16 @@ Answer checker API that uses sympy to simplify expressions and check for equalit
 
 Call grade_answer(given_answer: str, ground_truth: str).
 """
+
 import re
-from pylatexenc import latex2text
+
 import sympy
+from pylatexenc import latex2text
 from sympy.parsing import sympy_parser
-from typing import Optional
 
 
 # Dan Hendrycks' code
-def mathd_normalize_answer(answer: Optional[str]) -> Optional[str]:
+def mathd_normalize_answer(answer: str | None) -> str | None:
     if answer is None:
         return None
     answer = answer.strip()
@@ -21,8 +22,9 @@ def mathd_normalize_answer(answer: Optional[str]) -> Optional[str]:
         if m is not None:
             answer = m.group("text").strip()
         return _strip_string(answer)
-    except:
+    except AttributeError:
         return answer
+
 
 def _strip_string(string):
     def _fix_fracs(string):
@@ -37,7 +39,7 @@ def _strip_string(string):
                 else:
                     try:
                         assert len(substr) >= 2
-                    except:
+                    except AssertionError:
                         return string
                     a = substr[0]
                     b = substr[1]
@@ -56,7 +58,6 @@ def _strip_string(string):
         string = new_str
         return string
 
-
     def _fix_a_slash_b(string):
         if len(string.split("/")) != 2:
             return string
@@ -68,9 +69,8 @@ def _strip_string(string):
             assert string == "{}/{}".format(a, b)
             new_string = "\\frac{" + str(a) + "}{" + str(b) + "}"
             return new_string
-        except:
+        except (ValueError, TypeError, ZeroDivisionError):
             return string
-
 
     def _remove_right_units(string):
         # "\\text{ " only ever occurs (at least in the val set) when describing units
@@ -80,7 +80,6 @@ def _strip_string(string):
             return splits[0]
         else:
             return string
-
 
     def _fix_sqrt(string):
         if "\\sqrt" not in string:
@@ -95,6 +94,7 @@ def _strip_string(string):
                 new_substr = "\\sqrt" + split
             new_string += new_substr
         return new_string
+
     # linebreaks
     string = string.replace("\n", "")
     # print(string)
@@ -175,10 +175,7 @@ def _sympy_parse(expr: str):
     py_expr = expr.replace("^", "**")
     return sympy_parser.parse_expr(
         py_expr,
-        transformations=(
-            sympy_parser.standard_transformations
-            + (sympy_parser.implicit_multiplication_application,)
-        ),
+        transformations=(sympy_parser.standard_transformations + (sympy_parser.implicit_multiplication_application,)),
     )
 
 
@@ -211,7 +208,7 @@ def _is_float(num: str) -> bool:
 def _is_int(x: float) -> bool:
     try:
         return abs(x - int(round(x))) <= 1e-7
-    except:
+    except (TypeError, ValueError):
         return False
 
 
@@ -224,7 +221,7 @@ def _str_is_int(x: str) -> bool:
         x = _strip_properly_formatted_commas(x)
         x = float(x)
         return abs(x - int(round(x))) <= 1e-7
-    except:
+    except (TypeError, ValueError):
         return False
 
 
@@ -295,7 +292,7 @@ def _normalize(expr: str) -> str:
         "yard",
     ]:
         expr = re.sub(f"{unit}(es)?(s)? *(\^[0-9]+)?", "", expr)
-    expr = re.sub(f"\^ *\\\\circ", "", expr)
+    expr = re.sub("\^ *\\\\circ", "", expr)
 
     if len(expr) > 0 and expr[0] == "{" and expr[-1] == "}":
         expr = expr[1:-1]
@@ -306,7 +303,7 @@ def _normalize(expr: str) -> str:
     if "\\" in expr:
         try:
             expr = _parse_latex(expr)
-        except:
+        except Exception:
             pass
 
     # edge case with mixed numbers and negative signs
@@ -360,7 +357,7 @@ def are_equal_under_sympy(ground_truth_normalized: str, given_normalized: str):
             simplified = sympy.simplify(sympy_diff)
             if simplified == 0:
                 are_equal = True
-    except:
+    except Exception:
         pass
     return are_equal
 
@@ -372,12 +369,7 @@ def split_tuple(expr: str):
     expr = _strip_properly_formatted_commas(expr)
     if len(expr) == 0:
         return []
-    if (
-        len(expr) > 2
-        and expr[0] in TUPLE_CHARS
-        and expr[-1] in TUPLE_CHARS
-        and all([ch not in expr[1:-1] for ch in TUPLE_CHARS])
-    ):
+    if len(expr) > 2 and expr[0] in TUPLE_CHARS and expr[-1] in TUPLE_CHARS and all([ch not in expr[1:-1] for ch in TUPLE_CHARS]):
         elems = [elem.strip() for elem in expr[1:-1].split(",")]
     else:
         elems = [expr]
@@ -403,21 +395,22 @@ def last_boxed_only_string(string):
                 right_brace_idx = i
                 break
         i += 1
-    
-    if right_brace_idx == None:
+
+    if right_brace_idx is None:
         retval = None
     else:
-        retval = string[idx:right_brace_idx + 1]
-    
+        retval = string[idx : right_brace_idx + 1]
+
     return retval
+
 
 def remove_boxed(s):
     left = "\\boxed{"
     try:
-        assert s[:len(left)] == left
+        assert s[: len(left)] == left
         assert s[-1] == "}"
-        return s[len(left):-1]
-    except:
+        return s[len(left) : -1]
+    except (AssertionError, IndexError):
         return None
 
 
@@ -426,6 +419,7 @@ def extract_boxed_answer(solution: str) -> str:
     solution = last_boxed_only_string(solution)
     solution = remove_boxed(solution)
     return solution
+
 
 def grade_answer_sympy(given_answer: str, ground_truth: str) -> bool:
     ground_truth_normalized = _normalize(ground_truth)
@@ -443,15 +437,12 @@ def grade_answer_sympy(given_answer: str, ground_truth: str) -> bool:
     ground_truth_elems = split_tuple(ground_truth_normalized)
     given_elems = split_tuple(given_normalized)
 
-    if len(ground_truth_elems) > 1 and (
-        ground_truth_normalized[0] != given_normalized[0]
-        or ground_truth_normalized[-1] != given_normalized[-1]
-    ):
+    if len(ground_truth_elems) > 1 and (ground_truth_normalized[0] != given_normalized[0] or ground_truth_normalized[-1] != given_normalized[-1]):
         is_correct = False
     elif len(ground_truth_elems) != len(given_elems):
         is_correct = False
     else:
-        for ground_truth_elem, given_elem in zip(ground_truth_elems, given_elems):
+        for ground_truth_elem, given_elem in zip(ground_truth_elems, given_elems, strict=False):
             if _is_frac(ground_truth_elem) and _is_frac(given_elem):
                 # if fractions aren't reduced, then shouldn't be marked as correct
                 # so, we don't want to allow sympy.simplify in this case
@@ -466,6 +457,7 @@ def grade_answer_sympy(given_answer: str, ground_truth: str) -> bool:
 
     return is_correct
 
+
 def grade_answer_mathd(given_answer: str, ground_truth: str) -> bool:
     ground_truth_normalized_mathd = mathd_normalize_answer(ground_truth)
     given_answer_normalized_mathd = mathd_normalize_answer(given_answer)
@@ -475,18 +467,19 @@ def grade_answer_mathd(given_answer: str, ground_truth: str) -> bool:
         return True
     return False
 
+
 def extract_answer(passage: str) -> str:
     if "\\boxed" in passage:
         return extract_boxed_answer(passage)
     return None
 
+
 def grade_answer_verl(solution_str, ground_truth):
     if not ground_truth:
         return False
-    if '\\boxed' in ground_truth:
+    if "\\boxed" in ground_truth:
         ground_truth = extract_answer(ground_truth)
     given_answer = extract_answer(solution_str)
     if given_answer is None:
         return False
-    return grade_answer_mathd(given_answer, ground_truth) \
-        or grade_answer_sympy(given_answer, ground_truth)
+    return grade_answer_mathd(given_answer, ground_truth) or grade_answer_sympy(given_answer, ground_truth)

@@ -1,24 +1,23 @@
-from typing import List
-
 import asyncio
-import aiohttp
 from copy import deepcopy
-from typing import Any, Dict, List, Union
+from typing import Any
 
+import aiohttp
 import numpy as np
 import torch
-from omegaconf import DictConfig
 from openai.types.completion import Completion
 from tensordict import TensorDict
 
 from verl.protocol import DataProto
 from verl.utils.torch_functional import get_response_mask, pad_2d_list_to_length
 
-def _repeat_interleave(value: Union[torch.Tensor, np.ndarray], repeats: int) -> Union[torch.Tensor, List[Any]]:
+
+def _repeat_interleave(value: torch.Tensor | np.ndarray, repeats: int) -> torch.Tensor | list[Any]:
     if isinstance(value, torch.Tensor):
         return value.repeat_interleave(repeats, dim=0)
     else:
         return np.repeat(value, repeats, axis=0)
+
 
 async def poll_completions_openai(address: str, **completions_request) -> Completion:
     # Use aiohttp directly instead of AsyncOpenAI to avoid potential blocking
@@ -34,20 +33,14 @@ async def poll_completions_openai(address: str, **completions_request) -> Comple
     if "extra_headers" in completions_request:
         completions_request.pop("extra_headers")
 
-
     max_retries = 3
     retry_delay = 1  # Initial delay in seconds
-    
+
     for retry in range(max_retries):
         try:
             # Create a new session for each request to avoid blocking
             async with aiohttp.ClientSession() as session:
-                async with session.post(
-                    base_url,
-                    json=completions_request,
-                    headers=headers,
-                    timeout=aiohttp.ClientTimeout(total=10800)
-                ) as response:
+                async with session.post(base_url, json=completions_request, headers=headers, timeout=aiohttp.ClientTimeout(total=10800)) as response:
                     if response.status != 200:
                         error_text = await response.text()
                         raise Exception(f"API request failed with status {response.status}: {error_text}")
@@ -56,6 +49,7 @@ async def poll_completions_openai(address: str, **completions_request) -> Comple
                     return result
         except Exception as e:
             import traceback
+
             traceback.print_exc()
             # If this is the last retry, raise the exception
             if retry == max_retries - 1:
@@ -64,17 +58,19 @@ async def poll_completions_openai(address: str, **completions_request) -> Comple
             await asyncio.sleep(retry_delay)
             retry_delay *= 2
 
+
 class Router:
     """
     Router chooses the least-used server address from a static list of
     server addresses across multiple processes using asyncio locks.
     """
-    def __init__(self, config, tokenizer, addresses: List[str]):
+
+    def __init__(self, config, tokenizer, addresses: list[str]):
         # List of "ip:port" strings
         self.addresses = addresses
         self.tensor_parallel_size = config.actor_rollout_ref.rollout.get("tensor_model_parallel_size", 1)
         self._lock = asyncio.Lock()
-        self._usage= {}
+        self._usage = {}
         self._application_id_to_address = {}
         # Initialize usage counts for any new addresses
         for addr in self.addresses:
@@ -115,7 +111,7 @@ class Router:
         """
         async with self._lock:
             self._usage[addr] = max(0, self._usage.get(addr, 0) - 1)
-    
+
     async def generate_sequences(self, batch: DataProto, application_id: str, **sampling_params):
         kwargs = dict(
             n=self.config.actor_rollout_ref.rollout.n,
@@ -124,36 +120,38 @@ class Router:
             top_p=self.config.actor_rollout_ref.rollout.top_p,
             logprobs=1,
         )
-        
+
         do_sample = batch.meta_info.get("do_sample", True)
         is_validate = batch.meta_info.get("validate", False)
         if not do_sample or is_validate:
             kwargs["n"] = 1
             kwargs["temperature"] = 0
-        
+
         if is_validate:
-            kwargs.update({
-                #'top_k': self.config.val_kwargs.top_k,
-                'top_p': self.config.actor_rollout_ref.rollout.val_kwargs.top_p,
-                'temperature': self.config.actor_rollout_ref.rollout.val_kwargs.temperature,
-                'n': 1,  # if validate, already repeat in ray_trainer
-            })
-    
+            kwargs.update(
+                {
+                    #'top_k': self.config.val_kwargs.top_k,
+                    "top_p": self.config.actor_rollout_ref.rollout.val_kwargs.top_p,
+                    "temperature": self.config.actor_rollout_ref.rollout.val_kwargs.temperature,
+                    "n": 1,  # if validate, already repeat in ray_trainer
+                }
+            )
+
         if batch.meta_info.get("max_tokens", None) is not None:
-            kwargs['max_tokens'] = batch.meta_info['max_tokens']
-        
-        if batch.meta_info.get('agent_rollout', False):
-            kwargs['n'] = 1
-        
+            kwargs["max_tokens"] = batch.meta_info["max_tokens"]
+
+        if batch.meta_info.get("agent_rollout", False):
+            kwargs["n"] = 1
+
         kwargs.update(sampling_params)
-        
+
         address = await self.get_address(application_id)
-        
+
         tasks = []
         # Bug: len(batch) is used later but batch might not have a __len__ method
         batch_size = len(batch.non_tensor_batch["formatted_prompts"])
         batch_response_ids = [None] * batch_size
-        
+
         for batch_index, formatted_prompt in enumerate(batch.non_tensor_batch["formatted_prompts"]):
             # For Completion API, we need to convert the conversation to a prompt string
             self.counter += 1
@@ -164,33 +162,28 @@ class Router:
                     prompt=formatted_prompt,  # Changed from messages
                     **kwargs,
                 )
-            ) 
-        
+            )
+
         # Potential blocking: asyncio.gather can block if any task takes too long
-        print('Sending total requests: ', self.counter)
+        print("Sending total requests: ", self.counter)
         completions_list = await asyncio.gather(*tasks)
         await self.release_address(address, application_id)  # Release the address when done
-        
+
         for batch_index, completions in enumerate(completions_list):
             comps = []
             for choice in completions.get("choices", []):
-                token_ids= choice.get("logprobs", {}).get("tokens", [])
+                token_ids = choice.get("logprobs", {}).get("tokens", [])
                 token_ids = [int(t.split(":")[1]) for t in token_ids]
                 comps.append(token_ids)
             batch_response_ids[batch_index] = comps
-        
-        return await self.postprocess_batch(batch, batch_response_ids, kwargs['n'])
-        
+
+        return await self.postprocess_batch(batch, batch_response_ids, kwargs["n"])
+
     async def submit_completions(self, address, model, prompt, **kwargs):
         # Potential blocking: network I/O can block
-        return await poll_completions_openai(
-            address=address,
-            model=model,
-            prompt=prompt,
-            **kwargs
-        )
+        return await poll_completions_openai(address=address, model=model, prompt=prompt, **kwargs)
 
-    async def postprocess_batch(self, batch: DataProto, response_ids: List[List[str]], n: int) -> DataProto:
+    async def postprocess_batch(self, batch: DataProto, response_ids: list[list[str]], n: int) -> DataProto:
         # NOTE: For Completion API, batch_completions is a list of lists of strings (not dictionaries)
         # prompts: left pad
         # responses: right pad
@@ -204,7 +197,7 @@ class Router:
         attention_mask = batch.batch["attention_mask"]
         position_ids = batch.batch["position_ids"]
         non_tensor_batch = deepcopy(batch.non_tensor_batch)
-    
+
         # Flatten to list.
         # Flatten the list of lists of token IDs
         response = []
@@ -212,10 +205,9 @@ class Router:
             if r_ids is not None:  # Ensure we don't process None values
                 for r in r_ids:
                     response.append(r)
-        assert len(response) == len(non_tensor_batch["formatted_prompts"]) * n            
-        response = pad_2d_list_to_length(response, self.pad_token_id,
-                                         max_length=self.config.actor_rollout_ref.rollout.response_length).to(idx.device)
-        
+        assert len(response) == len(non_tensor_batch["formatted_prompts"]) * n
+        response = pad_2d_list_to_length(response, self.pad_token_id, max_length=self.config.actor_rollout_ref.rollout.response_length).to(idx.device)
+
         if n > 1:
             idx = _repeat_interleave(idx, n)
             attention_mask = _repeat_interleave(attention_mask, n)

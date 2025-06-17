@@ -1,6 +1,7 @@
 """
 Global variables for the RLLM project.
 """
+
 # For both vLLM and SGLang samplers
 BASE_SAMPLER_PORT = 8080
 

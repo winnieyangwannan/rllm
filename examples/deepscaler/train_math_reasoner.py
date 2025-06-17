@@ -1,11 +1,10 @@
-
 import hydra
 
 from rllm.agents.math_agent import MathAgent
 from rllm.data.dataset import DatasetRegistry
 from rllm.environments.base.single_turn_env import SingleTurnEnvironment
-from rllm.train.agent_trainer import AgentTrainer
 from rllm.rewards.reward_fn import math_reward_fn
+from rllm.train.agent_trainer import AgentTrainer
 
 
 @hydra.main(config_path="pkg://rllm.train.config", config_name="ppo_trainer", version_base=None)
@@ -14,7 +13,7 @@ def main(config):
     test_dataset = DatasetRegistry.load_dataset("aime2024", "test")
 
     env_args = {"reward_fn": math_reward_fn}
-    
+
     trainer = AgentTrainer(
         agent_class=MathAgent,
         agent_args={},
@@ -25,6 +24,7 @@ def main(config):
         val_dataset=test_dataset,
     )
     trainer.train()
+
 
 if __name__ == "__main__":
     main()

@@ -3,19 +3,17 @@
 Note that we don't combine the main with ray_trainer as ray_trainer is used by other main.
 """
 
-import ray
 import hydra
+import ray
+
+from rllm.train.env_agent_mappings import AGENT_CLASS_MAPPING, ENV_CLASS_MAPPING, setup_environment
 
 # Local application imports
-
 from rllm.trainer.agent_ppo_trainer import AgentPPOTrainer
-
-from rllm.train.env_agent_mappings import ENV_CLASS_MAPPING, AGENT_CLASS_MAPPING, setup_environment
-
 from verl.trainer.ppo.reward import load_reward_manager
 
 
-@hydra.main(config_path='config', config_name='ppo_trainer', version_base=None)
+@hydra.main(config_path="config", config_name="ppo_trainer", version_base=None)
 def main(config):
     run_ppo_agent(config)
 
@@ -23,17 +21,20 @@ def main(config):
 def run_ppo_agent(config):
     if not ray.is_initialized():
         # this is for local ray cluster
-        ray.init(runtime_env={'env_vars': {'TOKENIZERS_PARALLELISM': 'true', 'NCCL_DEBUG': 'WARN'}})
+        ray.init(runtime_env={"env_vars": {"TOKENIZERS_PARALLELISM": "true", "NCCL_DEBUG": "WARN"}})
 
     ray.get(train_agent.remote(config))
 
 
 @ray.remote(num_cpus=1)  # please make sure main_task is not scheduled on head
 def train_agent(config, agent_class=None, env_class=None, agent_args=None, env_args=None):
-    from verl.utils.fs import copy_local_path_from_hdfs
     # print initial config
     from pprint import pprint
+
     from omegaconf import OmegaConf
+
+    from verl.utils.fs import copy_local_path_from_hdfs
+
     pprint(OmegaConf.to_container(config, resolve=True))  # resolve=True will eval symbol values
     OmegaConf.resolve(config)
 
@@ -41,12 +42,11 @@ def train_agent(config, agent_class=None, env_class=None, agent_args=None, env_a
     local_path = copy_local_path_from_hdfs(config.actor_rollout_ref.model.path)
 
     # instantiate tokenizer
-    from verl.utils import hf_processor, hf_tokenizer
+    from verl.utils import hf_tokenizer
 
     trust_remote_code = config.data.get("trust_remote_code", False)
     tokenizer = hf_tokenizer(local_path, trust_remote_code=trust_remote_code)
-    #processor = hf_processor(local_path, use_fast=True)  # used for multimodal LLM, could be none
-
+    # processor = hf_processor(local_path, use_fast=True)  # used for multimodal LLM, could be none
 
     if config.actor_rollout_ref.actor.strategy in ["fsdp", "fsdp2"]:
         assert config.critic.strategy in ["fsdp", "fsdp2"]
@@ -81,7 +81,7 @@ def train_agent(config, agent_class=None, env_class=None, agent_args=None, env_a
     reward_fn = load_reward_manager(config, tokenizer, num_examine=0, **config.reward_model.get("reward_kwargs", {}))
     val_reward_fn = load_reward_manager(config, tokenizer, num_examine=1)
     resource_pool_manager = ResourcePoolManager(resource_pool_spec=resource_pool_spec, mapping=mapping)
-    
+
     if env_class is None:
         env_class = ENV_CLASS_MAPPING[config.env.name]
     if agent_class is None:
@@ -93,26 +93,26 @@ def train_agent(config, agent_class=None, env_class=None, agent_args=None, env_a
         env_args.update(config.env.get("env_args"))
     if config.agent.get("agent_args") is not None:
         agent_args.update(config.agent.get("agent_args"))
-    
-    setup_environment(config)    
 
-    trainer = AgentPPOTrainer(config=config,
-                            tokenizer=tokenizer,
-                            role_worker_mapping=role_worker_mapping,
-                            resource_pool_manager=resource_pool_manager,
-                            ray_worker_group_cls=ray_worker_group_cls,
-                            reward_fn=reward_fn,
-                            val_reward_fn=val_reward_fn,
-                            env_class=env_class,
-                            agent_class=agent_class,
-                            env_args=env_args,
-                            agent_args=agent_args,
-                            )
-    
+    setup_environment(config)
+
+    trainer = AgentPPOTrainer(
+        config=config,
+        tokenizer=tokenizer,
+        role_worker_mapping=role_worker_mapping,
+        resource_pool_manager=resource_pool_manager,
+        ray_worker_group_cls=ray_worker_group_cls,
+        reward_fn=reward_fn,
+        val_reward_fn=val_reward_fn,
+        env_class=env_class,
+        agent_class=agent_class,
+        env_args=env_args,
+        agent_args=agent_args,
+    )
+
     trainer.init_workers()
     trainer.fit_agent()
-    
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     main()

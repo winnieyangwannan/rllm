@@ -8,15 +8,15 @@ python scripts/data/dedupe_dataset.py \
     --problem_column <name of column> 
 """
 
-import collections
+import json
 import os
 
 from tqdm import tqdm
+
+from rllm.data.dataset_types import TrainDataset
+from rllm.data.utils import load_dataset
 from rllm.utils import RAG
 
-import json
-from rllm.data.utils import load_dataset
-from rllm.data.dataset_types import TrainDataset
 
 def normalize_string(text: str) -> str:
     """Basic string normalization."""
@@ -26,12 +26,13 @@ def normalize_string(text: str) -> str:
     text = " ".join(text.split())
     return text
 
+
 def get_prompt_from_chat_template(text: str) -> str:
     """Extract the prompt from a chat template."""
     if isinstance(text, str):
         return text
     elif isinstance(text, list):
-        return text[0]['content'] if text else ""
+        return text[0]["content"] if text else ""
     else:
         raise ValueError(f"Unsupported type for text: {type(text)}. Expected str or list.")
 
@@ -42,21 +43,14 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("--dedupe_dataset", type=str, required=True, help="Path of the first dataset to check for duplicates")
     parser.add_argument("--dataset", type=str, required=True, help="Paths of 2nd dataset to check for duplicates against.")
-    parser.add_argument(
-        "--problem_column", type=str, default="problem", help="Name of the column containing the problem (prompt)."
-    )
+    parser.add_argument("--problem_column", type=str, default="problem", help="Name of the column containing the problem (prompt).")
     parser.add_argument(
         "--data_dir",
         type=str,
         default=os.path.expanduser("~/rllm/rllm/data/train/code"),
         help="Data directory to save the deduped dataset. If not provided, will use the default data directory.",
     )
-    parser.add_argument(
-        "--new_dataset_name",
-        type=str,
-        default=None,
-        help="New name for the dataset. If not provided, will reuse the name and add a `_dedupe` to the name."
-    )
+    parser.add_argument("--new_dataset_name", type=str, default=None, help="New name for the dataset. If not provided, will reuse the name and add a `_dedupe` to the name.")
     args = parser.parse_args()
 
     # Load the dataset to check for contamination
@@ -64,9 +58,7 @@ if __name__ == "__main__":
     # open dataset from json
     if not os.path.exists(args.data_dir):
         raise ValueError(f"Data directory {args.data_dir} does not exist.")
-    
 
-    
     # read the dataset as json
     ds_name = TrainDataset.Code[args.dedupe_dataset.upper()]
     orig_ds_name = TrainDataset.Code[args.dataset.upper()]
@@ -74,13 +66,11 @@ if __name__ == "__main__":
     ds = load_dataset(ds_name)
     orig_ds = load_dataset(orig_ds_name)
 
-
     # get the column as a list
     problem_col = [prob[args.problem_column] for prob in ds]
 
     # init rag
     rag = RAG(docs=problem_col)
-
 
     # loop through the dataset and check for duplicates
     # using the rag
@@ -103,7 +93,7 @@ if __name__ == "__main__":
                     dupe_idx.add(top["idx"])  # add the index to the set
 
     # remove the dupe idx rows from ds
-    
+
     if dupe_idx:
         print(f"Found {len(dupe_idx)} duplicates in the dataset.")
         ds = [p for i, p in enumerate(ds) if i not in dupe_idx]  # remove the duplicates from the dataset

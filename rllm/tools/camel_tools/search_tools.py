@@ -6,65 +6,56 @@ except ImportError as e:
 
 from rllm.tools.camel_tools.camel_tool_base import CamelTool
 
+
 class SearchWikiCamel(CamelTool):
     def __init__(self):
-        super().__init__(
-            function_tool=FunctionTool(SearchToolkit().search_wiki)
-        )
+        super().__init__(function_tool=FunctionTool(SearchToolkit().search_wiki))
+
 
 class SearchLinkupCamel(CamelTool):
     def __init__(self):
-        super().__init__(
-            function_tool=FunctionTool(SearchToolkit().search_linkup)
-        )
+        super().__init__(function_tool=FunctionTool(SearchToolkit().search_linkup))
+
 
 class SearchGoogleCamel(CamelTool):
     def __init__(self):
-        super().__init__(
-            function_tool=FunctionTool(SearchToolkit().search_google)
-        )
+        super().__init__(function_tool=FunctionTool(SearchToolkit().search_google))
+
 
 class SearchDuckduckgoCamel(CamelTool):
     def __init__(self):
-        super().__init__(
-            function_tool=FunctionTool(SearchToolkit().search_duckduckgo)
-        )
+        super().__init__(function_tool=FunctionTool(SearchToolkit().search_duckduckgo))
+
 
 class QueryWolframAlphaCamel(CamelTool):
     def __init__(self):
-        super().__init__(
-            function_tool=FunctionTool(SearchToolkit().query_wolfram_alpha)
-        )
+        super().__init__(function_tool=FunctionTool(SearchToolkit().query_wolfram_alpha))
+
 
 class TavilySearchCamel(CamelTool):
     def __init__(self):
-        super().__init__(
-            function_tool=FunctionTool(SearchToolkit().tavily_search)
-        )
+        super().__init__(function_tool=FunctionTool(SearchToolkit().tavily_search))
+
 
 class SearchBraveCamel(CamelTool):
     def __init__(self):
-        super().__init__(
-            function_tool=FunctionTool(SearchToolkit().search_brave)
-        )
+        super().__init__(function_tool=FunctionTool(SearchToolkit().search_brave))
+
 
 class SearchBochaCamel(CamelTool):
     def __init__(self):
-        super().__init__(
-            function_tool=FunctionTool(SearchToolkit().search_bocha)
-        )
+        super().__init__(function_tool=FunctionTool(SearchToolkit().search_bocha))
+
 
 class SearchBaiduCamel(CamelTool):
     def __init__(self):
-        super().__init__(
-            function_tool=FunctionTool(SearchToolkit().search_baidu)
-        )
+        super().__init__(function_tool=FunctionTool(SearchToolkit().search_baidu))
+
 
 class SearchBingCamel(CamelTool):
     def __init__(self):
-        super().__init__(
-            function_tool=FunctionTool(SearchToolkit().search_bing)
-        )
+        super().__init__(function_tool=FunctionTool(SearchToolkit().search_bing))
+
 
 if __name__ == "__main__":
     # Test SearchWikiCamel
@@ -74,8 +65,5 @@ if __name__ == "__main__":
 
     # Test SearchGoogleCamel
     print("\nTesting SearchGoogleCamel")
-    result = SearchGoogleCamel()(**{
-        "query": "latest AI developments",
-        "num_result_pages": 2
-    })
+    result = SearchGoogleCamel()(**{"query": "latest AI developments", "num_result_pages": 2})
     print("SearchGoogleCamel result:", result)

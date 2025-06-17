@@ -47,10 +47,7 @@ def evaluate_results(results):
     # Calculate pass@1 and pass@16
     total_problems = len(problem_correct_map)
     pass_at_1 = sum(problem_correct_map.values()) / sum(problem_total_map.values())
-    pass_at_16 = (
-        sum(1 for problem, correct in problem_correct_map.items() if correct > 0)
-        / total_problems
-    )
+    pass_at_16 = sum(1 for problem, correct in problem_correct_map.items() if correct > 0) / total_problems
 
     print("Total unique problems:", total_problems)
     print("Average Pass@1 Accuracy:", pass_at_1)
@@ -90,7 +87,7 @@ if __name__ == "__main__":
         max_prompt_length=2048,
         config=None,
         n_parallel_agents=n_parallel_agents,
-        disable_thinking=False
+        disable_thinking=False,
     )
 
     tasks = load_data(n=32, dataset_enum=TestDataset.Math.AIME)[:10]

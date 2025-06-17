@@ -1,12 +1,10 @@
 import os
-from typing import Dict, Optional, Tuple, Union
 
 import numpy as np
-from datasets import load_dataset, Dataset
-
 import r2egym
-from r2egym.agenthub.environment.env import EnvArgs, RepoEnv
+from datasets import Dataset, load_dataset
 from r2egym.agenthub.action import Action
+from r2egym.agenthub.environment.env import EnvArgs, RepoEnv
 
 from rllm.environments.base.base_env import BaseEnv
 
@@ -33,9 +31,9 @@ class SWEEnv(BaseEnv):
 
     def __init__(
         self,
-        entry: Optional[Dict] = None,
-        dataset: Optional[Dataset] = None,
-        idx: Optional[int] = None,
+        entry: dict | None = None,
+        dataset: Dataset | None = None,
+        idx: int | None = None,
         step_timeout: int = 90,
         reward_timeout: int = 300,
         backend: str = "kubernetes",
@@ -58,7 +56,7 @@ class SWEEnv(BaseEnv):
             if dataset is None:
                 dataset = load_dataset(DEFAULT_R2E_ENV_ID, split="test")
             self.dataset = dataset
-            
+
             if idx is None:
                 idx = np.random.randint(0, len(self.dataset))
             assert 0 <= idx < len(self.dataset), "Selected index out of range"
@@ -72,7 +70,7 @@ class SWEEnv(BaseEnv):
         self.env = None
         self.verbose = verbose
 
-    def reset(self) -> Tuple[str, Dict]:
+    def reset(self) -> tuple[str, dict]:
         """Reset the environment to initial state.
 
         Returns:
@@ -83,11 +81,7 @@ class SWEEnv(BaseEnv):
         if first_time:
             # Initialize environment if not created yet.
             env_args = EnvArgs(ds=self.entry)
-            self.env = RepoEnv(env_args,
-                               backend=self.backend,
-                               step_timeout=self.step_timeout,
-                               reward_timeout=self.reward_timeout,
-                               verbose=self.verbose)
+            self.env = RepoEnv(env_args, backend=self.backend, step_timeout=self.step_timeout, reward_timeout=self.reward_timeout, verbose=self.verbose)
 
         self.env.reset()
         if not first_time:
@@ -102,18 +96,18 @@ class SWEEnv(BaseEnv):
         )
         # Polls docker runtime to get task instruction.
         return self.env.get_task_instruction(), {
-            'gt_patch': gt_patch,
+            "gt_patch": gt_patch,
         }
-    
+
     def compute_final_reward(self):
         return self.env.compute_reward()
-        
-    def step(self, action: Union[str, Action]) -> Tuple[str, float, bool, bool, Dict]:
+
+    def step(self, action: str | Action) -> tuple[str, float, bool, bool, dict]:
         """Take a step in the environment.
-        
+
         Args:
             action: Action string to execute in the environment
-            
+
         Returns:
             Tuple of (observation, reward, done, truncated, info)
         """
@@ -143,12 +137,12 @@ class SWEEnv(BaseEnv):
             os.system(f"docker rmi {docker_image}")
 
     @staticmethod
-    def from_dict(env_args: Dict) -> "SWEEnv":
+    def from_dict(env_args: dict) -> "SWEEnv":
         """Create an environment instance from JSON configuration.
-        
+
         Args:
             extra_info: Dictionary containing configuration parameters
-            
+
         Returns:
             Initialized SWEEnv instance
         """
@@ -157,13 +151,14 @@ class SWEEnv(BaseEnv):
 
 if __name__ == "__main__":
     import concurrent.futures
-    from datasets import load_dataset
     import threading
-    
+
+    from datasets import load_dataset
+
     # Use a thread-safe counter
     counter_lock = threading.Lock()
     total_envs = 0
-    
+
     def process_env(idx):
         global total_envs
         try:
@@ -171,22 +166,22 @@ if __name__ == "__main__":
             env = SWEEnv(entry=dataset_entry, backend="kubernetes")
             env.reset()
             env.close()
-            
+
             # Thread-safe increment of the counter
             with counter_lock:
                 total_envs += 1
                 current_total = total_envs
-            
+
             print(f"Successfully processed {current_total} out of {len(dataset)} environments")
             return True
         except Exception as e:
             print(f"Error processing idx {idx}: {e}")
             return False
-    
+
     dataset = load_dataset("R2E-Gym/R2E-Gym-V1", split="train")
-    
+
     # Process all elements using a threadpool with 512 workers
     with concurrent.futures.ThreadPoolExecutor(max_workers=128) as executor:
         results = list(executor.map(process_env, range(len(dataset))))
-    
+
     print(f"Successfully processed {sum(results)} out of {len(dataset)} environments")

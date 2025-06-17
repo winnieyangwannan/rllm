@@ -20,44 +20,45 @@ from rllm.tools.code_tools.code_tool import CodeTool, CodeToolOutput
 def lcb_sandbox(code, timeout):
     """
     Execute Python code in a sandboxed environment with timeout protection.
-    
+
     This function runs the provided code in a separate process with safety measures
     to prevent harmful operations and ensure termination after the specified timeout.
-    
+
     Args:
         code (str): Python code to execute
         timeout (int): Maximum execution time in seconds
-        
+
     Returns:
         tuple: (stdout, stderr, result) containing the execution output and result
     """
+
     def ensure_return_value(code):
         """
         Ensures the code has a return statement for the last expression.
         Only converts the last statement to a return statement if it's an expression.
-        
+
         Args:
             code (str): Python code to process
-            
+
         Returns:
             str: Modified code with return statement if needed
         """
         if not code.strip():
             return code
-        
+
         try:
             # Parse the code
             tree = ast.parse(code)
             body = tree.body
-            
+
             # If the last element is an expression, convert it to a return statement
             if body and isinstance(body[-1], ast.Expr):
                 value = body[-1].value
                 body[-1] = ast.Return(value=value)
-                
+
                 # Preserve the line numbers and column offsets for better error messages
                 ast.fix_missing_locations(tree)
-                
+
             # Unparse the modified AST back to code
             return ast.unparse(tree)
         except SyntaxError:
@@ -67,18 +68,18 @@ def lcb_sandbox(code, timeout):
             # Log other unexpected errors but return the original code
             print(f"Warning: Could not process code: {e}")
             return code
-    
+
     # Preprocess the code to ensure the last expression is returned
     code = ensure_return_value(code)
-    
+
     def execute_code(code, timeout):
         """
         Execute the provided code with safety measures and timeout handling.
-        
+
         Args:
             code (str): Python code to execute
             timeout (int): Maximum execution time in seconds
-            
+
         Returns:
             tuple: (stdout, stderr, result) containing execution output and result
         """
@@ -128,7 +129,6 @@ def lcb_sandbox(code, timeout):
         finally:
             signal.alarm(0)
 
-
     # Use multiprocessing to isolate code execution in a separate process
     manager = multiprocessing.Manager()
     result = manager.Queue()
@@ -144,13 +144,11 @@ def lcb_sandbox(code, timeout):
         args=(code, timeout),
     )
     p.start()
-    
+
     # Wait for the process to complete with additional buffer time
-    p.join(
-        timeout=(timeout + 1) + 5
-    )
-    
-    try: 
+    p.join(timeout=(timeout + 1) + 5)
+
+    try:
         # Get the result from the queue
         res = result.get()
         return res
@@ -169,7 +167,7 @@ def lcb_sandbox(code, timeout):
 class LCBPythonInterpreter(CodeTool):
     """
     A tool for executing Python code in a sandboxed environment.
-    
+
     This tool provides a safe way to execute Python code with timeout protection
     and isolation from the main process, using the LiveCodeBench execution environment.
     """
@@ -185,22 +183,17 @@ class LCBPythonInterpreter(CodeTool):
     def forward(self, code: str, timeout: int = 12) -> CodeToolOutput:
         """
         Execute Python code using the LiveCodeBench sandbox environment.
-        
+
         Args:
             code (str): Python code to execute
             timeout (int): Maximum execution time in seconds, defaults to 12
-            
+
         Returns:
             CodeToolOutput: Contains execution results with stdout, stderr, and result fields
         """
         try:
             stdout, stderr, result = lcb_sandbox(code, timeout=timeout)
-            return CodeToolOutput(
-                name=self.name,
-                stdout=stdout,
-                stderr=stderr,
-                output=result
-            )
+            return CodeToolOutput(name=self.name, stdout=stdout, stderr=stderr, output=result)
         except Exception as e:
             return CodeToolOutput(
                 name=self.name,

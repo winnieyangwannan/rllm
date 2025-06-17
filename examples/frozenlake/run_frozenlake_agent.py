@@ -15,10 +15,10 @@ def load_frozenlake_data():
     if DatasetRegistry.dataset_exists("frozenlake", "test"):
         test_dataset = DatasetRegistry.load_dataset("frozenlake", "test")
         return test_dataset.get_data()
-    
+
     print("FrozenLake datasets not found. Preparing datasets...")
     train_dataset, test_dataset = prepare_frozenlake_data()
-    
+
     return test_dataset.get_data()
 
 

@@ -3,12 +3,14 @@ from rllm.agents.tool_agent import ToolAgent
 
 __all__ = ["MathAgent", "ToolAgent"]
 
+
 def safe_import(module_path, class_name):
     try:
         module = __import__(module_path, fromlist=[class_name])
         return getattr(module, class_name)
     except ImportError:
         return None
+
 
 # Define all agent imports
 AGENT_IMPORTS = [
