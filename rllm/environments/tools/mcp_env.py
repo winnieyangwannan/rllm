@@ -245,9 +245,11 @@ class MCPEnvironment(BaseEnv):
                     arguments = finish_action.get("function", {}).get("arguments", {})
                     if isinstance(arguments, str):
                         arguments = json.loads(arguments)
+
+                    if isinstance(arguments, dict):
                         llm_response = arguments.get("response", "")
                     else:
-                        llm_response = arguments
+                        llm_response = str(arguments)
                 else:
                     llm_response = str(action)
 
