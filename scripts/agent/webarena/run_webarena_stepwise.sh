@@ -57,7 +57,7 @@ python3 -m rllm.train.train_agent_ppo \
     algorithm.clip_advantages=False \
     trainer.critic_warmup=0 \
     trainer.logger=['console','wandb'] \
-    trainer.project_name='stepwise-agent' \
+    trainer.project_name='rllm-agent' \
     trainer.experiment_name='4b-webarena_stepwise' \
     trainer.val_before_train=False \
     trainer.n_gpus_per_node=2 \

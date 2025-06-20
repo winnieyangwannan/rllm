@@ -7,6 +7,7 @@ export VLLM_ALLOW_LONG_MAX_MODEL_LEN=1
 export VLLM_ENGINE_ITERATION_TIMEOUT_S=100000000000
 export CUDA_VISIBLE_DEVICES=0,1,2,3,4,5,6,7
 
+MINIWOB_URL="file://<PATH_TO_MINIWOB_PLUSPLUS_CLONED_REPO>/miniwob/html/miniwob/"
 # Find the directory where rllm package is located
 RLLM_DIR=$(python3 -c "import rllm; import os; print(os.path.dirname(os.path.dirname(rllm.__file__)))")
 

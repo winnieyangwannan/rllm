@@ -58,7 +58,7 @@ python3 -m rllm.train.train_agent_ppo \
     algorithm.clip_advantages=False \
     trainer.critic_warmup=0 \
     trainer.logger=['console','wandb'] \
-    trainer.project_name='stepwise-agent' \
+    trainer.project_name='rllm-agent' \
     trainer.experiment_name='4b-coding-stepwise-broadcast-8k-dynamic-mini-batch' \
     trainer.val_before_train=False \
     trainer.n_gpus_per_node=8 \

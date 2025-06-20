@@ -9,7 +9,7 @@ from rllm.data.dataset import DatasetRegistry
 from rllm.engine.async_agent_execution_engine import AsyncAgentExecutionEngine
 from rllm.environments.browsergym.browsergym import BrowserGymEnv
 from rllm.utils import compute_pass_at_k
-from prepare_miniwob_data import prepare_miniwob_data
+from .prepare_miniwob_data import prepare_miniwob_data
 
 
 def load_miniwob_data():
