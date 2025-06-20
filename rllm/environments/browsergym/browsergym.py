@@ -1,5 +1,6 @@
 from typing import Dict, Optional
 import multiprocessing as mp
+import multiprocessing as mp
 import gymnasium as gym
 
 from rllm.environments.base.base_env import BaseEnv
