@@ -3,9 +3,11 @@ site_description: A library for training LLM agents with reinforcement learning
 repo_url: https://github.com/agentica-project/rllm
 theme:
   name: material
+  logo: assets/agentica-logo.png
+  favicon: assets/agentica-logo.png
   palette:
-    primary: indigo
-    accent: indigo
+    primary: black
+    accent: black
   features:
     - navigation.instant
     - navigation.tracking
@@ -18,7 +20,9 @@ markdown_extensions:
   - pymdownx.highlight:
       anchor_linenums: true
   - pymdownx.inlinehilite
-  - pymdownx.snippets
+  - pymdownx.snippets:
+      base_path: ['.', '..']
+      check_paths: true
   - pymdownx.superfences
   - admonition
   - pymdownx.details
@@ -36,6 +40,16 @@ nav:
       - Agent and Environment: core-concepts/agent_env.md
       - AgentExecutionEngine for Trajectory Rollout: core-concepts/execution-engine.md
       - AgentTrainer for RL Training: core-concepts/training.md
+      - RL Algorithms for Agents: core-concepts/rl-algos.md
+  - Examples:
+      - Overview: examples/index.md
+      - DeepSWE Agent: examples/swe.md
+      - DeepScaleR: examples/deepscaler.md
+      - DeepCoder: examples/deepcoder.md
+      - Search Agent: examples/search.md
+      - FrozenLake Agent: examples/frozenlake.md
+      - WebAgent with BrowserGym: examples/web.md
+
   - API Reference:
       - Agents: api/agents.md
       - Environments: api/environments.md
