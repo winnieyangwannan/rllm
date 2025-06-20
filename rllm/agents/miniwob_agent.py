@@ -2,18 +2,19 @@ import base64
 import io
 import logging
 import re
-from typing import Any
+import collections
+from typing import List, Dict, Any, Tuple
 
 import numpy as np
 from browsergym.core.action.highlevel import HighLevelActionSet
 from browsergym.utils.obs import flatten_axtree_to_str, flatten_dom_to_str, prune_html
 from PIL import Image
 
-from rllm.agents.agent import BaseAgent, Step, Trajectory
 from rllm.agents.system_prompts import *
+from rllm.agents.agent import BaseAgent, Step, Trajectory
+
 
 logger = logging.getLogger(__name__)
-
 
 def image_to_jpg_base64_url(image: np.ndarray | Image.Image):
     """Convert a numpy array to a base64 encoded image url."""
@@ -30,12 +31,12 @@ def image_to_jpg_base64_url(image: np.ndarray | Image.Image):
     return f"data:image/jpeg;base64,{image_base64}"
 
 
-class WebAgent(BaseAgent):
-    def __init__(self):
-        self.chat_mode = False
-        self.use_html = False
-        self.use_axtree = True
-        self.use_screenshot = False
+class MiniWobAgent(BaseAgent):
+    def __init__(self, chat_mode=False, use_html=True, use_axtree=True, use_screenshot=False, use_accumulate_thinking=True, cot_prompt=False, use_full_conversation=True, use_reward_shaping=False):
+        self.chat_mode = chat_mode
+        self.use_html = use_html
+        self.use_axtree = use_axtree
+        self.use_screenshot = use_screenshot
 
         self.action_set = HighLevelActionSet(
             subsets=["chat", "tab", "nav", "bid", "infeas"],  # define a subset of the action space
@@ -45,7 +46,7 @@ class WebAgent(BaseAgent):
             demo_mode=False,  # add visual effects
         )
 
-        self.action_history = []  # all are in string
+        self.action_history = [] # all are in string
 
         # for interface compliance
         self._trajectory = Trajectory()
@@ -53,11 +54,12 @@ class WebAgent(BaseAgent):
         self.step = 0
         self.reset()
 
-        self.accumulate_thinking = False
-        self.cot_prompt = False
-        self.full_conversation = False
+        self.accumulate_thinking = use_accumulate_thinking
+        self.cot_prompt = cot_prompt
+        self.full_conversation = use_full_conversation
+        self.reward_shaping = use_reward_shaping
 
-    def update_from_env(self, observation: Any, reward: float, done: bool, info: dict, **kwargs):
+    def update_from_env(self, observation: Any, reward: float, done: bool, info: Dict, **kwargs):
         """
         Updates the agent's internal state after an environment step.
         Includes logic to check if the observation changed from the previous step.
@@ -69,7 +71,10 @@ class WebAgent(BaseAgent):
         # initial state
         if not self.messages:
             self.messages.append(
-                {"role": "system", "content": self._format_msgs_as_str(self.get_system_msgs(obs))},
+                {
+                    "role": "system", 
+                    "content": self._format_msgs_as_str(self.get_system_msgs(obs))
+                },
             )
 
         # Update the last step in the trajectory with the outcome (next_observation, reward, done, info)
@@ -82,29 +87,44 @@ class WebAgent(BaseAgent):
             prior_step.info = info
 
         # Add the user message for the *next* interaction turn
-        self.messages.append({"role": "user", "content": user_prompt_content})
+        self.messages.append({
+            "role": "user",
+            "content": user_prompt_content
+        })
 
         # Create a new step for the current state (with the observation that resulted from the last action)
         # This step's action, reward, etc., will be filled in by subsequent update_from_model and update_from_env calls
         if done:
             return
-
-        cur_step = Step(observation=observation, step=self.step)
+        
+        cur_step = Step(
+            observation=observation, 
+            step=self.step
+        )
         self._trajectory.steps.append(cur_step)
+        
+    def update_from_model(self, response: Any, **kwargs):
+        if isinstance(response, str):
+            content = response
+        else: # OpenAI response
+            try:
+                content = response.choices[0].message.content
+            except Exception as e:
+                logger.error(f"Failed to extract content from response: {response}. Error: {e}")
+                content = str(response)
 
-    def update_from_model(self, response: str, **kwargs):
-        content = response
+        thought = content
         if not self.accumulate_thinking:
-            _, sep, after = content.partition("</think>")
+            thought, sep, after = content.partition("</think>")
             if sep:
                 content = after
 
         assert self._trajectory.steps, "Trajectory should not be empty when update_from_model is called."
 
-        thought, action_str = self._parse_model_response(content)
+        action_str = self._parse_model_response(content)
 
         cur_step = self._trajectory.steps[-1]
-        cur_step.thought = thought
+        cur_step.thought = thought # only thought if we aren't accumulating_thinking and extract </think> otherwise full response
         cur_step.action = action_str
         cur_step.model_response = content
 
@@ -112,20 +132,23 @@ class WebAgent(BaseAgent):
 
         self.step += 1
 
-    @property
-    def chat_completions(self) -> list[dict[str, str]]:
-        return self.messages
+        action_history_str = action_str if action_str != content else "Response is missing ``` ```"
+        self.action_history.append(action_history_str)
 
     @property
-    def prompt(self) -> list[dict[str, str]]:
+    def chat_completions(self) -> List[Dict[str, str]]:
+        return self.messages
+    
+    @property
+    def prompt(self) -> List[Dict[str, str]]:
         if self.full_conversation:
             return self.messages
 
-        latest_msgs = [self.messages[0]]  # system message
+        latest_msgs = [self.messages[0]] # system message
         has_assistant_msg = False
         for i in range(len(self.messages) - 1, -1, -1):
             if self.messages[i].get("role") == "assistant":
-                latest_msgs += self.messages[i + 1 :]
+                latest_msgs += self.messages[i + 1:] 
                 has_assistant_msg = True
                 break
         if not has_assistant_msg:
@@ -139,6 +162,7 @@ class WebAgent(BaseAgent):
     def reset(self):
         self._trajectory = Trajectory()
         self.messages = []
+        self.action_history = []
         self.step = 0
 
     def get_current_state(self) -> Step:
@@ -146,29 +170,71 @@ class WebAgent(BaseAgent):
             raise ValueError("get_current_state called before the first observation was processed.")
         return self._trajectory.steps[-1]
 
+
     def get_system_msgs(self, obs):
         system_msgs = []
-        system_msgs.append({"type": "text", "text": self._get_system_prompt()})
+        system_msgs.append({
+            "type": "text",
+            "text": self._get_system_prompt()
+        })
 
         # Add goal information
-        system_msgs.append({"type": "text", "text": "\n # Goal (Below is the goal you want to accomplish)\n"})
-        system_msgs.extend(obs["goal_object"])
+        system_msgs.append({
+            "type": "text",
+            "text": "\n# Goal (Below is the goal you want to accomplish):\n\n"
+        })
+        system_msgs.extend(obs["goal_object"])  
         return system_msgs
 
     def get_user_msgs(self, user_obs):
         user_msgs = []
         # Add open tabs information
-        user_msgs.extend(self._format_open_tabs(user_obs["open_pages_urls"], user_obs["open_pages_titles"], user_obs["active_page_index"]))
+        user_msgs.extend(self._format_open_tabs(
+            user_obs["open_pages_urls"],
+            user_obs["open_pages_titles"],
+            user_obs["active_page_index"]
+        ))
 
         # Add page information based on settings
         if self.use_axtree:
-            user_msgs.append({"type": "text", "text": f"# Current page Accessibility Tree\n\n{user_obs['axtree_txt']}\n\n"})
+            user_msgs.append({
+                "type": "text",
+                "text": f"# Current page Accessibility Tree\n\n{user_obs['axtree_txt']}\n\n"
+            })
 
         if self.use_html:
-            user_msgs.append({"type": "text", "text": f"# Current page DOM\n\n{user_obs['pruned_html']}\n\n"})
+            user_msgs.append({
+                "type": "text",
+                "text": f"# Current page DOM\n\n{user_obs['pruned_html']}\n\n"
+            })
 
         if self.use_screenshot:
             user_msgs.extend(self._format_screenshot(user_obs["screenshot"]))
+
+        if self.action_history:
+            user_msgs.append(
+                {
+                    "type": "text",
+                    "text": f"""\
+# History of past actions
+""",
+                }
+            )
+            user_msgs.extend(
+                [
+                    {
+                        "type": "text",
+                        "text": f"""\
+Action {i}:
+{action}
+""" if i != len(self.action_history) - 1 else f"""\
+Last Action:
+{action}
+""",
+                    } 
+                    for i, action in enumerate(self.action_history)
+                ]
+            )
 
         if user_obs["last_action_error"]:
             user_msgs.append(
@@ -184,17 +250,19 @@ class WebAgent(BaseAgent):
             )
 
         # Add action space description
-        user_msgs.append({"type": "text", "text": self._get_action_space_description()})
+        user_msgs.append({
+            "type": "text",
+            "text": self._get_action_space_description()
+        })
 
         # Add next action prompt
-        user_msgs.append(
-            {
-                "type": "text",
-                "text": "# Next action\nYou will now think step by step and produce your next best action. Reflect on your past actions, any resulting error message, and the current state of the page before deciding on your next action. MAKE SURE TO WRAP YOU FINAL ACTION in ```action``` YOU MUST PUT IN THIS EXACT STYLE FOR THE ACTION TO BE VALID. The content must be in the same format as shown before in the Action Space. Only 1 action is needed.",
-            }
-        )
+        user_msgs.append({
+            "type": "text",
+            "text": "# Next action\nThe task has not been completed yet. You will now think step by step and produce your next best action. Reflect on your past actions, any resulting error message, and the current state of the page before deciding on your next action. The content must be in the same format as shown before in the Action Space. You can plan ahead but only 1 immediate action is needed."
+        })
 
         return user_msgs
+    
 
     def _preproc_obs(self, obs: dict) -> dict:
         return {
@@ -210,27 +278,32 @@ class WebAgent(BaseAgent):
             "pruned_html": prune_html(flatten_dom_to_str(obs["dom_object"])),
         }
 
+
     def _get_system_prompt(self):
-        return SYSTEM_WEB_PROMPT
+        return SYSTEM_MINIWOB_PROMPT_WITHOUT_THOUGHT
 
     def _format_open_tabs(self, urls: list, titles: list, active_index: int) -> list:
         messages = [{"type": "text", "text": "# Currently open tabs (This is the current active tabs)\n"}]
 
-        for idx, (url, title) in enumerate(zip(urls, titles, strict=False)):
+        for idx, (url, title) in enumerate(zip(urls, titles)):
             active_marker = " (active tab)" if idx == active_index else ""
-            messages.append({"type": "text", "text": f"Tab {idx}{active_marker}\n  Title: {title}\n  URL: {url}\n"})
+            messages.append({
+                "type": "text",
+                "text": f"Tab {idx}{active_marker}\n  Title: {title}\n  URL: {url}\n"
+            })
         return messages
+
 
     def _format_screenshot(self, screenshot: np.ndarray):
         messages = []
         messages.append(
-            {
-                "type": "text",
-                "text": """\
+                {
+                    "type": "text",
+                    "text": """\
 # Current page Screenshot
 """,
-            }
-        )
+                }
+            )
         messages.append(
             {
                 "type": "image_url",
@@ -242,10 +315,11 @@ class WebAgent(BaseAgent):
         )
         return messages
 
+
     def _get_action_space_description(self):
         if self.cot_prompt:
             return f"""\
-# Action Space (This is the list of valid actions you are allowed to output after your chain-of-thought reasoning, YOU MUST OUTPUT EXACTLY IN THIS FORMAT FOR ACTION TO BE VALID)
+# Action Space (This is the list of valid actions you are allowed to output after your chain-of-thought reasoning,
 {self.action_set.describe(with_long_description=False, with_examples=False)}
 Here are examples of actions with chain-of-thought reasoning:
 Thought: I now need to click on the Submit button to send the form. I will use the click action on the button, which has bid 12.
@@ -255,8 +329,11 @@ Action: ```send_msg_to_user("The price for a 15\\" laptop is 1499 USD.")```
 """
         else:
             return f"""\
-# Action Space (This is the list of valid actions you are allowed to output, YOU MUST OUTPUT EXACTLY IN THIS FORMAT FOR ACTION TO BE VALID)
+# Action Space (This is the list of valid actions you are allowed to output,
 {self.action_set.describe(with_long_description=False, with_examples=False)}
+Here are examples of actions that can be returned:
+Action: ```click("12")```
+Action: ```send_msg_to_user("The price for a 15\\" laptop is 1499 USD.")```
 """
 
     def _format_msgs_as_str(self, msgs):
@@ -270,19 +347,24 @@ Action: ```send_msg_to_user("The price for a 15\\" laptop is 1499 USD.")```
                     if isinstance(message["image_url"], dict):
                         image_url = image_url["url"]
                     if image_url.startswith("data:image"):
-                        prompt_text_strings.append("image_url: " + image_url[:30] + "... (truncated)")
+                        prompt_text_strings.append(
+                            "image_url: " + image_url[:30] + "... (truncated)"
+                        )
                     else:
                         prompt_text_strings.append("image_url: " + image_url)
                 case _:
-                    raise ValueError(f"Unknown message type {repr(message['type'])} in the task goal.")
+                    raise ValueError(
+                        f"Unknown message type {repr(message['type'])} in the task goal."
+                    )
         return " ".join(prompt_text_strings)
+
 
     def _parse_model_response(self, response):
         """
         Extracts the last content enclosed within triple backticks (``` ```) from the response.
 
-        If the response contains multiple segments wrapped in triple backticks,
-        this function returns the content of the **last** occurrence.
+        If the response contains multiple segments wrapped in triple backticks, 
+        this function returns the content of the **last** occurrence. 
         If no such formatting is found, it returns the entire response unmodified.
 
         Args:
@@ -292,21 +374,41 @@ Action: ```send_msg_to_user("The price for a 15\\" laptop is 1499 USD.")```
             Tuple[str, str]: A tuple containing:
                 - The extracted action (content from the last occurrence of triple backticks
                   or the full response if no match is found)
-                - The processed response
         """
-        matches = re.findall(r"```(.*?)```", response, re.DOTALL)  # Find all occurrences
+        matches = re.findall(r'```(.*?)```', response, re.DOTALL)  # Find all occurrences
         if matches:
-            return matches[-1], response
-        return response, response
+            return matches[-1]
+        return response 
 
     def compute_training_reward(self, trajectory: Trajectory) -> float:
         if not trajectory:
             return 0
 
         reward = trajectory.steps[-1].reward
-        reward_penalty = 0
-        # for step in trajectory.steps:
-        #     if not self.validate_step(step):
-        #         reward_penalty = -0.5
-        #         break
+        if not self.reward_shaping:
+            return reward
+        
+        reward_penalty = 0    
+        for step in trajectory.steps:
+            if not self.validate_step(step):
+                reward_penalty = -0.5
+                break
         return reward + reward_penalty
+
+    def validate_step(self, trajectory_step):
+        """
+        Validates if the trajectory_step(dict) is valid or malformated.
+        """
+        thought = trajectory_step.thought
+        action = trajectory_step.action
+
+        # Thought and action are the same, meaning the parser didn't work
+        if thought == action:
+            return False
+
+        # Response has action that results in error
+        if trajectory_step["next_observation"]["last_action_error"]:
+            return False
+        
+        return True
+

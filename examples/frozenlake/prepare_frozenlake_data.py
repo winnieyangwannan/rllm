@@ -3,7 +3,7 @@ import numpy as np
 from rllm.data.dataset import DatasetRegistry
 
 
-def prepare_frozenlake_data(train_size=3000, test_size=100):
+def prepare_frozenlake_data(train_size=30000, test_size=100):
     """
     Prepare and register FrozenLake datasets for training and testing.
 

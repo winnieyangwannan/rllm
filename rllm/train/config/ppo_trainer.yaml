@@ -261,7 +261,7 @@ env:
   env_args: {}
 
 agent:
-  name: webagent
+  name: miniwobagent
   max_steps: 20
   async_engine: True
   trajectory_timeout: null

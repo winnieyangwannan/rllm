@@ -16,8 +16,8 @@ python3 -m rllm.train.train_agent_ppo \
     data.val_files=${RLLM_DIR}/data/rllm-miniwob/test.parquet \
     data.train_batch_size=16 \
     data.val_batch_size=128 \
-    data.max_prompt_length=16384 \
-    data.max_response_length=2048 \
+    data.max_prompt_length=10240 \
+    data.max_response_length=8192 \
     actor_rollout_ref.model.path=Qwen/Qwen3-4B \
     actor_rollout_ref.hybrid_engine=True \
     actor_rollout_ref.actor.optim.lr=1e-6 \
@@ -48,14 +48,13 @@ python3 -m rllm.train.train_agent_ppo \
     actor_rollout_ref.ref.log_prob_micro_batch_size_per_gpu=1 \
     actor_rollout_ref.rollout.log_prob_micro_batch_size_per_gpu=1 \
     actor_rollout_ref.actor.entropy_coeff=0 \
-    actor_rollout_ref.actor.ppo_epochs=1 \
     algorithm.kl_ctrl.kl_coef=0.001 \
     algorithm.mask_truncated_samples=False \
     algorithm.clip_advantages=False \
     trainer.critic_warmup=0 \
     trainer.logger=['console','wandb'] \
     trainer.project_name='rllm-agent' \
-    trainer.experiment_name='4b-miniwob_agent_stepwise' \
+    trainer.experiment_name='4b-miniwob_agent_trajectory' \
     trainer.val_before_train=True \
     trainer.n_gpus_per_node=8 \
     trainer.nnodes=1 \
@@ -70,12 +69,11 @@ python3 -m rllm.train.train_agent_ppo \
     agent.name=miniwobagent \
     agent.max_steps=10 \
     agent.async_engine=True \
-    agent.use_stepwise_advantage=True \
-    agent.normalize_step_advantage=True \
-    agent.stepwise_advantage_mode="broadcast" \
+    agent.use_stepwise_advantage=False \
     agent.trajectory_timeout=600 \
     +agent.engine_args.disable_thinking=False \
     +agent.engine_args.retry_limit=5 \
-    +agent.agent_args.use_accumulate_thinking=False \
-    +agent.agent_args.use_full_conversation=False \
+    +agent.agent_args.use_accumulate_thinking=True \
+    +agent.agent_args.use_full_conversation=True \
     trainer.total_epochs=5
+    

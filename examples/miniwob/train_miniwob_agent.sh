@@ -5,19 +5,26 @@ export PYTORCH_CUDA_ALLOC_CONF="expandable_segments:False"
 export VLLM_USE_V1=1
 export VLLM_ALLOW_LONG_MAX_MODEL_LEN=1
 export VLLM_ENGINE_ITERATION_TIMEOUT_S=100000000000
-export CUDA_VISIBLE_DEVICES=0,1,2,3
+
+# Tell Chromium to use /dev/null for user data dir (forces incognito)
+export CHROME_USER_DATA_DIR=/dev/null
+# Disable crash reporting (no filesystem writes)
+export CHROME_HEADLESS=1
+export CHROME_DISABLE_GPU=1
+export PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD=1 
+
 # Find the directory where rllm package is located
 RLLM_DIR=$(python3 -c "import rllm; import os; print(os.path.dirname(os.path.dirname(rllm.__file__)))")
 
-python3 -m rllm.train.train_agent_ppo \
-    algorithm.adv_estimator=loop \
-    data.train_files=${RLLM_DIR}/data/rllm-frozenlake/train.parquet \
-    data.val_files=${RLLM_DIR}/data/rllm-frozenlake/test.parquet \
-    data.train_batch_size=32 \
+python3 -m examples.miniwob.train_miniwob_agent \
+    algorithm.adv_estimator=grpo \
+    data.train_files=/home/colin/data/rllm-miniwob/train.parquet \
+    data.val_files=/home/colin/data/rllm-miniwob/test.parquet \
+    data.train_batch_size=8 \
     data.val_batch_size=128 \
-    data.max_prompt_length=4096 \
-    data.max_response_length=10240 \
-    actor_rollout_ref.model.path=Qwen/Qwen3-4B \
+    data.max_prompt_length=3072 \
+    data.max_response_length=16384 \
+    actor_rollout_ref.model.path=Qwen/Qwen3-1.7B \
     actor_rollout_ref.hybrid_engine=True \
     actor_rollout_ref.actor.optim.lr=1e-6 \
     actor_rollout_ref.model.use_remove_padding=True \
@@ -27,10 +34,9 @@ python3 -m rllm.train.train_agent_ppo \
     actor_rollout_ref.actor.ppo_max_token_len_per_gpu=24000 \
     actor_rollout_ref.actor.use_kl_loss=False \
     actor_rollout_ref.actor.clip_ratio_high=0.28 \
-    actor_rollout_ref.actor.kl_loss_coef=0.001 \
+    actor_rollout_ref.actor.kl_loss_coef=0.003 \
     actor_rollout_ref.actor.kl_loss_type=low_var_kl \
     actor_rollout_ref.actor.ulysses_sequence_parallel_size=1 \
-    actor_rollout_ref.actor.grad_norm_threshold=10 \
     actor_rollout_ref.model.enable_gradient_checkpointing=True \
     actor_rollout_ref.actor.fsdp_config.param_offload=True \
     actor_rollout_ref.actor.fsdp_config.optimizer_offload=True \
@@ -40,35 +46,40 @@ python3 -m rllm.train.train_agent_ppo \
     actor_rollout_ref.rollout.chat_scheduler=verl.schedulers.completions_scheduler.CompletionsScheduler \
     actor_rollout_ref.rollout.enforce_eager=False \
     actor_rollout_ref.rollout.temperature=0.7 \
-    actor_rollout_ref.rollout.gpu_memory_utilization=0.6 \
-    actor_rollout_ref.rollout.n=8 \
-    actor_rollout_ref.rollout.val_kwargs.n=2 \
-    actor_rollout_ref.rollout.val_kwargs.temperature=0.65 \
-    actor_rollout_ref.rollout.val_kwargs.top_p=0.8 \
-    actor_rollout_ref.rollout.val_kwargs.top_k=20 \
+    actor_rollout_ref.rollout.gpu_memory_utilization=0.65 \
+    actor_rollout_ref.rollout.n=16 \
+    actor_rollout_ref.rollout.val_kwargs.n=4 \
+    actor_rollout_ref.rollout.val_kwargs.temperature=0.7 \
     actor_rollout_ref.ref.fsdp_config.param_offload=True \
     actor_rollout_ref.ref.log_prob_micro_batch_size_per_gpu=1 \
     actor_rollout_ref.rollout.log_prob_micro_batch_size_per_gpu=1 \
-    actor_rollout_ref.actor.entropy_coeff=0 \
+    actor_rollout_ref.actor.entropy_coeff=0.002 \
+    actor_rollout_ref.actor.ppo_epochs=1 \
     algorithm.kl_ctrl.kl_coef=0.001 \
     algorithm.mask_truncated_samples=False \
     algorithm.clip_advantages=False \
     trainer.critic_warmup=0 \
     trainer.logger=['console','wandb'] \
-    trainer.project_name='stepwise-agent' \
-    trainer.experiment_name='4b-loop-drgrpo-frozenlake_agent_baseline' \
+    trainer.project_name='rllm-agent' \
+    trainer.experiment_name='1.7b-miniwob_agent' \
     trainer.val_before_train=True \
-    trainer.n_gpus_per_node=4 \
+    trainer.n_gpus_per_node=8 \
     trainer.nnodes=1 \
-    trainer.save_freq=400 \
-    trainer.test_freq=5 \
+    trainer.save_freq=20 \
+    trainer.test_freq=10 \
     trainer.default_hdfs_dir=null \
     trainer.rejection_sample=True \
-    trainer.rejection_sample_multiplier=2 \
-    env.name=frozenlake \
-    agent.name=frozenlakeagent \
-    agent.max_steps=10 \
+    trainer.rejection_sample_multiplier=1 \
+    env.name=browsergym \
+    +env.env_args.subtask=miniwob \
+    +env.env_args.miniwob_url="file:///home/colin/code/miniwob-plusplus/miniwob/html/miniwob/" \
+    agent.name=miniwobagent \
+    agent.max_steps=15 \
     agent.async_engine=True \
-    agent.step_advantage_broadcast=False \
+    agent.use_stepwise_advantage=False \
+    agent.trajectory_timeout=600 \
     +agent.engine_args.disable_thinking=False \
-    trainer.total_epochs=100
+    +agent.engine_args.retry_limit=5 \
+    +agent.agent_args.use_accumulate_thinking=True \
+    +agent.agent_args.use_full_conversation=True \
+    trainer.total_epochs=20
