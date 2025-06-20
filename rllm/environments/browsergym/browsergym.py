@@ -1,34 +1,39 @@
-from typing import Dict, Optional
 import multiprocessing as mp
-import multiprocessing as mp
+
 import gymnasium as gym
 
 from rllm.environments.base.base_env import BaseEnv
 
+
 class BrowserGymEnv(BaseEnv):
     def __init__(self, env_id="browsergym/openended", task=None, **env_kwargs):
         self.parent_conn, self.child_conn = mp.Pipe()
-        self.process = mp.Process(
-            target=self._worker, args=(self.child_conn, env_id, task, env_kwargs)
-        )
-        self.timeout = None # in seconds
+        self.process = mp.Process(target=self._worker, args=(self.child_conn, env_id, task, env_kwargs))
+        self.timeout = None  # in seconds
         self.process.start()
 
     def _worker(self, conn, env_id, task, env_kwargs):
-        env = gym.make(env_id, task_kwargs=task, **env_kwargs,
-                       browser_args=[
-                            "--no-sandbox",
-                            "--disable-dev-shm-usage",
-                            "--disable-application-cache",
-                            "--disk-cache-size=1",
-                            "--media-cache-size=1",
-                            "--disable-cache",
-                            "--disable-gpu",
-                            "--disable-software-rasterizer",
-                            "--incognito",
-                        ],
-                        user_data_dir=None,  # Forces incognito
-                    ) if task else gym.make(env_id, **env_kwargs)
+        env = (
+            gym.make(
+                env_id,
+                task_kwargs=task,
+                **env_kwargs,
+                browser_args=[
+                    "--no-sandbox",
+                    "--disable-dev-shm-usage",
+                    "--disable-application-cache",
+                    "--disk-cache-size=1",
+                    "--media-cache-size=1",
+                    "--disable-cache",
+                    "--disable-gpu",
+                    "--disable-software-rasterizer",
+                    "--incognito",
+                ],
+                user_data_dir=None,  # Forces incognito
+            )
+            if task
+            else gym.make(env_id, **env_kwargs)
+        )
         try:
             while True:
                 cmd, data = conn.recv()
@@ -70,8 +75,8 @@ class BrowserGymEnv(BaseEnv):
 
     @staticmethod
     def from_json(extra_info) -> "BrowserGymEnv":
-        headless = extra_info.get('headless', True)
-        timeout_ms = extra_info.get('timeout', 5000)
+        headless = extra_info.get("headless", True)
+        timeout_ms = extra_info.get("timeout", 5000)
         return BrowserGymEnv(env_id=extra_info["env_id"], headless=headless, timeout=timeout_ms)
 
     @staticmethod

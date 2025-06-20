@@ -1,13 +1,13 @@
 import argparse
 import os
+import random
 
 import browsergym.miniwob
 import gymnasium as gym
 import pandas as pd
 
-from verl.utils.hdfs_io import copy, makedirs
 import rllm
-import random
+from verl.utils.hdfs_io import copy, makedirs
 
 if __name__ == "__main__":
     import importlib
@@ -21,7 +21,7 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("--local_dir", default=os.path.join(RLLM_DIR, "data/rllm-miniwob"))
     parser.add_argument("--hdfs_dir", default=None)
-    parser.add_argument('--train_ratio', type=float, default=0.768, help="Ratio of data to use for training (default: 76.8%)")
+    parser.add_argument("--train_ratio", type=float, default=0.768, help="Ratio of data to use for training (default: 76.8%)")
     args = parser.parse_args()
 
     local_dir = args.local_dir

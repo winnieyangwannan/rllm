@@ -1,19 +1,22 @@
-import gymnasium as gym
-import random
-from rllm.data.dataset import DatasetRegistry
 import importlib
+import random
+
 import browsergym.miniwob
+import gymnasium as gym
+
+from rllm.data.dataset import DatasetRegistry
+
 importlib.reload(browsergym.miniwob)
 
 
 def prepare_miniwob_data(train_size=96, test_size=29):
     """
     Prepare and register MiniWoB datasets for training and testing.
-    
+
     Args:
         train_size (int): Number of training examples to generate
         test_size (int): Number of test examples to generate
-    
+
     Returns:
         tuple: (train_dataset, test_dataset)
     """
@@ -39,7 +42,7 @@ def prepare_miniwob_data(train_size=96, test_size=29):
     # Register the datasets with the DatasetRegistry
     train_dataset = DatasetRegistry.register_dataset("miniwob", train_data, "train")
     test_dataset = DatasetRegistry.register_dataset("miniwob", test_data, "test")
-    
+
     return train_dataset, test_dataset
 
 
@@ -48,4 +51,4 @@ if __name__ == "__main__":
     print(f"Train dataset: {len(train_dataset.get_data())} examples")
     print(f"Test dataset: {len(test_dataset.get_data())} examples")
     print("Sample train example:", train_dataset.get_data()[0])
-    print("Sample test example:", test_dataset.get_data()[0]) 
+    print("Sample test example:", test_dataset.get_data()[0])
