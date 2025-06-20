@@ -236,7 +236,6 @@ class AgentPPOTrainer(RayPPOTrainer):
 
                             # Filter batch to keep only valid samples
                             batch = batch[valid_mask]
-                            batch = dataprotoitem_to_dataproto(batch)
 
                             if self.config.agent.use_stepwise_advantage and self.config.agent.stepwise_advantage_mode == "broadcast":
                                 # batch now only contains steps with valid uids
@@ -265,15 +264,13 @@ class AgentPPOTrainer(RayPPOTrainer):
 
                                 size_mask = torch.zeros(last_step_batch.batch["input_ids"].shape[0], dtype=torch.bool)
                                 size_mask[:max_batch_size] = True
-                                last_step_batch = last_step_batch[size_mask]
-                                last_step_batch = dataprotoitem_to_dataproto(last_step_batch)  # filtered last steps
+                                last_step_batch = last_step_batch[size_mask] # filtered last steps
 
                                 # now we go through all the non_last_step_batch and keep everything that has same idxs that exists in the filtered last steps
                                 valid_last_step_idxs = last_step_batch.non_tensor_batch["idxs"]
                                 non_last_step_idxs = non_last_step_batch.non_tensor_batch["idxs"]
                                 non_last_step_mask = np.isin(non_last_step_idxs, valid_last_step_idxs)
                                 non_last_step_batch = non_last_step_batch[non_last_step_mask]
-                                non_last_step_batch = dataprotoitem_to_dataproto(non_last_step_batch)
 
                                 # concatenate then pad
                                 batch = DataProto.concat([last_step_batch, non_last_step_batch])
@@ -289,7 +286,6 @@ class AgentPPOTrainer(RayPPOTrainer):
                                 size_mask = torch.zeros(batch.batch["input_ids"].shape[0], dtype=torch.bool)
                                 size_mask[:max_batch_size] = True
                                 batch = batch[size_mask]
-                                batch = dataprotoitem_to_dataproto(batch)
 
                         # recompute old_log_probs
                         with _timer("old_log_prob", timing_raw):
