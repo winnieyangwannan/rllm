@@ -1,4 +1,5 @@
 from rllm.environments.base.multi_turn_env import MultiTurnEnvironment
+
 # from rllm.rewards.reward_fn import code_reward_fn
 
 
@@ -16,7 +17,7 @@ class CompetitionCodingEnv(MultiTurnEnvironment):
             max_turns: Maximum number of turns before terminating the interaction
         """
         super().__init__(task=task, max_turns=max_turns, **kwargs)
-        self.reward_fn = code_reward_fn
+        self.reward_fn = None
         self.prev_reward = None
         self.reward_bonus_coeff = reward_bonus_coeff
 

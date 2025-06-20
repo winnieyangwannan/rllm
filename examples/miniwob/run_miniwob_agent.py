@@ -1,7 +1,6 @@
-import asyncio
 import argparse
+import asyncio
 
-import numpy as np
 from transformers import AutoTokenizer
 
 from rllm.agents.miniwob_agent import MiniWobAgent
@@ -9,6 +8,7 @@ from rllm.data.dataset import DatasetRegistry
 from rllm.engine.async_agent_execution_engine import AsyncAgentExecutionEngine
 from rllm.environments.browsergym.browsergym import BrowserGymEnv
 from rllm.utils import compute_pass_at_k
+
 from .prepare_miniwob_data import prepare_miniwob_data
 
 
@@ -16,11 +16,12 @@ def load_miniwob_data():
     if DatasetRegistry.dataset_exists("miniwob", "test"):
         test_dataset = DatasetRegistry.load_dataset("miniwob", "test")
         return test_dataset.get_data()
-    
+
     print("MiniWoB datasets not found. Preparing datasets...")
     train_dataset, test_dataset = prepare_miniwob_data()
-    
+
     return test_dataset.get_data()
+
 
 if __name__ == "__main__":
     import os
@@ -81,7 +82,7 @@ if __name__ == "__main__":
             max_prompt_length=16384,
             n_parallel_agents=n_parallel_agents,
             disable_thinking=False,
-            enforce_max_prompt_length=True
+            enforce_max_prompt_length=True,
         )
 
     tasks = load_miniwob_data()
