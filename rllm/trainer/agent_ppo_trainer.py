@@ -223,13 +223,19 @@ class AgentPPOTrainer(RayPPOTrainer):
                         metrics["batch/solve_partial"] = len(unique_uids) - solve_none - solve_all
 
                         if self.config.trainer.rejection_sample:
+                            # log the actual complete training rewards before rejection sampling
+                            batch.batch["token_level_rewards"] = batch.batch["token_level_scores"] # for metrics calculation
+                            full_sequence_score = batch.batch["token_level_scores"].sum(-1)
+                            metrics["critic/full-score/mean"] = torch.mean(full_sequence_score).detach().item()
+                            metrics["critic/full-score/max"] = torch.max(full_sequence_score).detach().item()
+                            metrics["critic/full-score/min"] = torch.min(full_sequence_score).detach().item()
+
                             # If no valid samples remain, skip this batch and get a new one
                             if not valid_mask.any():
                                 continue
 
                             # Filter batch to keep only valid samples
                             batch = batch[valid_mask]
-                            batch = dataprotoitem_to_dataproto(batch)
 
                             if self.config.agent.use_stepwise_advantage and self.config.agent.stepwise_advantage_mode == "broadcast":
                                 # batch now only contains steps with valid uids
@@ -258,15 +264,13 @@ class AgentPPOTrainer(RayPPOTrainer):
 
                                 size_mask = torch.zeros(last_step_batch.batch["input_ids"].shape[0], dtype=torch.bool)
                                 size_mask[:max_batch_size] = True
-                                last_step_batch = last_step_batch[size_mask]
-                                last_step_batch = dataprotoitem_to_dataproto(last_step_batch)  # filtered last steps
+                                last_step_batch = last_step_batch[size_mask] # filtered last steps
 
                                 # now we go through all the non_last_step_batch and keep everything that has same idxs that exists in the filtered last steps
                                 valid_last_step_idxs = last_step_batch.non_tensor_batch["idxs"]
                                 non_last_step_idxs = non_last_step_batch.non_tensor_batch["idxs"]
                                 non_last_step_mask = np.isin(non_last_step_idxs, valid_last_step_idxs)
                                 non_last_step_batch = non_last_step_batch[non_last_step_mask]
-                                non_last_step_batch = dataprotoitem_to_dataproto(non_last_step_batch)
 
                                 # concatenate then pad
                                 batch = DataProto.concat([last_step_batch, non_last_step_batch])
@@ -282,7 +286,6 @@ class AgentPPOTrainer(RayPPOTrainer):
                                 size_mask = torch.zeros(batch.batch["input_ids"].shape[0], dtype=torch.bool)
                                 size_mask[:max_batch_size] = True
                                 batch = batch[size_mask]
-                                batch = dataprotoitem_to_dataproto(batch)
 
                         # recompute old_log_probs
                         with _timer("old_log_prob", timing_raw):
@@ -447,6 +450,7 @@ class AgentPPOTrainer(RayPPOTrainer):
         # to group for pass@k
         uid_tensor = np.concatenate(uid_lst, axis=0)
         data_source_uid_pass_rates = {}  # data source to {uid: pass or not}
+        data_source_uid_env_pass_rates = {} # data source to {uid: pass or not}
 
         for i in range(reward_tensor.shape[0]):
             data_source = data_sources[i]
@@ -462,12 +466,19 @@ class AgentPPOTrainer(RayPPOTrainer):
             # pass@k
             if data_source not in data_source_uid_pass_rates:
                 data_source_uid_pass_rates[data_source] = {}
+            if data_source not in data_source_uid_env_pass_rates:
+                data_source_uid_env_pass_rates[data_source] = {}
 
             uid = uid_tensor[i]
             if uid not in data_source_uid_pass_rates[data_source]:
                 data_source_uid_pass_rates[data_source][uid] = 0  # default to not pass
             # take highest score
             data_source_uid_pass_rates[data_source][uid] = max(data_source_uid_pass_rates[data_source][uid], reward_tensor[i].item())
+
+            if uid not in data_source_uid_env_pass_rates[data_source]:
+                data_source_uid_env_pass_rates[data_source][uid] = 0 # default to not pass
+            # take highest score
+            data_source_uid_env_pass_rates[data_source][uid] = max(data_source_uid_env_pass_rates[data_source][uid], reward_tensor[i].item())
 
         metric_dict = {}
         for data_source, rewards in data_source_reward.items():
@@ -484,6 +495,12 @@ class AgentPPOTrainer(RayPPOTrainer):
             for uid, pass_score in pass_rates.items():
                 pass_k_lst.append(pass_score >= 1)  # assuming 1 means passed
             metric_dict[f"val/test_score/pass@k/{data_source}"] = np.mean(pass_k_lst)
+
+        for data_source, pass_rates in data_source_uid_env_pass_rates.items():
+            pass_k_lst = []
+            for uid, pass_score in pass_rates.items():
+                pass_k_lst.append(pass_score >= 1) # assuming 1 means passed
+            metric_dict[f"val/env_score/pass@k/{data_source}"] = np.mean(pass_k_lst)
 
         return metric_dict
 

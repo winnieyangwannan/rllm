@@ -41,6 +41,11 @@ class BrowserGymCloud(BaseEnv):
         slow_mo=1000,
         url="ws://localhost:9999/send_and_wait",
     ):
+        if client is None:
+            client = CloudClient(
+                url=url,
+                max_concurrency=10,
+            )
         self.env = None
         self.client = client
         self.env_id = env_id

@@ -77,8 +77,8 @@ class Node:
     node_id: int
     role: str
     name: str = None
-    value: Any = None
-    properties: list[str | dict[str, Any]] = field(default_factory=list)
+    value: any = None
+    properties: list[str | dict[str, any]] = field(default_factory=list)
     parent: Optional["Node"] = None
     children: list["Node"] = field(default_factory=list)
     bid: int | None = None
@@ -634,7 +634,7 @@ class WebArenaAgent(BaseAgent):
         self.step = 0
         self.reset()
 
-    def update_from_env(self, observation: Any, reward: float, done: bool, info: dict, **kwargs):
+    def update_from_env(self, observation: any, reward: float, done: bool, info: dict, **kwargs):
         """
         Updates the agent's internal state after an environment step.
         Includes logic to check if the observation changed from the previous step.

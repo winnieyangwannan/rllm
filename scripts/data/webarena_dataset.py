@@ -7,6 +7,8 @@ import pandas as pd
 
 # import browsergym.miniwob
 from verl.utils.hdfs_io import copy, makedirs
+import rllm
+import random
 
 if __name__ == "__main__":
     import importlib
@@ -16,8 +18,9 @@ if __name__ == "__main__":
 
     importlib.reload(browsergym.async_webarena)
 
+    RLLM_DIR = os.path.dirname(os.path.dirname(os.path.abspath(rllm.__file__)))
     parser = argparse.ArgumentParser()
-    parser.add_argument("--local_dir", default="~/data/rllm-webarena")
+    parser.add_argument("--local_dir", default=os.path.join(RLLM_DIR, "data/rllm-miniwob"))
     parser.add_argument("--hdfs_dir", default=None)
     parser.add_argument("--train_ratio", type=float, default=0.8, help="Ratio of data to use for training (default: 80%)")
     args = parser.parse_args()

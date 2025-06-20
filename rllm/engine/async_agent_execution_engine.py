@@ -244,7 +244,7 @@ class AsyncAgentExecutionEngine(AgentExecutionEngine):
         # Note, this should never happen!
         if prompt_token_len > self.max_prompt_length:
             agent.reset()
-            raise Exception(f"Trajectory {idx}: initial prompt length already exceeded max_prompt_length, retrying")
+            raise Exception(f"Trajectory {idx}: initial prompt length {prompt_token_len} already exceeded max_prompt_length {self.max_prompt_length}, retrying")
 
         for step_idx in range(self.max_steps):
             # Get action from agent
@@ -284,7 +284,23 @@ class AsyncAgentExecutionEngine(AgentExecutionEngine):
             action = cur_state.action
             # Take step in environment using the executor
             start_time = time.time()
-            next_observation, reward, done, info = await loop.run_in_executor(self.executor, env.step, action)
+
+            try:
+                next_observation, reward, done, info = await asyncio.wait_for(
+                    loop.run_in_executor(self.executor, env.step, action),
+                    timeout=(self.trajectory_timeout - total_time)
+                )
+            except asyncio.TimeoutError:
+                termination_reason = "ENV_TIMEOUT"
+                if step_idx == 0:
+                    colorful_print(f"Warning: Trajectory {idx} completed due to: {termination_reason} before able to perform 1 complete action. This might cause unexpected behavior. Consider increasing trajectory timeout limit.\n", "red")
+                reward = 0
+
+                cur_step = agent.get_current_state()
+                done = True
+                cur_step.done = done
+                break
+
             total_time += time.time() - start_time
             info["max_steps"] = self.max_steps
             # Update agent internal state.
@@ -298,8 +314,24 @@ class AsyncAgentExecutionEngine(AgentExecutionEngine):
             chat_completions_messages = agent.chat_completions
             assistant_message, env_messages = get_recent_assistant_user_messages(chat_completions_messages)
 
-            assistant_msg_tokens, assistant_msg_masks = convert_messages_to_tokens_and_masks([assistant_message], tokenizer=self.tokenizer, parser=self.chat_template_parser, contains_first_msg=False, contains_generation_msg=False)
-            env_msg_tokens, env_msg_masks = convert_messages_to_tokens_and_masks(env_messages, tokenizer=self.tokenizer, parser=self.chat_template_parser, contains_first_msg=False, contains_generation_msg=True)
+            # Check and convert to tokens if necessary
+            assert assistant_message is not None or mode != "Token", "Assistant messages is none when accumulating token trajectories which should be conversations. This should not happen."
+            assert env_messages is not None or mode != "Token", "Environment messages is none when accumulating token trajectories which should be conversations. This should not happen."
+            assistant_msg_tokens, assistant_msg_masks = [], []
+            env_msg_tokens, env_msg_masks = [], []
+            if assistant_message:
+                assistant_msg_tokens, assistant_msg_masks = convert_messages_to_tokens_and_masks([assistant_message],
+                                                                                                tokenizer= self.tokenizer,
+                                                                                                parser=self.chat_template_parser,
+                                                                                                contains_first_msg=False,
+                                                                                                contains_generation_msg=False)
+            if env_messages:
+                env_msg_tokens, env_msg_masks = convert_messages_to_tokens_and_masks(env_messages,
+                                                                                tokenizer=self.tokenizer,
+                                                                                parser=self.chat_template_parser,
+                                                                                contains_first_msg=False,
+                                                                                contains_generation_msg=True)
+            
             # Update repsonse token length
             response_token_len += len(assistant_msg_tokens) + len(env_msg_tokens)
             # Reached maximum number of tokens for the trajectory

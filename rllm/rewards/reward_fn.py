@@ -76,7 +76,7 @@ def search_reward_fn(task_info: dict, action: str) -> RewardOutput:
     return reward_fn(reward_input)
 
 
-# def code_reward_fn(task_info: Dict, action: str) -> RewardOutput:
+# def code_reward_fn(task_info: dict, action: str) -> RewardOutput:
 #     """
 #     A reward function for code tasks that implements the RewardFunction protocol.
 

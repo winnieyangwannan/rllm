@@ -14,7 +14,7 @@ def safe_import(module_path, class_name):
 
 # Define all agent imports
 AGENT_IMPORTS = [
-    ("rllm.agents.web_agent", "WebAgent"),
+    ("rllm.agents.miniwob_agent", "MiniWobAgent"),
     ("rllm.agents.frozenlake_agent", "FrozenLakeAgent"),
     ("rllm.agents.swe_agent", "SWEAgent"),
     ("rllm.agents.code_agent", "CompetitionCodingAgent"),

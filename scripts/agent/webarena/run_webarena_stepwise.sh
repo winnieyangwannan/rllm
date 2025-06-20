@@ -7,12 +7,10 @@ export VLLM_ALLOW_LONG_MAX_MODEL_LEN=1
 export VLLM_ENGINE_ITERATION_TIMEOUT_S=100000000000
 export CUDA_VISIBLE_DEVICES=0,1,2,3,4,5,6,7
 
-export RAY_TMPDIR=/home/colin/tmp/ray
-mkdir -p $RAY_TMPDIR
+WEBARENA_URL="ws://18.234.63.23:9999/send_and_wait" 
 # export NCCL_P2P_DISABLE=1
 # Find the directory where rllm package is located
 RLLM_DIR=$(python3 -c "import rllm; import os; print(os.path.dirname(os.path.dirname(rllm.__file__)))")
-RLLM_DIR=/home/colin
 
 python3 -m rllm.train.train_agent_ppo \
     algorithm.adv_estimator=loop \
@@ -59,8 +57,8 @@ python3 -m rllm.train.train_agent_ppo \
     algorithm.clip_advantages=False \
     trainer.critic_warmup=0 \
     trainer.logger=['console','wandb'] \
-    trainer.project_name='stepwise-agent' \
-    trainer.experiment_name='4b-loop-drgrpo-miniwob_agent_stepwise-seq-mean-token-sum-norm' \
+    trainer.project_name='rllm-agent' \
+    trainer.experiment_name='4b-webarena_stepwise' \
     trainer.val_before_train=False \
     trainer.n_gpus_per_node=2 \
     trainer.nnodes=1 \
@@ -69,7 +67,7 @@ python3 -m rllm.train.train_agent_ppo \
     trainer.default_hdfs_dir=null \
     env.name=browsergym_cloud \
     +env.env_args.subtask=webarena \
-    +env.env_args.url="ws://18.234.63.23:5294/send_and_wait" \
+    +env.env_args.url=${WEBARENA_URL} \
     agent.name=webarenaagent \
     agent.max_steps=3 \
     agent.async_engine=False \
