@@ -59,7 +59,7 @@ logger = logging.getLogger(__name__)
 
 class SWEAgent(BaseAgent):
 
-    def __init__(self, use_fn_calling: bool = False, format_model_response: bool = False, version: str = "v2"):
+    def __init__(self, use_fn_calling: bool = False, format_model_response: bool = False, version: str = "v1"):
         self.use_fn_calling = use_fn_calling
         self.format_model_response = format_model_response
         

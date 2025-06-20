@@ -4,6 +4,7 @@ import pandas as pd
 from verl.utils.hdfs_io import copy, makedirs
 import argparse
 import rllm
+import json
 from datasets import load_dataset
 
 from rllm.agents.system_prompts import SWE_SYSTEM_PROMPT, SWE_USER_PROMPT, \
@@ -19,6 +20,7 @@ SWE_DATASETS = [
     "R2E-Gym/R2E-Gym-V1",
     "R2E-Gym/SWE-Bench-Lite",
     "R2E-Gym/SWE-Bench-Verified",
+    "r2e-edits/SweSmith-RL-Dataset",
 ]
 
 def main():
@@ -42,7 +44,7 @@ def main():
                 "prompt": [{"role": "system", "content": SWE_SYSTEM_PROMPT_V2}, {"role": "user", "content": SWE_USER_PROMPT_V2.format(problem_statement=problem_statement)}],
                 "ability": "swe",
                 "reward_model": {"style": "rule", "ground_truth": ""},
-                "extra_info": row_dict,
+                "extra_info": json.dumps(row_dict),
             }
         return process_fn
 

@@ -1,4 +1,5 @@
 import os
+import json
 from typing import Dict, Optional, Tuple, Union
 
 import numpy as np
@@ -48,7 +49,7 @@ class SWEEnv(BaseEnv):
         backend: str = "kubernetes",
         delete_image: bool = False,
         verbose: bool = False,
-        version: str = "v2",
+        version: str = "v1",
     ):
         """Initialize the SWE environment.
 
@@ -87,9 +88,8 @@ class SWEEnv(BaseEnv):
         Returns:
             Tuple containing task instruction and additional info including ground truth patch.
         """
-        first_time = not self.env
         # Reset environment and docker runtime.
-        if first_time:
+        if not self.env:
             # Initialize environment if not created yet.
             env_args = EnvArgs(ds=self.entry)
             self.env = RepoEnv(env_args,
@@ -97,24 +97,21 @@ class SWEEnv(BaseEnv):
                                step_timeout=self.step_timeout,
                                reward_timeout=self.reward_timeout,
                                verbose=self.verbose)
-
-        self.env.reset()
-        if not first_time:
-            self.env.runtime.reset()
-            self.env.runtime.setup_env()
+        else:
+            self.env.reset()
         if self.version == "v1":
             self.env.add_commands(R2EGYM_COMMAND_FILES_V1)
         else:
             self.env.add_commands(R2EGYM_COMMAND_FILES_V2)
         self.total_steps = 0
 
-        gt_patch = self.env.runtime.commit.get_patch(
-            test_file=True,
-            non_test_file=False,
-        )
+        # gt_patch = self.env.runtime.commit.get_patch(
+        #     test_file=True,
+        #     non_test_file=False,
+        # )
         # Polls docker runtime to get task instruction.
         return self.env.get_task_instruction(), {
-            'gt_patch': gt_patch,
+            # 'gt_patch': gt_patch,
         }
     
     def compute_final_reward(self):
@@ -155,7 +152,7 @@ class SWEEnv(BaseEnv):
             os.system(f"docker rmi {docker_image}")
 
     @staticmethod
-    def from_json(extra_info: Dict) -> "SWEEnv":
+    def from_json(extra_info: Union[Dict, str]) -> "SWEEnv":
         """Create an environment instance from JSON configuration.
         
         Args:
@@ -164,6 +161,8 @@ class SWEEnv(BaseEnv):
         Returns:
             Initialized SWEEnv instance
         """
+        if isinstance(extra_info, str):
+            extra_info = json.loads(extra_info)
         return SWEEnv(entry=extra_info)
 
 

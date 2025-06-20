@@ -197,13 +197,15 @@ class AsyncAgentExecutionEngine(AgentExecutionEngine):
         response_tokens = []
         response_masks = []
         total_time = 0
+        reward_time = None
+        llm_time = 0.0
+        env_time = 0.0
         reward = 0.0
 
         # Reset environment with the task using the executor
         loop = asyncio.get_event_loop()
         observation, info = await loop.run_in_executor(self.executor, env.reset)
         info['max_steps'] = self.max_steps
-
         # Reset agent
         agent.reset()
         # Update agent internal state from environment.
@@ -240,7 +242,9 @@ class AsyncAgentExecutionEngine(AgentExecutionEngine):
                 application_id,
                 **kwargs
             )
-            total_time += time.time() - start_time
+            delta_time = time.time() - start_time
+            llm_time += delta_time
+            total_time += delta_time
             agent.update_from_model(response)
             # Fetch action from agent's internal state.
             cur_state = agent.get_current_state()
@@ -248,7 +252,9 @@ class AsyncAgentExecutionEngine(AgentExecutionEngine):
             # Take step in environment using the executor
             start_time = time.time()
             next_observation, reward, done, info = await loop.run_in_executor(self.executor, env.step, action)
-            total_time += time.time() - start_time
+            delta_time = time.time() - start_time
+            env_time += delta_time
+            total_time += delta_time
             info['max_steps'] = self.max_steps
             info['cur_tokens'] = response_token_len
             # Update agent internal state.
@@ -337,7 +343,9 @@ class AsyncAgentExecutionEngine(AgentExecutionEngine):
 
         if hasattr(env, 'compute_final_reward') and not masked_out:
             cur_step = agent.get_current_state()
+            start_time = time.time()
             reward = await loop.run_in_executor(self.executor, env.compute_final_reward)
+            reward_time = time.time() - start_time
             cur_step.reward = reward
         # Closing environment using the executor.
         await loop.run_in_executor(self.executor, env.close)
@@ -370,6 +378,19 @@ class AsyncAgentExecutionEngine(AgentExecutionEngine):
                 "training_reward": agent.compute_training_reward(trajectory) if hasattr(agent, "compute_training_reward") else trajectory.steps[-1].reward,
                 "environment_reward": trajectory.reward,
                 "idx": env.idx,
+                "chat_completions": agent.chat_completions,
+                'metrics': {
+                    # Total number of steps taken in the trajectory
+                    'steps': len(trajectory.steps),
+                    # Time to calculate reward
+                    'reward_time': reward_time,
+                    # Total time spent in environment execution (env.step)
+                    'env_time': env_time,
+                    # Time to calculate response tokens
+                    'llm_time': llm_time,
+                    # Total time spent in the trajectory
+                    'total_time': total_time,
+                }
             }
             return token_result
         elif mode == "Conversation":
@@ -380,9 +401,9 @@ class AsyncAgentExecutionEngine(AgentExecutionEngine):
     ):
         for _ in range(self.retry_limit):
             try:
-                return await self.run_agent_trajectory_async(
+                return await asyncio.wait_for(self.run_agent_trajectory_async(
                     idx, application_id=application_id, seed=seed, mode=mode, **kwargs
-                )
+                ), timeout=4500)
             except Exception:
                 traceback.print_exc()
                 continue
@@ -411,7 +432,7 @@ class AsyncAgentExecutionEngine(AgentExecutionEngine):
         async def launch_one_trajectory_task(env_idx: int):
             try:
                 #await semaphore.acquire()
-                await asyncio.sleep(0.15 * env_idx)
+                await asyncio.sleep(0.20 * env_idx)
 
                 application_id = str(uuid.uuid4())                
                 result = await self.run_agent_trajectory_with_retry(
@@ -440,7 +461,7 @@ class AsyncAgentExecutionEngine(AgentExecutionEngine):
                 tasks_completed += 1
                 colorful_print(f"Number of Trajectories {tasks_completed}/{len(self.envs)} completed", "cyan")
                 if tasks_completed == len(self.envs)-2:
-                    self.is_last_trajectory = True
+                    self.is_last_trajectory = False
                 yield result
             except Exception as e:
                 raise e
@@ -451,7 +472,7 @@ class AsyncAgentExecutionEngine(AgentExecutionEngine):
             else:
                 self.router.__exit__()
         
-        self.executor.shutdown(wait=False)
+        self.executor.shutdown(wait=False, cancel_futures=True)
 
     # async def execute_tasks(self, tasks):
     #     """
