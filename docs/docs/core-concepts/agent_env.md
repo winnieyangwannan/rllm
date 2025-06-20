@@ -298,15 +298,6 @@ class MathEnv(BaseEnv):
           )
 ```
 
-### How They Work Together
-
-This implementation showcases several key concepts:
-
-1. **Standardized Interface**: Both classes follow the rLLM protocols, ensuring compatibility
-2. **Reward-Driven Learning**: The environment uses `math_reward_fn` to provide meaningful feedback
-3. **Self-Correction**: The agent can retry when it receives negative feedback
-4. **State Management**: Both components maintain their state through the interaction cycle
-
 ## Detailed Interaction Walkthrough
 
 Let's trace through how the MathAgent and MathEnv handle a complete interaction cycle with self-correction:

@@ -20,19 +20,22 @@ The AgentTrainer orchestrates several key components:
 
 The AgentTrainer serves as a wrapper over the training engine `verl`. When `trainer.train()` is called, the following process occurs:
 
-1. **Initialization**: The system initializes the `AgentPPOTrainer`, which inherits from `verl`'s `RayPPOTrainer`. We replace the original trajectory generation logic with rLLM's AgentExecutionEngine.
+**Initialization**: The system initializes the `AgentPPOTrainer`, which inherits from `verl`'s `RayPPOTrainer`. We replace the original trajectory generation logic with rLLM's AgentExecutionEngine.
 
-2. **Setup Phase**: The `AgentPPOTrainer` performs the following setup:
+**Setup Phase**: The `AgentPPOTrainer` performs the following setup:
+
    - Sets up Ray workers for distributed model training
    - Initializes the AgentExecutionEngine
    - Loads the dataset and splits it into mini-batches
 
-3. **Training Loop**: For each mini-batch:
+**Training Loop**: For each mini-batch:
+
    - Data is passed to rLLM's AgentExecutionEngine
    - The engine initializes agent-environment pairs to process the mini-batch in parallel
    - Agent trajectories are collected through environment interactions
 
-4. **Update Phase**: After a mini-batch is sampled:
+**Update Phase**: After a mini-batch is sampled:
+
    - The trainer transforms trajectories into `verl`'s format
    - Gradient updates are performed using the collected trajectories
 

@@ -4,7 +4,7 @@ repo_url: https://github.com/agentica-project/rllm
 theme:
   name: material
   logo: assets/agentica-logo.png
-  favicon: assets/agentica-logo.png
+  favicon: assets/agentica-logo-black.png
   palette:
     primary: black
     accent: black
