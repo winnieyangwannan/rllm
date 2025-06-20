@@ -1,5 +1,5 @@
 from rllm.environments.base.multi_turn_env import MultiTurnEnvironment
-from rllm.rewards.reward_fn import code_reward_fn
+# from rllm.rewards.reward_fn import code_reward_fn
 
 
 class CompetitionCodingEnv(MultiTurnEnvironment):
