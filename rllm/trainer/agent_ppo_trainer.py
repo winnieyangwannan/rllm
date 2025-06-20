@@ -223,8 +223,18 @@ class AgentPPOTrainer(RayPPOTrainer):
 
                         if self.config.trainer.rejection_sample:
                             # log the actual complete training rewards before rejection sampling
-                            batch.batch["token_level_rewards"] = batch.batch["token_level_scores"]  # for metrics calculation
-                            full_sequence_score = batch.batch["token_level_scores"].sum(-1)
+                            token_level_rewards = None  # for metrics calculation
+                            if self.config.agent.use_stepwise_advantage:
+                                is_pad_step = batch.non_tensor_batch["is_pad_step"]
+                                non_pad_step_indices = np.where(is_pad_step == False)[0]
+                                non_pad_steps = batch.select_idxs(non_pad_step_indices)
+                                is_last_step = non_pad_steps.non_tensor_batch["is_last_step"]
+                                valid_last_step_indices = np.where(is_last_step == True)[0]
+                                last_step_batch = batch.select_idxs(valid_last_step_indices)
+                                token_level_rewards = last_step_batch.batch["token_level_scores"]
+                            else:
+                                token_level_rewards = batch.batch["token_level_scores"]
+                            full_sequence_score = token_level_rewards.sum(-1)
                             metrics["critic/full-score/mean"] = torch.mean(full_sequence_score).detach().item()
                             metrics["critic/full-score/max"] = torch.max(full_sequence_score).detach().item()
                             metrics["critic/full-score/min"] = torch.min(full_sequence_score).detach().item()

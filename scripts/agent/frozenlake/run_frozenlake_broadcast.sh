@@ -47,7 +47,7 @@ python3 -m rllm.train.train_agent_ppo \
     actor_rollout_ref.ref.fsdp_config.param_offload=True \
     actor_rollout_ref.ref.log_prob_micro_batch_size_per_gpu=1 \
     actor_rollout_ref.rollout.log_prob_micro_batch_size_per_gpu=1 \
-    actor_rollout_ref.actor.entropy_coeff=0 \
+    actor_rollout_ref.actor.entropy_coeff=0.0001 \
     algorithm.kl_ctrl.kl_coef=0.001 \
     algorithm.mask_truncated_samples=False \
     algorithm.clip_advantages=False \
@@ -55,7 +55,7 @@ python3 -m rllm.train.train_agent_ppo \
     trainer.logger=['console','wandb'] \
     trainer.project_name='rllm-agent' \
     trainer.experiment_name='4b-frozenlake_agent_stepwise_broadcast' \
-    trainer.val_before_train=True \
+    trainer.val_before_train=False \
     trainer.n_gpus_per_node=8 \
     trainer.nnodes=1 \
     trainer.save_freq=40 \
