@@ -14,7 +14,7 @@ if __name__ == "__main__":
 
     os.environ["TOKENIZERS_PARALLELISM"] = "true"
 
-    n_parallel_agents = 256
+    n_parallel_agents = 64
 
     model_name = "agentica-org/DeepScaleR-1.5B-Preview"
 

@@ -22,7 +22,7 @@ def mathd_normalize_answer(answer: str | None) -> str | None:
         if m is not None:
             answer = m.group("text").strip()
         return _strip_string(answer)
-    except AttributeError:
+    except Exception:
         return answer
 
 
@@ -39,7 +39,7 @@ def _strip_string(string):
                 else:
                     try:
                         assert len(substr) >= 2
-                    except AssertionError:
+                    except Exception:
                         return string
                     a = substr[0]
                     b = substr[1]
@@ -69,7 +69,7 @@ def _strip_string(string):
             assert string == "{}/{}".format(a, b)
             new_string = "\\frac{" + str(a) + "}{" + str(b) + "}"
             return new_string
-        except (ValueError, TypeError, ZeroDivisionError):
+        except Exception:
             return string
 
     def _remove_right_units(string):
@@ -208,7 +208,7 @@ def _is_float(num: str) -> bool:
 def _is_int(x: float) -> bool:
     try:
         return abs(x - int(round(x))) <= 1e-7
-    except (TypeError, ValueError):
+    except Exception:
         return False
 
 
@@ -221,7 +221,7 @@ def _str_is_int(x: str) -> bool:
         x = _strip_properly_formatted_commas(x)
         x = float(x)
         return abs(x - int(round(x))) <= 1e-7
-    except (TypeError, ValueError):
+    except Exception:
         return False
 
 
@@ -410,7 +410,7 @@ def remove_boxed(s):
         assert s[: len(left)] == left
         assert s[-1] == "}"
         return s[len(left) : -1]
-    except (AssertionError, IndexError):
+    except Exception:
         return None
 
 
