@@ -71,5 +71,5 @@ python3 -m rllm.train.train_agent_ppo \
     agent.use_stepwise_advantage=True \
     agent.stepwise_advantage_mode="mc_return" \
     +agent.engine_args.disable_thinking=False \
-    +agent.agent_args.remove_thinking=True \
+    +agent.agent_args.accumulate_thinking=False \
     trainer.total_epochs=100

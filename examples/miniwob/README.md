@@ -47,7 +47,7 @@ playwright install chromium
 Then we download the MiniWoB++ repository
 
 ```bash
-git clone git@github.com:Farama-Foundation/miniwob-plusplus.git
+git clone https://github.com/Farama-Foundation/miniwob-plusplus.git
 git -C "./miniwob-plusplus" reset --hard 7fd85d71a4b60325c6585396ec4f48377d049838
 ```
 
@@ -78,18 +78,6 @@ Once your model server is running and datasets are prepared, you can run inferen
 cd examples/miniwob
 python run_miniwob.py
 ```
-
-### Configuration Options
-
-You can modify the inference script parameters:
-
-- `n_parallel_agents`: Number of parallel agents (default: 64)
-- `model_name`: Model to use (default: "Qwen/Qwen3-4B")
-- `base_url`: API server URL (default: "http://localhost:30000/v1")
-- `max_response_length`: Maximum response length (default: 16384)
-- `max_prompt_length`: Maximum prompt length (default: 2048)
-- `temperature`: Sampling temperature (default: 0.6)
-- `top_p`: Top-p sampling (default: 0.95)
 
 The script will:
 1. Load the MiniWoB++ test dataset

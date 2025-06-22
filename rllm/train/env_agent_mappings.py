@@ -33,23 +33,3 @@ AGENT_CLASSES = {
 # Filter out None values for unavailable imports
 ENV_CLASS_MAPPING = {k: v for k, v in ENV_CLASSES.items() if v is not None}
 AGENT_CLASS_MAPPING = {k: v for k, v in AGENT_CLASSES.items() if v is not None}
-
-
-def setup_environment(config):
-    if config.env.name == "browsergym":
-        assert hasattr(config.env.env_args, "subtask"), "subtask must be defined in environment argument for browsergym"
-        if config.env.env_args.subtask == "miniwob":
-            import importlib
-            import os
-
-            import browsergym.miniwob
-
-            importlib.reload(browsergym.miniwob)
-            assert hasattr(config.env.env_args, "miniwob_url"), "miniwob_url must be defined in environment argument for browsergym miniwob"
-            os.environ["MINIWOB_URL"] = config.env.env_args.miniwob_url
-            return
-        elif config.env.env_args.subtask == "webarena":
-            return
-    elif config.env.name in ["frozenlake", "swe", "math", "code", "tool", "competition_coding", "browsergym_cloud", "custom"]:
-        return
-    raise ValueError(f"Environment subtask not supported, env: {config.env.name}")

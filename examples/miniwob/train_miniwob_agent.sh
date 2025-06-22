@@ -6,8 +6,8 @@ export VLLM_USE_V1=1
 export VLLM_ALLOW_LONG_MAX_MODEL_LEN=1
 export VLLM_ENGINE_ITERATION_TIMEOUT_S=100000000000
 
-MINIWOB_URL="file://<PATH_TO_MINIWOB_PLUSPLUS_CLONED_REPO>/miniwob/html/miniwob/"
-MINIWOB_URL="file:///home/colin/code/miniwob-plusplus/miniwob/html/miniwob/"
+# export MINIWOB_URL="file://<PATH_TO_MINIWOB_PLUSPLUS_CLONED_REPO>/miniwob/html/miniwob/"
+
 # Find the directory where rllm package is located
 RLLM_DIR=$(python3 -c "import rllm; import os; print(os.path.dirname(os.path.dirname(rllm.__file__)))")
 
@@ -66,8 +66,6 @@ python3 -m examples.miniwob.train_miniwob_agent \
     trainer.rejection_sample=True \
     trainer.rejection_sample_multiplier=1 \
     env.name=browsergym \
-    +env.env_args.subtask=miniwob \
-    +env.env_args.miniwob_url="file:///home/colin/code/miniwob-plusplus/miniwob/html/miniwob/" \
     agent.name=miniwobagent \
     agent.max_steps=15 \
     agent.async_engine=True \

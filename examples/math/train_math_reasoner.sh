@@ -14,7 +14,7 @@ python3 -m examples.math.train_math_reasoner \
     data.train_batch_size=32 \
     data.val_batch_size=500 \
     data.max_prompt_length=2048 \
-    data.max_response_length=4096 \
+    data.max_response_length=8192 \
     actor_rollout_ref.model.path=Qwen/Qwen3-4B \
     actor_rollout_ref.hybrid_engine=True \
     actor_rollout_ref.actor.optim.lr=1e-6 \
@@ -42,7 +42,7 @@ python3 -m examples.math.train_math_reasoner \
     actor_rollout_ref.rollout.temperature=0.6 \
     actor_rollout_ref.rollout.gpu_memory_utilization=0.6 \
     actor_rollout_ref.rollout.n=8 \
-    actor_rollout_ref.rollout.val_kwargs.n=1 \
+    actor_rollout_ref.rollout.val_kwargs.n=8 \
     actor_rollout_ref.rollout.val_kwargs.temperature=0.6 \
     actor_rollout_ref.rollout.val_kwargs.top_p=0.95 \
     actor_rollout_ref.ref.fsdp_config.param_offload=True \
@@ -55,9 +55,9 @@ python3 -m examples.math.train_math_reasoner \
     trainer.critic_warmup=0 \
     trainer.logger=['console','wandb'] \
     trainer.project_name='rllm-agent' \
-    trainer.experiment_name='1.7b-math' \
-    trainer.val_before_train=True \
-    trainer.n_gpus_per_node=2 \
+    trainer.experiment_name='4b-math' \
+    trainer.val_before_train=False\
+    trainer.n_gpus_per_node=8 \
     trainer.nnodes=1 \
     trainer.save_freq=100 \
     trainer.test_freq=20 \
@@ -67,5 +67,5 @@ python3 -m examples.math.train_math_reasoner \
     agent.use_stepwise_advantage=False \
     agent.stepwise_advantage_mode="mc_return" \
     +agent.engine_args.enable_thinking=True \
-    +agent.agent_args.remove_thinking=True \
+    +agent.agent_args.accumulate_thinking=False \
     trainer.total_epochs=100

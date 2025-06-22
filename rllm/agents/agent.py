@@ -5,28 +5,35 @@ from typing import Any
 
 @dataclass
 class Step:
-    observation: Any = None
+    chat_completions: list[dict[str, str]] = field(default_factory=list)
+
     thought: str = ""
     action: Any = None
-    reward: float = 0.0
-    next_observation: Any = None
-    done: bool = False
-    # Store additional information from the environment or anything else.
-    info: dict = field(default_factory=dict)
-    step: int = 0
+    observation: Any = None
     model_response: str = ""
-    mc_return: float = 0.0  # Monte Carlo estimate of returns.
+    info: dict = field(default_factory=dict)  # Store any additional info.
+
+    # field below are filled by the engine
+    reward: float = 0.0
+    done: bool = False
+    mc_return: float = 0.0
+
+
+@dataclass
+class Action:
+    action: Any = None
 
 
 @dataclass
 class Trajectory:
+    task: Any = None
     steps: list[Step] = field(default_factory=list)
     reward: float = 0.0
 
     def to_dict(self):
         return {
             "steps": [asdict(step) for step in self.steps],
-            "reward": float(self.reward),  # Convert numpy float to Python float
+            "reward": float(self.reward),
         }
 
 
@@ -55,7 +62,7 @@ class BaseAgent(ABC):
         raise NotImplementedError("Subclasses must implement this method")
 
     @abstractmethod
-    def update_from_model(self, response: str, **kwargs):
+    def update_from_model(self, response: str, **kwargs) -> Action:
         """
         Updates the agent's internal state after the model generates a response.
 
@@ -80,7 +87,7 @@ class BaseAgent(ABC):
         """
         return
 
-    def get_current_state(self) -> Step:
+    def get_current_state(self) -> Step | None:
         """
         Returns the agent's current state as a dictionary.
 
@@ -90,5 +97,6 @@ class BaseAgent(ABC):
         Returns:
             Step: The agent's current state.
         """
-        assert self.trajectory.steps, "Trajectory should not be empty when get_current_state is called."
+        if not self.trajectory.steps:
+            return None
         return self.trajectory.steps[-1]

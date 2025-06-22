@@ -10,6 +10,7 @@ import openai
 import torch
 from openai.types import Completion
 
+from rllm.agents.agent import Action
 from rllm.agents.utils import (
     convert_messages_to_tokens_and_masks,
     get_recent_assistant_user_messages,
@@ -277,11 +278,9 @@ class AsyncAgentExecutionEngine(AgentExecutionEngine):
 
             # Update agent with model response
             total_time += time.time() - start_time
-            agent.update_from_model(response)
+            action: Action = agent.update_from_model(response)
+            action = action.action
 
-            # Fetch action from agent's internal state.
-            cur_state = agent.get_current_state()
-            action = cur_state.action
             # Take step in environment using the executor
             start_time = time.time()
 
@@ -300,6 +299,7 @@ class AsyncAgentExecutionEngine(AgentExecutionEngine):
 
             total_time += time.time() - start_time
             info["max_steps"] = self.max_steps
+
             # Update agent internal state.
             agent.update_from_env(
                 observation=next_observation,
@@ -307,6 +307,11 @@ class AsyncAgentExecutionEngine(AgentExecutionEngine):
                 done=done,
                 info=info,
             )
+
+            cur_step = agent.get_current_state()
+            cur_step.reward = reward
+            cur_step.done = done
+            cur_step.info.update(info)
 
             chat_completions_messages = agent.chat_completions
             assistant_message, env_messages = get_recent_assistant_user_messages(chat_completions_messages)
@@ -397,8 +402,7 @@ class AsyncAgentExecutionEngine(AgentExecutionEngine):
                 "prompt_tokens": torch.tensor(prompt_tokens, dtype=torch.long),
                 "response_tokens": torch.tensor(response_tokens, dtype=torch.long),
                 "response_masks": torch.tensor(response_masks, dtype=torch.long),
-                "training_reward": agent.compute_training_reward(trajectory) if hasattr(agent, "compute_training_reward") else trajectory.steps[-1].reward,
-                "environment_reward": trajectory.reward,
+                "trajectory_reward": trajectory.reward,
                 "idx": env.idx,
             }
             return token_result
@@ -407,8 +411,7 @@ class AsyncAgentExecutionEngine(AgentExecutionEngine):
         elif mode == "Step":
             steps_result = {
                 "steps": episode_steps,
-                "training_reward": agent.compute_training_reward(trajectory) if hasattr(agent, "compute_training_reward") else trajectory.steps[-1].reward,
-                "environment_reward": trajectory.reward,
+                "trajectory_reward": trajectory.reward,
                 "idx": env.idx,
                 "mc_returns": [step.mc_return for step in trajectory.steps][: len(episode_steps)],
             }
@@ -515,6 +518,7 @@ class AsyncAgentExecutionEngine(AgentExecutionEngine):
                 try:
                     self.envs[index] = self.env_class.from_dict({**task, **self.env_args})
                     self.agents[index] = self.agent_class(**self.agent_args)
+                    self.agents[index].trajectory.task = task
                     res = await self.run_agent_trajectory_async(index, application_id=task_id)
                     completed += 1
                     colorful_print(f"Progress: {completed}/{total} trajectories completed", "cyan")

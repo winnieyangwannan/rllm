@@ -11,7 +11,6 @@ from rllm.environments.env_utils import (
 )
 from rllm.misc import colorful_print
 from rllm.parser.chat_template.parser import ChatTemplateParser
-from verl.trainer.ppo.ray_trainer import _timer
 
 
 class AgentExecutionEngine:
@@ -393,6 +392,8 @@ class AgentExecutionEngine:
             - Timing information, if provided via `timing_raw`, can be used for profiling execution times of different stages.
             - Trajectories content in the Token version has truncation due to max_response_length reflected, but not in Text or Conversation.
         """
+        from verl.trainer.ppo.ray_trainer import _timer
+
         assert self.envs, f"Env cannot be empty, but got {self.envs}"
         env_batch_size = len(self.envs)
         assert env_batch_size == self.n_parallel_agents, "Number of parallel environments should match number of parallel agents."

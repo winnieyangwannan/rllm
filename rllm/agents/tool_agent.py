@@ -1,9 +1,10 @@
+import copy
 import json
 import logging
 import uuid
 from typing import Any
 
-from rllm.agents.agent import BaseAgent, Step, Trajectory
+from rllm.agents.agent import Action, BaseAgent, Step, Trajectory
 from rllm.agents.system_prompts import TOOL_SYSTEM_PROMPT
 from rllm.parser import get_tool_parser
 from rllm.tools.mcp_tool import MCPTool
@@ -56,7 +57,7 @@ class ToolAgent(BaseAgent):
         # Initialize state according to BaseAgent
         self._trajectory = Trajectory()
         self.messages = []
-        self.step = 0
+        self.current_observation = None
         self.reset()  # Call reset to set initial state
 
     def _format_observation_as_messages(self, obs: Any) -> list[dict]:
@@ -87,26 +88,13 @@ class ToolAgent(BaseAgent):
         Updates the agent's state based on environment feedback.
         Formats observation and updates the trajectory.
         """
-        # Update the previous step with results from the action
-        if self._trajectory.steps:
-            prior_step = self._trajectory.steps[-1]
-            prior_step.next_observation = observation
-            prior_step.reward = reward
-            prior_step.done = done
-            prior_step.info = info
 
         # Format the observation for the next model call
         obs_messages = self._format_observation_as_messages(observation)
         self.messages.extend(obs_messages)
+        self.current_observation = observation
 
-        if done:
-            return
-
-        # Create the new step for the current observation if trajectory not done.
-        current_step = Step(observation=observation, step=self.step)
-        self._trajectory.steps.append(current_step)
-
-    def update_from_model(self, response: str, **kwargs):
+    def update_from_model(self, response: str, **kwargs) -> Action:
         """
         Updates the agent's state based on the model's response.
         Parses the response, updates messages, and the current step in the trajectory.
@@ -152,22 +140,15 @@ class ToolAgent(BaseAgent):
 
         self.messages.append(assistant_message)
 
-        # Update the current step in the trajectory
-        if self._trajectory.steps:
-            current_step = self._trajectory.steps[-1]
-            current_step.action = tool_calls_dict  # Action is the list of tool calls
-            current_step.model_response = response  # Store raw response
-            current_step.thought = ""
-        else:
-            raise ValueError("update_from_model called before update_from_env after reset.")
+        new_step = Step(chat_completions=copy.deepcopy(self.chat_completions), action=tool_calls_dict, model_response=response, observation=self.current_observation)
+        self._trajectory.steps.append(new_step)
 
-        self.step += 1
+        return Action(action=tool_calls_dict)
 
     def reset(self):
         """Resets the agent's state for a new episode."""
         self._trajectory = Trajectory()
         self.messages = [{"role": "system", "content": self.system_prompt + self.tools_prompt}]
-        self.step = 0
 
     @property
     def chat_completions(self) -> list[dict[str, str]]:
@@ -193,5 +174,4 @@ class MCPToolAgent(ToolAgent):
 
         self._trajectory = Trajectory()
         self.messages = []
-        self.step = 0
         self.reset()

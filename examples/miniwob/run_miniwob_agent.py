@@ -9,8 +9,6 @@ from rllm.engine.async_agent_execution_engine import AsyncAgentExecutionEngine
 from rllm.environments.browsergym.browsergym import BrowserGymEnv
 from rllm.utils import compute_pass_at_k
 
-from .prepare_miniwob_data import prepare_miniwob_data
-
 
 def load_miniwob_data():
     if DatasetRegistry.dataset_exists("miniwob", "test"):
@@ -18,6 +16,8 @@ def load_miniwob_data():
         return test_dataset.get_data()
 
     print("MiniWoB datasets not found. Preparing datasets...")
+    from prepare_miniwob_data import prepare_miniwob_data
+
     train_dataset, test_dataset = prepare_miniwob_data()
 
     return test_dataset.get_data()
@@ -40,50 +40,42 @@ if __name__ == "__main__":
 
     sampling_params = {"temperature": 0.6, "top_p": 0.95, "model": model_name}
 
+    # Set parameters based on stepwise flag
     if not args.stepwise:
-        engine = AsyncAgentExecutionEngine(
-            agent_class=MiniWobAgent,
-            env_class=BrowserGymEnv,
-            agent_args={
-                "use_accumulate_thinking": True,
-                "use_full_conversation": True,
-            },
-            env_args={},
-            engine_name="openai",
-            tokenizer=tokenizer,
-            sampling_params=sampling_params,
-            rollout_engine_args={
-                "base_url": "http://localhost:30000/v1",
-                "api_key": "None",
-            },
-            max_response_length=16384,
-            max_prompt_length=3072,
-            n_parallel_agents=n_parallel_agents,
-            disable_thinking=False,
-            enforce_max_prompt_length=False,
-        )
+        agent_args = {
+            "use_accumulate_thinking": True,
+            "use_full_conversation": True,
+        }
+        max_prompt_length = 3072
+        max_response_length = 16384
+        enforce_max_prompt_length = False
     else:
-        engine = AsyncAgentExecutionEngine(
-            agent_class=MiniWobAgent,
-            env_class=BrowserGymEnv,
-            agent_args={
-                "use_accumulate_thinking": False,
-                "use_full_conversation": False,
-            },
-            env_args={},
-            engine_name="openai",
-            tokenizer=tokenizer,
-            sampling_params=sampling_params,
-            rollout_engine_args={
-                "base_url": "http://localhost:30000/v1",
-                "api_key": "None",
-            },
-            max_response_length=3072,
-            max_prompt_length=16384,
-            n_parallel_agents=n_parallel_agents,
-            disable_thinking=False,
-            enforce_max_prompt_length=True,
-        )
+        agent_args = {
+            "use_accumulate_thinking": False,
+            "use_full_conversation": False,
+        }
+        max_prompt_length = 16384
+        max_response_length = 3072
+        enforce_max_prompt_length = True
+
+    engine = AsyncAgentExecutionEngine(
+        agent_class=MiniWobAgent,
+        env_class=BrowserGymEnv,
+        agent_args=agent_args,
+        env_args={},
+        engine_name="openai",
+        tokenizer=tokenizer,
+        sampling_params=sampling_params,
+        rollout_engine_args={
+            "base_url": "http://localhost:30000/v1",
+            "api_key": "None",
+        },
+        max_response_length=max_response_length,
+        max_prompt_length=max_prompt_length,
+        n_parallel_agents=n_parallel_agents,
+        disable_thinking=False,
+        enforce_max_prompt_length=enforce_max_prompt_length,
+    )
 
     tasks = load_miniwob_data()
 

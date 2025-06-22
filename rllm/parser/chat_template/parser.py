@@ -63,11 +63,12 @@ class ChatTemplateParser:
         # Determine parser type based on tokenizer name or path
         if isinstance(tokenizer.name_or_path, str):
             model_name = tokenizer.name_or_path.lower()
-            if "deepseek" in model_name and "qwen" in model_name:
-                parser = DeepseekQwenChatTemplateParser(tokenizer)
+            tokenizer_cls = tokenizer.__class__.__name__.lower()
+            print(f"model_name: {model_name}, tokenizer_cls: {tokenizer_cls}")
+            if any(x in model_name for x in ("deepseek", "deepscaler", "deepcoder")) and "llama" in tokenizer_cls:
                 print(f"Using DeepseekQwenChatTemplateParser for {tokenizer.name_or_path}")
-                return parser
-            elif "qwen" in model_name or "r2egym" in model_name or "deepscaler" in model_name:
+                return DeepseekQwenChatTemplateParser(tokenizer)
+            elif "qwen" in model_name or "qwen" in tokenizer_cls:
                 parser = QwenChatTemplateParser(tokenizer, disable_thinking=disable_thinking)
                 print(f"Using QwenChatTemplateParser for {tokenizer.name_or_path}")
                 return parser
@@ -75,8 +76,6 @@ class ChatTemplateParser:
                 parser = LlamaChatTemplateParser(tokenizer)
                 print(f"Using LlamaChatTemplateParser for {tokenizer.name_or_path}")
                 return parser
-            else:
-                raise ValueError(f"Unsupported model: {tokenizer.name_or_path}")
 
         # Default to the standard parser if no specific match
         parser = ChatTemplateParser(tokenizer)

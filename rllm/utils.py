@@ -22,13 +22,13 @@ def compute_pass_at_k(results):
 
     # Count correct answers for each problem
     for trajectory in results:
-        problem = trajectory.steps[0].observation
+        task = trajectory.task
 
         # Generate hash of problem dict/string
-        if isinstance(problem, dict):
-            problem_str = json.dumps(problem, sort_keys=True)
+        if isinstance(task, dict):
+            problem_str = json.dumps(task, sort_keys=True)
         else:
-            problem_str = str(problem)
+            problem_str = str(task)
         problem_hash = hashlib.md5(problem_str.encode()).hexdigest()
 
         is_correct = 1 if trajectory.reward > 0 else 0

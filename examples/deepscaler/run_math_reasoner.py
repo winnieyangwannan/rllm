@@ -26,7 +26,7 @@ if __name__ == "__main__":
         "reward_fn": reward_fn,
     }
 
-    sampling_params = {"temperature": 0.35, "top_p": 0.95, "model": model_name}
+    sampling_params = {"temperature": 0.6, "top_p": 0.95, "model": model_name}
 
     engine = AsyncAgentExecutionEngine(
         agent_class=MathAgent,
@@ -40,7 +40,7 @@ if __name__ == "__main__":
             "base_url": "http://localhost:30000/v1",
             "api_key": "None",
         },
-        max_response_length=15000,
+        max_response_length=32768,
         max_prompt_length=2048,
         n_parallel_agents=n_parallel_agents,
     )

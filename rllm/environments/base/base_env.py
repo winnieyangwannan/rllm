@@ -50,10 +50,9 @@ class BaseEnv(ABC):
         """
         pass
 
-    @abstractmethod
     def close(self):
         """Standard Gym close method. Performs any necessary cleanup."""
-        pass
+        return
 
     @staticmethod
     @abstractmethod

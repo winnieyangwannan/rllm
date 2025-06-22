@@ -410,7 +410,6 @@ class AgentPPOTrainer(RayPPOTrainer):
 
     def _validate_agent(self):
         rewards_lst = []
-        env_rewards_lst = []
         data_source_lst = []
         uid_lst = []
         for test_data in self.val_dataloader:
@@ -440,26 +439,20 @@ class AgentPPOTrainer(RayPPOTrainer):
 
             test_batch = test_batch.union(test_output_gen_batch)
 
-            # use environment score to report validation reward
             reward_tensor = test_batch.batch["token_level_scores"]
-            env_reward_tensor = test_batch.batch["environment_scores"]
 
             rewards_lst.append(reward_tensor.sum(-1).cpu())
-            env_rewards_lst.append(env_reward_tensor.sum(-1).cpu())
             data_source_lst.append(test_batch.non_tensor_batch.get("data_source", ["unknown"] * reward_tensor.shape[0]))
             uid_lst.append(test_batch.non_tensor_batch["uid"])
 
         reward_tensor = torch.cat(rewards_lst, dim=0)  # (batch_size,)
-        env_reward_tensor = torch.cat(env_rewards_lst, dim=0)  # (batch_size,)
         data_sources = np.concatenate(data_source_lst, axis=0)
         # evaluate test_score based on data source
         data_source_reward = {}
-        data_source_env_reward = {}
 
         # to group for pass@k
         uid_tensor = np.concatenate(uid_lst, axis=0)
         data_source_uid_pass_rates = {}  # data source to {uid: pass or not}
-        data_source_uid_env_pass_rates = {}  # data source to {uid: pass or not}
 
         for i in range(reward_tensor.shape[0]):
             data_source = data_sources[i]
@@ -468,26 +461,15 @@ class AgentPPOTrainer(RayPPOTrainer):
                 data_source_reward[data_source] = []
             data_source_reward[data_source].append(reward_tensor[i].item())
 
-            if data_source not in data_source_env_reward:
-                data_source_env_reward[data_source] = []
-            data_source_env_reward[data_source].append(env_reward_tensor[i].item())
-
             # pass@k
             if data_source not in data_source_uid_pass_rates:
                 data_source_uid_pass_rates[data_source] = {}
-            if data_source not in data_source_uid_env_pass_rates:
-                data_source_uid_env_pass_rates[data_source] = {}
 
             uid = uid_tensor[i]
             if uid not in data_source_uid_pass_rates[data_source]:
                 data_source_uid_pass_rates[data_source][uid] = 0  # default to not pass
             # take highest score
             data_source_uid_pass_rates[data_source][uid] = max(data_source_uid_pass_rates[data_source][uid], reward_tensor[i].item())
-
-            if uid not in data_source_uid_env_pass_rates[data_source]:
-                data_source_uid_env_pass_rates[data_source][uid] = 0  # default to not pass
-            # take highest score
-            data_source_uid_env_pass_rates[data_source][uid] = max(data_source_uid_env_pass_rates[data_source][uid], reward_tensor[i].item())
 
         metric_dict = {}
         for data_source, rewards in data_source_reward.items():
@@ -496,20 +478,11 @@ class AgentPPOTrainer(RayPPOTrainer):
             rewards_array = np.clip(rewards_array, 0, 1)
             metric_dict[f"val/test_score/{data_source}"] = np.mean(rewards_array)
 
-        for data_source, env_rewards in data_source_env_reward.items():
-            metric_dict[f"val/env_score/{data_source}"] = np.mean(env_rewards)
-
         for data_source, pass_rates in data_source_uid_pass_rates.items():
             pass_k_lst = []
             for uid, pass_score in pass_rates.items():
                 pass_k_lst.append(pass_score >= 1)  # assuming 1 means passed
             metric_dict[f"val/test_score/pass@k/{data_source}"] = np.mean(pass_k_lst)
-
-        for data_source, pass_rates in data_source_uid_env_pass_rates.items():
-            pass_k_lst = []
-            for uid, pass_score in pass_rates.items():
-                pass_k_lst.append(pass_score >= 1)  # assuming 1 means passed
-            metric_dict[f"val/env_score/pass@k/{data_source}"] = np.mean(pass_k_lst)
 
         return metric_dict
 
@@ -590,7 +563,6 @@ class AgentPPOTrainer(RayPPOTrainer):
         all_response_tokens_list = []
         all_masks_list = []
         traj_scores = []
-        environment_scores = []
 
         for traj in trajectories:
             prompt_tokens = traj["prompt_tokens"]
@@ -600,8 +572,7 @@ class AgentPPOTrainer(RayPPOTrainer):
             all_initial_tokens_list.append(prompt_tokens)
             all_response_tokens_list.append(response_tokens)
             all_masks_list.append(traj["response_masks"])
-            traj_scores.append(traj["training_reward"])
-            environment_scores.append(traj["environment_reward"])
+            traj_scores.append(traj["trajectory_reward"])
 
         # reverse the list and create tensors, pad, then flip to achieve left padding
         prompts_batch = torch.nn.utils.rnn.pad_sequence(
@@ -633,7 +604,6 @@ class AgentPPOTrainer(RayPPOTrainer):
 
         # Place all rewards to last response token
         score_batch = torch.zeros_like(response_batch, dtype=torch.float32)
-        environment_score_batch = torch.zeros_like(response_batch, dtype=torch.float32)
 
         prompt_length = prompts_batch.shape[1]
         valid_response_length_sequences = attention_mask[:, prompt_length:].sum(dim=-1)
@@ -642,7 +612,6 @@ class AgentPPOTrainer(RayPPOTrainer):
             last_valid_idx = valid_response_length_sequences[i] - 1
             if last_valid_idx >= 0 and last_valid_idx < score_batch.shape[1]:
                 score_batch[i, last_valid_idx] = traj_score
-                environment_score_batch[i, last_valid_idx] = environment_scores[i]
 
         tensor_batch = {
             "input_ids": trajectory_batch,
@@ -652,7 +621,6 @@ class AgentPPOTrainer(RayPPOTrainer):
             "prompts": prompts_batch,
             "token_level_scores": score_batch,
             "traj_mask": traj_mask,
-            "environment_scores": environment_score_batch,
         }
 
         self.visualize_trajectory(DataProto.from_dict(tensors=tensor_batch))
@@ -676,7 +644,6 @@ class AgentPPOTrainer(RayPPOTrainer):
         responses = tensor_batch.batch["responses"]
         traj_mask = tensor_batch.batch[mask_key]
         token_level_scores = tensor_batch.batch["token_level_scores"]
-        environment_scores = tensor_batch.batch["environment_scores"]
 
         batch_size = prompts.shape[0]
         end_idx = min(sample_idx + max_samples, batch_size)
@@ -710,21 +677,18 @@ class AgentPPOTrainer(RayPPOTrainer):
 
                 # Check if this token has a reward
                 has_reward = token_level_scores[i, j] != 0
-                has_env_reward = environment_scores[i, j] != 0
 
                 # Apply different colors based on mask and rewards
                 if mask == 0:
                     # Masked token (not used in training)
                     colorful_print(token_text, fg="red", end="")
-                elif has_reward or has_env_reward:
+                elif has_reward:
                     # Token with reward
                     colorful_print(token_text, bg="green", end="")
 
                     reward_info = ""
                     if has_reward:
                         reward_info += f" R:{token_level_scores[i, j].item():.2f}"
-                    if has_env_reward:
-                        reward_info += f" ER:{environment_scores[i, j].item():.2f}"
 
                     colorful_print(reward_info, fg="magenta", end="")
                 else:
@@ -735,9 +699,8 @@ class AgentPPOTrainer(RayPPOTrainer):
 
             # Print reward summary
             total_reward = token_level_scores[i].sum().item()
-            total_env_reward = environment_scores[i].sum().item()
             colorful_print("Rewards:", fg="green", bold=True)
-            print(f" Training={total_reward:.2f}, Environment={total_env_reward:.2f}")
+            print(f" Trajectory Reward={total_reward:.2f}")
 
     def generate_agent_trajectories_async(self, timing_raw=None, meta_info=None, mode="Token"):
         """
@@ -787,15 +750,13 @@ class AgentPPOTrainer(RayPPOTrainer):
         all_steps_step_num = []  # total number of steps the trajectory this step belongs to have
         all_steps_step_ids = []
         training_rewards = []
-        environment_rewards = []
         all_mc_returns = []  # Monte Carlo returns for each episode
         # the last step will have reward assigned and be used for advantage calculation
 
         for episode in steps:
             episode_steps = episode["steps"]
             idx = episode["idx"]
-            training_reward = episode["training_reward"]
-            environment_reward = episode["environment_reward"]
+            training_reward = episode["trajectory_reward"]
             mc_returns = episode["mc_returns"]
 
             all_prompts_list.extend([torch.tensor(self.tokenizer.encode(s["prompt"], add_special_tokens=False), dtype=torch.long) for s in episode_steps])
@@ -803,7 +764,6 @@ class AgentPPOTrainer(RayPPOTrainer):
 
             step_numbers.append(len(episode_steps) - 1)
             training_rewards.append(training_reward)
-            environment_rewards.append(environment_reward)
             all_mc_returns.extend(mc_returns)
 
             all_steps_idx_list.extend([idx for _ in range(len(episode_steps))])
@@ -841,7 +801,6 @@ class AgentPPOTrainer(RayPPOTrainer):
 
         # Place all rewards to last response token of the last_step response
         score_batch = torch.zeros_like(response_batch, dtype=torch.float32)
-        environment_score_batch = torch.zeros_like(response_batch, dtype=torch.float32)
         mc_return_batch = torch.zeros_like(response_batch, dtype=torch.float32)
 
         prompt_length = prompts_batch.shape[1]
@@ -855,7 +814,6 @@ class AgentPPOTrainer(RayPPOTrainer):
                 last_valid_idx = valid_response_length_sequences[step_index] - 1
                 if last_valid_idx >= 0 and last_valid_idx < score_batch.shape[1]:
                     score_batch[step_index, last_valid_idx] = traj_score
-                    environment_score_batch[step_index, last_valid_idx] = environment_rewards[i]
                     mc_return_batch[step_index, last_valid_idx] = all_mc_returns[step_index]
                 step_index += 1
         assert step_index == score_batch.shape[0], f"Number of total steps used should equal to batch size, but got {step_index} and {score_batch.shape[0]}"
@@ -867,7 +825,6 @@ class AgentPPOTrainer(RayPPOTrainer):
             "responses": response_batch,
             "prompts": prompts_batch,
             "token_level_scores": score_batch,
-            "environment_scores": environment_score_batch,
             "mc_returns": mc_return_batch,
             "traj_mask": traj_mask,
         }

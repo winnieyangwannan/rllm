@@ -1,15 +1,17 @@
 import base64
+import copy
 import io
 import logging
 import re
 from typing import Any
 
+import browsergym.miniwob  # noqa: F401
 import numpy as np
 from browsergym.core.action.highlevel import HighLevelActionSet
 from browsergym.utils.obs import flatten_axtree_to_str, flatten_dom_to_str, prune_html
 from PIL import Image
 
-from rllm.agents.agent import BaseAgent, Step, Trajectory
+from rllm.agents.agent import Action, BaseAgent, Step, Trajectory
 from rllm.agents.system_prompts import *
 
 logger = logging.getLogger(__name__)
@@ -51,6 +53,7 @@ class MiniWobAgent(BaseAgent):
         self._trajectory = Trajectory()
         self.messages = []
         self.step = 0
+        self.current_observation = None
         self.reset()
 
         self.accumulate_thinking = use_accumulate_thinking
@@ -73,66 +76,47 @@ class MiniWobAgent(BaseAgent):
                 {"role": "system", "content": self._format_msgs_as_str(self.get_system_msgs(obs))},
             )
 
-        # Update the last step in the trajectory with the outcome (next_observation, reward, done, info)
-        if self._trajectory.steps:
-            prior_step = self._trajectory.steps[-1]
-            # The observation received here is the 'next_observation' for the *previous* action/step
-            prior_step.next_observation = observation
-            prior_step.reward = reward
-            prior_step.done = done
-            prior_step.info = info
-
-        # Add the user message for the *next* interaction turn
         self.messages.append({"role": "user", "content": user_prompt_content})
+        self.current_observation = obs
 
-        # Create a new step for the current state (with the observation that resulted from the last action)
-        # This step's action, reward, etc., will be filled in by subsequent update_from_model and update_from_env calls
-        if done:
-            return
+        if done and self.reward_shaping:
+            reward_penalty = 0
+            for step in self.trajectory.steps:
+                if not self.validate_step(step):
+                    reward_penalty = -0.5
+                    break
+            self.trajectory.reward += reward_penalty
 
-        cur_step = Step(observation=observation, step=self.step)
-        self._trajectory.steps.append(cur_step)
+    def update_from_model(self, response: str, **kwargs) -> Action:
+        action_str = self._parse_model_response(response)
 
-    def update_from_model(self, response: Any, **kwargs):
-        if isinstance(response, str):
-            content = response
-        else:  # OpenAI response
-            try:
-                content = response.choices[0].message.content
-            except Exception as e:
-                logger.error(f"Failed to extract content from response: {response}. Error: {e}")
-                content = str(response)
-
-        thought = content
-        if not self.accumulate_thinking:
-            thought, sep, after = content.partition("</think>")
-            if sep:
-                content = after
-
-        assert self._trajectory.steps, "Trajectory should not be empty when update_from_model is called."
-
-        action_str = self._parse_model_response(content)
-
-        cur_step = self._trajectory.steps[-1]
-        cur_step.thought = thought  # only thought if we aren't accumulating_thinking and extract </think> otherwise full response
-        cur_step.action = action_str
-        cur_step.model_response = content
-
-        self.messages.append({"role": "assistant", "content": content})
-
+        self.messages.append({"role": "assistant", "content": response})
         self.step += 1
 
-        action_history_str = action_str if action_str != content else "Response is missing ``` ```"
+        new_step = Step(chat_completions=copy.deepcopy(self.chat_completions), action=action_str, model_response=response, observation=self.current_observation)
+        self._trajectory.steps.append(new_step)
+
+        action_history_str = action_str if action_str != response else "Response is missing ``` ```"
         self.action_history.append(action_history_str)
+
+        return Action(action=action_str)
+
+    def _remove_thinking(self, messages: list[dict[str, str]]) -> list[dict[str, str]]:
+        for msg in messages[:-1]:
+            if msg["role"] == "assistant":
+                _, sep, after = msg["content"].partition("</think>")
+                if sep:
+                    msg["content"] = after
+        return messages
 
     @property
     def chat_completions(self) -> list[dict[str, str]]:
-        return self.messages
+        messages = copy.deepcopy(self.messages)
+        if not self.accumulate_thinking:
+            messages = self._remove_thinking(messages)
 
-    @property
-    def prompt(self) -> list[dict[str, str]]:
         if self.full_conversation:
-            return self.messages
+            return messages
 
         latest_msgs = [self.messages[0]]  # system message
         has_assistant_msg = False
@@ -336,21 +320,6 @@ Action: ```send_msg_to_user("The price for a 15\\" laptop is 1499 USD.")```
         if matches:
             return matches[-1]
         return response
-
-    def compute_training_reward(self, trajectory: Trajectory) -> float:
-        if not trajectory:
-            return 0
-
-        reward = trajectory.steps[-1].reward
-        if not self.reward_shaping:
-            return reward
-
-        reward_penalty = 0
-        for step in trajectory.steps:
-            if not self.validate_step(step):
-                reward_penalty = -0.5
-                break
-        return reward + reward_penalty
 
     def validate_step(self, trajectory_step):
         """

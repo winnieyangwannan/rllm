@@ -8,8 +8,6 @@ from rllm.engine.async_agent_execution_engine import AsyncAgentExecutionEngine
 from rllm.environments.frozenlake.frozenlake import FrozenLakeEnv
 from rllm.utils import compute_pass_at_k
 
-from .prepare_frozenlake_data import prepare_frozenlake_data
-
 
 def load_frozenlake_data():
     if DatasetRegistry.dataset_exists("frozenlake", "test"):
@@ -17,6 +15,8 @@ def load_frozenlake_data():
         return test_dataset.get_data()
 
     print("FrozenLake datasets not found. Preparing datasets...")
+    from prepare_frozenlake_data import prepare_frozenlake_data
+
     train_dataset, test_dataset = prepare_frozenlake_data()
 
     return test_dataset.get_data()

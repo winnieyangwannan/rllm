@@ -6,7 +6,7 @@ Note that we don't combine the main with ray_trainer as ray_trainer is used by o
 import hydra
 import ray
 
-from rllm.train.env_agent_mappings import AGENT_CLASS_MAPPING, ENV_CLASS_MAPPING, setup_environment
+from rllm.train.env_agent_mappings import AGENT_CLASS_MAPPING, ENV_CLASS_MAPPING
 
 # Local application imports
 from rllm.trainer.agent_ppo_trainer import AgentPPOTrainer
@@ -93,8 +93,6 @@ def train_agent(config, agent_class=None, env_class=None, agent_args=None, env_a
         env_args.update(config.env.get("env_args"))
     if config.agent.get("agent_args") is not None:
         agent_args.update(config.agent.get("agent_args"))
-
-    setup_environment(config)
 
     trainer = AgentPPOTrainer(
         config=config,

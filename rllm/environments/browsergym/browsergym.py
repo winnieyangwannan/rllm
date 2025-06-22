@@ -74,7 +74,7 @@ class BrowserGymEnv(BaseEnv):
             self.process.join()
 
     @staticmethod
-    def from_json(extra_info) -> "BrowserGymEnv":
+    def from_dict(extra_info: dict) -> "BrowserGymEnv":
         headless = extra_info.get("headless", True)
         timeout_ms = extra_info.get("timeout", 5000)
         return BrowserGymEnv(env_id=extra_info["env_id"], headless=headless, timeout=timeout_ms)

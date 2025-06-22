@@ -9,6 +9,8 @@ from enum import Enum
 
 @dataclass
 class RewardConfig:
+    apply_format_reward: bool = False
+
     # Config for math-bsed rewards
     math_reward_weight: float = 1.0
     use_math_orm: bool = False
