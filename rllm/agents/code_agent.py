@@ -1,7 +1,8 @@
+import copy
 import logging
 from typing import Any
 
-from rllm.agents.agent import BaseAgent, Step, Trajectory
+from rllm.agents.agent import Action, BaseAgent, Step, Trajectory
 
 logger = logging.getLogger(__name__)
 
@@ -29,14 +30,17 @@ class CompetitionCodingAgent(BaseAgent):
         self.revise_instruction = "Here's the feedback from the previous attempt. Revise the code to fix the errors and improve the solution."
         self._trajectory = Trajectory()
         self.messages = []
-        self.step = 0
         self.remove_thinking = remove_thinking
         self.max_tests = max_tests
         self.public_test_only = public_test_only
+        self.current_observation = None
 
     def format_test_results(self, test_results: list[dict]) -> str:
         def normalize_string(s):
             return "".join(s.split())
+
+        if not self.trajectory.steps:
+            return "No test cases found. Please review your solution once more for correctness and efficiency, then output your final code if you're confident it's optimal."
 
         normalized_question = normalize_string(self.trajectory.steps[0].observation)
 
@@ -84,7 +88,6 @@ class CompetitionCodingAgent(BaseAgent):
         Updates the agent's internal state after an environment step.
         """
         # Format observation based on whether it's the initial problem or subsequent feedback
-
         if not self._trajectory.steps:
             # Initial problem statement
             assert isinstance(observation, dict) and "question" in observation, "Initial observation must be a dict with a 'question' key."
@@ -94,47 +97,43 @@ class CompetitionCodingAgent(BaseAgent):
             if "test_results" in observation:
                 test_results = observation["test_results"]
                 formatted_observation = self.format_test_results(test_results)
-            if "error" in observation:
+            elif "error" in observation:
                 formatted_observation = observation["error"]
-
-        # Update reward on the latest step
-        if self.trajectory.steps:
-            cur_step = self.trajectory.steps[-1]
-            cur_step.reward = reward
-            cur_step.step = self.step
-            cur_step.done = done
-            cur_step.info = info
+            else:
+                formatted_observation = str(observation)
 
         if done:
             return
 
         self.messages.append({"role": "user", "content": formatted_observation})
-        # Create a new step for the current state
-        new_step = Step(observation=formatted_observation, step=self.step)
-        self._trajectory.steps.append(new_step)
+        self.current_observation = formatted_observation
 
-    def update_from_model(self, response: str, **kwargs):
+    def update_from_model(self, response: str, **kwargs) -> Action:
         """
         Updates the agent's internal state based on the model's response.
         """
         content = response
+        action = response
 
-        assert self._trajectory.steps, "Trajectory should not be empty when update_from_model is called."
-
-        # Update the current step in the trajectory
-        cur_step = self._trajectory.steps[-1]
-        cur_step.model_response = response
-
+        # Handle thinking removal if needed
         if self.remove_thinking and content.count("</think>") == 1:
-            cur_step.thought, cur_step.action = response.split("</think>")
-            cur_step.thought += "</think>"
-            cur_step.action = cur_step.action.strip()
-            self.messages.append({"role": "assistant", "content": cur_step.action})
+            thought, action = response.split("</think>")
+            thought += "</think>"
+            action = action.strip()
+            self.messages.append({"role": "assistant", "content": action})
         else:
-            cur_step.model_response = response
             self.messages.append({"role": "assistant", "content": response})
 
-        self.step += 1
+        # Create new step
+        new_step = Step(
+            chat_completions=copy.deepcopy(self.chat_completions),
+            action=action,
+            model_response=response,
+            observation=self.current_observation
+        )
+        self._trajectory.steps.append(new_step)
+
+        return Action(action=action)
 
     def reset(self):
         """
@@ -142,7 +141,7 @@ class CompetitionCodingAgent(BaseAgent):
         """
         self._trajectory = Trajectory()
         self.messages = []
-        self.step = 0
+        self.current_observation = None
 
     @property
     def chat_completions(self) -> list[dict[str, str]]:
@@ -156,5 +155,6 @@ class CompetitionCodingAgent(BaseAgent):
 
     def get_current_state(self) -> Step:
         """Returns the current step/state of the agent."""
-        assert self._trajectory.steps, "Trajectory should not be empty when get_current_state is called."
+        if not self._trajectory.steps:
+            return None
         return self._trajectory.steps[-1]
