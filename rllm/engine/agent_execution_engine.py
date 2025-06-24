@@ -1,70 +1,57 @@
+import asyncio
+import concurrent.futures
+import logging
+import time
 import traceback
+import uuid
 from concurrent.futures import ThreadPoolExecutor
 
 import numpy as np
+import openai
 import torch
+from openai.types import Completion
 
-from rllm.agents.utils import convert_messages_to_tokens_and_masks, get_recent_assistant_user_messages
+from rllm.agents.agent import Action
+from rllm.agents.utils import (
+    convert_messages_to_tokens_and_masks,
+    get_recent_assistant_user_messages,
+)
 from rllm.environments.env_utils import (
     compute_mc_return,
     compute_trajectory_reward,
 )
 from rllm.misc import colorful_print
 from rllm.parser.chat_template.parser import ChatTemplateParser
+from rllm.router.router import Router
+
+logger = logging.getLogger(__name__)
 
 
 class AgentExecutionEngine:
-    """Engine for executing agent interactions with environments."""
-
     def __init__(
         self,
-        rollout_engine,
-        engine_name,
-        tokenizer,
-        config,
-        agents=None,
-        envs=None,
-        model_path="",
-        n_parallel_agents=None,
+        engine_name="openai",
+        tokenizer=None,
+        rollout_engine=None,
+        chat_parser=None,
+        n_parallel_agents=1,
         trajectory_timeout=None,
-        gamma=0.95,
+        gamma=0.2,
         api_retries=3,
-        retry_limit=1,
+        retry_limit=3,
         max_steps=5,
-        max_response_length=16384,
-        max_prompt_length=2048,  # Max prompt length for agent is only applied to first request
+        max_response_length=8192,
+        max_prompt_length=1024,
+        config=None,
         agent_class=None,
         env_class=None,
         agent_args=None,
         rollout_engine_args=None,
         env_args=None,
-        max_workers=16,
+        max_workers=64,
         enforce_max_prompt_length=False,  # If enabled, applies max_prompt check per step
         **kwargs,
     ):
-        """Initialize the agent execution engine.
-
-        Args:
-            rollout_engine: Engine for rolling out trajectories
-            engine_name: Name of the engine to use
-            tokenizer: Tokenizer for the model
-            agents: List of agents
-            envs: List of environments
-            model_path: Path to the model
-            gamma: Discount factor
-            api_retries: Number of API retries
-            retry_limit: Number of retry limits
-            max_steps: Maximum number of steps
-            max_prompt_length: Maximum prompt length
-            max_response_length: Maximum response length
-            rollout_engine_args: Arguments for the rollout engine
-            **kwargs: Additional arguments
-        """
-        # Initialize mutable defaults
-        if agents is None:
-            agents = []
-        if envs is None:
-            envs = []
         if agent_args is None:
             agent_args = {}
         if rollout_engine_args is None:
@@ -77,115 +64,496 @@ class AgentExecutionEngine:
         self.tokenizer = tokenizer
         self.engine_name = engine_name
         self.n_parallel_agents = n_parallel_agents
-        self.model_path = model_path
 
         # For interaction
         self.gamma = gamma
         self.retry_limit = retry_limit
         self.api_retries = api_retries
         self.max_steps = max_steps
-        self.agent_args = agent_args
         self.max_response_length = max_response_length
         self.max_prompt_length = max_prompt_length
         self.enforce_max_prompt_length = enforce_max_prompt_length
-        self.max_workers = max_workers
 
         self.agent_class = agent_class
         self.agent_args = agent_args
-        self.agents = agents
         self.env_class = env_class
         self.env_args = env_args
-        self.envs = envs
 
-        assert len(agents) == len(envs), f"Number of agents must equal to number of environments but received, {len(agents)} and {len(envs)}"
+        self.agents = [None for _ in range(n_parallel_agents)]
+        self.envs = [None for _ in range(n_parallel_agents)]
 
         self.trajectory_timeout = trajectory_timeout
         if not trajectory_timeout:
             self.trajectory_timeout = int(1e9)
 
+        assert env_class.is_multithread_safe(), "Environment must be multithread safe for async engine"
         # rollout engine args
-        self.rollout_engine_args = rollout_engine_args or {}
+        self.rollout_engine_args = rollout_engine_args
         self.sampling_params = kwargs.get("sampling_params", None)
 
-        if engine_name == "openai":
-            from openai import OpenAI
+        self.server_addresses = getattr(self.rollout_engine, "server_addresses", None)
 
-            self.client = OpenAI(**self.rollout_engine_args)
-        elif engine_name == "verl":
-            # only compatible with synchronous verl engine
-            assert self.config.actor_rollout_ref.rollout.mode != "async", "Only synchronous engine is supported for synchronous execution engine"
+        assert self.engine_name in ["openai", "verl"], "Currently only openai and verl are supported as rollout engine"
+        if self.engine_name == "openai":
+            from openai import AsyncOpenAI
 
-        self.chat_template_parser = ChatTemplateParser.get_parser(self.tokenizer, disable_thinking=kwargs.get("disable_thinking", False))
+            self.client = AsyncOpenAI(**self.rollout_engine_args)
+            # Disable httpx INFO logs that show HTTP requests
+            logging.getLogger("httpx").setLevel(logging.WARNING)
+        elif self.engine_name == "verl":
+            # All generation is done via scheduler. Currently only works for verl
+            self.router = Router(config=self.config, tokenizer=self.tokenizer, addresses=self.server_addresses)
 
-    def get_model_response(self, prompts, seq_idxs, **kwargs):
+        # Create a thread pool executor for environment interactions (i.e. step, reset, close)
+        self.executor = concurrent.futures.ThreadPoolExecutor(max_workers=max_workers)
+
+        if chat_parser is None:
+            self.chat_parser = ChatTemplateParser.get_parser(self.tokenizer, disable_thinking=kwargs.get("disable_thinking", False))
+        else:
+            self.chat_parser = chat_parser
+
+        self.is_last_trajectory = False
+
+    async def get_model_response(self, prompt, application_id, **kwargs):
         """
-        Compute model response based on the engine type.
+        Compute model response asynchronously based on the engine type.
 
-        This function routes the request to the appropriate engine-specific handler.
+        This function is multithread safe and routes the request to the appropriate
+        engine-specific handler.
 
         Args:
-            prompts: List of input prompts to send to the model
-            seq_idxs: List of indices indicating which agent each prompt is for
+            prompt: The input prompt to send to the model
+            application_id: Unique identifier for the application
             **kwargs: Additional arguments to pass to the model
 
         Returns:
-            List of model response texts
+            The model's response text
 
         Raises:
             NotImplementedError: If the engine type is not supported
         """
-        assert len(prompts) == len(seq_idxs), f"Number of prompts {len(prompts)} should equal to the number of agents they are for ({len(seq_idxs)})"
-        if self.engine_name == "verl":
-            return self._get_verl_sync(prompts, seq_idxs, **kwargs)
+        if self.engine_name == "openai":
+            return await self._get_openai_async(prompt, application_id, **kwargs)
+        elif self.engine_name == "verl":
+            return await self._get_verl_async(prompt, application_id, **kwargs)
         else:
             raise NotImplementedError(f"Engine type '{self.engine_name}' not supported")
 
-    def _get_verl_sync(self, prompts, seq_idxs, **kwargs):
-        """Get responses from veRL engine synchronously.
+    def update_envs_and_agents(self, envs, agents):
+        """
+        Update the environments and agents.
 
         Args:
-            prompts: List of prompts to send to the model
-            seq_idxs: List of indices indicating which agent each prompt is for
-            **kwargs: Additional arguments to pass to the model
+            envs: List of environments to use
+            agents: List of agents to use
+        """
+        assert len(agents) == len(envs), f"Number of agents must equal to number of environments but received, {len(agents)} and {len(envs)}"
+        self.envs = envs
+        # For keeping track of the environment index in the batch.
+        for idx, env in enumerate(envs):
+            env.idx = idx
+        self.agents = agents
+        self.n_parallel_agents = len(envs)
+
+    async def _get_verl_async(self, prompt, application_id, **kwargs):
+        batch = self._convert_prompt_verl([prompt], **kwargs)
+
+        if "max_tokens" in kwargs:
+            batch.meta_info["max_tokens"] = kwargs["max_tokens"]
+
+        output = await self.router.generate_sequences(batch, application_id=application_id, **kwargs)
+
+        attn = output.batch["attention_mask"][0, self.max_prompt_length :]
+        tokens = output.batch["responses"][0]
+
+        # Find last index where attention == 1
+        non_pad_indices = (attn == 1).nonzero(as_tuple=True)[0]
+        if len(non_pad_indices) == 0:
+            trimmed = tokens[:0]  # empty
+        else:
+            last_valid_idx = non_pad_indices[-1].item()
+            trimmed = tokens[: last_valid_idx + 1]  # include the last valid token
+
+        response = self.tokenizer.decode(trimmed, skip_special_tokens=False)
+
+        pad_token = self.tokenizer.pad_token
+        eos_token = self.tokenizer.eos_token
+        response = response.replace(pad_token, "").replace(eos_token, "")
+        return response
+
+    async def _get_openai_async(self, prompt, _, **kwargs):
+        """
+        Get action from OpenAI API asynchronously with retry logic.
+
+        Args:
+            prompt: The input prompt in text format for completions API
+            application_id: Unique identifier for the application (unused for OpenAI)
+            **kwargs: Additional arguments to pass to the OpenAI API
 
         Returns:
-            Tuple of (responses, seq_idxs)
+            The response from OpenAI API
         """
-        from verl.protocol import pad_dataproto_to_divisor, unpad_dataproto
 
-        batch = self._convert_prompt_verl(prompts, **kwargs)
+        async def get_response(prompt_text: str):
+            retries = self.api_retries
+            while retries > 0:
+                try:
+                    response = await self.client.completions.create(
+                        prompt=prompt_text,
+                        timeout=3600,
+                        **self.sampling_params,
+                        **kwargs,
+                    )
+                    return response
+                except openai.RateLimitError:
+                    retries -= 1
+                    if retries == 0:
+                        return "Error: Rate limit reached and retries exhausted."
+                    logger.info("Sleep for 5 seconds for API limit.")
+                    await asyncio.sleep(5)
+                except Exception as e:
+                    logger.error("Error: %s", e)
+                    return f"Error processing content: {e}"
 
-        # because of veRL's chunking. we need to pad number of prompts to be a multiple of worker group world size
-        batch_padded, pad_size = pad_dataproto_to_divisor(batch, self.rollout_engine.world_size)
-        if "max_tokens" in kwargs:
-            batch_padded.meta_info["max_tokens"] = kwargs["max_tokens"]
-        output_padded = self.rollout_engine.generate_sequences(batch_padded)
+        # If prompt is in chat format, convert it to text format
+        prompt_text = prompt
+        if isinstance(prompt, list) and all(isinstance(msg, dict) for msg in prompt):
+            prompt_text = self.chat_parser.parse(prompt, add_generation_prompt=True, is_first_msg=True)
 
-        output = unpad_dataproto(output_padded, pad_size=pad_size)
-        attention_mask = output.batch["attention_mask"][:, self.max_prompt_length :]
-        responses_tokens = output.batch["responses"]
+        response = await get_response(prompt_text)
+        if isinstance(response, Completion):
+            response = response.choices[0].text
+        return response
 
-        responses = []
-        batch_size = responses_tokens.size(0)
+    async def run_agent_trajectory_async(self, idx, application_id, seed=0, mode="Text", **kwargs):
+        """Run a single agent's trajectory asynchronously"""
+        agent = self.agents[idx]
+        env = self.envs[idx]
+        # env_id = env.env_id
 
-        for i in range(batch_size):
-            tokens = responses_tokens[i]
-            attn = attention_mask[i]
+        # Initialize trajectory for this task.
+        trajectory = []
+        termination_reason = None
+        prompt_token_len = 0
+        prompt_tokens = []
+        response_token_len = 0
+        response_tokens = []
+        response_masks = []
+        total_time = 0
 
-            # Find last index where attention == 1
-            non_pad_indices = (attn == 1).nonzero(as_tuple=True)[0]
-            if len(non_pad_indices) == 0:
-                trimmed = tokens[:0]  # empty
+        # for step return
+        episode_steps = []
+
+        # Reset environment with the task using the executor
+        loop = asyncio.get_event_loop()
+        observation, info = await loop.run_in_executor(self.executor, env.reset)
+        info["max_steps"] = self.max_steps
+
+        # Reset agent
+        agent.reset()
+        # Update agent internal state from environment.
+        agent.update_from_env(
+            observation=observation,  # Raw observation from environment
+            reward=0.0,
+            done=False,
+            info=info,
+        )
+        messages = agent.chat_completions
+        prompt_tokens, _ = convert_messages_to_tokens_and_masks(messages, tokenizer=self.tokenizer, parser=self.chat_parser, contains_first_msg=True, contains_generation_msg=True)
+        prompt_token_len = len(prompt_tokens)
+        # Note, this should never happen!
+        if prompt_token_len > self.max_prompt_length:
+            agent.reset()
+            raise Exception(f"Trajectory {idx}: initial prompt length {prompt_token_len} already exceeded max_prompt_length {self.max_prompt_length}, retrying")
+
+        for step_idx in range(self.max_steps):
+            # Get action from agent
+            prompt_messages = agent.chat_completions.copy()
+            # Max remaining tokens left for the response
+            # For enforced max prompt at each step, no need to deduct here
+            if not self.enforce_max_prompt_length:
+                max_tokens = self.max_response_length - response_token_len
             else:
-                last_valid_idx = non_pad_indices[-1].item()
-                trimmed = tokens[: last_valid_idx + 1]  # include the last valid token
+                max_tokens = self.max_response_length
 
-            text = self.tokenizer.decode(trimmed, skip_special_tokens=False)
-            pad_token = self.tokenizer.pad_token
-            eos_token = self.tokenizer.eos_token
-            text = text.replace(pad_token, "").replace(eos_token, "")
-            responses.append(text)
-        return responses, seq_idxs
+                # since max prompt is enforced, we filter out too long prompts.
+                prompt_str = self.chat_parser.parse(prompt_messages, add_generation_prompt=True, is_first_msg=True)
+                prompt_len = len(self.tokenizer.encode(prompt_str, add_special_tokens=False))
+                if prompt_len > self.max_prompt_length:
+                    termination_reason = "PROMPT_TRUNCATION"
+                    break
+
+            kwargs["max_tokens"] = max_tokens
+
+            start_time = time.time()
+            response = await self.get_model_response(prompt_messages, application_id, **kwargs)
+
+            # Update steps
+            prompt_response_pair = {
+                "prompt": self.chat_parser.parse(prompt_messages, add_generation_prompt=True, is_first_msg=True),
+                "response": response,
+            }
+            episode_steps.append(prompt_response_pair)
+
+            # Update agent with model response
+            total_time += time.time() - start_time
+            action: Action = agent.update_from_model(response)
+            action = action.action
+
+            # Take step in environment using the executor
+            start_time = time.time()
+
+            try:
+                next_observation, reward, done, info = await asyncio.wait_for(loop.run_in_executor(self.executor, env.step, action), timeout=(self.trajectory_timeout - total_time))
+            except asyncio.TimeoutError:
+                termination_reason = "ENV_TIMEOUT"
+                if step_idx == 0:
+                    colorful_print(f"Warning: Trajectory {idx} completed due to: {termination_reason} before able to perform 1 complete action. This might cause unexpected behavior. Consider increasing trajectory timeout limit.\n", "red")
+                reward = 0
+
+                cur_step = agent.get_current_state()
+                done = True
+                cur_step.done = done
+                break
+
+            total_time += time.time() - start_time
+            info["max_steps"] = self.max_steps
+
+            # Update agent internal state.
+            agent.update_from_env(
+                observation=next_observation,
+                reward=reward,
+                done=done,
+                info=info,
+            )
+
+            cur_step = agent.get_current_state()
+            cur_step.reward = reward
+            cur_step.done = done
+            cur_step.info.update(info)
+
+            chat_completions_messages = agent.chat_completions
+            assistant_message, env_messages = get_recent_assistant_user_messages(chat_completions_messages)
+
+            # Check and convert to tokens if necessary
+            assert assistant_message is not None or mode != "Token", "Assistant messages is none when accumulating token trajectories which should be conversations. This should not happen."
+            assert env_messages is not None or mode != "Token", "Environment messages is none when accumulating token trajectories which should be conversations. This should not happen."
+            assistant_msg_tokens, assistant_msg_masks = [], []
+            env_msg_tokens, env_msg_masks = [], []
+            if assistant_message:
+                assistant_msg_tokens, assistant_msg_masks = convert_messages_to_tokens_and_masks([assistant_message], tokenizer=self.tokenizer, parser=self.chat_parser, contains_first_msg=False, contains_generation_msg=False)
+            if env_messages:
+                env_msg_tokens, env_msg_masks = convert_messages_to_tokens_and_masks(env_messages, tokenizer=self.tokenizer, parser=self.chat_parser, contains_first_msg=False, contains_generation_msg=True)
+
+            # Update repsonse token length
+            response_token_len += len(assistant_msg_tokens) + len(env_msg_tokens)
+            # Reached maximum number of tokens for the trajectory
+            if not self.enforce_max_prompt_length and response_token_len >= self.max_response_length:
+                # Truncation length
+                truncation_length = self.max_response_length - response_token_len
+                # Truncate the response and masks
+                if truncation_length < 0:
+                    truncated_response_tokens = (assistant_msg_tokens + env_msg_tokens)[:truncation_length]
+                    truncated_response_masks = (assistant_msg_masks + env_msg_masks)[:truncation_length]
+                else:
+                    # Edge case where the response is exactly the max response length.
+                    truncated_response_tokens = assistant_msg_tokens + env_msg_tokens
+                    truncated_response_masks = assistant_msg_masks + env_msg_masks
+                # Update token collections
+                response_tokens.extend(truncated_response_tokens)
+                response_masks.extend(truncated_response_masks)
+
+                cur_step = agent.get_current_state()
+                if response_token_len - len(env_msg_tokens) > self.max_response_length and not hasattr(env, "compute_final_reward"):
+                    cur_step.reward = 0.0
+                cur_step.done = True
+                termination_reason = "TRUNCATION"
+                # handle returning
+                break
+
+            # Update the token version of trajectory
+            response_tokens.extend(assistant_msg_tokens)
+            response_masks.extend(assistant_msg_masks)
+            observation = next_observation
+
+            if total_time >= self.trajectory_timeout or self.is_last_trajectory:
+                termination_reason = "TIMEOUT"
+                cur_step = agent.get_current_state()
+                done = True
+                cur_step.done = done
+                break
+
+            # Check if episode is done
+            if done:
+                termination_reason = "ENV_DONE"
+                break
+
+            response_tokens.extend(env_msg_tokens)
+            response_masks.extend(env_msg_masks)
+
+            if step_idx == self.max_steps - 1:
+                termination_reason = "MAX_STEPS"
+
+        if hasattr(env, "compute_final_reward"):
+            cur_step = agent.get_current_state()
+            reward = await loop.run_in_executor(self.executor, env.compute_final_reward)
+            cur_step.reward = reward
+        # Closing environment using the executor.
+        await loop.run_in_executor(self.executor, env.close)
+        if termination_reason:
+            if reward > 0:
+                color = "green"
+            else:
+                color = "yellow"
+            colorful_print(
+                f"Trajectory {idx} completed due to: {termination_reason}. Reward is {reward}. \n",
+                color,
+            )
+        trajectory = agent.trajectory
+        # Aggregate final trajectory statistics
+        compute_trajectory_reward(trajectory)
+        compute_mc_return(trajectory, gamma=self.gamma)
+
+        if mode == "Text":
+            return trajectory
+        elif mode == "Token":
+            token_result = {
+                "prompt_tokens": torch.tensor(prompt_tokens, dtype=torch.long),
+                "response_tokens": torch.tensor(response_tokens, dtype=torch.long),
+                "response_masks": torch.tensor(response_masks, dtype=torch.long),
+                "trajectory_reward": trajectory.reward,
+                "idx": env.idx,
+            }
+            return token_result
+        elif mode == "Conversation":
+            return agent.chat_completions
+        elif mode == "Step":
+            steps_result = {
+                "steps": episode_steps,
+                "trajectory_reward": trajectory.reward,
+                "idx": env.idx,
+                "mc_returns": [step.mc_return for step in trajectory.steps][: len(episode_steps)],
+            }
+            return steps_result
+
+    async def run_agent_trajectory_with_retry(self, idx, application_id, seed=0, mode="Text", **kwargs):
+        for _ in range(self.retry_limit):
+            try:
+                return await self.run_agent_trajectory_async(idx, application_id=application_id, seed=seed, mode=mode, **kwargs)
+            except Exception:
+                traceback.print_exc()
+                continue
+        traceback.print_exc()
+        raise Exception(f"Trajectory {idx} cannot complete. Please check the log message")
+
+    async def trajectory_generator(self, reset_seed=0, timing_raw=None, mode="Text", **kwargs):
+        if timing_raw is None:
+            timing_raw = {}
+        assert all(type(env).is_multithread_safe() for env in self.envs), "All environments must be multithread safe for async engine"
+        self.is_last_trajectory = False
+        max_concurrency = self.n_parallel_agents
+        self.executor = ThreadPoolExecutor(max_workers=max_concurrency)
+
+        if self.engine_name == "verl":
+            self.rollout_engine.wake_up()
+
+        # semaphore = asyncio.Semaphore(max_concurrency)
+        async def launch_one_trajectory_task(env_idx: int):
+            try:
+                # await semaphore.acquire()
+                # await asyncio.sleep(0.15 * env_idx)
+
+                application_id = str(uuid.uuid4())
+                result = await self.run_agent_trajectory_with_retry(
+                    idx=env_idx,
+                    application_id=application_id,
+                    seed=reset_seed,  # or current_seed
+                    mode=mode,
+                    **kwargs,
+                )
+                # semaphore.release()
+            except Exception as e:
+                import traceback
+
+                traceback.print_exc()
+                raise e
+            return result
+
+        # Create all N conceptual tasks. Their execution will be throttled by the semaphore
+        # and the availability of agent/env indices.
+        tasks_to_run = [launch_one_trajectory_task(i) for i in range(len(self.envs))]
+
+        tasks_completed = 0
+        for coro in asyncio.as_completed(tasks_to_run):
+            try:
+                result = await coro
+                tasks_completed += 1
+                colorful_print(f"Number of Trajectories {tasks_completed}/{len(self.envs)} completed", "cyan")
+                if tasks_completed == len(self.envs) - 2:
+                    self.is_last_trajectory = True
+                yield result
+            except Exception as e:
+                raise e
+
+        if self.engine_name == "verl":
+            self.rollout_engine.sleep()
+
+        self.executor.shutdown(wait=False)
+
+    async def execute_tasks(self, tasks: list[dict]):
+        """
+        Run asynchronous interactions between the agent and environment where each agent
+        has its own environment instance and can proceed independently.
+
+        Args:
+            tasks: List of tasks to process
+            max_concurrent: Maximum number of concurrent tasks to process (defaults to self.n_parallel_agents)
+
+        Returns:
+            A list of trajectories, one for each task.
+        """
+
+        max_concurrent = self.n_parallel_agents
+
+        # Initialize results list to store trajectories for all tasks
+        all_trajectories = {}
+
+        # Create a queue of tasks to process
+        task_queue = list(enumerate(tasks))
+        semaphore = asyncio.Semaphore(max_concurrent)
+        index_queue = asyncio.Queue(maxsize=max_concurrent)
+        for i in range(max_concurrent):
+            index_queue.put_nowait(i)
+
+        # Track completed trajectories
+        completed = 0
+        total = len(tasks)
+
+        async def sem_wrapper(task_id, task):
+            nonlocal completed
+            async with semaphore:
+                # Get an available index
+                index = await index_queue.get()
+                try:
+                    self.envs[index] = self.env_class.from_dict({**task, **self.env_args})
+                    self.agents[index] = self.agent_class(**self.agent_args)
+                    self.agents[index].trajectory.task = task
+                    res = await self.run_agent_trajectory_async(index, application_id=task_id)
+                    completed += 1
+                    colorful_print(f"Progress: {completed}/{total} trajectories completed", "cyan")
+                    return task_id, res
+                finally:
+                    # Put the index back in the queue when done
+                    await index_queue.put(index)
+
+        # Create a queue of tasks to process
+        task_queue = list(enumerate(tasks))
+        # Run all tasks concurrently
+        results = await asyncio.gather(*[sem_wrapper(task_id, task) for task_id, task in task_queue])
+
+        all_trajectories = {task_id: trajectory for task_id, trajectory in results}
+        ordered_trajectories = [all_trajectories[i] for i in range(len(all_trajectories))]
+        return ordered_trajectories
 
     def _convert_prompt_verl(self, prompts, **kwargs):
         """
@@ -206,7 +574,7 @@ class AgentExecutionEngine:
         old_padding_side = self.tokenizer.padding_side
         self.tokenizer.padding_side = "left"
 
-        formatted_prompts = [self.chat_template_parser.parse(prompt, add_generation_prompt=True, is_first_msg=True) for prompt in prompts]
+        formatted_prompts = [self.chat_parser.parse(prompt, add_generation_prompt=True, is_first_msg=True) for prompt in prompts]
 
         # Tokenize the final processed strings
         inputs = self.tokenizer(
@@ -240,388 +608,7 @@ class AgentExecutionEngine:
 
         return data
 
-    def get_model_response_batched(self, prompts, all_dones, **kwargs):
-        """Get model responses for non-done trajectories.
 
-        Args:
-            prompts: List of prompts for all agents
-            all_dones: List of boolean flags indicating which trajectories are done
-            **kwargs: Additional arguments to pass to the model
-
-        Returns:
-            Tuple of (responses, seq_idxs) where seq_idxs are the indices of non-done trajectories
-        """
-        seq_idxs = []
-        cur_prompts = []
-        for i, done in enumerate(all_dones):
-            if not done:
-                cur_prompts.append(prompts[i])
-                seq_idxs.append(i)
-
-        if cur_prompts:
-            responses, seq_idxs = self.get_model_response(
-                cur_prompts,
-                seq_idxs,
-                **kwargs,
-            )
-            assert len(responses) == len(seq_idxs), f"Number of responses {len(responses)} returned does not match number of trajectories {len(seq_idxs)}"
-            return responses, seq_idxs
-        return [], []
-
-    def step_environment_batched(self, actions, seq_idxs):
-        """Step multiple environments in parallel.
-
-        Args:
-            actions: List of actions to take in each environment
-            seq_idxs: List of indices indicating which environment each action is for
-
-        Returns:
-            Tuple of (next_observations, rewards, dones, infos)
-        """
-        results = [None] * len(seq_idxs)
-
-        def step_env_single(env, action):
-            return env.step(action)
-
-        if all(type(self.envs[seq_idxs[i]]).is_multithread_safe() for i in range(len(seq_idxs))):
-            with ThreadPoolExecutor(max_workers=self.max_workers) as executor:
-                futures = [executor.submit(step_env_single, self.envs[seq_idxs[i]], actions[i]) for i in range(len(seq_idxs))]
-
-                for i, fut in enumerate(futures):
-                    results[i] = fut.result()
-        else:
-            for i in range(len(seq_idxs)):
-                results[i] = self.envs[seq_idxs[i]].step(actions[i])
-
-        next_observations, rewards, dones, infos = zip(*results, strict=False)
-        return list(next_observations), list(rewards), list(dones), list(infos)
-
-    def reset_environment_batched(self, seq_idxs):
-        """Reset multiple environments in parallel.
-
-        Args:
-            seq_idxs: List of indices indicating which environments to reset
-
-        Returns:
-            Tuple of (observations, infos)
-        """
-        results = [None] * len(seq_idxs)
-
-        def reset_env_single(env):
-            return env.reset()
-
-        if all(type(self.envs[seq_idxs[i]]).is_multithread_safe() for i in range(len(seq_idxs))):
-            with ThreadPoolExecutor(max_workers=self.max_workers) as executor:
-                futures = [executor.submit(reset_env_single, self.envs[seq_idxs[i]]) for i in range(len(seq_idxs))]
-
-                for i, fut in enumerate(futures):
-                    results[i] = fut.result()
-        else:
-            for i in range(len(seq_idxs)):
-                results[i] = self.envs[seq_idxs[i]].reset()
-
-        # Unpack all results
-        observations, infos = zip(*results, strict=False)
-        for info in infos:
-            info["max_steps"] = self.max_steps
-        return list(observations), list(infos)
-
-    def close_environment_batched(self):
-        """Close multiple environments in parallel."""
-
-        def close_env_single(env):
-            return env.close()
-
-        if all(type(self.envs[i]).is_multithread_safe() for i in range(len(self.envs))):
-            with ThreadPoolExecutor(max_workers=self.max_workers) as executor:
-                futures = [executor.submit(close_env_single, self.envs[i]) for i in range(len(self.envs))]
-                # Wait for all futures to complete
-                for fut in futures:
-                    fut.result()
-        else:
-            for env in self.envs:
-                env.close()
-
-    def generate_trajectories(self, reset_seed=0, timing_raw=None, mode="Text", **kwargs):
-        """
-        Execute batched interactions with the environment and collect trajectories.
-
-        This function simulates multiple parallel environments and collects step-wise
-        interactions in a structured format. Each trajectory consists of multiple
-        time steps, recording observations, actions, rewards, and other relevant
-        environment information.
-
-        Args:
-            reset_seed (int, optional): The random seed for resetting the environment. Defaults to 0.
-            timing_raw (dict, optional): Dictionary for tracking execution times of different stages. Defaults to {}.
-            mode (str, optional): Decides the return value. If `Text`,returns structured text. If 'Token', returns tokenized responses. If 'Conversation', returns the conversation format. Defaults to Text.
-            **kwargs: Additional arguments that may be passed to environment interactions.
-
-        Returns:
-            List[List[Dict]]: A nested list where each inner list represents a trajectory
-            corresponding to a specific environment. Each step in the trajectory is
-            represented as a dictionary with the following keys:
-
-            - "observation" (Any): The state observed before taking an action.
-            - "next_observation" (Any): The state observed after taking an action.
-            - "reward" (float): The reward received at this step.
-            - "done" (bool): Whether the episode has ended.
-            - "action" (Any): The action taken at this step.
-            - "response" (str): The assistant's response.
-            - "training_reward" (float): The computed reward signal for training purposes.
-            - "truncated" (bool): If this end step resulted in max_steps exceed
-
-            or
-
-            List[Dict]: A list of dictionary where each represents the token version of the trajectory if `mode=Tokens`
-            Each dict of the list has the following keys:
-
-            - "prompt_tokens" (torch.tensor, dtype=torch.long): the prompt token obtained with initial observation
-            - "response_tokens" (torch.tensor, dtype=torch.long): the response token obtained with the rest of response, next_observation of the trajectory
-            - "response_masks" (torch.tensor, dtype=torch.long): the state masking for the response_tokens
-            - "training_reward" (float): The computed reward signal for training purposes
-            - "environment_reward" (float): The raw reward signal from the environment
-
-            or
-
-            List[List[Dict]]: A nested list where each inner list represents a trajectory conversation message in ChatML format
-
-        Notes:
-            - The function ensures that trajectories remain in order, matching the environments they originated from.
-            - The `mode` flag controls the return format.
-            - Timing information, if provided via `timing_raw`, can be used for profiling execution times of different stages.
-            - Trajectories content in the Token version has truncation due to max_response_length reflected, but not in Text or Conversation.
-        """
-        from verl.trainer.ppo.ray_trainer import _timer
-
-        assert self.envs, f"Env cannot be empty, but got {self.envs}"
-        env_batch_size = len(self.envs)
-        assert env_batch_size == self.n_parallel_agents, "Number of parallel environments should match number of parallel agents."
-        assert mode in ["Text", "Token", "Conversation", "Step"], f"Return mode {mode} not supported"
-
-        timing_raw = timing_raw or {}
-
-        for i in range(self.retry_limit):
-            try:
-                steps = 0
-
-                all_dones = [False for _ in range(env_batch_size)]
-                max_prompt_token_len = 0
-                all_response_token_lens = [0 for _ in range(env_batch_size)]
-                all_prompt_tokens = [[] for _ in range(env_batch_size)]
-                all_response_tokens = [[] for _ in range(env_batch_size)]
-                all_response_masks = [[] for _ in range(env_batch_size)]
-
-                # For each episode, accumulate the prompt and response pair for each step in a list.
-                # Each step is a dict with keys "prompt" and "response" to String
-                all_steps = [[] for _ in range(env_batch_size)]
-
-                observations, infos = self.reset_environment_batched(list(range(env_batch_size)))
-
-                # put initial observation into the sequence
-                for i, obs in enumerate(observations):
-                    self.agents[i].reset()
-                    self.agents[i].update_from_env(
-                        observation=obs,
-                        reward=0,
-                        done=False,
-                        info=infos[i],
-                    )
-                    prompt_tokens, _ = convert_messages_to_tokens_and_masks(self.agents[i].chat_completions, self.tokenizer, self.chat_template_parser, contains_first_msg=True, contains_generation_msg=True)
-                    max_prompt_token_len = max(max_prompt_token_len, len(prompt_tokens))
-                    all_prompt_tokens[i] = prompt_tokens
-
-                if max_prompt_token_len > self.max_prompt_length:
-                    self.reset_agents_batched()
-                    self.close_environment_batched()
-                    raise Exception(f"Initial prompt length already exceeded max_prompt_length. Please set `max_prompt_length` to be larger. Current max_prompt_length is {max_prompt_token_len} and max_prompt_length is {self.max_prompt_length}.")
-
-                # get model actions and responses
-                while not all(all_dones) and steps < self.max_steps:
-                    steps += 1
-                    prompt_response_pair = {}
-                    with _timer("get_actions", timing_raw):
-                        prompts = [self.agents[i].prompt.copy() for i in range(env_batch_size)]
-                        # for enforced max prompt, no need to deduct here
-                        if not self.enforce_max_prompt_length:
-                            max_tokens = self.max_response_length - min([t for i, t in enumerate(all_response_token_lens) if all_dones[i] is False])
-                        else:
-                            max_tokens = self.max_response_length
-                            # since max prompt is enforced, we filter out too long prompts.
-                            for i, done in enumerate(all_dones):
-                                if not done:
-                                    prompt_str = self.chat_template_parser.parse(prompts[i], add_generation_prompt=True, is_first_msg=True)
-                                    prompt_len = len(self.tokenizer.encode(prompt_str, add_special_tokens=False))
-                                    if prompt_len > self.max_prompt_length:
-                                        # early terminate the trajectory
-                                        all_dones[i] = True
-                                        finished_traj = self.agents[i].trajectory
-                                        colorful_print(
-                                            f"Trajectory {i} completed due to maximum prompt length reached. Reward is {finished_traj.steps[-1].reward if finished_traj and finished_traj.steps else 0}. \n",
-                                            "yellow",
-                                        )
-
-                        kwargs["max_tokens"] = max_tokens
-                        responses, seq_idxs = self.get_model_response_batched(prompts, all_dones, **kwargs)
-
-                    actions = []
-                    for i, response in enumerate(responses):
-                        self.agents[seq_idxs[i]].update_from_model(response)
-                        cur_state = self.agents[seq_idxs[i]].get_current_state()
-                        actions.append(cur_state.action)
-
-                        prompt_response_pair = {
-                            "prompt": self.chat_template_parser.parse(prompts[seq_idxs[i]], add_generation_prompt=True, is_first_msg=True),
-                            "response": response,
-                        }
-                        all_steps[seq_idxs[i]].append(prompt_response_pair)
-
-                    # environment step
-                    try:
-                        with _timer("env_step", timing_raw):
-                            (
-                                next_observations,
-                                rewards,
-                                dones,
-                                infos,
-                            ) = self.step_environment_batched(actions, seq_idxs)
-                    except Exception as e:
-                        print(f"Error in environment interation: {e}. Re-attempting...")
-                        self.reset_agents_batched()
-                        raise e
-
-                    for i, idx in enumerate(seq_idxs):
-                        if all_dones[idx]:
-                            raise Exception(f"Trajectory {idx} has new state but was marked done. Something went wrong.")
-                        infos[i]["max_steps"] = self.max_steps
-                        self.agents[idx].update_from_env(
-                            observation=next_observations[i],
-                            reward=rewards[i],
-                            done=dones[i],
-                            info=infos[i],
-                        )
-
-                        chat_completions_messages = self.agents[idx].chat_completions
-                        assistant_message, env_messages = get_recent_assistant_user_messages(chat_completions_messages)
-
-                        assistant_msg_tokens, assistant_msg_masks = convert_messages_to_tokens_and_masks([assistant_message], self.tokenizer, self.chat_template_parser, contains_first_msg=False, contains_generation_msg=False)
-                        env_msg_tokens, env_msg_masks = convert_messages_to_tokens_and_masks(env_messages, self.tokenizer, self.chat_template_parser, contains_first_msg=False, contains_generation_msg=True)
-
-                        all_response_token_lens[idx] += len(assistant_msg_tokens) + len(env_msg_tokens)
-                        # Reached maximum number of tokens for the trajectory
-                        # If max prompt is enforced at each round, no need to enforce all response token length.
-                        if not self.enforce_max_prompt_length and all_response_token_lens[idx] >= self.max_response_length:
-                            # Truncation length
-                            truncation_length = self.max_response_length - all_response_token_lens[idx]
-                            # Truncate the response and masks
-                            truncated_response_tokens = (assistant_msg_tokens + env_msg_tokens)[:truncation_length]
-                            truncated_response_masks = (assistant_msg_masks + env_msg_masks)[:truncation_length]
-                            # Update token collections
-                            all_response_tokens[idx].extend(truncated_response_tokens)
-                            all_response_masks[idx].extend(truncated_response_masks)
-                            all_dones[idx] = True
-
-                            cur_step = self.agents[idx].get_current_state()
-                            if all_response_token_lens[idx] - len(env_msg_tokens) > self.max_response_length:
-                                cur_step.reward = 0.0
-                            cur_step.done = True
-
-                            colorful_print(
-                                f"Trajectory {idx} completed due to maximum trajectory length reached. Reward is {rewards[i]}. \n",
-                                "yellow",
-                            )
-                            continue
-
-                        # Update the token version of trajectory
-                        all_response_tokens[idx].extend(assistant_msg_tokens)
-                        all_response_masks[idx].extend(assistant_msg_masks)
-                        observations[idx] = next_observations[i]
-                        # If an environment is done, handle the completed trajectory
-                        if dones[i]:
-                            all_dones[idx] = True
-                            colorful_print(
-                                f"Trajectory {idx} completed. Reward is {rewards[i]}. \n",
-                                "green",
-                            )
-                            continue
-
-                        # Insert env tokens to the results (only for non-finished trajectories)
-                        all_response_tokens[idx].extend(env_msg_tokens)
-                        all_response_masks[idx].extend(env_msg_masks)
-                break
-
-            except Exception as e:
-                print("Error in environment interaction")
-                print(traceback.format_exc())
-                print(e)
-                if i == self.retry_limit - 1:
-                    raise e  # all retry trials are done
-                continue
-
-        # Close all environments
-        self.close_environment_batched()
-
-        # Trajectory post-processing.
-        trajectories = [a.trajectory for a in self.agents]
-        for i, trajectory in enumerate(trajectories):
-            compute_trajectory_reward(trajectory)
-            compute_mc_return(trajectory, gamma=self.gamma)
-
-        if mode == "Text":
-            return trajectories
-        elif mode == "Token":
-            # Collect into dictionary form
-            token_result = []
-            for i, (prompt_tokens, response_tokens, response_masks) in enumerate(zip(all_prompt_tokens, all_response_tokens, all_response_masks, strict=False)):
-                token_result.append(
-                    {
-                        "prompt_tokens": torch.tensor(prompt_tokens, dtype=torch.long),
-                        "response_tokens": torch.tensor(response_tokens, dtype=torch.long),
-                        "response_masks": torch.tensor(response_masks, dtype=torch.long),
-                        "training_reward": self.agents[i].compute_training_reward(trajectories[i]) if hasattr(self.agents[i], "compute_training_reward") else trajectories[i].steps[-1].reward,
-                        "environment_reward": trajectories[i].reward,
-                        "idx": self.envs[i].idx,
-                    }
-                )
-            return token_result
-        elif mode == "Conversation":
-            return [a.chat_completions for a in self.agents]
-        elif mode == "Step":
-            steps_result = []
-            for i, episode in enumerate(all_steps):
-                trajectory = trajectories[i]
-                environment_reward = trajectory.reward
-                training_reward = self.agents[i].compute_training_reward(trajectory) if hasattr(self.agents[i], "compute_training_reward") else trajectory.steps[-1].reward
-                steps_result.append(
-                    {
-                        "steps": episode,
-                        "training_reward": training_reward,
-                        "environment_reward": environment_reward,
-                        "idx": self.envs[i].idx,
-                        "mc_returns": [step.mc_return for step in trajectory.steps][: len(episode)],
-                    }
-                )
-            return steps_result
-
-    def reset_agents_batched(self):
-        """Reset all agents in parallel."""
-        with ThreadPoolExecutor(max_workers=self.max_workers) as executor:
-            futures = [executor.submit(agent.reset) for agent in self.agents]
-            for future in futures:
-                future.result()
-
-    def update_envs_and_agents(self, envs, agents):
-        """
-        Update the environments and agents.
-
-        Args:
-            envs: List of environments to use
-            agents: List of agents to use
-        """
-        assert len(agents) == len(envs), f"Number of agents must equal to number of environments but received, {len(agents)} and {len(envs)}"
-        self.envs = envs
-        # For keeping track of the environment index in the batch.
-        for idx, env in enumerate(envs):
-            env.idx = idx
-        self.agents = agents
-        self.n_parallel_agents = len(envs)
+class AsyncAgentExecutionEngine(AgentExecutionEngine):
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)

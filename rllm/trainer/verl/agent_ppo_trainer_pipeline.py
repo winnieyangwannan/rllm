@@ -7,8 +7,8 @@ from queue import Queue
 import numpy as np
 import torch
 
-from rllm.engine.async_agent_execution_engine import AsyncAgentExecutionEngine
-from rllm.trainer.agent_ppo_trainer import AgentPPOTrainer
+from rllm.engine.agent_execution_engine import AsyncAgentExecutionEngine
+from rllm.trainer.verl.agent_ppo_trainer import AgentPPOTrainer
 from verl import DataProto
 from verl.single_controller.ray import (
     RayClassWithInitArgs,

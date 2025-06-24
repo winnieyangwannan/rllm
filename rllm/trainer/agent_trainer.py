@@ -3,7 +3,7 @@ from typing import Any
 import ray
 
 from rllm.data import Dataset
-from rllm.train.train_agent_ppo import train_agent
+from rllm.trainer.verl.train_agent_ppo import train_agent
 
 
 class AgentTrainer:

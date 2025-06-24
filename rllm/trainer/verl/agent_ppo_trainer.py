@@ -10,8 +10,7 @@ import numpy as np
 import torch
 from omegaconf import OmegaConf
 
-from rllm.engine.agent_execution_engine import AgentExecutionEngine
-from rllm.engine.async_agent_execution_engine import AsyncAgentExecutionEngine
+from rllm.engine.agent_execution_engine import AsyncAgentExecutionEngine
 from verl import DataProto
 from verl.protocol import pad_dataproto_to_divisor
 from verl.trainer.ppo.ray_trainer import (
@@ -65,42 +64,28 @@ class AgentPPOTrainer(RayPPOTrainer):
         else:
             agent_rollout_wg = self.rollout_wg
 
-        if self.config.agent.async_engine:
-            if self.config.actor_rollout_ref.rollout.mode == "async":
-                rollout_engine = self.async_rollout_manager
-            else:
-                rollout_engine = agent_rollout_wg
-
-            self.agent_execution_engine = AsyncAgentExecutionEngine(
-                rollout_engine=rollout_engine,
-                config=self.config,
-                engine_name="verl",
-                tokenizer=self.tokenizer,
-                model_path=self.config.actor_rollout_ref.model.path,
-                max_steps=self.config.agent.max_steps,
-                max_response_length=self.config.data.max_response_length,
-                max_prompt_length=self.config.data.max_prompt_length,
-                agent_class=self.agent_class,
-                agent_args=self.agent_args,
-                env_class=self.env_class,
-                env_args=self.env_args,
-                enforce_max_prompt_length=self.config.agent.use_stepwise_advantage,
-                trajectory_timeout=self.config.agent.trajectory_timeout,
-                **self.config.agent.get("engine_args", {}),
-            )
+        if self.config.actor_rollout_ref.rollout.mode == "async":
+            rollout_engine = self.async_rollout_manager
         else:
-            self.agent_execution_engine = AgentExecutionEngine(
-                rollout_engine=agent_rollout_wg,
-                engine_name="verl",
-                tokenizer=self.tokenizer,
-                config=self.config,
-                model_path=self.config.actor_rollout_ref.model.path,
-                max_steps=self.config.agent.max_steps,
-                max_response_length=self.config.data.max_response_length,
-                max_prompt_length=self.config.data.max_prompt_length,
-                enforce_max_prompt_length=self.config.agent.use_stepwise_advantage,
-                **self.config.agent.get("engine_args", {}),
-            )
+            rollout_engine = agent_rollout_wg
+
+        self.agent_execution_engine = AsyncAgentExecutionEngine(
+            rollout_engine=rollout_engine,
+            config=self.config,
+            engine_name="verl",
+            tokenizer=self.tokenizer,
+            model_path=self.config.actor_rollout_ref.model.path,
+            max_steps=self.config.agent.max_steps,
+            max_response_length=self.config.data.max_response_length,
+            max_prompt_length=self.config.data.max_prompt_length,
+            agent_class=self.agent_class,
+            agent_args=self.agent_args,
+            env_class=self.env_class,
+            env_args=self.env_args,
+            enforce_max_prompt_length=self.config.agent.use_stepwise_advantage,
+            trajectory_timeout=self.config.agent.trajectory_timeout,
+            **self.config.agent.get("engine_args", {}),
+        )
 
     def init_envs_and_agents(self, batch):
         """
