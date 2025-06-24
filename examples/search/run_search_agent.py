@@ -8,7 +8,7 @@ from transformers import AutoTokenizer
 from rllm.agents.system_prompts import SEARCH_SYSTEM_PROMPT
 from rllm.agents.tool_agent import ToolAgent
 from rllm.data.dataset import DatasetRegistry
-from rllm.engine.async_agent_execution_engine import AsyncAgentExecutionEngine
+from rllm.engine.agent_execution_engine import AgentExecutionEngine
 from rllm.environments.tools.tool_env import ToolEnvironment
 from rllm.rewards.reward_fn import search_reward_fn
 from rllm.utils import save_trajectories
@@ -44,7 +44,7 @@ if __name__ == "__main__":
 
     tool_map = {"local_search": LocalRetrievalTool}
 
-    engine = AsyncAgentExecutionEngine(
+    engine = AgentExecutionEngine(
         agent_class=ToolAgent,
         agent_args={"tool_map": tool_map, "system_prompt": SEARCH_SYSTEM_PROMPT, "parser_name": "qwen"},
         env_class=ToolEnvironment,

@@ -4,7 +4,7 @@ from transformers import AutoTokenizer
 
 from rllm.agents.math_agent import MathAgent
 from rllm.data.dataset import DatasetRegistry
-from rllm.engine.async_agent_execution_engine import AsyncAgentExecutionEngine
+from rllm.engine.agent_execution_engine import AgentExecutionEngine
 from rllm.environments.base.single_turn_env import SingleTurnEnvironment
 from rllm.rewards.reward_fn import math_reward_fn
 from rllm.utils import compute_pass_at_k
@@ -28,7 +28,7 @@ if __name__ == "__main__":
 
     sampling_params = {"temperature": 0.6, "top_p": 0.95, "model": model_name}
 
-    engine = AsyncAgentExecutionEngine(
+    engine = AgentExecutionEngine(
         agent_class=MathAgent,
         env_class=SingleTurnEnvironment,
         agent_args={},
@@ -48,7 +48,7 @@ if __name__ == "__main__":
     test_dataset = DatasetRegistry.load_dataset("aime2024", "test")
     if test_dataset is None:
         print("Dataset not found, preparing dataset...")
-        from .prepare_math_data import prepare_math_data
+        from prepare_math_data import prepare_math_data
 
         _, test_dataset = prepare_math_data()
 

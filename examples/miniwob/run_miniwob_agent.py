@@ -5,7 +5,7 @@ from transformers import AutoTokenizer
 
 from rllm.agents.miniwob_agent import MiniWobAgent
 from rllm.data.dataset import DatasetRegistry
-from rllm.engine.async_agent_execution_engine import AsyncAgentExecutionEngine
+from rllm.engine.agent_execution_engine import AgentExecutionEngine
 from rllm.environments.browsergym.browsergym import BrowserGymEnv
 from rllm.utils import compute_pass_at_k
 
@@ -58,7 +58,7 @@ if __name__ == "__main__":
         max_response_length = 3072
         enforce_max_prompt_length = True
 
-    engine = AsyncAgentExecutionEngine(
+    engine = AgentExecutionEngine(
         agent_class=MiniWobAgent,
         env_class=BrowserGymEnv,
         agent_args=agent_args,

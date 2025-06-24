@@ -4,7 +4,7 @@ from transformers import AutoTokenizer
 
 from rllm.agents import ToolAgent
 from rllm.data.dataset import DatasetRegistry
-from rllm.engine.async_agent_execution_engine import AsyncAgentExecutionEngine
+from rllm.engine.agent_execution_engine import AgentExecutionEngine
 from rllm.environments.tools.tool_env import ToolEnvironment
 from rllm.rewards.reward_fn import math_reward_fn
 from rllm.utils import compute_pass_at_k
@@ -28,7 +28,7 @@ if __name__ == "__main__":
 
     sampling_params = {"temperature": 0.6, "top_p": 0.95, "model": model_name}
 
-    engine = AsyncAgentExecutionEngine(
+    engine = AgentExecutionEngine(
         agent_class=ToolAgent,
         agent_args=agent_args,
         env_class=ToolEnvironment,

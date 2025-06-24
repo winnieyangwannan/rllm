@@ -1,4 +1,5 @@
 import asyncio
+import logging
 from copy import deepcopy
 from typing import Any
 
@@ -10,6 +11,8 @@ from tensordict import TensorDict
 
 from verl.protocol import DataProto
 from verl.utils.torch_functional import get_response_mask, pad_2d_list_to_length
+
+logger = logging.getLogger(__name__)
 
 
 def _repeat_interleave(value: torch.Tensor | np.ndarray, repeats: int) -> torch.Tensor | list[Any]:
@@ -165,7 +168,7 @@ class Router:
             )
 
         # Potential blocking: asyncio.gather can block if any task takes too long
-        print("Sending total requests: ", self.counter)
+        logger.debug("Sending total requests: %s", self.counter)
         completions_list = await asyncio.gather(*tasks)
         await self.release_address(address, application_id)  # Release the address when done
 

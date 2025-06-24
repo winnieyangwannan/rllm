@@ -9,7 +9,7 @@ from transformers import AutoTokenizer
 from rllm.agents.system_prompts import SEARCH_SYSTEM_PROMPT
 from rllm.agents.tool_agent import MCPToolAgent
 from rllm.data.dataset import DatasetRegistry
-from rllm.engine.async_agent_execution_engine import AsyncAgentExecutionEngine
+from rllm.engine.agent_execution_engine import AgentExecutionEngine
 from rllm.environments.tools.mcp_env import MCPConnectionManager, MCPEnvironment
 from rllm.rewards.reward_fn import search_reward_fn
 from rllm.utils import save_trajectories
@@ -95,7 +95,7 @@ async def main():
 
     sampling_params = {"temperature": 0.6, "top_p": 0.95, "model": model_name}
 
-    engine = AsyncAgentExecutionEngine(
+    engine = AgentExecutionEngine(
         agent_class=MCPToolAgent,
         env_class=MCPEnvironment,
         agent_args=agent_args,

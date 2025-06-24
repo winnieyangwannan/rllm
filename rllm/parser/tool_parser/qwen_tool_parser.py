@@ -55,7 +55,6 @@ class QwenToolParser(ToolParser):
 
             # Extract and parse the JSON content
             json_content = text[start:end].strip()
-            print(f"json_content: {json_content}")
             try:
                 call_data = json.loads(json_content)
                 # Convert to common format matching parse_tool_calls output
