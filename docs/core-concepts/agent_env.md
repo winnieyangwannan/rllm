@@ -47,9 +47,10 @@ class BaseAgent(ABC):
         """Returns complete interaction history."""
         return Trajectory()
 
-    def get_current_state(self) -> Step:
+    def get_current_state(self) -> Step | None:
         """Return the most recent step."""
-        assert self._trajectory.steps, "No active step available"
+        if not self.trajectory.steps:
+            return None
         return self._trajectory.steps[-1]
 ```
 

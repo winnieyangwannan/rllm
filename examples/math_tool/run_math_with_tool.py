@@ -45,7 +45,7 @@ if __name__ == "__main__":
     test_dataset = DatasetRegistry.load_dataset("aime2024", "test")
     if test_dataset is None:
         print("Dataset not found, preparing dataset...")
-        from .prepare_math_data import prepare_math_data
+        from prepare_math_data import prepare_math_data
 
         _, test_dataset = prepare_math_data()
 

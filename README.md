@@ -133,11 +133,6 @@ We evaluate `Deepcoder-14B-Preview` on LiveCodeBench (LCB), Codeforces, and Huma
 | **DeepSeek-R1-Distill-Qwen-14B** | 53.0 | 1791 | 92.7 | 92.0 | 69.7 |
 | **O1-2024-12-17 (Low)** | 59.5 | **1991** | **96.1** | 90.8 | **74.4** |
 | **O3-Mini-2025-1-31 (Low)** | **60.9** | 1918 | 94.9 | 92.6 | 60.0 |
-| **O1-Preview** | 42.7 | 1658 | 88.5 | 89 | 40.0 |
-| **Deepseek-R1** | 62.8 | 1948 | 95.4 | 92.6 | 79.8 |
-| **Llama-4-Behemoth** | 49.4 | - | - | - | - |
-| **DeepCoder-1.5B-Preview** | 25.1 | 963 | 28.5 | 73.0 | - |
-| **Deepseek-R1-Distill-Qwen-1.5B** | 16.9 | 615 | 1.9 | 58.3 | 28.8 |
 
 ### DeepScaler
 
@@ -145,23 +140,9 @@ We report Pass@1 accuracy averaged over 16 samples for each problem. Notably, ou
 
 | Model | AIME 2024 | MATH 500 | AMC 2023 | Minerva Math | OlympiadBench | Avg. |
 |-------|-----------|-----------|-----------|--------------|---------------|------|
-| Qwen2.5-Math-7B-Instruct | 13.3 | 79.8 | 50.6 | 34.6 | 40.7 | 43.8 |
-| rStar-Math-7B | 26.7 | 78.4 | 47.5 | - | 47.1 | - |
-| Eurus-2-7B-PRIME | 26.7 | 79.2 | 57.8 | 38.6 | 42.1 | 48.9 |
-| Qwen2.5-7B-SimpleRL | 26.7 | 82.4 | 62.5 | <strong>39.7</strong> | 43.3 | 50.9 |
 | DeepSeek-R1-Distill-Qwen-1.5B | 28.8 | 82.8 | 62.9 | 26.5 | 43.3 | 48.9 |
-| Still-1.5B | 32.5 | 84.4 | 66.7 | 29.0 | 45.4 | 51.6 |
 | <strong>DeepScaleR-1.5B-Preview</strong> | <strong>43.1</strong> | <strong>87.8</strong> | <strong>73.6</strong> | 30.2 | <strong>50.0</strong> | <strong>57.0</strong> |
 | O1-Preview | 40.0 | 81.4 | - | - | - | - |
-
-We also show the validation curve during training:
-
-
-<div align="center">
-  <img src="figures/deepscaler.png" width="60%" />
-
-  <sub>*DeepScaleR 1.5B model's Pass@1 accuracy on AIME2024 as RL training progresses. At step 1040 and 1520, the context length is extended to 16K and 24K. For more details, see our [blog post](https://pretty-radio-b75.notion.site/DeepScaleR-Surpassing-O1-Preview-with-a-1-5B-Model-by-Scaling-RL-19681902c1468005bed8ca303013a4e2) .*</sub>
-</div>
 
 
 ## Acknowledgements
