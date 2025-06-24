@@ -88,7 +88,4 @@ bash train_deepcoder_16k.sh
 
 # modify MODEL_PATH to the 16k checkpoint path before running the script.
 bash train_deepcoder_32k.sh
-
-# modify MODEL_PATH to the 32k checkpoint path before running the script
-bash train_deepcoder_64k.sh
 ```
