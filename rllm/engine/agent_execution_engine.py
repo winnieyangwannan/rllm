@@ -89,7 +89,7 @@ class AgentExecutionEngine:
         assert env_class.is_multithread_safe(), "Environment must be multithread safe for async engine"
         # rollout engine args
         self.rollout_engine_args = rollout_engine_args
-        self.sampling_params = kwargs.get("sampling_params", None)
+        self.sampling_params = kwargs.get("sampling_params", {})
 
         self.server_addresses = getattr(self.rollout_engine, "server_addresses", None)
 

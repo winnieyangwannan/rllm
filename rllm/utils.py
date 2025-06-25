@@ -207,7 +207,7 @@ class RAG:
         return results
 
 
-def save_trajectories(results, save_dir="./trajectories/sample_trajectories", filename="trajectories.pt"):
+def save_trajectories(results, save_dir="./trajectories", filename="trajectories.pt"):
     os.makedirs(save_dir, exist_ok=True)
     save_path = os.path.join(save_dir, filename)
     torch.save(results, save_path)
