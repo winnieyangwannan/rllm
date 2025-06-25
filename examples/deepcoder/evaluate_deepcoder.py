@@ -1,5 +1,4 @@
 import asyncio
-import json
 import os
 
 from prepare_deepcoder_data import prepare_deepcoder_data
@@ -12,17 +11,10 @@ from rllm.rewards.reward_fn import code_reward_fn
 from rllm.utils import save_trajectories
 
 
-async def evaluate_deepcoder_on_livecodebench(
-    model_name="agentica-org/DeepCoder-14B-Preview",
-    num_examples=50,
-    max_tokens=64000, 
-    temperature=0.6,  
-    top_p=0.95,       
-    n_parallel_agents=1
-):
+async def evaluate_deepcoder_on_livecodebench(model_name="agentica-org/DeepCoder-14B-Preview", num_examples=50, max_tokens=64000, temperature=0.6, top_p=0.95, n_parallel_agents=1):
     """
     Evaluate DeepCoder model on LiveCodeBench test generation dataset using local model.
-    
+
     Args:
         model_name: Model name (for tokenizer)
         num_examples: Number of examples to evaluate
@@ -31,28 +23,28 @@ async def evaluate_deepcoder_on_livecodebench(
         top_p: Top-p sampling parameter (0.95 recommended)
         n_parallel_agents: Number of parallel agents for evaluation
     """
-    
+
     print(f"Evaluating {model_name} on LiveCodeBench test generation...")
     print("Using local model at http://localhost:30000/v1")
-    
+
     print("Preparing LiveCodeBench test generation dataset...")
     test_dataset = prepare_deepcoder_data(test_size=10)
     tasks = test_dataset.get_data()
-    
+
     print(f"Loading tokenizer for {model_name}...")
     tokenizer = AutoTokenizer.from_pretrained(model_name)
     if tokenizer.pad_token is None:
         tokenizer.pad_token = tokenizer.eos_token
-    
+
     sampling_params = {
         "temperature": temperature,
         "top_p": top_p,
         "model": model_name,
     }
-    
+
     engine = AgentExecutionEngine(
         agent_class=CompetitionCodingAgent,
-        agent_args={}, 
+        agent_args={},
         env_class=SingleTurnEnvironment,
         env_args={"reward_fn": code_reward_fn},
         rollout_engine=None,
@@ -68,9 +60,9 @@ async def evaluate_deepcoder_on_livecodebench(
         config=None,
         n_parallel_agents=n_parallel_agents,
     )
-    
+
     print(f"Starting evaluation with {len(tasks)} tasks and {n_parallel_agents} parallel agents...")
-    
+
     # Execute tasks
     results = await engine.execute_tasks(tasks)
 
@@ -78,18 +70,11 @@ async def evaluate_deepcoder_on_livecodebench(
     trajectories_file = f"deepcoder_trajectories_{num_examples}.pt"
     save_trajectories(results, filename=trajectories_file)
     print(f"Trajectories saved to: {trajectories_file}")
-    
+
     return results
 
 
 if __name__ == "__main__":
     os.environ["TOKENIZERS_PARALLELISM"] = "true"
-    
-    results = asyncio.run(evaluate_deepcoder_on_livecodebench(
-        model_name="agentica-org/DeepCoder-14B-Preview",
-        num_examples=len(prepare_deepcoder_data().get_data()), 
-        max_tokens=64000, 
-        temperature=0.6,  
-        top_p=0.95,       
-        n_parallel_agents=64
-    )) 
+
+    results = asyncio.run(evaluate_deepcoder_on_livecodebench(model_name="agentica-org/DeepCoder-14B-Preview", num_examples=len(prepare_deepcoder_data().get_data()), max_tokens=64000, temperature=0.6, top_p=0.95, n_parallel_agents=64))

@@ -125,12 +125,7 @@ class CompetitionCodingAgent(BaseAgent):
             self.messages.append({"role": "assistant", "content": response})
 
         # Create new step
-        new_step = Step(
-            chat_completions=copy.deepcopy(self.chat_completions),
-            action=action,
-            model_response=response,
-            observation=self.current_observation
-        )
+        new_step = Step(chat_completions=copy.deepcopy(self.chat_completions), action=action, model_response=response, observation=self.current_observation)
         self._trajectory.steps.append(new_step)
 
         return Action(action=action)

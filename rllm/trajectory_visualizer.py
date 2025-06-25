@@ -95,15 +95,15 @@ def main(trajectory_file: str = "./trajectories/sample_trajectories/search_traje
         """Extract metadata from trajectory - supports both observation and info fields"""
         if not trajectory.steps:
             return {}
-        
+
         first_step = trajectory.steps[0]
-        
+
         # Try multiple sources for metadata in order of preference
         if isinstance(first_step.observation, dict):
             return first_step.observation
-        elif hasattr(first_step, 'info') and isinstance(first_step.info, dict):
+        elif hasattr(first_step, "info") and isinstance(first_step.info, dict):
             return first_step.info
-        elif hasattr(trajectory, 'task') and isinstance(trajectory.task, dict):
+        elif hasattr(trajectory, "task") and isinstance(trajectory.task, dict):
             return trajectory.task
         else:
             return {}
@@ -111,41 +111,34 @@ def main(trajectory_file: str = "./trajectories/sample_trajectories/search_traje
     def detect_response_structure(step):
         """Detect if this step uses thinking structure or direct response structure - updated for new API"""
         # Check for thinking format (separate thought and action fields)
-        has_thinking = (hasattr(step, 'thought') and step.thought and 
-                       hasattr(step, 'action') and step.action)
-        
+        has_thinking = hasattr(step, "thought") and step.thought and hasattr(step, "action") and step.action
+
         # Check for direct response format (model_response and action)
-        has_direct_response = (hasattr(step, 'model_response') and step.model_response and
-                              hasattr(step, 'action') and step.action)
-        
+        has_direct_response = hasattr(step, "model_response") and step.model_response and hasattr(step, "action") and step.action
+
         # Updated logic for new API pattern
         uses_thinking_format = has_thinking and step.thought.strip()
-        
-        return {
-            'has_thinking': has_thinking,
-            'has_direct_response': has_direct_response,
-            'uses_thinking_format': uses_thinking_format,
-            'response_field': 'thought' if uses_thinking_format else 'model_response'
-        }
+
+        return {"has_thinking": has_thinking, "has_direct_response": has_direct_response, "uses_thinking_format": uses_thinking_format, "response_field": "thought" if uses_thinking_format else "model_response"}
 
     def get_task_type(metadata):
         """Detect task type from metadata"""
-        if 'data_source' in metadata:
-            if metadata['data_source'] in ['hotpotqa', 'bamboogle', 'musique']:
-                return 'search'
-            elif metadata['data_source'] in ['deepcoder', 'livecodebench', 'code_generation']:
-                return 'code'
-            elif metadata['data_source'] in ['math', 'gsm8k', 'math_word_problems']:
-                return 'math'
-        
-        if 'question_type' in metadata or 'level' in metadata:
-            return 'search'
-        elif 'difficulty' in metadata or 'contest_id' in metadata or 'platform' in metadata:
-            return 'code'
-        elif 'problem_type' in metadata or 'solution_type' in metadata:
-            return 'math'
-        
-        return 'unknown'
+        if "data_source" in metadata:
+            if metadata["data_source"] in ["hotpotqa", "bamboogle", "musique"]:
+                return "search"
+            elif metadata["data_source"] in ["deepcoder", "livecodebench", "code_generation"]:
+                return "code"
+            elif metadata["data_source"] in ["math", "gsm8k", "math_word_problems"]:
+                return "math"
+
+        if "question_type" in metadata or "level" in metadata:
+            return "search"
+        elif "difficulty" in metadata or "contest_id" in metadata or "platform" in metadata:
+            return "code"
+        elif "problem_type" in metadata or "solution_type" in metadata:
+            return "math"
+
+        return "unknown"
 
     def advance_step_or_trajectory(current_traj_idx_val, current_step_idx_val, direction, level, filtered_trajs):
         current_traj_idx_val = int(current_traj_idx_val)
@@ -183,24 +176,24 @@ def main(trajectory_file: str = "./trajectories/sample_trajectories/search_traje
     def update_step_view(traj_idx: int, step_idx: int, filter_option: str):
         """Update the step view with detailed information - updated for new API pattern"""
         empty_content = "*No data available*"
-        
+
         filtered_trajs = filter_trajectories_by_reward(filter_option)
-        
+
         if traj_idx >= len(filtered_trajs):
             return (empty_content,) * 10
-        
+
         trajectory = filtered_trajs[traj_idx]
         num_steps = len(trajectory.steps)
-        
+
         position_text = f"**Trajectory {traj_idx + 1}/{len(filtered_trajs)}**  |  **Step {step_idx + 1}/{num_steps}**"
         metadata = get_trajectory_metadata(trajectory)
         task_type = get_task_type(metadata)
-        
-        if task_type == 'search':
+
+        if task_type == "search":
             question = metadata.get("question", "No question found")
             gt = metadata.get("ground_truth", "N/A")
-            ground_truth = str(gt).lower() if isinstance(gt, (str, int, float, bool)) else str(gt)
-        elif task_type == 'code':
+            ground_truth = str(gt).lower() if isinstance(gt, str | int | float | bool) else str(gt)
+        elif task_type == "code":
             question = metadata.get("question_content", metadata.get("problem", metadata.get("question", "No problem statement found")))
             test_cases = metadata.get("test_cases", [])
             if test_cases and len(test_cases) > 0:
@@ -208,30 +201,30 @@ def main(trajectory_file: str = "./trajectories/sample_trajectories/search_traje
                 ground_truth = str(expected_output)
             else:
                 ground_truth = "See test cases"
-        elif task_type == 'math':
+        elif task_type == "math":
             question = metadata.get("problem", metadata.get("question", "No problem found"))
             ground_truth = str(metadata.get("answer", metadata.get("solution", "N/A")))
-        else:       
+        else:
             question = str(trajectory.steps[0].observation) if num_steps > 0 else "No question"
             ground_truth = "Unknown"
-        
-        task_icons = {'search': '🔍', 'code': '💻', 'math': '🧮', 'unknown': '❓'}
-        task_names = {'search': 'Search', 'code': 'Code', 'math': 'Math', 'unknown': 'Unknown'}
-        
+
+        task_icons = {"search": "🔍", "code": "💻", "math": "🧮", "unknown": "❓"}
+        task_names = {"search": "Search", "code": "Code", "math": "Math", "unknown": "Unknown"}
+
         metadata_text = f"**Task Type:** {task_icons[task_type]} {task_names[task_type]}\n"
         metadata_text += f"**Data Source:** {metadata.get('data_source', 'N/A')}\n"
-        
-        if task_type == 'search':
+
+        if task_type == "search":
             metadata_text += f"**Question Type:** {metadata.get('question_type', 'N/A')}\n"
             metadata_text += f"**Level:** {metadata.get('level', 'N/A')}\n"
-        elif task_type == 'code':
+        elif task_type == "code":
             metadata_text += f"**Difficulty:** {metadata.get('difficulty', 'N/A')}\n"
             metadata_text += f"**Platform:** {metadata.get('platform', 'N/A')}\n"
             metadata_text += f"**Contest ID:** {metadata.get('contest_id', 'N/A')}\n"
-        elif task_type == 'math':
+        elif task_type == "math":
             metadata_text += f"**Problem Type:** {metadata.get('problem_type', 'N/A')}\n"
             metadata_text += f"**Difficulty:** {metadata.get('difficulty', 'N/A')}\n"
-            
+
         metadata_text += f"**Split:** {metadata.get('split', 'N/A')}\n"
         metadata_text += f"**UID:** `{metadata.get('uid', metadata.get('question_id', 'N/A'))}`"
 
@@ -247,20 +240,20 @@ def main(trajectory_file: str = "./trajectories/sample_trajectories/search_traje
         step = trajectory.steps[step_idx]
         structure = detect_response_structure(step)
 
-        if structure['uses_thinking_format']:
-            thinking_text = getattr(step, 'thought', "") or "*No thinking recorded*"
-            response_text = getattr(step, 'action', "") or "*No response recorded*"
+        if structure["uses_thinking_format"]:
+            thinking_text = getattr(step, "thought", "") or "*No thinking recorded*"
+            response_text = getattr(step, "action", "") or "*No response recorded*"
         else:
-            thinking, response = extract_thinking_and_response(getattr(step, 'model_response', ""))
+            thinking, response = extract_thinking_and_response(getattr(step, "model_response", ""))
             thinking_text = thinking if thinking else "*No thinking recorded*"
-            response_text = response if response else (getattr(step, 'action', "") or "*No response recorded*")
+            response_text = response if response else (getattr(step, "action", "") or "*No response recorded*")
 
         # Safe field access for step performance
-        step_reward = getattr(step, 'reward', 0.0)
-        step_mc_return = getattr(step, 'mc_return', 0.0)
-        step_done = getattr(step, 'done', False)
-        step_number = getattr(step, 'step', step_idx)  # Fallback to step_idx if step field doesn't exist
-        
+        step_reward = getattr(step, "reward", 0.0)
+        step_mc_return = getattr(step, "mc_return", 0.0)
+        step_done = getattr(step, "done", False)
+        step_number = getattr(step, "step", step_idx)  # Fallback to step_idx if step field doesn't exist
+
         step_perf_text = f"**Step Reward:** {step_reward}\n"
         step_perf_text += f"**MC Return:** {step_mc_return:.3f}\n"
         step_perf_text += f"**Done:** {'✅ Yes' if step_done else '❌ No'}\n"
@@ -268,31 +261,31 @@ def main(trajectory_file: str = "./trajectories/sample_trajectories/search_traje
         step_perf_text += f"**Response Structure:** {'🧠 Thinking Format' if structure['uses_thinking_format'] else '📝 Direct Response'}"
 
         actions_text = empty_content
-        step_action = getattr(step, 'action', None)
+        step_action = getattr(step, "action", None)
         if step_action:
-            if task_type == 'search' and isinstance(step_action, list):
+            if task_type == "search" and isinstance(step_action, list):
                 actions_text = "\n\n".join([format_tool_call_detailed(tc) for tc in step_action])
-            elif task_type in ['code', 'math'] and isinstance(step_action, str):
+            elif task_type in ["code", "math"] and isinstance(step_action, str):
                 actions_text = f"**Generated {'Code' if task_type == 'code' else 'Solution'}:**\n```\n{step_action}\n```"
-            else:   
+            else:
                 actions_text = format_tool_call_detailed(step_action) if isinstance(step_action, dict) else str(step_action)
 
         outputs_text = empty_content
         # Handle outputs - be more flexible with field access
-        if task_type == 'search':
+        if task_type == "search":
             # Try multiple ways to get tool outputs for search tasks
-            next_obs = getattr(step, 'next_observation', None)
+            next_obs = getattr(step, "next_observation", None)
             if next_obs and isinstance(next_obs, dict):
                 tool_outputs = next_obs.get("tool_outputs", {})
                 if tool_outputs:
                     outputs_text = format_tool_outputs(tool_outputs)
             # Also check if outputs are in the current step's info
-            elif hasattr(step, 'info') and isinstance(step.info, dict):
+            elif hasattr(step, "info") and isinstance(step.info, dict):
                 tool_outputs = step.info.get("tool_outputs", {})
                 if tool_outputs:
                     outputs_text = format_tool_outputs(tool_outputs)
-        elif task_type in ['code', 'math']:
-            step_observation = getattr(step, 'observation', None)
+        elif task_type in ["code", "math"]:
+            step_observation = getattr(step, "observation", None)
             if step_idx > 0 and isinstance(step_observation, dict):
                 if "test_results" in step_observation:
                     outputs_text = f"**Test Results:**\n{step_observation['test_results']}"
@@ -304,7 +297,7 @@ def main(trajectory_file: str = "./trajectories/sample_trajectories/search_traje
         predicted_answer = ""
         has_finish_action = False
 
-        if task_type == 'search' and step_action:
+        if task_type == "search" and step_action:
             actions_to_check = step_action if isinstance(step_action, list) else [step_action]
             for action in actions_to_check:
                 if isinstance(action, dict) and action.get("function", {}).get("name") == "finish":
@@ -317,14 +310,14 @@ def main(trajectory_file: str = "./trajectories/sample_trajectories/search_traje
                         break
                     except Exception:
                         pass
-        elif task_type in ['code', 'math']:
+        elif task_type in ["code", "math"]:
             if step_done and step_action:
                 predicted_answer = step_action
                 has_finish_action = True
 
         if has_finish_action:
             if predicted_answer:
-                if task_type == 'search':
+                if task_type == "search":
                     is_correct = predicted_answer.lower().strip() == ground_truth.lower().strip()
                     final_answer_text = "**🎯 Final Answer Provided:**\n"
                     final_answer_text += f"**Predicted:** `{predicted_answer}`\n"
