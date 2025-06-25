@@ -1,11 +1,11 @@
 # DeepCoder Training Examples
 
-This directory contains examples for training and running DeepCoder, a code reasoning LLM fine-tuned from DeepSeek-R1-Distill-Qwen-14B using distributed reinforcement learning (RL) to scale up to long context lengths. The model achieves 60.6% Pass@1 accuracy on LiveCodeBench v5, representing an 8% improvement over the base model and achieving similar performance to OpenAI's o3-mini.
+This directory contains examples for training and running DeepCoder, a code reasoning LLM fine-tuned from DeepSeek-R1-Distill-Qwen-14B using distributed reinforcement learning (RL). 
 
 Our examples uses the following:
 * DeepSeek-R1-Distill-Qwen-14B as the base model
-* LiveCodeBench v5 dataset for training
-* LiveCodeBench v2 dataset for evaluation
+* agentica-org/DeepCoder-Preview-Dataset (lcbv5 subset) for training and evaluation
+
 
 
 ## Model Hosting
@@ -20,7 +20,7 @@ python -m vllm.entrypoints.openai.api_server \
     --host 0.0.0.0 \
     --port 30000 \
     --dtype bfloat16 \
-    --max-model-len 32768
+    --max-model-len 65536
 ```
 
 ### Option 2: Using SGLang
@@ -37,7 +37,7 @@ The server should be accessible at `http://localhost:30000/v1`
 
 ## Dataset Preparation
 
-Prepare the required datasets (LiveCodeBench v2 for testing, LiveCodeBench v5 for training):
+Prepare the DeepCoder Preview Dataset:
 
 ```bash
 cd examples/deepcoder
@@ -45,9 +45,8 @@ python prepare_deepcoder_data.py
 ```
 
 This will:
-- Download LiveCodeBench v5 for training data (older problems from May 2023-July 2024)
-- Download LiveCodeBench v2 for test data (recent problems from August 2024-January 2025)
-- Register both datasets with the RLLM DatasetRegistry
+- Download the agentica-org/DeepCoder-Preview-Dataset (lcbv5 subset)
+- Register both train/test splits with the RLLM DatasetRegistry
 
 ## Running Inference
 
@@ -62,19 +61,18 @@ python evaluate_deepcoder.py
 
 You can modify the inference script parameters:
 
-- `n_parallel_agents`: Number of parallel agents (default: 32)
+- `n_parallel_agents`: Number of parallel agents (default: 64)
 - `model_name`: Model to use (default: "agentica-org/DeepCoder-14B-Preview")
 - `base_url`: API server URL (default: "http://localhost:30000/v1")
 - `max_response_length`: Maximum response length (default: 64000)
-- `max_prompt_length`: Maximum prompt length (default: 24576)
+- `max_prompt_length`: Maximum prompt length (default: 2048)
 - `temperature`: Sampling temperature (default: 0.6)
 - `top_p`: Top-p sampling (default: 0.95)
 
 The script will:
-1. Load the LiveCodeBench test dataset
-2. Repeat each problem 16 times for Pass@K evaluation
-3. Run parallel and async trajectory collection using the agent execution engine
-4. Evaluate results and report Pass@1 and Pass@K accuracy
+1. Load the DeepCoder Preview test dataset
+2. Run parallel and async trajectory collection using the agent execution engine
+3. Evaluate results and report accuracy metrics
 
 ## Training
 

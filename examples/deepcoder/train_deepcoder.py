@@ -9,8 +9,8 @@ from rllm.trainer.agent_trainer import AgentTrainer
 
 @hydra.main(config_path="pkg://rllm.trainer.config", config_name="ppo_trainer", version_base=None)
 def main(config):
-    train_dataset = DatasetRegistry.load_dataset("deepcoder_combined", "train")
-    test_dataset = DatasetRegistry.load_dataset("livecodebench_test", "test")
+    train_dataset = DatasetRegistry.load_dataset("deepcoder", "train")
+    test_dataset = DatasetRegistry.load_dataset("deepcoder", "test")
 
     env_args = {"reward_fn": code_reward_fn}
 
