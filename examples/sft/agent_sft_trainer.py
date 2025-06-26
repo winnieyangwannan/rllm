@@ -5,40 +5,15 @@ sys.path.append("../../verl")
 
 from torch.distributed.device_mesh import init_device_mesh
 
-from verl.trainer.fsdp_sft_trainer import FSDPSFTTrainer
+from verl.trainer.fsdp_sft_trainer import FSDPSFTTrainer, create_sft_dataset
 from verl.utils import hf_tokenizer
-from verl.utils.dataset.multiturn_sft_dataset import MultiTurnSFTDataset
-from verl.utils.dataset.sft_dataset import SFTDataset
 from verl.utils.device import get_device_name
 from verl.utils.distributed import initialize_global_process_group
 from verl.utils.fs import copy_to_local
 
 
 class AgentSFTTrainer(FSDPSFTTrainer):
-    @classmethod
-    def create_sft_dataset(cls, data_paths, data_config, tokenizer):
-        """Create appropriate dataset based on configuration."""
-        # Check if custom dataset class is specified
-        if data_config.custom_cls.get("path", None):
-            from verl.utils.import_utils import load_extern_type
-
-            dataset_cls = load_extern_type(data_config.custom_cls.path, data_config.custom_cls.name)
-        # Check if multi-turn dataset should be used
-        elif data_config.get("multiturn", {}).get("enable", False):
-            dataset_cls = MultiTurnSFTDataset
-        # Default to single-turn dataset
-        else:
-            dataset_cls = SFTDataset
-
-        # Create dataset
-        dataset = dataset_cls(parquet_files=data_paths, tokenizer=tokenizer, config=data_config)
-        return dataset
-
-    @classmethod
-    def from_config(cls, config):
-        """
-        Create trainer from configuration
-        """
+    def __init__(self, config):
         print("Initializing AgentSFTTrainer...")
 
         # Initialize distributed training
@@ -59,17 +34,16 @@ class AgentSFTTrainer(FSDPSFTTrainer):
         print(f" - Train: {config.data.train_files}")
         print(f" - Val: {config.data.val_files}")
 
-        train_dataset = cls.create_sft_dataset(config.data.train_files, config.data, tokenizer)
-        val_dataset = cls.create_sft_dataset(config.data.val_files, config.data, tokenizer)
+        train_dataset = create_sft_dataset(config.data.train_files, config.data, tokenizer)
+        val_dataset = create_sft_dataset(config.data.val_files, config.data, tokenizer)
 
         print(f" - Train dataset size: {len(train_dataset)}")
         print(f" - Val dataset size: {len(val_dataset)}")
 
-        # Trainer instance
-        trainer = cls(config=config, device_mesh=device_mesh, ulysses_device_mesh=ulysses_device_mesh, tokenizer=tokenizer, train_dataset=train_dataset, val_dataset=val_dataset)
+        # Initialize parent class
+        super().__init__(config=config, device_mesh=device_mesh, ulysses_device_mesh=ulysses_device_mesh, tokenizer=tokenizer, train_dataset=train_dataset, val_dataset=val_dataset)
 
         print("AgentSFTTrainer ready for training!")
-        return trainer
 
     def train(self):
         """Start training process."""
@@ -86,10 +60,3 @@ class AgentSFTTrainer(FSDPSFTTrainer):
         self.fit()
 
         print("Training completed!")
-
-
-def train_from_config(config):
-    """Train from config."""
-    trainer = AgentSFTTrainer.from_config(config)
-    trainer.train()
-    return trainer

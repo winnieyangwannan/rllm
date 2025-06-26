@@ -16,28 +16,15 @@ Usage:
 """
 
 import hydra
-from agent_sft_trainer import train_from_config
+from agent_sft_trainer import AgentSFTTrainer
 from omegaconf import DictConfig
 
 
 @hydra.main(config_path="../../verl/verl/trainer/config", config_name="sft_trainer", version_base=None)
 def main(config: DictConfig):
-    """Main training entry point."""
-
-    print("RLLM Simple SFT Training")
-    print("Training Configuration:")
-    print(f"  - Model: {config.model.partial_pretrain}")
-    print(f"  - Train data: {config.data.train_files}")
-    print(f"  - Val data: {config.data.val_files}")
-    print(f"  - Max length: {config.data.max_length}")
-    print(f"  - Batch size: {config.data.train_batch_size}")
-    print(f"  - Epochs: {config.trainer.total_epochs}")
-    print(f"  - Output dir: {config.trainer.default_local_dir}")
-
-    # Use agent_sft_trainer to train
-    train_from_config(config)
-
-    print("Training completed successfully!")
+    # initialize trainer
+    trainer = AgentSFTTrainer(config=config)
+    trainer.train()
 
 
 if __name__ == "__main__":
