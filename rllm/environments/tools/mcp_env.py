@@ -4,6 +4,7 @@ import queue
 import threading
 import warnings
 from contextlib import AsyncExitStack
+from typing import Any
 
 from mcp import ClientSession, StdioServerParameters
 from mcp.client.stdio import stdio_client
@@ -16,18 +17,18 @@ from rllm.tools.mcp_tool import MCPTool
 class MCPConnectionManager:
     """Manages MCP connections in a dedicated thread to avoid asyncio context issues."""
 
-    def __init__(self, mcp_server_command: str, mcp_server_args: list[str] = None, mcp_server_env: dict[str, str] = None):
+    def __init__(self, mcp_server_command: str, mcp_server_args: list[str] | None = None, mcp_server_env: dict[str, str] | None = None):
         self.mcp_server_command = mcp_server_command
         self.mcp_server_args = mcp_server_args or []
         self.mcp_server_env = mcp_server_env
 
-        self.request_queue = queue.Queue()
-        self.response_queues = {}
-        self.worker_thread = None
-        self.loop = None
-        self.session = None
-        self.stdio_transport = None
-        self.tool_map = {}
+        self.request_queue: queue.Queue[tuple[str, Any, queue.Queue[tuple[str, Any]] | None]] = queue.Queue()
+        self.response_queues: dict[str, queue.Queue[Any]] = {}
+        self.worker_thread: threading.Thread | None = None
+        self.loop: asyncio.AbstractEventLoop | None = None
+        self.session: ClientSession | None = None
+        self.stdio_transport: Any = None
+        self.tool_map: dict[str, MCPTool] = {}
         self.running = False
 
     def start(self):
@@ -40,7 +41,7 @@ class MCPConnectionManager:
         self.worker_thread.start()
 
         # Wait for initialization
-        response_queue = queue.Queue()
+        response_queue: queue.Queue[tuple[str, Any]] = queue.Queue()
         self.request_queue.put(("init", None, response_queue))
         result = response_queue.get(timeout=30)
         if result[0] == "error":
@@ -56,17 +57,17 @@ class MCPConnectionManager:
         if self.worker_thread:
             self.worker_thread.join(timeout=5)
 
-    def execute_tool_calls(self, tool_calls: list[dict]) -> dict:
+    def execute_tool_calls(self, tool_calls: list[dict[str, Any]]) -> dict[str, str]:
         """Execute tool calls and return results."""
         if not self.running:
             raise Exception("Connection manager not running")
 
-        response_queue = queue.Queue()
+        response_queue: queue.Queue[tuple[str, Any]] = queue.Queue()
         self.request_queue.put(("execute", tool_calls, response_queue))
         result = response_queue.get(timeout=30)
         if result[0] == "error":
             raise Exception(f"Tool execution failed: {result[1]}")
-        return result[1]
+        return result[1]  # type: ignore
 
     def _run_worker(self):
         """Worker thread that runs the asyncio event loop."""
@@ -81,7 +82,8 @@ class MCPConnectionManager:
                     self.loop.run_until_complete(self._cleanup())
                 except Exception:
                     pass
-            self.loop.close()
+            if self.loop:
+                self.loop.close()
 
     async def _worker_loop(self):
         """Main worker loop that processes requests."""
@@ -98,16 +100,20 @@ class MCPConnectionManager:
                 if command == "init":
                     try:
                         await self._initialize_connection()
-                        response_queue.put(("success", self.tool_map))
+                        if response_queue:
+                            response_queue.put(("success", self.tool_map))
                     except Exception as e:
-                        response_queue.put(("error", str(e)))
+                        if response_queue:
+                            response_queue.put(("error", str(e)))
 
                 elif command == "execute":
                     try:
                         result = await self._execute_tools(data)
-                        response_queue.put(("success", result))
+                        if response_queue:
+                            response_queue.put(("success", result))
                     except Exception as e:
-                        response_queue.put(("error", str(e)))
+                        if response_queue:
+                            response_queue.put(("error", str(e)))
 
                 elif command == "stop":
                     break
@@ -125,22 +131,23 @@ class MCPConnectionManager:
         stdio, write = self.stdio_transport
         self.session = await self.exit_stack.enter_async_context(ClientSession(stdio, write))
 
-        await self.session.initialize()
+        if self.session:
+            await self.session.initialize()
 
-        response = await self.session.list_tools()
-        tools = response.tools
-        print(f"\nConnected to MCP server with tools: {[tool.name for tool in tools]}")
+            response = await self.session.list_tools()
+            tools = response.tools
+            print(f"\nConnected to MCP server with tools: {[tool.name for tool in tools]}")
 
-        self.tool_map = {}
-        for tool in tools:
-            mcp_tool = MCPTool(session=self.session, tool_name=tool.name, tool_description=tool.description, tool_schema=tool.inputSchema)
-            self.tool_map[tool.name] = mcp_tool
+            self.tool_map = {}
+            for tool in tools:
+                mcp_tool = MCPTool(session=self.session, tool_name=tool.name, tool_description=tool.description, tool_schema=tool.inputSchema)  # type: ignore
+                self.tool_map[tool.name] = mcp_tool
 
-        print(f"Initialized {len(self.tool_map)} MCP tools")
+            print(f"Initialized {len(self.tool_map)} MCP tools")
 
-    async def _execute_tools(self, tool_calls: list[dict]) -> dict:
+    async def _execute_tools(self, tool_calls: list[dict[str, Any]]) -> dict[str, str]:
         """Execute tool calls."""
-        tool_outputs = {}
+        tool_outputs: dict[str, str] = {}
 
         for tool_call in tool_calls:
             tool_name = tool_call["function"]["name"]
@@ -155,7 +162,7 @@ class MCPConnectionManager:
 
         return tool_outputs
 
-    async def _cleanup(self):
+    async def _cleanup(self) -> None:
         """Clean up the connection."""
         if hasattr(self, "exit_stack") and self.exit_stack:
             await self.exit_stack.aclose()
@@ -168,10 +175,10 @@ class MCPEnvironment(BaseEnv):
     """
 
     # Class-level connection manager to share across instances
-    _connection_manager = None
+    _connection_manager: MCPConnectionManager | None = None
     _manager_lock = threading.Lock()
 
-    def __init__(self, task: dict | None = None, mcp_server_command: str = None, mcp_server_args: list[str] = None, mcp_server_env: dict[str, str] = None, reward_fn: RewardFunction | None = None, max_steps=10):
+    def __init__(self, task: dict[str, Any] | None = None, mcp_server_command: str | None = None, mcp_server_args: list[str] | None = None, mcp_server_env: dict[str, str] | None = None, reward_fn: RewardFunction | None = None, max_steps: int = 10):
         """
         Initialize the MCPEnvironment.
 
@@ -197,16 +204,17 @@ class MCPEnvironment(BaseEnv):
 
         # Initialize shared connection manager
         with MCPEnvironment._manager_lock:
-            if MCPEnvironment._connection_manager is None:
+            if MCPEnvironment._connection_manager is None and mcp_server_command is not None:
                 MCPEnvironment._connection_manager = MCPConnectionManager(mcp_server_command, mcp_server_args, mcp_server_env)
                 MCPEnvironment._connection_manager.start()
 
-    def reset(self):
+    def reset(self) -> tuple[list[Any], list[Any]]:
         """Reset the environment and return initial observations."""
         self.step_count = 0
-        return self.task, {}
+        task_list = [self.task] if self.task is not None else []
+        return task_list, []
 
-    def step(self, action):
+    def step(self, action: Any) -> tuple[Any, float, bool, bool, dict[Any, Any]]:
         """
         Take a step in the environment based on the action.
 
@@ -214,13 +222,13 @@ class MCPEnvironment(BaseEnv):
             action: Action from the agent (tool calls or final response)
 
         Returns:
-            next_observations, rewards, terminateds, infos
+            next_observations, rewards, terminateds, truncated, infos
         """
         if isinstance(action, dict):
             action = [action]
         self.step_count += 1
 
-        reward = 0
+        reward = 0.0
         # Check if we should terminate
         done = self.step_count >= self.max_steps or isinstance(action, str)
         # Check if action contains a "finish" tool call
@@ -253,19 +261,25 @@ class MCPEnvironment(BaseEnv):
                 else:
                     llm_response = str(action)
 
-            reward_output = self.reward_fn(task_info=self.task, action=llm_response)
-            return {}, reward_output.reward, done, {"response": action, "metadata": reward_output.metadata}
+            if self.reward_fn and self.task is not None:
+                reward_output = self.reward_fn(task_info=self.task, action=llm_response)
+                return {}, reward_output.reward, done, False, {"response": action, "metadata": reward_output.metadata}
+            else:
+                return {}, 0.0, done, False, {"response": action, "metadata": {}}
 
         # Execute tool calls using the connection manager
         tool_calls = action
         try:
-            tool_outputs = MCPEnvironment._connection_manager.execute_tool_calls(tool_calls)
-            next_obs = {"tool_outputs": tool_outputs}
+            if MCPEnvironment._connection_manager is not None:
+                tool_outputs = MCPEnvironment._connection_manager.execute_tool_calls(tool_calls)
+                next_obs = {"tool_outputs": tool_outputs}
+            else:
+                next_obs = {"tool_outputs": {}}
         except Exception as e:
             print(f"Tool execution error: {e}")
             next_obs = {"tool_outputs": {}}
 
-        return next_obs, reward, done, {"response": action, "metadata": {}}
+        return next_obs, reward, done, False, {"response": action, "metadata": {}}
 
     def close(self):
         """Clean up resources."""
@@ -281,7 +295,7 @@ class MCPEnvironment(BaseEnv):
                 MCPEnvironment._connection_manager = None
 
     @staticmethod
-    def from_dict(env_args: dict) -> "MCPEnvironment":
+    def from_dict(env_args: dict[str, Any]) -> "MCPEnvironment":
         mcp_server_command = env_args.pop("mcp_server_command", None)
         mcp_server_args = env_args.pop("mcp_server_args", None)
         mcp_server_env = env_args.pop("mcp_server_env", None)
