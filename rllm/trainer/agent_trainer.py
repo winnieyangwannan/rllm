@@ -43,9 +43,9 @@ class AgentTrainer:
 
         self.config = config
 
-        if train_dataset is not None:
+        if train_dataset is not None and self.config is not None and hasattr(self.config, "data"):
             self.config.data.train_files = train_dataset.get_verl_data_path()
-        if val_dataset is not None:
+        if val_dataset is not None and self.config is not None and hasattr(self.config, "data"):
             self.config.data.val_files = val_dataset.get_verl_data_path()
 
     def train(self):
