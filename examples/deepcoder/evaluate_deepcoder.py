@@ -1,7 +1,7 @@
 import asyncio
 import os
+from datetime import datetime
 
-from prepare_deepcoder_data import prepare_deepcoder_data
 from transformers import AutoTokenizer
 
 from rllm.agents.code_agent import CompetitionCodingAgent
@@ -55,4 +55,5 @@ if __name__ == "__main__":
     tasks = test_dataset.get_data()
 
     results = asyncio.run(engine.execute_tasks(tasks))
-    save_trajectories(results, filename=f"deepcoder_trajectories_{len(tasks)}.pt")
+    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+    save_trajectories(results, filename=f"deepcoder_trajectories_{len(tasks)}_{timestamp}.pt")
