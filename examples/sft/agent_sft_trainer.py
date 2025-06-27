@@ -30,7 +30,7 @@ class AgentSFTTrainer(FSDPSFTTrainer):
             try:
                 obj = traj
                 for attr in attr_path.split("."):
-                    if "[" in attr:  # Handle array access like "steps[0]"
+                    if "[" in attr:  # Handles "steps[0]"
                         attr_name, idx = attr.split("[")
                         idx = int(idx.rstrip("]"))
                         obj = getattr(obj, attr_name)[idx]
