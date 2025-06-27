@@ -222,7 +222,7 @@ class MCPEnvironment(BaseEnv):
             action: Action from the agent (tool calls or final response)
 
         Returns:
-            next_observations, rewards, terminateds, truncated, infos
+            next_observations, rewards, terminateds, infos
         """
         if isinstance(action, dict):
             action = [action]

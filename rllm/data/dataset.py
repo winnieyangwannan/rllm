@@ -4,6 +4,7 @@ import os
 from typing import Any
 
 import pandas as pd
+import polars as pl
 import torch
 
 logger = logging.getLogger(__name__)
@@ -238,8 +239,7 @@ class DatasetRegistry:
             logger.warning(f"Dataset file not found: {dataset_path}")
             return None
 
-        data_df = pd.read_parquet(dataset_path)
-        data = data_df.to_dict("records")
+        data = pl.read_parquet(dataset_path).to_dicts()
 
         logger.info(f"Loaded dataset '{name}' split '{split}' with {len(data)} examples.")
 
