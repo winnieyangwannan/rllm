@@ -155,7 +155,7 @@ def postprocess_lcb_sample(sample):
     if sample[0].get("testtype") == "functional":
         metadata = sample[0].get("metadata", {})
         fn_name = metadata.get("func_name", None)
-        assert fn_name is not None, f"Function name is not found, check if your LCB data is preprocessed correctly: {metadata}"
+        assert fn_name is not None, f"Function name is not found, check if your LCB data is preprocessed correctly: {metadata}\nSample: {sample}"
         # Fill in the blank
         sample_dict["fn_name"] = fn_name
 
@@ -194,6 +194,12 @@ def primeintellect_check_correctness(tests, code, use_tci=False):
     return check_correctness(tests_formatted, code, taco_run_test)
 
 
+def _temp_run(sample, generation, debug, result, metadata_list, timeout):
+    res, metadata = lcb_run_test(sample, test=generation, debug=debug, timeout=timeout)
+    result.append(res)
+    metadata_list.append(metadata)
+
+
 def lcb_check_correctness_v2(sample, generation, timeout=6, debug=False):
     """Check correctness of code generation with a global timeout.
     The global timeout is to catch some extreme/rare cases not handled by the timeouts
@@ -204,11 +210,6 @@ def lcb_check_correctness_v2(sample, generation, timeout=6, debug=False):
     manager = multiprocessing.Manager()
     result = manager.list()
     metadata_list = manager.list()
-
-    def _temp_run(sample, generation, debug, result, metadata_list, timeout):
-        res, metadata = lcb_run_test(sample, test=generation, debug=debug, timeout=timeout)
-        result.append(res)
-        metadata_list.append(metadata)
 
     p = multiprocessing.Process(
         target=_temp_run,
