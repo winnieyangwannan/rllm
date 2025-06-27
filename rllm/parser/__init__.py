@@ -8,7 +8,7 @@ PARSER_REGISTRY = {
 }
 
 
-def get_tool_parser(parser_name: str) -> ToolParser:
+def get_tool_parser(parser_name: str) -> type[ToolParser]:
     assert parser_name in PARSER_REGISTRY, f"Tool parser {parser_name} not found in {PARSER_REGISTRY}"
     return PARSER_REGISTRY[parser_name]
 

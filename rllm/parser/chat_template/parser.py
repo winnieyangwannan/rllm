@@ -94,7 +94,7 @@ class DeepseekQwenChatTemplateParser(ChatTemplateParser):
         self.assistant_token = " "
         self.generation_prompt = self.assistant_token
 
-    def parse(self, messages, add_generation_prompt=False, is_first_msg=False):
+    def parse(self, messages, add_generation_prompt=False, is_first_msg=False) -> str:
         result = ""
 
         if is_first_msg:
@@ -143,7 +143,7 @@ class QwenChatTemplateParser(ChatTemplateParser):
         self.tool_response_start_token = "<tool_response>\n"
         self.tool_response_end_token = "\n</tool_response>"
 
-    def parse(self, messages, add_generation_prompt=False, is_first_msg=False):
+    def parse(self, messages, add_generation_prompt=False, is_first_msg=False) -> str:
         result = ""
 
         # if the first message is not a system message, add the system message
@@ -196,7 +196,7 @@ class LlamaChatTemplateParser(ChatTemplateParser):
         self.tool_response_start_token = "<|start_header_id|>tool_response<|end_header_id|>\n\n"
         self.tool_response_end_token = "<|eot_id|>"
 
-    def parse(self, messages, add_generation_prompt=False, is_first_msg=False):
+    def parse(self, messages, add_generation_prompt=False, is_first_msg=False) -> str:
         result = ""
 
         if is_first_msg:

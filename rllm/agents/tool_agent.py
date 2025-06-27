@@ -7,6 +7,7 @@ from typing import Any
 from rllm.agents.agent import Action, BaseAgent, Step, Trajectory
 from rllm.agents.system_prompts import TOOL_SYSTEM_PROMPT
 from rllm.parser import get_tool_parser
+from rllm.parser.tool_parser.tool_parser_base import ToolParser
 from rllm.tools.mcp_tool import MCPTool
 from rllm.tools.multi_tool import MultiTool
 from rllm.tools.tool_base import Tool
@@ -49,14 +50,14 @@ class ToolAgent(BaseAgent):
         else:
             self.tools = MultiTool(tools=[])
 
-        parser_class = get_tool_parser(parser_name=parser_name)
+        parser_class: type[ToolParser] = get_tool_parser(parser_name=parser_name)
         self.tool_parser = parser_class()
 
         self.tools_prompt = self.tool_parser.get_tool_prompt(json.dumps(self.tools.json, indent=2))
 
         # Initialize state according to BaseAgent
         self._trajectory = Trajectory()
-        self.messages = []
+        self.messages: list[dict[str, Any]] = []
         self.current_observation = None
         self.reset()  # Call reset to set initial state
 
@@ -166,12 +167,12 @@ class MCPToolAgent(ToolAgent):
         self.system_prompt = system_prompt
         self.tool_map = tool_map
 
-        parser_class = get_tool_parser(parser_name=parser_name)
+        parser_class: type[ToolParser] = get_tool_parser(parser_name=parser_name)
         self.tool_parser = parser_class()
 
         tools_json = [tool.json for tool in self.tool_map.values()]
         self.tools_prompt = self.tool_parser.get_tool_prompt(json.dumps(tools_json, indent=2))
 
         self._trajectory = Trajectory()
-        self.messages = []
+        self.messages: list[dict[str, Any]] = []
         self.reset()

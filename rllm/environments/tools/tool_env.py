@@ -1,5 +1,7 @@
 import json
+import queue
 import warnings
+from typing import Any
 
 from rllm.environments.base.base_env import BaseEnv
 from rllm.rewards.reward_fn import RewardFunction, zero_reward
@@ -38,10 +40,11 @@ class ToolEnvironment(BaseEnv):
             self.tools = MultiTool(tools=[])
 
         self.task = task
-        self.reward_fn = reward_fn
         if reward_fn is None:
             warnings.warn("No reward function specified, will get 0 reward.", stacklevel=2)
             self.reward_fn = zero_reward
+        else:
+            self.reward_fn = reward_fn
 
     def reset(self):
         """Reset the environment and return initial observations."""
@@ -90,23 +93,24 @@ class ToolEnvironment(BaseEnv):
                     # No finish tool call found, use the action itself
                     llm_response = str(action)
 
-            reward_output = self.reward_fn(task_info=self.task, action=llm_response)
+            task_info = self.task if self.task is not None else {}
+            reward_output = self.reward_fn(task_info=task_info, action=llm_response)
             return {}, reward_output.reward, done, {"response": action, "metadata": reward_output.metadata}
 
         tool_calls = action
+        assert isinstance(tool_calls, list)
         tool_outputs = self._execute_tool_calls(tool_calls)
         next_obs = {"tool_outputs": tool_outputs}
 
         # Return results as lists with single items to maintain batch structure
         return next_obs, reward, done, {"response": action, "metadata": {}}
 
-    def _execute_tool_calls(self, tool_calls: list[dict]):
-        import queue
+    def _execute_tool_calls(self, tool_calls: list[dict[Any, Any]]) -> dict[str, str]:
         import threading
 
         # Create a dictionary to store results in order
-        tool_outputs = {}
-        output_queue = queue.Queue()
+        tool_outputs: dict[str, str] = {}
+        output_queue: queue.Queue[tuple[str, str]] = queue.Queue()
         threads = []
 
         def execute_tool(tool_call):

@@ -11,7 +11,7 @@ import openai
 import torch
 from openai.types import Completion
 
-from rllm.agents.agent import Action
+from rllm.agents.agent import Action, Trajectory
 from rllm.agents.utils import (
     convert_messages_to_tokens_and_masks,
     get_recent_assistant_user_messages,
@@ -86,12 +86,11 @@ class AgentExecutionEngine:
         if not trajectory_timeout:
             self.trajectory_timeout = int(1e9)
 
-        assert env_class.is_multithread_safe(), "Environment must be multithread safe for async engine"
+        if env_class is not None:
+            assert env_class.is_multithread_safe(), "Environment must be multithread safe for async engine"
         # rollout engine args
         self.rollout_engine_args = rollout_engine_args
         self.sampling_params = kwargs.get("sampling_params", {})
-
-        self.server_addresses = getattr(self.rollout_engine, "server_addresses", None)
 
         assert self.engine_name in ["openai", "verl"], "Currently only openai and verl are supported as rollout engine"
         if self.engine_name == "openai":
@@ -102,6 +101,7 @@ class AgentExecutionEngine:
             logging.getLogger("httpx").setLevel(logging.WARNING)
         elif self.engine_name == "verl":
             # All generation is done via scheduler. Currently only works for verl
+            self.server_addresses = getattr(self.rollout_engine, "server_addresses", [])
             self.router = Router(config=self.config, tokenizer=self.tokenizer, addresses=self.server_addresses)
 
         # Create a thread pool executor for environment interactions (i.e. step, reset, close)
@@ -231,15 +231,13 @@ class AgentExecutionEngine:
         env = self.envs[idx]
         # env_id = env.env_id
 
-        # Initialize trajectory for this task.
-        trajectory = []
         termination_reason = None
         prompt_token_len = 0
         prompt_tokens = []
         response_token_len = 0
         response_tokens = []
         response_masks = []
-        total_time = 0
+        total_time = 0.0
 
         # for step return
         episode_steps = []
@@ -409,7 +407,7 @@ class AgentExecutionEngine:
                 f"Trajectory {idx} completed due to: {termination_reason}. Reward is {reward}. \n",
                 color,
             )
-        trajectory = agent.trajectory
+        trajectory: Trajectory = agent.trajectory
         # Aggregate final trajectory statistics
         compute_trajectory_reward(trajectory)
         compute_mc_return(trajectory, gamma=self.gamma)
@@ -449,7 +447,7 @@ class AgentExecutionEngine:
     async def trajectory_generator(self, reset_seed=0, timing_raw=None, mode="Text", **kwargs):
         if timing_raw is None:
             timing_raw = {}
-        assert all(type(env).is_multithread_safe() for env in self.envs), "All environments must be multithread safe for async engine"
+        assert all(hasattr(type(env), "is_multithread_safe") and type(env).is_multithread_safe() for env in self.envs if env is not None), "All environments must be multithread safe for async engine"
         self.is_last_trajectory = False
         max_concurrency = self.n_parallel_agents
         self.executor = ThreadPoolExecutor(max_workers=max_concurrency)
@@ -521,7 +519,7 @@ class AgentExecutionEngine:
         # Create a queue of tasks to process
         task_queue = list(enumerate(tasks))
         semaphore = asyncio.Semaphore(max_concurrent)
-        index_queue = asyncio.Queue(maxsize=max_concurrent)
+        index_queue: asyncio.Queue[int] = asyncio.Queue(maxsize=max_concurrent)
         for i in range(max_concurrent):
             index_queue.put_nowait(i)
 
@@ -537,7 +535,8 @@ class AgentExecutionEngine:
                 try:
                     self.envs[index] = self.env_class.from_dict({**task, **self.env_args})
                     self.agents[index] = self.agent_class(**self.agent_args)
-                    self.agents[index].trajectory.task = task
+                    if self.agents[index] is not None:
+                        self.agents[index].trajectory.task = task
                     res = await self.run_agent_trajectory_async(index, application_id=task_id)
                     completed += 1
                     colorful_print(f"Progress: {completed}/{total} trajectories completed", "cyan")
@@ -566,8 +565,7 @@ class AgentExecutionEngine:
         Returns:
             DataProto object containing the converted prompts
         """
-        from verl import DataProto
-        from verl.protocol import union_two_dict
+        from verl.protocol import DataProto, union_two_dict
         from verl.utils.model import compute_position_id_with_mask
         from verl.utils.torch_functional import pad_sequence_to_length
 
