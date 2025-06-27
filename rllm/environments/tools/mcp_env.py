@@ -208,13 +208,13 @@ class MCPEnvironment(BaseEnv):
                 MCPEnvironment._connection_manager = MCPConnectionManager(mcp_server_command, mcp_server_args, mcp_server_env)
                 MCPEnvironment._connection_manager.start()
 
-    def reset(self) -> tuple[list[Any], list[Any]]:
+    def reset(self) -> tuple[list[Any], dict[str, Any]]:
         """Reset the environment and return initial observations."""
         self.step_count = 0
         task_list = [self.task] if self.task is not None else []
-        return task_list, []
+        return task_list, {}
 
-    def step(self, action: Any) -> tuple[Any, float, bool, bool, dict[Any, Any]]:
+    def step(self, action: Any) -> tuple[Any, float, bool, dict[Any, Any]]:
         """
         Take a step in the environment based on the action.
 
@@ -222,7 +222,7 @@ class MCPEnvironment(BaseEnv):
             action: Action from the agent (tool calls or final response)
 
         Returns:
-            next_observations, rewards, terminateds, truncated, infos
+            next_observations, rewards, terminateds, infos
         """
         if isinstance(action, dict):
             action = [action]
@@ -263,9 +263,9 @@ class MCPEnvironment(BaseEnv):
 
             if self.reward_fn and self.task is not None:
                 reward_output = self.reward_fn(task_info=self.task, action=llm_response)
-                return {}, reward_output.reward, done, False, {"response": action, "metadata": reward_output.metadata}
+                return {}, reward_output.reward, done, {"response": action, "metadata": reward_output.metadata}
             else:
-                return {}, 0.0, done, False, {"response": action, "metadata": {}}
+                return {}, 0.0, done, {"response": action, "metadata": {}}
 
         # Execute tool calls using the connection manager
         tool_calls = action
@@ -279,7 +279,7 @@ class MCPEnvironment(BaseEnv):
             print(f"Tool execution error: {e}")
             next_obs = {"tool_outputs": {}}
 
-        return next_obs, reward, done, False, {"response": action, "metadata": {}}
+        return next_obs, reward, done, {"response": action, "metadata": {}}
 
     def close(self):
         """Clean up resources."""
