@@ -1,4 +1,4 @@
-from transformers import AutoTokenizer
+from transformers import PreTrainedTokenizerBase
 
 from rllm.parser.chat_template.parser import ChatTemplateParser
 
@@ -35,7 +35,7 @@ def get_recent_assistant_user_messages(chat_completions_messages):
     return assistant_message, env_messages
 
 
-def convert_messages_to_tokens_and_masks(messages: list[dict[str, str]], tokenizer: AutoTokenizer, parser: ChatTemplateParser, contains_first_msg=False, contains_generation_msg=False):
+def convert_messages_to_tokens_and_masks(messages: list[dict[str, str]], tokenizer: PreTrainedTokenizerBase, parser: ChatTemplateParser, contains_first_msg=False, contains_generation_msg=False):
     """
     Converts multiple messages to tokens and masks.
     contains_first_msg flag and contains_generaiton_msg flag are used to indicate whether the conversation is for beginning or contains the generation.

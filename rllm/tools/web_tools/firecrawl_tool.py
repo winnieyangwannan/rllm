@@ -1,6 +1,7 @@
 import asyncio
 import os
 import time
+from typing import Any
 
 try:
     from firecrawl import FirecrawlApp
@@ -17,7 +18,7 @@ TIMEOUT = 10
 class FirecrawlTool(Tool):
     """A tool for extracting data from websites using the FireCrawl service."""
 
-    def __init__(self, timeout: int = TIMEOUT, api_key: str = FIRECRAWL_API_KEY, api_url: str = None):
+    def __init__(self, timeout: int = TIMEOUT, api_key: str = FIRECRAWL_API_KEY, api_url: str | None = None):
         """
         Initialize the Firecrawl tool.
 
@@ -38,7 +39,7 @@ class FirecrawlTool(Tool):
         """Initialize the FirecrawlApp instance with appropriate configuration."""
         assert self.api_key is not None or self.api_url is not None, "Either api_key or api_url must be provided."
         if self.api_url is None:
-            self.app = FirecrawlApp(api_key=self.api_key)
+            self.app: Any = FirecrawlApp(api_key=self.api_key)
         else:
             self.app = FirecrawlApp(api_url=self.api_url)
 
@@ -73,10 +74,10 @@ class FirecrawlTool(Tool):
         try:
             job = self._start_firecrawl_job(url)
         except Exception as e:
-            return ToolOutput(name=self.name, error=f"Firecrawl job could not start: {e}")
+            return ToolOutput(name=self.name or "firecrawl", error=f"Firecrawl job could not start: {e}")
 
         if not job["success"]:
-            return ToolOutput(name=self.name, error="Firecrawl job failed to start")
+            return ToolOutput(name=self.name or "firecrawl", error="Firecrawl job failed to start")
 
         job_id = job["id"]
         start_time = time.monotonic()
@@ -86,12 +87,12 @@ class FirecrawlTool(Tool):
                 break
             time.sleep(1)
             if time.monotonic() - start_time > self.timeout:
-                return ToolOutput(name=self.name, error="Firecrawl request timed out")
+                return ToolOutput(name=self.name or "firecrawl", error="Firecrawl request timed out")
 
         if status["success"]:
             results = {page["metadata"]["url"]: page["markdown"] for page in status["data"]}
-            return ToolOutput(name=self.name, output=results)
-        return ToolOutput(name=self.name, error=f"Firecrawl request errored: {status['error']}")
+            return ToolOutput(name=self.name or "firecrawl", output=results)
+        return ToolOutput(name=self.name or "firecrawl", error=f"Firecrawl request errored: {status['error']}")
 
     async def async_forward(self, url: str) -> ToolOutput:
         """

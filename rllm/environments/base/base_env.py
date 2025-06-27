@@ -30,7 +30,7 @@ class BaseEnv(ABC):
         self._idx = value
 
     @abstractmethod
-    def reset(self) -> tuple[list, list]:
+    def reset(self) -> tuple[dict, dict]:
         """Standard Gym reset method. Resets the environment to an initial state.
 
         Returns:
@@ -39,7 +39,7 @@ class BaseEnv(ABC):
         pass
 
     @abstractmethod
-    def step(self, action: Any) -> tuple[Any, float, bool, bool, dict]:
+    def step(self, action: Any) -> tuple[Any, float, bool, dict]:
         """Standard Gym step method. Executes one time step within the environment.
 
         Args:

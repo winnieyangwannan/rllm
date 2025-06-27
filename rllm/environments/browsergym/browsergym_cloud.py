@@ -46,7 +46,7 @@ class BrowserGymCloud(BaseEnv):
                 url=url,
                 max_concurrency=10,
             )
-        self.env = None
+        self.env: CloudEnv | None = None
         self.client = client
         self.env_id = env_id
         self.timeout = timeout
@@ -54,7 +54,7 @@ class BrowserGymCloud(BaseEnv):
         self.url = url
 
     @with_retry(num_retries=5)
-    def reset(self, task: dict = None):
+    def reset(self, task: dict | None = None):
         if task is None:
             task = {}
         if self.env is not None:
@@ -99,6 +99,8 @@ class BrowserGymCloud(BaseEnv):
         # return obs, info
 
     def step(self, action, timeout=30000):
+        if self.env is None:
+            raise ValueError("Environment is not initialized. Call reset() first.")
         obs, reward, terminated, truncated, extra_info = self.env.step(action, timeout)
         return obs, reward, terminated or truncated, extra_info
 
@@ -109,11 +111,12 @@ class BrowserGymCloud(BaseEnv):
     @with_retry(num_retries=5)
     def _close(self):
         logger.debug("Closing env")
-        self.env.close()
+        if self.env is not None:
+            self.env.close()
         logger.debug("Successfully closed env")
 
     @staticmethod
-    def from_json(extra_info_json=None) -> "BrowserGymCloud":
+    def from_dict(extra_info_json=None) -> "BrowserGymCloud":
         if extra_info_json is None:
             extra_info_json = {}
         env_id = extra_info_json["env_id"]
@@ -133,7 +136,7 @@ if __name__ == "__main__":
         "timeout": 30000,
         "slow_mo": 1000,
     }
-    env = BrowserGymCloud.from_json()
+    env = BrowserGymCloud.from_dict()
     obs = env.reset(task=extra_info)
     print(obs)
     logger.info("Reset done")

@@ -1,4 +1,5 @@
 import os
+from typing import Any
 
 import httpx
 
@@ -51,7 +52,7 @@ class GoogleSearchTool(Tool):
         engine_id = os.getenv("GOOGLE_SEARCH_ENGINE_ID")
         if not secret_key or not engine_id:
             raise ValueError("GOOGLE_SEARCH_SECRET_KEY or GOOGLE_SEARCH_ENGINE_ID is not set")
-        params = {
+        params: dict[str, Any] = {
             "key": secret_key,
             "cx": engine_id,
             "q": query,
@@ -83,9 +84,9 @@ class GoogleSearchTool(Tool):
             assert self.client is not None, "Google Search Client not initialized"
             contexts = self._search_with_google(query)
             results = {c["link"]: c["snippet"] for c in contexts}
-            return ToolOutput(name=self.name, output=results)
+            return ToolOutput(name=self.name or "google_search", output=results)
         except Exception as e:
-            return ToolOutput(name=self.name, error=f"{type(e).__name__} - {str(e)}")
+            return ToolOutput(name=self.name or "google_search", error=f"{type(e).__name__} - {str(e)}")
 
     def __del__(self):
         try:

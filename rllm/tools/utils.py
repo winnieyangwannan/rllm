@@ -1,5 +1,6 @@
 import inspect
 import typing
+from typing import Any, cast
 
 # avoid circular import
 TOGETHER_IMPORTS = """
@@ -60,6 +61,8 @@ def function_to_dict(func):
 
     # Initialize the parameters dictionary
     params = {"type": "object", "properties": {}, "required": []}
+    required_list = cast(list[str], params["required"])  # Type hint for mypy
+    properties_dict = cast(dict[str, Any], params["properties"])  # Type hint for mypy
 
     # Map Python types to JSON Schema types
     type_mapping = {
@@ -96,11 +99,11 @@ def function_to_dict(func):
         param_schema = {"type": param_type}
         if param_description:
             param_schema["description"] = param_description
-        params["properties"][param_name] = param_schema
+        properties_dict[param_name] = param_schema
 
         # Add to required if there's no default value
         if param.default == inspect.Parameter.empty:
-            params["required"].append(param_name)
+            required_list.append(param_name)
 
     # Build the final dictionary
     function_dict = {
@@ -115,9 +118,9 @@ def function_to_dict(func):
     return function_dict
 
 
-def _extract_import_lines(code: str) -> list:
-    import_lines = []
-    others = []
+def _extract_import_lines(code: str) -> tuple[str, str]:
+    import_lines: list[str] = []
+    others: list[str] = []
     lines = code.splitlines()
     for line in lines:
         stripped = line.lstrip()

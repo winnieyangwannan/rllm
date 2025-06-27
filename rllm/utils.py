@@ -1,5 +1,6 @@
 import os
 import time
+from collections import defaultdict
 
 import openai
 import torch
@@ -14,11 +15,10 @@ from rllm.globals import GCP_LOCATION, GCP_PROJECT_ID, GEMINI_MODEL, OAI_RM_MODE
 def compute_pass_at_k(results):
     import hashlib
     import json
-    from collections import defaultdict
 
     # Create a map to store correct answers per problem
-    problem_correct_map = defaultdict(int)
-    problem_total_map = defaultdict(int)
+    problem_correct_map: defaultdict[str, int] = defaultdict(int)
+    problem_total_map: defaultdict[str, int] = defaultdict(int)
 
     # Count correct answers for each problem
     for trajectory in results:
@@ -52,7 +52,7 @@ def call_oai_rm_llm(
     n: int = 1,
     temperature: float = 1.0,
     model_id: str = OAI_RM_MODEL,
-    retry_count: int = 1e9,
+    retry_count: int = int(1e9),
 ) -> list[str]:
     client = openai.OpenAI()
 
@@ -79,8 +79,9 @@ def call_oai_rm_llm(
                 return []
 
     if n == 1:
-        return response.choices[0].message.content
-    return [choice.message.content for choice in response.choices]
+        content = response.choices[0].message.content
+        return [content] if content is not None else []
+    return [choice.message.content for choice in response.choices if choice.message.content is not None]
 
 
 def call_gemini_llm(
@@ -91,7 +92,7 @@ def call_gemini_llm(
     project_id: str = GCP_PROJECT_ID,
     location: str = GCP_LOCATION,
     model_id: str = GEMINI_MODEL,
-    retry_count: int = 1e9,
+    retry_count: int = int(1e9),
 ) -> list[str]:
     """
     Calls a Gemini LLM on Vertex AI to generate n responses at a given temperature.

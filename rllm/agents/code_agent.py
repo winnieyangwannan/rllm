@@ -148,7 +148,7 @@ class CompetitionCodingAgent(BaseAgent):
         """Returns the trajectory object."""
         return self._trajectory
 
-    def get_current_state(self) -> Step:
+    def get_current_state(self) -> Step | None:
         """Returns the current step/state of the agent."""
         if not self._trajectory.steps:
             return None

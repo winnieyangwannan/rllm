@@ -40,7 +40,7 @@ class E2BPythonInterpreter(CodeTool):
                 print(f"Error killing sandbox: {e}")
         self.sandboxes = []
 
-    def _restart_sandbox(self, id: int):
+    def _restart_sandbox(self, id: int = 0) -> Any:
         """Restart a sandbox and return a new one."""
         previous_sandbox = self.sandboxes[id]
         previous_sandbox.kill()
@@ -48,19 +48,21 @@ class E2BPythonInterpreter(CodeTool):
         self.sandboxes[id] = sandbox
         return sandbox
 
-    def forward(self, code: str, id: int | None = None, max_retries: int = 3, timeout: int = 20) -> CodeToolOutput:
+    def forward(self, code: str, timeout: int = 20, **kwargs) -> CodeToolOutput:
         """
         Execute Python code in one of the sandboxes using round-robin distribution.
 
         Args:
             code: Python code to execute
-            id: Optional specific sandbox ID to use
-            max_retries: Number of retries before restarting sandbox
             timeout: Maximum execution time in seconds
+            **kwargs: Additional parameters including id, max_retries
 
         Returns:
             CodeToolOutput containing execution results, stdout, and stderr
         """
+        id = kwargs.get("id", None)
+        max_retries = kwargs.get("max_retries", 3)
+
         if id:
             self.cur_sandbox_idx = id % self.n_sandboxes
         else:
@@ -76,7 +78,7 @@ class E2BPythonInterpreter(CodeTool):
                 max_retries -= 1
                 if max_retries == 0:
                     self._restart_sandbox(self.cur_sandbox_idx)
-                    return CodeToolOutput(name=self.name, error="Sandbox error, please try again.")
+                    return CodeToolOutput(name=self.name or "e2b_python", error="Sandbox error, please try again.")
 
         # Create a CodeToolOutput object instead of a dictionary
         result = None
@@ -94,7 +96,7 @@ class E2BPythonInterpreter(CodeTool):
         if execution.error:
             stderr = f"{execution.error.traceback}"
 
-        return CodeToolOutput(name=self.name, stdout=stdout, stderr=stderr, output=result)
+        return CodeToolOutput(name=self.name or "e2b_python", stdout=stdout or None, stderr=stderr or None, output=result or None)
 
     @property
     def json(self) -> dict[str, Any]:

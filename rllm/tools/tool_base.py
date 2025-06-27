@@ -18,7 +18,7 @@ class ToolCall:
 @dataclass
 class ToolOutput:
     name: str
-    output: str | list | dict = None
+    output: str | list | dict | None = None
     error: str | None = None
     metadata: dict | None = None
 
@@ -55,7 +55,7 @@ class Tool:
     - async_forward() for asynchronous tools
     """
 
-    def __init__(self, name: str = None, description: str = None, function: Callable[[Any], Any] = None):
+    def __init__(self, name: str | None = None, description: str | None = None, function: Callable | None = None):
         """
         Initialize the tool with a name.
 
@@ -112,14 +112,14 @@ class Tool:
         Returns:
             Any: The result of the tool execution.
         """
-        if self.function:
+        if self.function is not None:
             try:
                 output = self.function(*args, **kwargs)
-                return ToolOutput(name=self.name, output=output)
+                return ToolOutput(name=self.name or "unknown", output=output)
             except Exception as e:
-                return ToolOutput(name=self.name, error=f"{type(e).__name__} - {str(e)}")
+                return ToolOutput(name=self.name or "unknown", error=f"{type(e).__name__} - {str(e)}")
         else:
-            pass
+            raise NotImplementedError("Tool must implement forward() method or provide a function")
 
     async def async_forward(self, *args, **kwargs) -> ToolOutput:
         """
@@ -131,7 +131,7 @@ class Tool:
         """
         return self.forward(*args, **kwargs)
 
-    def __call__(self, *args, use_async=False, **kwargs) -> ToolOutput:
+    def __call__(self, *args, use_async=False, **kwargs):
         """
         Make the tool instance callable.
         - If use_async is True, delegates to async_forward

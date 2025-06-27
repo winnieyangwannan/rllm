@@ -49,7 +49,7 @@ def generate_random_map(size: int = 8, p: float = 0.8, seed: int = 0) -> list[st
         A random valid map
     """
     valid = False
-    board = []  # initialize to make pyright happy
+    board: list[list[str]] = []  # initialize to make pyright happy
 
     np_random, _ = seeding.np_random(seed)
 

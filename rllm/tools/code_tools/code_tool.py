@@ -7,9 +7,9 @@ from rllm.tools.tool_base import Tool, ToolOutput
 
 @dataclasses.dataclass
 class CodeToolOutput(ToolOutput):
-    stdout: str = None  # Standard output
-    stderr: str = None  # Standard error
-    output: str = None  # Result of the code execution (i.e. last line of code)
+    stdout: str | None = None  # Standard output
+    stderr: str | None = None  # Standard error
+    output: str | None = None  # Result of the code execution (i.e. last line of code)
 
     def to_string(self) -> str:
         """

@@ -18,7 +18,7 @@ class CompetitionCodingEnv(MultiTurnEnvironment):
         """
         super().__init__(task=task, max_turns=max_turns, **kwargs)
         self.reward_fn = None
-        self.prev_reward = None
+        self.prev_reward: float | None = None
         self.reward_bonus_coeff = reward_bonus_coeff
 
     def reset(self, task=None, seed=None):
@@ -31,6 +31,8 @@ class CompetitionCodingEnv(MultiTurnEnvironment):
         # Use the provided task if available, otherwise use the default task
         if task is not None:
             self.task = task
+
+        assert self.task is not None, "Task must be set before reset"
 
         self.done = False
         self.current_turn = 0
@@ -54,6 +56,7 @@ class CompetitionCodingEnv(MultiTurnEnvironment):
         self.history.append(action)
 
         # Calculate reward for the current turn using the abstract method
+        assert self.task is not None, "Task is not set"
         raw_reward, next_obs = self.get_reward_and_next_obs(self.task, action)
 
         # Reward shaping
@@ -87,6 +90,7 @@ class CompetitionCodingEnv(MultiTurnEnvironment):
         Returns:
             Tuple of (reward: float, metadata: Dict)
         """
+        assert self.reward_fn is not None, "Reward function is not set"
         reward_response = self.reward_fn(data_source=task.get("data_source", ""), llm_solution=action, ground_truth=task["ground_truth"])
         # all_passed_bonus = 1.0 if reward_response.metadata["all_passed"] else 0.0
         # n_passed_tests = reward_response.metadata["passed_tests"]

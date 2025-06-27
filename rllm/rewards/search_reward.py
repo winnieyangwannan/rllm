@@ -66,7 +66,7 @@ class RewardSearchFn:
             return ""
 
         # 1. HIGHEST PRIORITY: Look for \boxed{} or \boxed[] content
-        def unbox(s: str) -> str:
+        def unbox(s: str) -> str | None:
             """Extract content from \boxed{} with proper nesting support"""
             try:
                 i = s.find("boxed{")
@@ -196,7 +196,7 @@ class RewardSearchFn:
         best_precision = 0.0
         best_recall = 0.0
 
-        metadata = {"extracted_answer": extracted_answer, "ground_truths": ground_truths, "evaluation_method": None}
+        metadata: dict[str, Any] = {"extracted_answer": extracted_answer, "ground_truths": ground_truths, "evaluation_method": None}
 
         for gt in ground_truths:
             gt_str = str(gt).strip()

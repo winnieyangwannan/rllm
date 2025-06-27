@@ -63,7 +63,7 @@ def load_dataset(dataset_enum: TrainDataset.Math | TrainDataset.Code | TestDatas
         raise ValueError(f"Error loading dataset: {str(e)}") from e
 
 
-def fetch_live_code_bench_system_prompt(prompt: str, starter_code: str = None):
+def fetch_live_code_bench_system_prompt(prompt: str, starter_code: str | None = None):
     # https://github.com/LiveCodeBench/LiveCodeBench/blob/main/lcb_runner/prompts/code_generation.py
     prompt = LCB_SYSTEM_MESSAGE_GENERIC + "\n\n" + prompt
     if starter_code:

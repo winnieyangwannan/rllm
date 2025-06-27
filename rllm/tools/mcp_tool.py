@@ -33,8 +33,11 @@ class MCPTool(Tool):
                 content_str = str(result)
 
             logger.debug(f"MCP tool result: {content_str}")
-            return ToolOutput(name=self.name, output=content_str)
+            return ToolOutput(name=self.name or "mcp_tool", output=content_str)
         except Exception as e:
             logger.debug(f"Error executing MCP tool {self.name}: {str(e)}")
             traceback.print_exc()
-            return ToolOutput(name=self.name, error=f"Error: {str(e)}")
+            return ToolOutput(
+                name=self.name or "mcp_tool",
+                error=f"Error calling MCP tool: {e}",
+            )

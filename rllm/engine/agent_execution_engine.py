@@ -11,11 +11,12 @@ import openai
 import torch
 from openai.types import Completion
 
-from rllm.agents.agent import Action, Trajectory
+from rllm.agents.agent import Action, BaseAgent, Trajectory
 from rllm.agents.utils import (
     convert_messages_to_tokens_and_masks,
     get_recent_assistant_user_messages,
 )
+from rllm.environments.base.base_env import BaseEnv
 from rllm.environments.env_utils import (
     compute_mc_return,
     compute_trajectory_reward,
@@ -447,7 +448,8 @@ class AgentExecutionEngine:
     async def trajectory_generator(self, reset_seed=0, timing_raw=None, mode="Text", **kwargs):
         if timing_raw is None:
             timing_raw = {}
-        assert all(hasattr(type(env), "is_multithread_safe") and type(env).is_multithread_safe() for env in self.envs if env is not None), "All environments must be multithread safe for async engine"
+        assert all(env is not None and isinstance(env, BaseEnv) for env in self.envs), "All environments must be inheriting from BaseEnv"
+        assert all(env.is_multithread_safe() for env in self.envs), "All environments must be multithread safe for async engine"  # type: ignore
         self.is_last_trajectory = False
         max_concurrency = self.n_parallel_agents
         self.executor = ThreadPoolExecutor(max_workers=max_concurrency)
@@ -535,8 +537,8 @@ class AgentExecutionEngine:
                 try:
                     self.envs[index] = self.env_class.from_dict({**task, **self.env_args})
                     self.agents[index] = self.agent_class(**self.agent_args)
-                    if self.agents[index] is not None:
-                        self.agents[index].trajectory.task = task
+                    assert self.agents[index] is not None and isinstance(self.agents[index], BaseAgent), "Agent is not initalized or not inheriting from BaseAgent"
+                    self.agents[index].trajectory.task = task  # type: ignore
                     res = await self.run_agent_trajectory_async(index, application_id=task_id)
                     completed += 1
                     colorful_print(f"Progress: {completed}/{total} trajectories completed", "cyan")

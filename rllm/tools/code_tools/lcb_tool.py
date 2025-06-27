@@ -180,23 +180,24 @@ class LCBPythonInterpreter(CodeTool):
             n_sandboxes=-1,
         )
 
-    def forward(self, code: str, timeout: int = 12) -> CodeToolOutput:
+    def forward(self, code: str, timeout: int = 12, **kwargs) -> CodeToolOutput:
         """
         Execute Python code using the LiveCodeBench sandbox environment.
 
         Args:
             code (str): Python code to execute
             timeout (int): Maximum execution time in seconds, defaults to 12
+            **kwargs: Additional parameters (unused but kept for compatibility)
 
         Returns:
             CodeToolOutput: Contains execution results with stdout, stderr, and result fields
         """
         try:
             stdout, stderr, result = lcb_sandbox(code, timeout=timeout)
-            return CodeToolOutput(name=self.name, stdout=stdout, stderr=stderr, output=result)
+            return CodeToolOutput(name=self.name or "python", stdout=stdout, stderr=stderr, output=result)
         except Exception as e:
             return CodeToolOutput(
-                name=self.name,
+                name=self.name or "python",
                 error=f"Sandbox Error: {type(e).__name__} - {str(e)}",
             )
 
