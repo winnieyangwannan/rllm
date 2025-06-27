@@ -25,23 +25,6 @@ class AgentSFTTrainer(FSDPSFTTrainer):
         # Initialize parent class
         super().__init__(config=config, device_mesh=device_mesh, ulysses_device_mesh=ulysses_device_mesh, tokenizer=tokenizer, train_dataset=train_dataset, val_dataset=val_dataset)
 
-    def _extract_messages_from_trajectory(self, traj):
-        for attr_path in ["chat_completions", "trajectory.chat_completions", "trajectory[-1].chat_completions", "steps[0].chat_completions"]:
-            try:
-                obj = traj
-                for attr in attr_path.split("."):
-                    if "[" in attr:  # Handles "steps[0]"
-                        attr_name, idx = attr.split("[")
-                        idx = int(idx.rstrip("]"))
-                        obj = getattr(obj, attr_name)[idx]
-                    else:
-                        obj = getattr(obj, attr)
-                if obj:
-                    return obj
-            except (AttributeError, IndexError, TypeError, ValueError):
-                continue
-        return None
-
     def process_trajectories(self, trajectories: list, reward_threshold: float):
         """Process trajectories into SFT format."""
         sft_data = []
@@ -50,18 +33,23 @@ class AgentSFTTrainer(FSDPSFTTrainer):
             if not traj:
                 continue
 
-            # Get reward from possible locations
-            reward = getattr(traj, "reward", None) or getattr(getattr(traj, "trajectory", None), "reward", None) or getattr(getattr(traj, "steps", [None])[-1] if getattr(traj, "steps", None) else None, "reward", None)
+            reward = traj.reward
 
-            if not reward or reward < reward_threshold:
+            if reward < reward_threshold:
                 continue
 
-            # Extract and clean messages
-            messages = self._extract_messages_from_trajectory(traj)
+            # Get chat_completions from the last step of the trajectory
+            messages = None
+            if traj.steps and hasattr(traj.steps[-1], "chat_completions"):
+                messages = traj.steps[-1].chat_completions
+            elif hasattr(traj, "chat_completions"):
+                # Fallback: check if trajectory itself has chat_completions
+                messages = traj.chat_completions
+
             if not messages:
                 continue
 
-            clean_messages = [{"role": msg["role"], "content": str(msg["content"]).strip()} for msg in messages if isinstance(msg, dict) and msg.get("role") and msg.get("content", "").strip()]
+            clean_messages = [{"role": msg["role"], "content": str(msg["content"]).strip()} for msg in messages if isinstance(msg, dict) and msg.get("role") and str(msg.get("content", "")).strip()]
 
             if len(clean_messages) >= 2:
                 sft_data.append({"messages": clean_messages})
