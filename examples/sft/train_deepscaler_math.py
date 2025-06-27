@@ -20,7 +20,7 @@ from agent_sft_trainer import AgentSFTTrainer
 from omegaconf import DictConfig
 
 
-@hydra.main(config_path="../../verl/verl/trainer/config", config_name="sft_trainer", version_base=None)
+@hydra.main(config_path="pkg://rllm.trainer.config", config_name="sft_trainer", version_base=None)
 def main(config: DictConfig):
     # initialize trainer
     trainer = AgentSFTTrainer(config=config)
