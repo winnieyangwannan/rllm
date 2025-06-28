@@ -75,4 +75,10 @@ python3 -m examples.miniwob.train_miniwob_agent \
     +agent.engine_args.retry_limit=5 \
     +agent.agent_args.use_accumulate_thinking=True \
     +agent.agent_args.use_full_conversation=True \
+    +agent.agent_args.chat_mode=False \
+    +agent.agent_args.use_html=True \
+    +agent.agent_args.use_axtree=True \
+    +agent.agent_args.use_screenshot=False \
+    +agent.agent_args.cot_prompt=False \
+    +agent.agent_args.use_reward_shaping=False \
     trainer.total_epochs=20
