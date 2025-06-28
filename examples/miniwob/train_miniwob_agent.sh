@@ -81,4 +81,4 @@ python3 -m examples.miniwob.train_miniwob_agent \
     +agent.agent_args.use_screenshot=False \
     +agent.agent_args.cot_prompt=False \
     +agent.agent_args.use_reward_shaping=False \
-    trainer.total_epochs=20
+    trainer.total_epochs=10

@@ -26,6 +26,12 @@ def load_miniwob_data():
 if __name__ == "__main__":
     import os
 
+    url = os.getenv("MINIWOB_URL")
+    if url is None:
+        raise Exception("MINIWOB_URL is not set.")
+    else:
+        print(f"MINIWOB_URL is set to: {url}")
+
     parser = argparse.ArgumentParser()
     parser.add_argument("--stepwise", action="store_true", help="Run in stepwise mode")
     args = parser.parse_args()
@@ -39,6 +45,11 @@ if __name__ == "__main__":
     tokenizer = AutoTokenizer.from_pretrained(model_name)
 
     sampling_params = {"temperature": 0.6, "top_p": 0.95, "model": model_name}
+
+    env_args = {
+        "subtask": "miniwob",
+        "miniwob_url": url,
+    }
 
     # Set parameters based on stepwise flag
     if not args.stepwise:
@@ -62,7 +73,7 @@ if __name__ == "__main__":
         agent_class=MiniWobAgent,
         env_class=BrowserGymEnv,
         agent_args=agent_args,
-        env_args={},
+        env_args=env_args,
         engine_name="openai",
         tokenizer=tokenizer,
         sampling_params=sampling_params,
