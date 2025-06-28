@@ -54,7 +54,7 @@ python prepare_frozenlake_data.py
 ```
 
 This will:
-- Generate 3,000 random FrozenLake environments for training
+- Generate 10,000 random FrozenLake environments for training
 - Generate 100 random FrozenLake environments for testing
 - Register both datasets with the RLLM DatasetRegistry
 - Each environment has random size (2-10), slip probability (0.6-0.85), and seed
