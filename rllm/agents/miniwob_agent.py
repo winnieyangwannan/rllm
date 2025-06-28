@@ -1,3 +1,8 @@
+# DISCLAIMER:
+# This MiniWoB agent implementation is adapted from the BrowserGym demo agent:
+# https://github.com/ServiceNow/BrowserGym/blob/main/demo_agent/agent.py
+# Some parts have been modified or extended for custom use.
+
 import base64
 import copy
 import io

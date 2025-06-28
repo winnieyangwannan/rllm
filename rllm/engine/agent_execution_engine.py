@@ -540,6 +540,7 @@ class AgentExecutionEngine:
                     assert self.agents[index] is not None and isinstance(self.agents[index], BaseAgent), "Agent is not initalized or not inheriting from BaseAgent"
                     self.agents[index].trajectory.task = task  # type: ignore
                     res = await self.run_agent_trajectory_async(index, application_id=task_id)
+                    res.task = task
                     completed += 1
                     colorful_print(f"Progress: {completed}/{total} trajectories completed", "cyan")
                     return task_id, res
@@ -547,8 +548,6 @@ class AgentExecutionEngine:
                     # Put the index back in the queue when done
                     await index_queue.put(index)
 
-        # Create a queue of tasks to process
-        task_queue = list(enumerate(tasks))
         # Run all tasks concurrently
         results = await asyncio.gather(*[sem_wrapper(task_id, task) for task_id, task in task_queue])
 

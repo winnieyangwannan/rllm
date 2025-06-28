@@ -7,7 +7,7 @@ export VLLM_USE_V1=0
 # Find the directory where rllm package is located
 RLLM_DIR=$(python3 -c "import rllm; import os; print(os.path.dirname(os.path.dirname(rllm.__file__)))")
 
-python3 -m rllm.train.train_agent_ppo_pipeline \
+python3 -m rllm.trainer.verl.train_agent_ppo_pipeline \
     algorithm.adv_estimator=grpo \
     data.train_files=${RLLM_DIR}/data/rllm-frozenlake/train.parquet \
     data.val_files=${RLLM_DIR}/data/rllm-frozenlake/test.parquet \

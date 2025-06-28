@@ -11,6 +11,7 @@ logger = logging.getLogger(__name__)
 
 
 class FrozenLakeAgent(BaseAgent):
+    # Prompting format inspired by the RAGEN project: https://github.com/RAGEN-AI/RAGEN
     SYSTEM_PROMPT: str = """You are Qwen, created by Alibaba Cloud. You are a helpful assistant. You are walking on a frozen lake.
 
 FrozenLake Quick Guide

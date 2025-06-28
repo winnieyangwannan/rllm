@@ -1,3 +1,10 @@
+# DISCLAIMER:
+# This implementation is based on the Gymnasium FrozenLake environment and the RAGEN project:
+# - Gymnasium: https://gymnasium.farama.org/environments/toy_text/frozen_lake/
+# - RAGEN: https://github.com/RAGEN-AI/RAGEN/blob/main/ragen/env/frozen_lake/env.py
+#
+# Some components have been modified or extended for custom use in this project.
+
 import copy
 
 import gymnasium as gym
@@ -7,9 +14,6 @@ from gymnasium.utils import seeding
 
 from rllm.environments.base.base_env import BaseEnv
 
-"""
-This environment is adapted from Ragen at https://github.com/RAGEN-AI/RAGEN.
-"""
 MAX_STEPS: int = 5
 
 
@@ -284,4 +288,4 @@ class FrozenLakeEnv(GymFrozenLakeEnv, BaseEnv):
 
     @staticmethod
     def from_dict(env_info: dict) -> "FrozenLakeEnv":
-        return FrozenLakeEnv(size=env_info["size"], seed=env_info["seed"], p=env_info["p"], max_steps=env_info.get("max_steps", MAX_STEPS))
+        return FrozenLakeEnv(size=env_info["size"], seed=env_info["seed"], p=env_info["p"], max_steps=env_info.get("max_steps", MAX_STEPS), is_slippery=env_info.get("is_slippery", False))

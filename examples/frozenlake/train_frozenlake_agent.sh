@@ -64,6 +64,7 @@ python3 -m examples.frozenlake.train_frozenlake_agent \
     trainer.rejection_sample=True \
     trainer.rejection_sample_multiplier=2 \
     +env.env_args.max_steps=8 \
+    +env.env_args.is_slippery=False \
     agent.max_steps=10 \
     agent.async_engine=True \
     agent.use_stepwise_advantage=False \

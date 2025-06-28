@@ -4,8 +4,8 @@ This directory contains examples for training and running a simple web agent for
 
 Our examples uses the following:
 * Qwen3-1.7B as the base model
-* 100 BrowserGym-MiniWoB++ tasks for training
-* Rest of 25 BrowserGym-MiniWoB++ tasks as dataset for evaluation
+* 96 BrowserGym-MiniWoB++ tasks for training
+* Rest of 29 BrowserGym-MiniWoB++ tasks as dataset for evaluation
 
 
 ## Model Hosting
