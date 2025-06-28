@@ -1,4 +1,5 @@
 import json
+from typing import Any
 
 from rllm.parser.tool_parser.tool_parser_base import ToolParser
 from rllm.tools.tool_base import ToolCall
@@ -30,7 +31,7 @@ class QwenToolParser(ToolParser):
         tool_calls = [ToolCall(name=tc["name"], arguments=tc["arguments"]) for tc in tool_calls_dicts]
         return tool_calls
 
-    def parse_qwen_tool_calls(self, text: str) -> list[dict]:
+    def parse_qwen_tool_calls(self, text: str) -> list[dict[str, Any]]:
         """Parse tool calls from text using a simple token format.
 
         Format:
@@ -40,7 +41,7 @@ class QwenToolParser(ToolParser):
             list[dict]: List of parsed tool calls, each containing 'name' and 'parameters'
         """
 
-        tool_calls = []
+        tool_calls: list[dict[str, Any]] = []
 
         # Return empty list if no tool calls found
         if self.tool_call_begin not in text:

@@ -25,7 +25,7 @@ class TogetherCodeTool(CodeTool):
         """
         self.api_key = api_key
         self.client = self._setup_client()
-        self.session_id = None
+        self.session_id: str | None = None
         super().__init__(name="together_python", description="Execute Python code using Together Code Interpreter.")
 
     def _setup_client(self):
@@ -59,7 +59,8 @@ class TogetherCodeTool(CodeTool):
             response = self.client.code_interpreter.run(code=code, language="python", **kwargs)
 
             # Save the session_id for potential future use
-            self.session_id = response.data.session_id
+            if hasattr(response.data, "session_id"):
+                self.session_id = response.data.session_id
             # Process the outputs
             stdout = ""
             stderr = ""
@@ -78,10 +79,10 @@ class TogetherCodeTool(CodeTool):
                     output += str(output_item.data) + "\n"
 
             # Return formatted output
-            return CodeToolOutput(name=self.name, output=output.strip() if output else None, stdout=stdout.strip() if stdout else None, stderr=stderr.strip() if stderr else None, error=error)
+            return CodeToolOutput(name=self.name or "together_python", output=output.strip() if output else None, stdout=stdout.strip() if stdout else None, stderr=stderr.strip() if stderr else None, error=error)
 
         except Exception as e:
-            return CodeToolOutput(name=self.name, error=f"{type(e).__name__} - {str(e)}", stderr=str(e))
+            return CodeToolOutput(name=self.name or "together_python", error=f"{type(e).__name__} - {str(e)}", stderr=str(e))
 
     def _init_sandbox(self):
         """Initialize a new sandbox session by resetting the session ID."""

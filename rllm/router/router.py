@@ -1,7 +1,6 @@
 import asyncio
 import logging
 from copy import deepcopy
-from typing import Any
 
 import aiohttp
 import numpy as np
@@ -15,10 +14,10 @@ from verl.utils.torch_functional import get_response_mask, pad_2d_list_to_length
 logger = logging.getLogger(__name__)
 
 
-def _repeat_interleave(value: torch.Tensor | np.ndarray, repeats: int) -> torch.Tensor | list[Any]:
+def _repeat_interleave(value: torch.Tensor | np.ndarray, repeats: int) -> torch.Tensor | np.ndarray:
     if isinstance(value, torch.Tensor):
         return value.repeat_interleave(repeats, dim=0)
-    else:
+    elif isinstance(value, np.ndarray):
         return np.repeat(value, repeats, axis=0)
 
 
@@ -61,6 +60,9 @@ async def poll_completions_openai(address: str, **completions_request) -> Comple
             await asyncio.sleep(retry_delay)
             retry_delay *= 2
 
+    # This should never be reached due to the raise in the loop, but mypy requires it
+    raise Exception("All retries failed")
+
 
 class Router:
     """
@@ -73,8 +75,8 @@ class Router:
         self.addresses = addresses
         self.tensor_parallel_size = config.actor_rollout_ref.rollout.get("tensor_model_parallel_size", 1)
         self._lock = asyncio.Lock()
-        self._usage = {}
-        self._application_id_to_address = {}
+        self._usage: dict[str, int] = {}
+        self._application_id_to_address: dict[str, str] = {}
         # Initialize usage counts for any new addresses
         for addr in self.addresses:
             if addr not in self._usage:
@@ -153,7 +155,7 @@ class Router:
         tasks = []
         # Bug: len(batch) is used later but batch might not have a __len__ method
         batch_size = len(batch.non_tensor_batch["formatted_prompts"])
-        batch_response_ids = [None] * batch_size
+        batch_response_ids: list[list[int]] = [[] for _ in range(batch_size)]
 
         for batch_index, formatted_prompt in enumerate(batch.non_tensor_batch["formatted_prompts"]):
             # For Completion API, we need to convert the conversation to a prompt string
@@ -186,7 +188,7 @@ class Router:
         # Potential blocking: network I/O can block
         return await poll_completions_openai(address=address, model=model, prompt=prompt, **kwargs)
 
-    async def postprocess_batch(self, batch: DataProto, response_ids: list[list[str]], n: int) -> DataProto:
+    async def postprocess_batch(self, batch: DataProto, response_ids: list[list[int]], n: int) -> DataProto:
         # NOTE: For Completion API, batch_completions is a list of lists of strings (not dictionaries)
         # prompts: left pad
         # responses: right pad
@@ -209,7 +211,7 @@ class Router:
                 for r in r_ids:
                     response.append(r)
         assert len(response) == len(non_tensor_batch["formatted_prompts"]) * n
-        response = pad_2d_list_to_length(response, self.pad_token_id, max_length=self.config.actor_rollout_ref.rollout.response_length).to(idx.device)
+        response_tensor = pad_2d_list_to_length(response, self.pad_token_id, max_length=self.config.actor_rollout_ref.rollout.response_length).to(idx.device)
 
         if n > 1:
             idx = _repeat_interleave(idx, n)
@@ -219,9 +221,9 @@ class Router:
                 non_tensor_batch[key] = _repeat_interleave(val, n)
 
         batch_size = len(idx)
-        seq = torch.cat([idx, response], dim=-1)
+        seq = torch.cat([idx, response_tensor], dim=-1)
 
-        response_length = response.size(1)
+        response_length = response_tensor.size(1)
         delta_position_id = torch.arange(1, response_length + 1, device=position_ids.device)
         delta_position_id = delta_position_id.unsqueeze(0).expand(batch_size, -1)
 
@@ -231,13 +233,13 @@ class Router:
         # position_ids:   [0,0,0,0,0,1,2,3, | 4,5,6,7,8,9,10,11]
         response_position_ids = position_ids[..., -1:] + delta_position_id
         position_ids = torch.cat([position_ids, response_position_ids], dim=-1)
-        response_attention_mask = get_response_mask(response_id=response, eos_token=self.eos_token_id, dtype=attention_mask.dtype)
+        response_attention_mask = get_response_mask(response_id=response_tensor, eos_token=self.eos_token_id, dtype=attention_mask.dtype)
         attention_mask = torch.cat((attention_mask, response_attention_mask), dim=-1)
 
         output = TensorDict(
             {
                 "prompts": idx,
-                "responses": response,
+                "responses": response_tensor,
                 "input_ids": seq,
                 "attention_mask": attention_mask,
                 "position_ids": position_ids,

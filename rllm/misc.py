@@ -34,7 +34,7 @@ def pad_from_left(input_id_list, pad_token_id):
 
 
 def merge_dicts(dict_list):
-    merged_dict = {}
+    merged_dict: dict[str, list] = {}
     for dictionary in dict_list:
         for key, value in dictionary.items():
             if key in merged_dict:

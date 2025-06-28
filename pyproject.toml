@@ -5,9 +5,9 @@ build-backend = "setuptools.build_meta"
 [project]
 name = "rllm"
 version = "0.1.0"
-description = "Distributed Post-Training RL Library for LLMs"
+description = "Reinforcement Learning for Language Agents"
 authors = [
-    {name = "RLLM Team"}
+    {name = "rLLM Team"}
 ]
 readme = "README.md"
 requires-python = ">=3.10"
@@ -58,3 +58,19 @@ ignore = [
 [tool.setuptools.packages.find]
 where   = ["."]
 include = ["rllm", "rllm.*"]
+
+[tool.mypy]
+plugins = ["pydantic.mypy"]
+ignore_missing_imports = true
+check_untyped_defs = true
+follow_imports = "silent"
+
+exclude = [
+    "verl/.*",
+    "rllm/rewards/code_utils/.*",
+    "rllm/rewards/math_utils/.*",
+    "examples/.*",
+    "scripts/.*",
+    "tests/.*",
+    "docs/.*",
+]

@@ -23,10 +23,10 @@ class CamelTool(Tool):
     def json(self) -> dict[str, Any]:
         return self.function_tool.get_openai_tool_schema()
 
-    def forward(self, **kwargs) -> str:
+    def forward(self, **kwargs) -> ToolOutput:
         try:
             result = self.function_tool(**kwargs)
-            return ToolOutput(name=self.name, output=str(result))
+            return ToolOutput(name=self.name or "unknown", output=str(result))
         except Exception as e:
             print(f"Error: {e}")
-            return ToolOutput(name=self.name, output=str(e))
+            return ToolOutput(name=self.name or "unknown", error=str(e))

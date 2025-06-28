@@ -1,5 +1,6 @@
 import enum
 from dataclasses import dataclass, field
+from typing import cast
 
 
 class TrainDataset:
@@ -53,7 +54,7 @@ class TestDataset:
         GAIA = "GAIA"
 
 
-Dataset = TrainDataset | TestDataset
+Dataset = TrainDataset.Math | TrainDataset.Code | TrainDataset.Web | TestDataset.Math | TestDataset.Code | TestDataset.Web
 
 
 @dataclass
@@ -81,14 +82,34 @@ class DatasetConfig:
 
         # Convert string dataset names to Dataset enum values
         if isinstance(self.datasets[0], str):
-            converted_datasets = []
+            converted_datasets: list[Dataset] = []
             for dataset_name in self.datasets:
                 # Try to match with TrainDataset first, then TestDataset
-                try:
-                    dataset = TrainDataset(dataset_name)
-                except ValueError:
-                    raise ValueError(f"Dataset {dataset_name} not found in TrainDataset.") from None
-                converted_datasets.append(dataset)
+                dataset_found = False
+                # Check all TrainDataset enum classes
+                for enum_cls in [TrainDataset.Math, TrainDataset.Code, TrainDataset.Web]:
+                    try:
+                        dataset = enum_cls(dataset_name)
+                        converted_datasets.append(cast(Dataset, dataset))
+                        dataset_found = True
+                        break
+                    except ValueError:
+                        continue
+
+                # If not found in TrainDataset, try TestDataset
+                if not dataset_found:
+                    for enum_cls in [TestDataset.Math, TestDataset.Code, TestDataset.Web]:
+                        try:
+                            dataset = enum_cls(dataset_name)
+                            converted_datasets.append(cast(Dataset, dataset))
+                            dataset_found = True
+                            break
+                        except ValueError:
+                            continue
+
+                if not dataset_found:
+                    raise ValueError(f"Dataset {dataset_name} not found in TrainDataset or TestDataset.")
+
             self.datasets = converted_datasets
 
         # Set uniform weights if not specified

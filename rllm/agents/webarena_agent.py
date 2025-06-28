@@ -5,7 +5,7 @@ import io
 import logging
 import re
 from dataclasses import dataclass, field
-from typing import Optional
+from typing import Any, Optional
 
 import numpy as np
 from browsergym.utils.obs import _process_bid
@@ -76,9 +76,9 @@ ROLE_REMAP = {
 class Node:
     node_id: int
     role: str
-    name: str = None
-    value: any = None
-    properties: list[str | dict[str, any]] = field(default_factory=list)
+    name: str | None = None
+    value: Any = None
+    properties: list[str | dict[str, Any]] = field(default_factory=list)
     parent: Optional["Node"] = None
     children: list["Node"] = field(default_factory=list)
     bid: int | None = None
@@ -91,7 +91,7 @@ class Node:
         return parent.children
 
 
-def from_axtree_construct_tree(tree_dict: dict, return_id2node: bool = False) -> Node:
+def from_axtree_construct_tree(tree_dict: dict, return_id2node: bool = False) -> Node | tuple[Node, dict[Any, Node]]:
     assert isinstance(tree_dict, dict) and "nodes" in tree_dict
     nodes = tree_dict["nodes"]
     node_id_to_idx = {}
@@ -99,7 +99,7 @@ def from_axtree_construct_tree(tree_dict: dict, return_id2node: bool = False) ->
         node_id_to_idx[node["nodeId"]] = idx
 
     if return_id2node:
-        id2node = {}
+        id2node: dict[Any, Node] = {}
 
     def dfs(d: dict) -> Node:
         name = d["name"]["value"] if "name" in d else None
@@ -169,9 +169,10 @@ def clean_accesibility_tree(root: Node) -> Node:
     if isinstance(root.name, str):
         root.name = remove_unwanted_characters(root.name)
     for prop in root.properties:
-        for key, value in prop.items():
-            if isinstance(value, str):
-                prop[key] = remove_unwanted_characters(value)
+        if isinstance(prop, dict):
+            for key, value in prop.items():
+                if isinstance(value, str):
+                    prop[key] = remove_unwanted_characters(value)
     for child in root.children:
         clean_accesibility_tree(child)
     return root
@@ -179,7 +180,7 @@ def clean_accesibility_tree(root: Node) -> Node:
 
 def prune_axtree(
     root: Node,
-    extra_properties: dict = None,
+    extra_properties: dict | None = None,
     with_visible: bool = False,
     with_clickable: bool = False,
     with_center_coords: bool = False,
@@ -206,7 +207,7 @@ def prune_axtree(
         parent_node_filtered: bool,
         parent_node_name: str,
         ancestor_node_names: str,
-    ) -> None:
+    ) -> list[Node]:
         bid = node.bid
         role = node.role
         name = node.name
@@ -215,6 +216,8 @@ def prune_axtree(
 
         has_attributes = False
         for property in node.properties:
+            if not isinstance(property, dict):
+                continue
             if "value" not in property or "value" not in property["value"]:
                 continue
             prop_name = property["name"]
@@ -245,16 +248,16 @@ def prune_axtree(
                 "Legend",
                 "listitem",
             ]
-            and not name.strip()
+            and not (name and name.strip())
             and node.properties == []
         ):
             skip_node = True
         elif role in ["listitem"]:
             skip_node = True
-        elif merge_code_into_text and role == "code" and not name.strip() and node.properties == []:
+        elif merge_code_into_text and role == "code" and not (name and name.strip()) and node.properties == []:
             skip_node = True
             for child in node.children:
-                if child.role == "StaticText":
+                if child.role == "StaticText" and child.name:
                     child.name = "`" + child.name + "`"
 
         if skip_generic and role == "generic" and not has_attributes:
@@ -266,9 +269,9 @@ def prune_axtree(
         if role == "StaticText":
             if parent_node_filtered:
                 skip_node = True
-            elif remove_redundant_static_text and name in parent_node_name:
+            elif remove_redundant_static_text and name and name in parent_node_name:
                 skip_node = True
-            elif remove_redundant_static_text and remove_redundant_mode == "ancestor" and name in ancestor_node_names:
+            elif remove_redundant_static_text and remove_redundant_mode == "ancestor" and name and name in ancestor_node_names:
                 skip_node = True
         else:
             filter_node, _ = _process_bid(
@@ -288,28 +291,29 @@ def prune_axtree(
             # if either is True, skip the node
             skip_node = skip_node or filter_node
 
-        child_filtered = []
+        child_filtered: list[Node] = []
 
         for child in node.children:
-            name = name if name else ""
+            name_for_child = name if name else ""
             child_filtered.extend(
                 dfs(
                     child,
                     depth if skip_node else depth + 1,
                     filter_node,
-                    name,
-                    ancestor_node_names + " " + name,
+                    name_for_child,
+                    ancestor_node_names + " " + name_for_child,
                 )
             )
 
         if merge_consecutive_static_text:
-            child_after_merge_consecutive_static_text = []
+            child_after_merge_consecutive_static_text: list[Node] = []
             pre_is_text = False
             for child in child_filtered:
                 if child.role == "StaticText":
                     if pre_is_text:
                         # TODO: this does not work well for website contain codes
-                        child_after_merge_consecutive_static_text[-1].name += " " + child.name
+                        if child_after_merge_consecutive_static_text[-1].name and child.name:
+                            child_after_merge_consecutive_static_text[-1].name += " " + child.name
                     else:
                         child_after_merge_consecutive_static_text.append(child)
                     pre_is_text = True
@@ -322,18 +326,18 @@ def prune_axtree(
             child_names = " ".join([child.name for child in child_filtered if child.name])
             child_after_filter_redundant_static_text = []
             for child in child_filtered:
-                if not (child.role == "StaticText" and child_names.count(child.name) > 1):
+                if not (child.role == "StaticText" and child.name and child_names.count(child.name) > 1):
                     child_after_filter_redundant_static_text.append(child)
             child_filtered = child_after_filter_redundant_static_text
 
-        if node.role == "StaticText" and not node.name.strip():
+        if node.role == "StaticText" and node.name and not node.name.strip():
             skip_node = True
 
         if not skip_node:
             for child in child_filtered:
                 child.parent = node
             node.children = child_filtered
-            if child_filtered == [] and node.role == "img" or node.name == "Image" and remove_img_if_child_img:
+            if child_filtered == [] and node.role == "img" or (node.name == "Image" and remove_img_if_child_img):
                 # if an img node has no non-img children, remove it
                 return []
             return [node]
@@ -345,7 +349,7 @@ def prune_axtree(
 
 def flatten_axtree(
     root: Node | list[Node],
-    extra_properties: dict = None,
+    extra_properties: dict | None = None,
     with_visible: bool = False,
     with_clickable: bool = False,
     with_center_coords: bool = False,
@@ -373,6 +377,8 @@ def flatten_axtree(
 
         attributes = []
         for property in node.properties:
+            if not isinstance(property, dict):
+                continue
             if "value" not in property or "value" not in property["value"]:
                 continue
             prop_name = property["name"]
@@ -406,7 +412,7 @@ def flatten_axtree(
         if role in hide_bid_roles:
             # TODO: need list and table reformatingbid_str = ""
             bid_str = ""
-        elif not (hide_all_bids or bid is None or (hide_bid_if_invisible and extra_properties.get(bid, {}).get("visibility", 0) < 0.5)):
+        elif not (hide_all_bids or bid is None or (hide_bid_if_invisible and extra_properties is not None and extra_properties.get(bid, {}).get("visibility", 0) < 0.5)):
             bid_str = f" [{bid}]"
         else:
             bid_str = ""
@@ -452,7 +458,9 @@ def find_parent_with_bid(node: Node):
 all_action_types = ["click", "go_back", "type", "stop"]
 
 
-def proper_content(content: str):
+def proper_content(content: str | None):
+    if content is None:
+        content = ""
     content = repr(content)[1:-1]
     return repr(content)
 
@@ -634,7 +642,7 @@ class WebArenaAgent(BaseAgent):
         self.step = 0
         self.reset()
 
-    def update_from_env(self, observation: any, reward: float, done: bool, info: dict, **kwargs):
+    def update_from_env(self, observation: Any, reward: float, done: bool, info: dict, **kwargs):
         """
         Updates the agent's internal state after an environment step.
         Includes logic to check if the observation changed from the previous step.
@@ -652,10 +660,11 @@ class WebArenaAgent(BaseAgent):
         if self._trajectory.steps:
             prior_step = self._trajectory.steps[-1]
             # The observation received here is the 'next_observation' for the *previous* action/step
-            prior_step.next_observation = obs["axtree_txt"]
+            # Store the next observation in the info dict since Step doesn't have a next_observation field
+            prior_step.info["next_observation"] = obs["axtree_txt"]
             prior_step.reward = reward
             prior_step.done = done
-            prior_step.info = info
+            prior_step.info.update(info)
 
         self.messages.extend(message)
 
@@ -664,7 +673,7 @@ class WebArenaAgent(BaseAgent):
         if done:
             return
 
-        cur_step = Step(observation=obs["axtree_txt"], step=self.step)
+        cur_step = Step(observation=obs["axtree_txt"])
         self._trajectory.steps.append(cur_step)
         assert "axtree_txt" in obs, "Only axtree is supported for now"
         self.past_obs.append(obs["axtree_txt"])
@@ -783,7 +792,14 @@ CURRENT OBSERVATION:
     def _preproc_obs(self, obs: dict) -> dict:
         if "goal_object" in obs:
             self.objective = obs["goal_object"][0]["text"]
-        root, id2node = from_axtree_construct_tree(obs["axtree_object"], return_id2node=True)
+        result = from_axtree_construct_tree(obs["axtree_object"], return_id2node=True)
+        if isinstance(result, tuple):
+            root, id2node = result
+        else:
+            # This shouldn't happen since we pass return_id2node=True, but handle it for type safety
+            root = result
+            id2node = {}
+
         root = clean_accesibility_tree(root)
         roots = prune_axtree(root)
         self.id2node = id2node
@@ -812,10 +828,9 @@ CURRENT OBSERVATION:
             response (str): The raw text response to be processed.
 
         Returns:
-            Tuple[str, str]: A tuple containing:
-                - The extracted action (content from the last occurrence of triple backticks
-                  or the full response if no match is found)
-                - The processed response
+            Tuple[dict[str, str], str]: A tuple containing:
+                - The extracted parts as a dictionary
+                - The processed action code
         """
         parts = [
             "INTERACTION HISTORY SUMMARY",
@@ -824,7 +839,7 @@ CURRENT OBSERVATION:
             "ACTION",
             "OBSERVATION HIGHLIGHT",
         ]
-        result = {}
+        result: dict[str, Any] = {}
         current_part = None
 
         for line in response.split("\n"):

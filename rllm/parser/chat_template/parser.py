@@ -6,7 +6,7 @@ class ChatTemplateParser:
         self.tokenizer = tokenizer
         self.assistant_token = ""
 
-    def parse(self, messages, add_generation_prompt=False, **kwargs) -> str:
+    def parse(self, messages, add_generation_prompt=False, is_first_msg=False, **kwargs) -> str:
         return self.tokenizer.apply_chat_template(messages, tokenize=False, add_generation_prompt=add_generation_prompt)
 
     def verify_equivalence(self, messages, verbose=True):
@@ -46,7 +46,7 @@ class ChatTemplateParser:
         return is_equivalent
 
     @classmethod
-    def get_parser(cls, tokenizer, disable_thinking=False):
+    def get_parser(cls, tokenizer, disable_thinking=False) -> "ChatTemplateParser":
         """Factory method to get the appropriate parser based on a string identifier.
 
         Args:
@@ -69,13 +69,11 @@ class ChatTemplateParser:
                 print(f"Using DeepseekQwenChatTemplateParser for {tokenizer.name_or_path}")
                 return DeepseekQwenChatTemplateParser(tokenizer)
             elif "qwen" in model_name or "qwen" in tokenizer_cls:
-                parser = QwenChatTemplateParser(tokenizer, disable_thinking=disable_thinking)
                 print(f"Using QwenChatTemplateParser for {tokenizer.name_or_path}")
-                return parser
+                return QwenChatTemplateParser(tokenizer, disable_thinking=disable_thinking)
             elif "llama" in model_name:
-                parser = LlamaChatTemplateParser(tokenizer)
                 print(f"Using LlamaChatTemplateParser for {tokenizer.name_or_path}")
-                return parser
+                return LlamaChatTemplateParser(tokenizer)
 
         # Default to the standard parser if no specific match
         parser = ChatTemplateParser(tokenizer)
@@ -94,7 +92,7 @@ class DeepseekQwenChatTemplateParser(ChatTemplateParser):
         self.assistant_token = " "
         self.generation_prompt = self.assistant_token
 
-    def parse(self, messages, add_generation_prompt=False, is_first_msg=False) -> str:
+    def parse(self, messages, add_generation_prompt=False, is_first_msg=False, **kwargs) -> str:
         result = ""
 
         if is_first_msg:
@@ -143,7 +141,7 @@ class QwenChatTemplateParser(ChatTemplateParser):
         self.tool_response_start_token = "<tool_response>\n"
         self.tool_response_end_token = "\n</tool_response>"
 
-    def parse(self, messages, add_generation_prompt=False, is_first_msg=False) -> str:
+    def parse(self, messages, add_generation_prompt=False, is_first_msg=False, **kwargs) -> str:
         result = ""
 
         # if the first message is not a system message, add the system message
@@ -196,7 +194,7 @@ class LlamaChatTemplateParser(ChatTemplateParser):
         self.tool_response_start_token = "<|start_header_id|>tool_response<|end_header_id|>\n\n"
         self.tool_response_end_token = "<|eot_id|>"
 
-    def parse(self, messages, add_generation_prompt=False, is_first_msg=False) -> str:
+    def parse(self, messages, add_generation_prompt=False, is_first_msg=False, **kwargs) -> str:
         result = ""
 
         if is_first_msg:

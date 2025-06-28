@@ -25,7 +25,7 @@ class MultiTurnEnvironment(BaseEnv, ABC):
         self.max_turns = max_turns
         self.current_turn = 0
         self.done = False
-        self.history = []
+        self.history: list[Any] = []
 
     def reset(self):
         self.done = False
@@ -48,6 +48,7 @@ class MultiTurnEnvironment(BaseEnv, ABC):
         self.history.append(action)
 
         # Calculate reward for the current turn using the abstract method
+        assert self.task is not None, "Task is not set"
         reward, next_obs = self.get_reward_and_next_obs(self.task, action)
 
         # Increment turn counter
@@ -76,8 +77,4 @@ class MultiTurnEnvironment(BaseEnv, ABC):
 
     @staticmethod
     def from_dict(env_args: dict) -> "MultiTurnEnvironment":
-        if "task" in env_args:
-            task = env_args["task"]
-        else:
-            task = env_args
-        return MultiTurnEnvironment(task=task, max_turns=env_args.get("max_turns", 3))
+        raise NotImplementedError("MultiTurnEnvironment is abstract and cannot be instantiated directly. Use a concrete subclass.")

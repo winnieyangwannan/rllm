@@ -67,16 +67,16 @@ def difficulty_fn(idx, entry):
 def batch_difficulty(dataset: str, split: str):
     # Figure out if we need a TrainDataset or TestDataset
     if split == "train":
-        dataset_enum = TrainDataset[dataset.upper()]
+        dataset_enum = getattr(TrainDataset, dataset.upper())
     else:
-        dataset_enum = TestDataset[dataset.upper()]
+        dataset_enum = getattr(TestDataset, dataset.upper())
 
     # Load data using the provided load_dataset function
     data = load_dataset(dataset_enum)
     results = deepcopy(data)
 
     # Prepare to save back to the same file location
-    data_dir = "train" if isinstance(dataset_enum, TrainDataset) else "test"
+    data_dir = "train" if split == "train" else "test"
     dataset_name = dataset_enum.value.lower()
     file_path = os.path.join("..", data_dir, f"{dataset_name}.json")
 

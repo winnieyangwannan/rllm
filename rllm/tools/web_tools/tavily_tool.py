@@ -20,7 +20,7 @@ class TavilyExtractTool(Tool):
         return {"type": "function", "function": {"name": self.name, "description": self.description, "parameters": {"type": "object", "properties": {"urls": {"type": "array", "items": {"type": "string"}, "description": "Array of URLs to extract content from"}}, "required": ["urls"]}}}
 
     def _init_client(self):
-        self.client = httpx.Client()
+        self.client: httpx.Client | None = httpx.Client()
 
     def _close_client(self):
         if self.client:
@@ -40,6 +40,10 @@ class TavilyExtractTool(Tool):
         api_key = os.getenv("TAVILY_API_KEY")
         if not api_key:
             raise ValueError("TAVILY_API_KEY is not set")
+
+        if self.client is None:
+            raise RuntimeError("HTTP client is not initialized")
+
         try:
             params = {"urls": urls, "include_images": False, "extract_depth": "basic"}
             headers = {"Authorization": f"Bearer {api_key}", "Content-Type": "application/json"}
@@ -47,13 +51,13 @@ class TavilyExtractTool(Tool):
             response = self.client.post(url=TAVILY_EXTRACT_ENDPOINT, json=params, headers=headers)
 
             if not response.is_success:
-                return ToolOutput(name=self.name, error=f"Error: {response.status_code} - {response.text}")
+                return ToolOutput(name=self.name or "tavily_extract", error=f"Error: {response.status_code} - {response.text}")
 
             results = response.json()["results"]
             output = {res["url"]: res["raw_content"] for res in results}
-            return ToolOutput(name=self.name, output=output)
+            return ToolOutput(name=self.name or "tavily_extract", output=output)
         except Exception as e:
-            return ToolOutput(name=self.name, error=f"{type(e).__name__} - {str(e)}")
+            return ToolOutput(name=self.name or "tavily_extract", error=f"{type(e).__name__} - {str(e)}")
 
     def __del__(self):
         """Clean up resources when the tool is garbage collected."""
@@ -89,7 +93,7 @@ class TavilySearchTool(Tool):
         }
 
     def _init_client(self):
-        self.client = httpx.Client()
+        self.client: httpx.Client | None = httpx.Client()
 
     def _close_client(self):
         if self.client:
@@ -113,6 +117,10 @@ class TavilySearchTool(Tool):
         api_key = os.getenv("TAVILY_API_KEY")
         if not api_key:
             raise ValueError("TAVILY_API_KEY is not set")
+
+        if self.client is None:
+            raise RuntimeError("HTTP client is not initialized")
+
         try:
             params = {"query": query, "search_depth": search_depth, "max_results": max_results}
 
@@ -126,12 +134,12 @@ class TavilySearchTool(Tool):
             response = self.client.post(url=TAVILY_SEARCH_ENDPOINT, json=params, headers=headers)
 
             if not response.is_success:
-                return ToolOutput(name=self.name, error=f"Error: {response.status_code} - {response.text}")
+                return ToolOutput(name=self.name or "tavily_search", error=f"Error: {response.status_code} - {response.text}")
 
             result = response.json()
-            return ToolOutput(name=self.name, output=result)
+            return ToolOutput(name=self.name or "tavily_search", output=result)
         except Exception as e:
-            return ToolOutput(name=self.name, error=f"{type(e).__name__} - {str(e)}")
+            return ToolOutput(name=self.name or "tavily_search", error=f"{type(e).__name__} - {str(e)}")
 
     def __del__(self):
         """Clean up resources when the tool is garbage collected."""

@@ -3,6 +3,7 @@ import json
 from datasets import load_dataset
 
 from rllm.data.dataset import DatasetRegistry
+from rllm.data.utils import fetch_live_code_bench_system_prompt
 
 
 def prepare_deepcoder_data(train_size: int = None, test_size: int = None):
@@ -10,9 +11,8 @@ def prepare_deepcoder_data(train_size: int = None, test_size: int = None):
     test_dataset = load_dataset("agentica-org/DeepCoder-Preview-Dataset", name="lcbv5", split="test")
 
     def preprocess_fn(example, idx):
-        question = example["problem"]
-        if example.get("starter_code"):
-            question += f"\n\nStarter code:\n```python\n{example['starter_code']}\n```"
+        starter_code = example.get("starter_code", "")
+        question = fetch_live_code_bench_system_prompt(example["problem"], starter_code if starter_code else None)
 
         tests = json.loads(example["tests"])
         metadata = example.get("metadata", {})
@@ -23,7 +23,7 @@ def prepare_deepcoder_data(train_size: int = None, test_size: int = None):
             else:
                 test["metadata"] = {"func_name": None}
 
-        return {"question": question, "ground_truth": tests, "data_source": "livecodebench", "uid": f"deepcoder_{idx}", "index": idx, "starter_code": example.get("starter_code", ""), "metadata": metadata}
+        return {"question": question, "ground_truth": tests, "data_source": "livecodebench", "uid": f"deepcoder_{idx}", "index": idx, "starter_code": starter_code, "metadata": metadata}
 
     if train_size:
         train_dataset = train_dataset.select(range(min(train_size, len(train_dataset))))

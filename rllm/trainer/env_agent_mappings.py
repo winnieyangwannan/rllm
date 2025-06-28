@@ -14,7 +14,7 @@ ENV_CLASSES = {
     "tool": safe_import("rllm.environments.tools.tool_env", "ToolEnvironment"),
     "math": safe_import("rllm.environments.base.single_turn_env", "SingleTurnEnvironment"),
     "code": safe_import("rllm.environments.base.single_turn_env", "SingleTurnEnvironment"),
-    "swe": safe_import("rllm.environments.swe.swe", "SWEEnv"),
+    # "swe": safe_import("rllm.environments.swe.swe", "SWEEnv"),
     "competition_coding": safe_import("rllm.environments.code.competition_coding", "CompetitionCodingEnv"),
     "browsergym_cloud": safe_import("rllm.environments.browsergym.browsergym_cloud", "BrowserGymCloud"),
 }
@@ -25,7 +25,7 @@ AGENT_CLASSES = {
     "webarenaagent": safe_import("rllm.agents.webarena_agent", "WebArenaAgent"),
     "frozenlakeagent": safe_import("rllm.agents.frozenlake_agent", "FrozenLakeAgent"),
     "tool_agent": safe_import("rllm.agents.tool_agent", "ToolAgent"),
-    "sweagent": safe_import("rllm.agents.swe_agent", "SWEAgent"),
+    # "sweagent": safe_import("rllm.agents.swe_agent", "SWEAgent"),
     "math_agent": safe_import("rllm.agents.math_agent", "MathAgent"),
     "code_agent": safe_import("rllm.agents.code_agent", "CompetitionCodingAgent"),
 }

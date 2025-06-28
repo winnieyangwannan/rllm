@@ -41,7 +41,7 @@ class PythonInterpreter(CodeTool):
     def _init_backend(self):
         """Initialize the selected backend interpreter."""
         if self.backend_type == "local":
-            self.backend = LCBPythonInterpreter()
+            self.backend: LCBPythonInterpreter | E2BPythonInterpreter | TogetherCodeTool = LCBPythonInterpreter()
         elif self.backend_type == "e2b":
             self.backend = E2BPythonInterpreter(n_sandboxes=self.n_sandboxes, api_key=self.api_key)
         elif self.backend_type == "together":

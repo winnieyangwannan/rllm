@@ -141,12 +141,11 @@ class DocumentProcessingToolkit(BaseToolkit):
                     from PyPDF2 import PdfReader
 
                     # Open file in binary mode for PdfReader
-                    f = open(document_path, "rb")
-                    reader = PdfReader(f)
-                    extracted_text = ""
-                    for page in reader.pages:
-                        extracted_text += page.extract_text()
-                    f.close()
+                    with open(document_path, "rb") as f:  # type: ignore
+                        reader = PdfReader(f)
+                        extracted_text = ""
+                        for page in reader.pages:
+                            extracted_text += page.extract_text()
 
                     return True, extracted_text
 
