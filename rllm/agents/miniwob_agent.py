@@ -3,12 +3,12 @@ import copy
 import io
 import logging
 import re
+from dataclasses import asdict
 from typing import Any
 
-import browsergym.miniwob  # noqa: F401
 import numpy as np
-from browsergym.core.action.highlevel import HighLevelActionSet
-from browsergym.utils.obs import flatten_axtree_to_str, flatten_dom_to_str, prune_html
+from browsergym.core.action.highlevel import HighLevelActionSet  # type: ignore[import-untyped]
+from browsergym.utils.obs import flatten_axtree_to_str, flatten_dom_to_str, prune_html  # type: ignore[import-untyped]
 from PIL import Image
 
 from rllm.agents.agent import Action, BaseAgent, Step, Trajectory
@@ -17,7 +17,7 @@ from rllm.agents.system_prompts import *
 logger = logging.getLogger(__name__)
 
 
-def image_to_jpg_base64_url(image: np.ndarray | Image.Image):
+def image_to_jpg_base64_url(image: np.ndarray | Image.Image) -> str:
     """Convert a numpy array to a base64 encoded image url."""
 
     if isinstance(image, np.ndarray):
@@ -33,35 +33,35 @@ def image_to_jpg_base64_url(image: np.ndarray | Image.Image):
 
 
 class MiniWobAgent(BaseAgent):
-    def __init__(self, chat_mode=False, use_html=True, use_axtree=True, use_screenshot=False, use_accumulate_thinking=True, cot_prompt=False, use_full_conversation=True, use_reward_shaping=False):
-        self.chat_mode = chat_mode
-        self.use_html = use_html
-        self.use_axtree = use_axtree
-        self.use_screenshot = use_screenshot
+    def __init__(self, chat_mode: bool = False, use_html: bool = True, use_axtree: bool = True, use_screenshot: bool = False, use_accumulate_thinking: bool = True, cot_prompt: bool = False, use_full_conversation: bool = True, use_reward_shaping: bool = False):
+        self.chat_mode: bool = chat_mode
+        self.use_html: bool = use_html
+        self.use_axtree: bool = use_axtree
+        self.use_screenshot: bool = use_screenshot
 
         self.action_set = HighLevelActionSet(
             subsets=["chat", "tab", "nav", "bid", "infeas"],  # define a subset of the action space
             # subsets=["chat", "bid", "coord", "infeas"] # allow the agent to also use x,y coordinates
             strict=False,  # less strict on the parsing of the actions
             multiaction=False,  # does not enable the agent to take multiple actions at once
-            demo_mode=False,  # add visual effects
+            demo_mode="off",  # add visual effects
         )
 
-        self.action_history = []  # all are in string
+        self.action_history: list[str] = []  # all are in string
 
         # for interface compliance
         self._trajectory = Trajectory()
-        self.messages = []
-        self.step = 0
-        self.current_observation = None
+        self.messages: list[dict[str, Any]] = []
+        self.step: int = 0
+        self.current_observation: dict[str, Any] | None = None
         self.reset()
 
-        self.accumulate_thinking = use_accumulate_thinking
-        self.cot_prompt = cot_prompt
-        self.full_conversation = use_full_conversation
-        self.reward_shaping = use_reward_shaping
+        self.accumulate_thinking: bool = use_accumulate_thinking
+        self.cot_prompt: bool = cot_prompt
+        self.full_conversation: bool = use_full_conversation
+        self.reward_shaping: bool = use_reward_shaping
 
-    def update_from_env(self, observation: Any, reward: float, done: bool, info: dict, **kwargs):
+    def update_from_env(self, observation: Any, reward: float, done: bool, info: dict, **kwargs) -> None:
         """
         Updates the agent's internal state after an environment step.
         Includes logic to check if the observation changed from the previous step.
@@ -80,9 +80,9 @@ class MiniWobAgent(BaseAgent):
         self.current_observation = obs
 
         if done and self.reward_shaping:
-            reward_penalty = 0
+            reward_penalty = 0.0
             for step in self.trajectory.steps:
-                if not self.validate_step(step):
+                if not self.validate_step(asdict(step)):
                     reward_penalty = -0.5
                     break
             self.trajectory.reward += reward_penalty
@@ -144,7 +144,7 @@ class MiniWobAgent(BaseAgent):
             raise ValueError("get_current_state called before the first observation was processed.")
         return self._trajectory.steps[-1]
 
-    def get_system_msgs(self, obs):
+    def get_system_msgs(self, obs) -> list[dict[str, str]]:
         system_msgs = []
         system_msgs.append({"type": "text", "text": self._get_system_prompt()})
 
@@ -153,7 +153,7 @@ class MiniWobAgent(BaseAgent):
         system_msgs.extend(obs["goal_object"])
         return system_msgs
 
-    def get_user_msgs(self, user_obs):
+    def get_user_msgs(self, user_obs) -> list[dict[str, str]]:
         user_msgs = []
         # Add open tabs information
         user_msgs.extend(self._format_open_tabs(user_obs["open_pages_urls"], user_obs["open_pages_titles"], user_obs["active_page_index"]))
@@ -216,7 +216,7 @@ Last Action:
 
         return user_msgs
 
-    def _preproc_obs(self, obs: dict) -> dict:
+    def _preproc_obs(self, obs: dict[str, Any]) -> dict[str, Any]:
         return {
             "chat_messages": obs["chat_messages"],
             "screenshot": obs["screenshot"],
@@ -230,19 +230,19 @@ Last Action:
             "pruned_html": prune_html(flatten_dom_to_str(obs["dom_object"])),
         }
 
-    def _get_system_prompt(self):
+    def _get_system_prompt(self) -> str:
         return SYSTEM_MINIWOB_PROMPT_WITHOUT_THOUGHT
 
-    def _format_open_tabs(self, urls: list, titles: list, active_index: int) -> list:
-        messages = [{"type": "text", "text": "# Currently open tabs (This is the current active tabs)\n"}]
+    def _format_open_tabs(self, urls: list, titles: list, active_index: int) -> list[dict[str, Any]]:
+        messages: list[dict[str, Any]] = [{"type": "text", "text": "# Currently open tabs (This is the current active tabs)\n"}]
 
         for idx, (url, title) in enumerate(zip(urls, titles, strict=False)):
             active_marker = " (active tab)" if idx == active_index else ""
             messages.append({"type": "text", "text": f"Tab {idx}{active_marker}\n  Title: {title}\n  URL: {url}\n"})
         return messages
 
-    def _format_screenshot(self, screenshot: np.ndarray):
-        messages = []
+    def _format_screenshot(self, screenshot: np.ndarray) -> list[dict[str, Any]]:
+        messages: list[dict[str, Any]] = []
         messages.append(
             {
                 "type": "text",
@@ -262,7 +262,7 @@ Last Action:
         )
         return messages
 
-    def _get_action_space_description(self):
+    def _get_action_space_description(self) -> str:
         if self.cot_prompt:
             return f"""\
 # Action Space (This is the list of valid actions you are allowed to output after your chain-of-thought reasoning,
@@ -282,7 +282,7 @@ Action: ```click("12")```
 Action: ```send_msg_to_user("The price for a 15\\" laptop is 1499 USD.")```
 """
 
-    def _format_msgs_as_str(self, msgs):
+    def _format_msgs_as_str(self, msgs: list[dict[str, Any]]) -> str:
         prompt_text_strings = []
         for message in msgs:
             match message["type"]:
@@ -300,7 +300,7 @@ Action: ```send_msg_to_user("The price for a 15\\" laptop is 1499 USD.")```
                     raise ValueError(f"Unknown message type {repr(message['type'])} in the task goal.")
         return " ".join(prompt_text_strings)
 
-    def _parse_model_response(self, response):
+    def _parse_model_response(self, response: str) -> str:
         """
         Extracts the last content enclosed within triple backticks (``` ```) from the response.
 
@@ -312,8 +312,7 @@ Action: ```send_msg_to_user("The price for a 15\\" laptop is 1499 USD.")```
             response (str): The raw text response to be processed.
 
         Returns:
-            Tuple[str, str]: A tuple containing:
-                - The extracted action (content from the last occurrence of triple backticks
+            action (str): The extracted action (content from the last occurrence of triple backticks
                   or the full response if no match is found)
         """
         matches = re.findall(r"```(.*?)```", response, re.DOTALL)  # Find all occurrences
@@ -321,12 +320,12 @@ Action: ```send_msg_to_user("The price for a 15\\" laptop is 1499 USD.")```
             return matches[-1]
         return response
 
-    def validate_step(self, trajectory_step):
+    def validate_step(self, trajectory_step: dict) -> bool:
         """
         Validates if the trajectory_step(dict) is valid or malformated.
         """
-        thought = trajectory_step.thought
-        action = trajectory_step.action
+        thought = trajectory_step["thought"]
+        action = trajectory_step["action"]
 
         # Thought and action are the same, meaning the parser didn't work
         if thought == action:
