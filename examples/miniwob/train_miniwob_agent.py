@@ -13,9 +13,15 @@ def main(config):
     train_dataset = DatasetRegistry.load_dataset("miniwob", "train")
     val_dataset = DatasetRegistry.load_dataset("miniwob", "test")
 
+    url = os.getenv("MINIWOB_URL")
+    if url is None:
+        raise Exception("MINIWOB_URL is not set.")
+    else:
+        print(f"MINIWOB_URL is set to: {url}")
+
     env_args = {
         "subtask": "miniwob",
-        "miniwob_url": os.getenv("MINIWOB_URL"),
+        "miniwob_url": url,
     }
 
     trainer = AgentTrainer(

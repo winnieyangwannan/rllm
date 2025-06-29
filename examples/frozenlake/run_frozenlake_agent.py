@@ -35,11 +35,21 @@ if __name__ == "__main__":
 
     sampling_params = {"temperature": 0.6, "top_p": 0.95, "model": model_name}
 
+    agent_args = {
+        "max_steps": 10,
+        "use_accumulate_history": True,
+    }
+
+    env_args = {
+        "max_steps": 8,
+        "is_slippery": False,
+    }
+
     engine = AgentExecutionEngine(
         agent_class=FrozenLakeAgent,
         env_class=FrozenLakeEnv,
-        agent_args={},
-        env_args={},
+        agent_args=agent_args,
+        env_args=env_args,
         engine_name="openai",
         tokenizer=tokenizer,
         sampling_params=sampling_params,

@@ -11,12 +11,13 @@ Our examples use the following:
 
 FrozenLake is a classic reinforcement learning environment where:
 - **Objective**: Navigate from start position to goal position
-- **Challenge**: The surface is slippery, so actions may not always succeed as intended
+- **Dynamics**: Depending on configuration, the surface may be slippery, causing actions to execute stochastically (e.g., intended moves may go sideways)
 - **Termination**: Episode ends when reaching goal (reward +1) or falling into hole (reward 0)
 - **Parameters**:
   - `size`: Grid size (e.g., 4x4, 8x8)
-  - `p`: Probability of successful action execution (1-p probability of random action)
+  - `p`: Probability that the agent performs the intended action (remainder is split among unintended directions)
   - `seed`: Random seed for environment generation
+  - `is_slippery`: Boolean flag controlling whether movement is stochastic (True) or deterministic (False)
 
 ## Model Hosting
 

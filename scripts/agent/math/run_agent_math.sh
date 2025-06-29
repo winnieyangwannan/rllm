@@ -10,7 +10,7 @@ export VLLM_ENGINE_ITERATION_TIMEOUT_S=100000000000
 RLLM_DIR=$(python3 -c "import rllm; import os; print(os.path.dirname(os.path.dirname(rllm.__file__)))")
 
 # Train over a single node, 8 A100-80GB GPUs.
-python3 -m rllm.train.train_agent_ppo \
+python3 -m rllm.trainer.verl.train_agent_ppo \
     algorithm.adv_estimator=grpo \
     data.train_files=${RLLM_DIR}/data/math_train.parquet \
     data.val_files=${RLLM_DIR}/data/math.parquet \

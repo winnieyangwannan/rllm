@@ -11,7 +11,7 @@ export CUDA_VISIBLE_DEVICES=0,1,2,3,4,5,6,7
 RLLM_DIR=$(python3 -c "import rllm; import os; print(os.path.dirname(os.path.dirname(rllm.__file__)))")
 RLLM_DIR=/data/sijun/rllm
 
-python3 -m rllm.train.train_agent_ppo \
+python3 -m rllm.trainer.verl.train_agent_ppo \
     algorithm.adv_estimator=loop \
     data.train_files=${RLLM_DIR}/data/deepscaler_code.parquet  \
     data.val_files=${RLLM_DIR}/data/test_livecodebench.parquet  \

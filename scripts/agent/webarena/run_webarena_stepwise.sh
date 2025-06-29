@@ -12,7 +12,7 @@ WEBARENA_URL="ws://18.234.63.23:9999/send_and_wait"
 # Find the directory where rllm package is located
 RLLM_DIR=$(python3 -c "import rllm; import os; print(os.path.dirname(os.path.dirname(rllm.__file__)))")
 
-python3 -m rllm.train.train_agent_ppo \
+python3 -m rllm.trainer.verl.train_agent_ppo \
     algorithm.adv_estimator=loop \
     data.train_files=${RLLM_DIR}/data/rllm-webarena/train.parquet \
     data.val_files=${RLLM_DIR}/data/rllm-webarena/test.parquet \

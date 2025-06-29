@@ -24,7 +24,7 @@ if [ -z "$MODEL_PATH" ]; then
 fi
 
 
-python3 -m rllm.train.train_agent_ppo \
+python3 -m rllm.trainer.verl.train_agent_ppo \
     algorithm.adv_estimator=grpo \
     data.train_files=$HOME/rllm/data/train.parquet \
     data.val_files=$HOME/rllm/data/math.parquet \

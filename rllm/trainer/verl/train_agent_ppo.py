@@ -13,7 +13,7 @@ from rllm.trainer.verl.agent_ppo_trainer import AgentPPOTrainer
 from verl.trainer.ppo.reward import load_reward_manager
 
 
-@hydra.main(config_path="config", config_name="ppo_trainer", version_base=None)
+@hydra.main(config_path="../config", config_name="ppo_trainer", version_base=None)
 def main(config):
     run_ppo_agent(config)
 
