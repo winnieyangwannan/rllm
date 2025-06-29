@@ -1,9 +1,9 @@
 """
 Generates SFT data from DeepScaleR trajectories.
-
 Usage:
-    CUDA_VISIBLE_DEVICES=0,1 python -m vllm.entrypoints.openai.api_server   --model agentica-org/DeepScaleR-1.5B-Preview   --port 30001   --tensor-parallel-size 2
-    python generate_sft_data.py --num_samples 500
+    CUDA_VISIBLE_DEVICES=0,1 python -m vllm.entrypoints.openai.api_server   --model agentica-org/DeepScaleR-1.5B-Preview   --port 30000   --tensor-parallel-size 2
+    python generate_sft_data.py --num_samples 500 --reward_threshold 0.5
+
 """
 
 import argparse
@@ -11,7 +11,8 @@ import asyncio
 import os
 
 import pandas as pd
-from agent_sft_trainer import AgentSFTTrainer
+
+from rllm.trainer.agent_sft_trainer import AgentSFTTrainer
 
 
 def load_problems(num_samples):
@@ -42,8 +43,8 @@ async def generate_trajectories(tasks):
         env_args={"reward_fn": math_reward_fn},
         engine_name="openai",
         tokenizer=AutoTokenizer.from_pretrained(model_name),
-        sampling_params={"temperature": 0.35, "top_p": 0.95, "model": model_name},
-        rollout_engine_args={"base_url": "http://localhost:30001/v1", "api_key": "None"},
+        sampling_params={"temperature": 0.6, "top_p": 0.95, "model": model_name},
+        rollout_engine_args={"base_url": "http://localhost:30000/v1", "api_key": "None"},
         max_response_length=15000,
         max_prompt_length=2048,
         n_parallel_agents=256,
@@ -64,16 +65,15 @@ def main():
     results = asyncio.run(generate_trajectories(tasks))
 
     # Process trajectories
-    trainer = AgentSFTTrainer.__new__(AgentSFTTrainer)
-    sft_data = trainer.process_trajectories(results, args.reward_threshold)
+    sft_data = AgentSFTTrainer.process_trajectories(results, args.reward_threshold)
 
     # Save results
     if sft_data:
         pd.DataFrame(sft_data).to_parquet(args.output, index=False)
         lengths = [len(" ".join([m["content"] for m in ex["messages"] if m["role"] == "assistant"])) for ex in sft_data]
-        print(f"✅ Saved {len(sft_data)} examples. Response lengths: min={min(lengths)}, max={max(lengths)}, avg={sum(lengths) // len(lengths)}")
+        print(f"Saved {len(sft_data)} examples. Response lengths: min={min(lengths)}, max={max(lengths)}, avg={sum(lengths) // len(lengths)}")
     else:
-        print("❌ No valid data generated!")
+        print("No valid data generated!")
 
 
 if __name__ == "__main__":

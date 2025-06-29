@@ -25,7 +25,8 @@ class AgentSFTTrainer(FSDPSFTTrainer):
         # Initialize parent class
         super().__init__(config=config, device_mesh=device_mesh, ulysses_device_mesh=ulysses_device_mesh, tokenizer=tokenizer, train_dataset=train_dataset, val_dataset=val_dataset)
 
-    def process_trajectories(self, trajectories: list, reward_threshold: float):
+    @staticmethod
+    def process_trajectories(trajectories: list, reward_threshold: float):
         """Process trajectories into SFT format."""
         sft_data = []
 
