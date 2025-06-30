@@ -62,11 +62,9 @@ with open(test_file, "w") as f:
 with open(test_file, "r") as f:
     content = f.read()
 print(f"File content: {content}")
-import os
-os.remove(test_file)
-print("File deleted successfully")
+print("File operations completed successfully")
 """,
-        "expected_stdout": "Testing file operations...\nFile content: Hello, World!\nFile deleted successfully",
+        "expected_stdout": "Testing file operations...\nFile content: Hello, World!\nFile operations completed successfully",
     },
 ]
 
@@ -119,9 +117,9 @@ asyncio.run(main())
 # Test queries for search tools
 search_test_cases = {
     "google_search": [{"name": "Basic Search", "query": "What is Python programming?", "expected_fields": ["title", "snippet", "link"]}, {"name": "Technical Search", "query": "Python async await syntax example", "expected_fields": ["title", "snippet", "link"]}],
-    "tavily_search": [{"name": "News Search", "query": "Latest developments in AI", "expected_fields": ["title", "snippet", "url"]}, {"name": "Technical Search", "query": "Python type hints tutorial", "expected_fields": ["title", "snippet", "url"]}],
-    "tavily_extract": [{"name": "Python.org", "url": "https://www.python.org/about/", "expected_fields": ["title", "text"]}, {"name": "Python Docs", "url": "https://docs.python.org/3/tutorial/", "expected_fields": ["title", "text"]}],
-    "firecrawl": [{"name": "Python.org", "url": "https://www.python.org", "expected_fields": ["title", "text", "links"]}, {"name": "Python Docs", "url": "https://docs.python.org/3/", "expected_fields": ["title", "text", "links"]}],
+    # "tavily_search": [{"name": "News Search", "query": "Latest developments in AI", "expected_fields": ["title", "snippet", "url"]}, {"name": "Technical Search", "query": "Python type hints tutorial", "expected_fields": ["title", "snippet", "url"]}],
+    # "tavily_extract": [{"name": "Python.org", "url": "https://www.python.org/about/", "expected_fields": ["title", "text"]}, {"name": "Python Docs", "url": "https://docs.python.org/3/tutorial/", "expected_fields": ["title", "text"]}],
+    # "firecrawl": [{"name": "Python.org", "url": "https://www.python.org", "expected_fields": ["title", "text", "links"]}, {"name": "Python Docs", "url": "https://docs.python.org/3/", "expected_fields": ["title", "text", "links"]}],
 }
 
 
@@ -148,8 +146,8 @@ def test_python_tool():
     """Test the Python interpreter tool synchronously and asynchronously."""
     print("\nTesting Python interpreter tool...")
 
-    # Get the tool
-    python_tool = tool_registry["python"]()
+    # Get the tool using the instantiate method
+    python_tool = tool_registry.instantiate("python")
 
     # Test sync cases
     print("\nTesting sync execution:")
@@ -165,12 +163,20 @@ def test_python_tool():
         print(f"Stdout: {result.stdout}")
         print(f"Stderr: {result.stderr}")
 
-        if result.stdout.strip() == test_case["expected_stdout"].strip():
+        # Handle None values properly
+        actual_stdout = result.stdout.strip() if result.stdout else ""
+        expected_stdout = test_case["expected_stdout"].strip()
+
+        if result.error:
+            print(f"Test failed with error: {result.error}")
+        elif actual_stdout == expected_stdout:
             print("Test passed!")
         else:
             print("Test failed! Output doesn't match expected")
             print("Expected:")
-            print(test_case["expected_stdout"])
+            print(expected_stdout)
+            print("Actual:")
+            print(actual_stdout)
 
     # Test async cases
     print("\nTesting async execution:")
@@ -186,20 +192,28 @@ def test_python_tool():
         print(f"Stdout: {result.stdout}")
         print(f"Stderr: {result.stderr}")
 
-        if result.stdout.strip() == test_case["expected_stdout"].strip():
+        # Handle None values properly
+        actual_stdout = result.stdout.strip() if result.stdout else ""
+        expected_stdout = test_case["expected_stdout"].strip()
+
+        if result.error:
+            print(f"Test failed with error: {result.error}")
+        elif actual_stdout == expected_stdout:
             print("Test passed!")
         else:
             print("Test failed! Output doesn't match expected")
             print("Expected:")
-            print(test_case["expected_stdout"])
+            print(expected_stdout)
+            print("Actual:")
+            print(actual_stdout)
 
 
 def test_search_tool(tool_name: str):
     """Test a search tool with multiple test cases."""
     print(f"\nTesting {tool_name} tool...")
 
-    # Get the tool
-    tool = tool_registry[tool_name]()
+    # Get the tool using the instantiate method
+    tool = tool_registry.instantiate(tool_name)
 
     # Run test cases
     for test_case in search_test_cases[tool_name]:

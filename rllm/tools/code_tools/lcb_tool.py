@@ -17,6 +17,108 @@ from rllm.rewards.code_utils.livecodebench import (
 from rllm.tools.code_tools.code_tool import CodeTool, CodeToolOutput
 
 
+def ensure_return_value(code):
+    """
+    Ensures the code has a return statement for the last expression.
+    Only converts the last statement to a return statement if it's an expression.
+
+    Args:
+        code (str): Python code to process
+
+    Returns:
+        str: Modified code with return statement if needed
+    """
+    if not code.strip():
+        return code
+
+    try:
+        # Parse the code
+        tree = ast.parse(code)
+        body = tree.body
+
+        # If the last element is an expression, convert it to a return statement
+        if body and isinstance(body[-1], ast.Expr):
+            value = body[-1].value
+            body[-1] = ast.Return(value=value)
+
+            # Preserve the line numbers and column offsets for better error messages
+            ast.fix_missing_locations(tree)
+
+        # Unparse the modified AST back to code
+        return ast.unparse(tree)
+    except SyntaxError:
+        # If the code has syntax errors, return the original code
+        return code
+    except Exception as e:
+        # Log other unexpected errors but return the original code
+        print(f"Warning: Could not process code: {e}")
+        return code
+
+
+def execute_code(code, timeout):
+    """
+    Execute the provided code with safety measures and timeout handling.
+
+    Args:
+        code (str): Python code to execute
+        timeout (int): Maximum execution time in seconds
+
+    Returns:
+        tuple: (stdout, stderr, result) containing execution output and result
+    """
+    signal.signal(signal.SIGALRM, timeout_handler)
+    stdout, stderr, result = None, None, None
+    # Disable functionalities that can make destructive changes to the test.
+    reliability_guard()
+    signal.alarm(timeout)
+    try:
+        code = clean_if_name(code)
+        ## we wrap the given code inside another function
+        code = make_function(code)
+        compiled_sol = compile_code(code, timeout)
+        if compiled_sol is None:
+            stderr = "Failed to compile code"
+            return stdout, stderr, result
+        method = get_function(compiled_sol, "wrapped_function")
+        if method is None:
+            stderr = "Failed to get function 'wrapped_function'"
+            return stdout, stderr, result
+        signal.alarm(timeout)
+        faulthandler.enable()
+        signal.alarm(timeout)
+        with Capturing() as captured_output:
+            try:
+                try:
+                    result = method()
+                except SystemExit as e:
+                    stderr = f"SystemExit: {e}"
+                finally:
+                    pass
+                # reset the alarm
+                signal.alarm(0)
+            except Exception as e:
+                signal.alarm(0)
+                if "timeoutexception" in repr(e).lower():
+                    stderr = "Time Limit Exceeded."
+                else:
+                    stderr = traceback.format_exc()
+            finally:
+                signal.alarm(0)
+                faulthandler.disable()
+        stdout = captured_output[0] if captured_output else ""
+        return stdout, stderr, result
+    except Exception:
+        return stdout, stderr, result
+    finally:
+        signal.alarm(0)
+
+
+def _wrapper_exec_fn(sample, timeout, result_queue):
+    """Helper function to execute code and put results in the queue"""
+    res = execute_code(sample, timeout=timeout)
+    result_queue.put(res)
+
+
 def lcb_sandbox(code, timeout):
     """
     Execute Python code in a sandboxed environment with timeout protection.
@@ -31,117 +133,17 @@ def lcb_sandbox(code, timeout):
     Returns:
         tuple: (stdout, stderr, result) containing the execution output and result
     """
-
-    def ensure_return_value(code):
-        """
-        Ensures the code has a return statement for the last expression.
-        Only converts the last statement to a return statement if it's an expression.
-
-        Args:
-            code (str): Python code to process
-
-        Returns:
-            str: Modified code with return statement if needed
-        """
-        if not code.strip():
-            return code
-
-        try:
-            # Parse the code
-            tree = ast.parse(code)
-            body = tree.body
-
-            # If the last element is an expression, convert it to a return statement
-            if body and isinstance(body[-1], ast.Expr):
-                value = body[-1].value
-                body[-1] = ast.Return(value=value)
-
-                # Preserve the line numbers and column offsets for better error messages
-                ast.fix_missing_locations(tree)
-
-            # Unparse the modified AST back to code
-            return ast.unparse(tree)
-        except SyntaxError:
-            # If the code has syntax errors, return the original code
-            return code
-        except Exception as e:
-            # Log other unexpected errors but return the original code
-            print(f"Warning: Could not process code: {e}")
-            return code
-
     # Preprocess the code to ensure the last expression is returned
     code = ensure_return_value(code)
 
-    def execute_code(code, timeout):
-        """
-        Execute the provided code with safety measures and timeout handling.
-
-        Args:
-            code (str): Python code to execute
-            timeout (int): Maximum execution time in seconds
-
-        Returns:
-            tuple: (stdout, stderr, result) containing execution output and result
-        """
-        signal.signal(signal.SIGALRM, timeout_handler)
-        stdout, stderr, result = None, None, None
-        # Disable functionalities that can make destructive changes to the test.
-        reliability_guard()
-        signal.alarm(timeout)
-        try:
-            code = clean_if_name(code)
-            ## we wrap the given code inside another function
-            code = make_function(code)
-            compiled_sol = compile_code(code, timeout)
-            if compiled_sol is None:
-                stderr = "Failed to compile code"
-                return stdout, stderr, result
-            method = get_function(compiled_sol, "wrapped_function")
-            if method is None:
-                stderr = "Failed to get function 'wrapped_function'"
-                return stdout, stderr, result
-            signal.alarm(timeout)
-            faulthandler.enable()
-            signal.alarm(timeout)
-            with Capturing() as captured_output:
-                try:
-                    try:
-                        result = method()
-                    except SystemExit as e:
-                        stderr = f"SystemExit: {e}"
-                    finally:
-                        pass
-                    # reset the alarm
-                    signal.alarm(0)
-                except Exception as e:
-                    signal.alarm(0)
-                    if "timeoutexception" in repr(e).lower():
-                        stderr = "Time Limit Exceeded."
-                    else:
-                        stderr = traceback.format_exc()
-                finally:
-                    signal.alarm(0)
-                    faulthandler.disable()
-            stdout = captured_output[0] if captured_output else ""
-            return stdout, stderr, result
-        except Exception:
-            return stdout, stderr, result
-        finally:
-            signal.alarm(0)
-
     # Use multiprocessing to isolate code execution in a separate process
     manager = multiprocessing.Manager()
-    result = manager.Queue()
-
-    def _wrapper_exec_fn(sample, timeout):
-        """Helper function to execute code and put results in the queue"""
-        res = execute_code(sample, timeout=timeout)
-        result.put(res)
+    result_queue = manager.Queue()
 
     # Create and start the process
     p = multiprocessing.Process(
         target=_wrapper_exec_fn,
-        args=(code, timeout),
+        args=(code, timeout, result_queue),
     )
     p.start()
 
@@ -150,11 +152,11 @@ def lcb_sandbox(code, timeout):
 
     try:
         # Get the result from the queue
-        res = result.get()
+        res = result_queue.get()
         return res
     except queue.Empty:
         # Return timeout message if no result is available
-        return "Timeout"
+        return "Timeout", "", ""
     finally:
         # Ensure the process is terminated if still running
         if p.is_alive():

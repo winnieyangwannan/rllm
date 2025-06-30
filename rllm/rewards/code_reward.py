@@ -97,19 +97,21 @@ def check_correctness(tests: list[dict[str, str]] | dict[str, list[str]], code: 
 
     original_tests = tests
     if isinstance(tests, list):
-        total_tests = len(tests)
+        list_tests = tests
+        total_tests = len(list_tests)
         if total_tests > max_tests:
             # Sort indices by test input length and take the max_tests longest ones
-            selected_indices = sorted(range(total_tests), key=lambda i: len(tests[i]["input"]), reverse=True)[:max_tests]
-            tests = [tests[i] for i in selected_indices]
+            selected_indices = sorted(range(total_tests), key=lambda i: len(list_tests[i]["input"]), reverse=True)[:max_tests]
+            tests = [list_tests[i] for i in selected_indices]
         num_tests = len(tests)
     else:
-        total_tests = len(tests["inputs"])
+        dict_tests = tests
+        total_tests = len(dict_tests["inputs"])
         if total_tests > max_tests:
             # Select the tests with the longest input length.
-            selected_indices = sorted(range(total_tests), key=lambda i: len(tests["inputs"][i]), reverse=True)[:max_tests]
+            selected_indices = sorted(range(total_tests), key=lambda i: len(dict_tests["inputs"][i]), reverse=True)[:max_tests]
             # Create a new dict with only the selected test cases
-            selected_tests = {"inputs": [tests["inputs"][i] for i in selected_indices], "outputs": [tests["outputs"][i] for i in selected_indices]}
+            selected_tests: dict[str, list[str]] = {"inputs": [dict_tests["inputs"][i] for i in selected_indices], "outputs": [dict_tests["outputs"][i] for i in selected_indices]}
             tests = selected_tests
         num_tests = len(tests["inputs"])
 
@@ -119,23 +121,26 @@ def check_correctness(tests: list[dict[str, str]] | dict[str, list[str]], code: 
 
     if process.is_alive():
         process.kill()
-    test_results = test_results[:]
+    test_results_list = list(test_results)
 
-    detailed_results = {"all_passed": False, "test_results": [], "total_tests": num_tests, "passed_tests": 0}
+    detailed_results: dict[str, Any] = {"all_passed": False, "test_results": [], "total_tests": num_tests, "passed_tests": 0}
 
-    if len(test_results) == 0:
+    if len(test_results_list) == 0:
         return False, detailed_results
 
-    test_results = test_results[0]
-    passed_results = [r == True for r in test_results]
+    test_results_data = test_results_list[0]
+    passed_results = [r == True for r in test_results_data]
 
     # Create detailed test results
+    test_results_list_typed: list[dict[str, Any]] = detailed_results["test_results"]
     if isinstance(original_tests, list):
+        assert isinstance(tests, list)
         for i, (test, result) in enumerate(zip(tests, passed_results, strict=False)):
-            detailed_results["test_results"].append({"input": test.get("input", ""), "expected": test.get("output", ""), "passed": result})
+            test_results_list_typed.append({"input": test.get("input", ""), "expected": test.get("output", ""), "passed": result})
     else:
+        assert isinstance(tests, dict)
         for i, (inp, out, result) in enumerate(zip(tests["inputs"], tests["outputs"], passed_results, strict=False)):
-            detailed_results["test_results"].append({"input": inp, "expected": out, "passed": result})
+            test_results_list_typed.append({"input": inp, "expected": out, "passed": result})
 
     detailed_results["passed_tests"] = sum(passed_results)
     detailed_results["all_passed"] = all(passed_results)
@@ -225,7 +230,7 @@ def lcb_check_correctness_v2(sample, generation, timeout=6, debug=False):
     if not result:
         in_outs = json.loads(sample["input_output"])
         # consider that all tests failed
-        result = [[-1 for i in range(len(in_outs["inputs"]))]]
+        result.extend([[-1 for i in range(len(in_outs["inputs"]))]])
         detailed_results["total_tests"] = len(in_outs["inputs"])
         detailed_results["test_results"] = [{"input": inp, "expected": out, "passed": False, "error": "global timeout"} for inp, out in zip(in_outs["inputs"], in_outs["outputs"], strict=False)]
         if debug:
@@ -245,12 +250,12 @@ def lcb_check_correctness_v2(sample, generation, timeout=6, debug=False):
     return all(x == True for x in result[0]), detailed_results
 
 
-def leetcode_check_correctness(tests: list[dict[str, str]], code: str) -> tuple[bool, dict[str, Any]]:
+def leetcode_check_correctness(tests: dict[str, str], code: str) -> tuple[bool, dict[str, Any]]:
     """
     Check if generated code passes all LeetCode test cases.
 
     Args:
-         tests: List of test cases, each containing input/output pairs
+         tests: Dict of test cases with "functional" key containing test code
          code: Generated code to test
          timeout: Maximum execution time in seconds before killing process
          runtime_debug: Whether to print debug info during test execution
@@ -348,7 +353,7 @@ def taco_to_lcb_format(tests):
         inp = inputs[i] if i < len(inputs) else (inputs[0] if inputs else "")
         out = outputs[i] if i < len(outputs) else (outputs[0] if outputs else "")
         out = out[0] if isinstance(out, list) else out
-        test_case = {"input": inp, "output": out, "metadata": {}}
+        test_case: dict[str, Any] = {"input": inp, "output": out, "metadata": {}}
         if "fn_name" in tests:
             test_case["testtype"] = "functional"
             test_case["metadata"]["func_name"] = tests["fn_name"]
@@ -432,7 +437,7 @@ class RewardCodeFn:
         # Tests: List[Dictionary] - Codeforces, LiveCodeBench
         # Tests: Dictionary[Lists] - CodeContests, Taco/Apps
         is_correct = False
-        test_details = {}
+        test_details: dict[str, Any] = {}
 
         if dataset_name in ["taco", "apps", "code_contests"]:
             if self.config.use_together_code_interpreter:

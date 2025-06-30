@@ -6,7 +6,7 @@ import torch
 from fire import Fire
 
 
-def main(trajectory_file: str = "./trajectories/sample_trajectories/search_trajectories.pt", server_port: int = 9782):
+def main(trajectory_file: str = "./trajectories/sample_trajectories/search_trajectories.pt", server_port: int = 12345):
     trajs_data = torch.load(trajectory_file, weights_only=False)
     all_trajs = list(filter(lambda x: hasattr(x, "steps") and len(x.steps) > 0, trajs_data))
 
@@ -194,7 +194,7 @@ def main(trajectory_file: str = "./trajectories/sample_trajectories/search_traje
             gt = metadata.get("ground_truth", "N/A")
             ground_truth = str(gt).lower() if isinstance(gt, str | int | float | bool) else str(gt)
         elif task_type == "code":
-            question = metadata.get("question_content", metadata.get("problem", metadata.get("question", "No problem statement found")))
+            question = metadata.get("question_content", metadata.get("question", metadata.get("problem", "No problem statement found")))
             test_cases = metadata.get("test_cases", [])
             if test_cases and len(test_cases) > 0:
                 expected_output = test_cases[0].get("expected_output", "N/A")
