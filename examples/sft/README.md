@@ -30,7 +30,7 @@ Generate SFT training data from teacher model trajectories:
 
 ```bash
 cd examples/sft
-python generate_sft_data.py --num_samples 1000 --reward_threshold 0.5 --output large_sft_data.parquet
+python generate_sft_data.py --num_samples 1000 --reward_threshold 1.0 --output large_sft_data.parquet
 ```
 
 This will:
