@@ -11,7 +11,8 @@ logger = logging.getLogger(__name__)
 
 
 class FrozenLakeAgent(BaseAgent):
-    SYSTEM_PROMPT = """You are Qwen, created by Alibaba Cloud. You are a helpful assistant. You are walking on a frozen lake.
+    # Prompting format inspired by the RAGEN project: https://github.com/RAGEN-AI/RAGEN
+    SYSTEM_PROMPT: str = """You are Qwen, created by Alibaba Cloud. You are a helpful assistant. You are walking on a frozen lake.
 
 FrozenLake Quick Guide
 Goal: Reach the goal (G). Player (P) and Goal (G) must overlap.
@@ -39,7 +40,7 @@ You should be aware that frozen tiles can be slippery, but the chance is small a
 Please show your thinking process and put the final action in ``` ```. In every turn, the final action MUST be one of Up, Down, Left, Right.
 """
 
-    MULTI_SHOT_SYSTEM_PROMPT = """You are Qwen, created by Alibaba Cloud. You are a helpful assistant. You are walking on a frozen lake.
+    MULTI_SHOT_SYSTEM_PROMPT: str = """You are Qwen, created by Alibaba Cloud. You are a helpful assistant. You are walking on a frozen lake.
 
 FrozenLake Quick Guide
 Goal: Reach the goal (G). Player (P) and Goal (G) must overlap.
@@ -121,15 +122,15 @@ Assistant: G is at the bottom right corner of P. I can move left, right, or up. 
 Now it is your turn, please show your thinking process and put the final action in ``` ```. In every turn, the final action MUST be one of Up, Down, Left, Right.
 """
 
-    def __init__(self, max_steps=None, use_accumulate_thinking=True, use_multistep_prompt=False, use_accumulate_history=True):
+    def __init__(self, max_steps: int | None = None, use_accumulate_thinking: bool | None = True, use_multistep_prompt: bool | None = False, use_accumulate_history: bool | None = True):
         self._trajectory = Trajectory()
         self.messages: list[dict[str, str]] = []
-        self.step = 0
-        self.accumulate_thinking = use_accumulate_thinking  # controlls whether to accumulate the thinking portion of the response
-        self.multistep_prompt = use_multistep_prompt
-        self.max_steps = max_steps
-        self.accumulate_history = use_accumulate_history
-        self.current_observation = None
+        self.step: int = 0
+        self.accumulate_thinking: bool | None = use_accumulate_thinking  # controlls whether to accumulate the thinking portion of the response
+        self.multistep_prompt: bool | None = use_multistep_prompt
+        self.max_steps: int | None = max_steps
+        self.accumulate_history: bool | None = use_accumulate_history
+        self.current_observation: Any = None
         self.reset()
 
     def update_from_env(self, observation: Any, reward: float, done: bool, info: dict, **kwargs):
@@ -198,7 +199,7 @@ Now it is your turn, please show your thinking process and put the final action 
 
         return thought, action_str
 
-    def _process_action_for_validation(self, response):
+    def _process_action_for_validation(self, response: str) -> str:
         _, action_str = self._parse_model_response(response)
         return action_str
 
@@ -216,7 +217,7 @@ Now it is your turn, please show your thinking process and put the final action 
     def trajectory(self) -> Trajectory:
         return self._trajectory
 
-    def reset(self):
+    def reset(self) -> None:
         self._trajectory = Trajectory()
         self.messages = [
             {

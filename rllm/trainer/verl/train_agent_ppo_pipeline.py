@@ -28,7 +28,7 @@ from verl.workers.fsdp_workers import ActorRolloutRefWorker
 from verl.workers.reward_manager import NaiveRewardManager
 
 
-@hydra.main(config_path="config", config_name="ppo_trainer", version_base=None)
+@hydra.main(config_path="../config", config_name="ppo_trainer", version_base=None)
 def main(config):
     run_ppo_agent_async(config)
 

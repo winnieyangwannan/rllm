@@ -1,3 +1,10 @@
+# DISCLAIMER:
+# This implementation is based on the Gymnasium FrozenLake environment and the RAGEN project:
+# - Gymnasium: https://gymnasium.farama.org/environments/toy_text/frozen_lake/
+# - RAGEN: https://github.com/RAGEN-AI/RAGEN/blob/main/ragen/env/frozen_lake/env.py
+#
+# Some components have been modified or extended for custom use in this project.
+
 import copy
 
 import gymnasium as gym
@@ -7,7 +14,7 @@ from gymnasium.utils import seeding
 
 from rllm.environments.base.base_env import BaseEnv
 
-MAX_STEPS = 5
+MAX_STEPS: int = 5
 
 
 # DFS to check that it's a valid path.
@@ -37,7 +44,7 @@ def is_valid(board: list[list[str]], max_size: int) -> bool:
     return False
 
 
-def generate_random_map(size: int = 8, p: float = 0.8, seed: int = 0) -> list[str]:
+def generate_random_map(size: int = 8, p: float = 0.8, seed: int = 0) -> tuple[list[str], tuple[int, int]]:
     """Generates a random valid map (one that has a path from start to goal)
 
     Args:
@@ -57,13 +64,13 @@ def generate_random_map(size: int = 8, p: float = 0.8, seed: int = 0) -> list[st
 
     while not valid:
         p = min(1, p)
-        board = np_random.choice(["F", "H"], (size, size), p=[p, 1 - p])
+        board = np_random.choice(["F", "H"], (size, size), p=[p, 1 - p]).tolist()
 
         while True:
-            start_r = np_random.integers(0, size)
-            start_c = np_random.integers(0, size)
-            goal_r = np_random.integers(0, size)
-            goal_c = np_random.integers(0, size)
+            start_r = int(np_random.integers(0, size))
+            start_c = int(np_random.integers(0, size))
+            goal_r = int(np_random.integers(0, size))
+            goal_c = int(np_random.integers(0, size))
 
             # Ensure start and goal are different positions
             if (start_r, start_c) != (goal_r, goal_c):
@@ -175,7 +182,7 @@ class FrozenLakeEnv(GymFrozenLakeEnv, BaseEnv):
         self.goal_postion = goal_position
 
         GymFrozenLakeEnv.__init__(self, desc=random_map[:], is_slippery=is_slippery)
-        self.ACTION_SPACE = gym.spaces.discrete.Discrete(4, start=1)
+        self.ACTION_SPACE = gym.spaces.Discrete(4, start=1)
 
         self.map_kwargs = {
             "size": size,
@@ -215,7 +222,7 @@ class FrozenLakeEnv(GymFrozenLakeEnv, BaseEnv):
         player_pos = self._get_player_position()
         return self.desc[player_pos] in b"G"
 
-    def step(self, action: str):
+    def step(self, action: int):
         """
         - Map custom action to gymnasium FrozenLakeEnv action and take the step
         - Check if the action is effective (whether player moves in the env).
@@ -281,4 +288,4 @@ class FrozenLakeEnv(GymFrozenLakeEnv, BaseEnv):
 
     @staticmethod
     def from_dict(env_info: dict) -> "FrozenLakeEnv":
-        return FrozenLakeEnv(size=env_info["size"], seed=env_info["seed"], p=env_info["p"], max_steps=env_info.get("max_steps", MAX_STEPS))
+        return FrozenLakeEnv(size=env_info["size"], seed=env_info["seed"], p=env_info["p"], max_steps=env_info.get("max_steps", MAX_STEPS), is_slippery=env_info.get("is_slippery", False))

@@ -6,8 +6,6 @@ export VLLM_USE_V1=1
 export VLLM_ALLOW_LONG_MAX_MODEL_LEN=1
 export VLLM_ENGINE_ITERATION_TIMEOUT_S=100000000000
 
-# export MINIWOB_URL="file://<PATH_TO_MINIWOB_PLUSPLUS_CLONED_REPO>/miniwob/html/miniwob/"
-
 # Find the directory where rllm package is located
 RLLM_DIR=$(python3 -c "import rllm; import os; print(os.path.dirname(os.path.dirname(rllm.__file__)))")
 
@@ -66,8 +64,6 @@ python3 -m examples.frozenlake.train_frozenlake_agent \
     trainer.rejection_sample=True \
     trainer.rejection_sample_multiplier=1 \
     env.name=browsergym \
-    +env.env_args.subtask=miniwob \
-    +env.env_args.miniwob_url=${MINIWOB_URL} \
     agent.name=miniwobagent \
     agent.max_steps=15 \
     agent.async_engine=True \
@@ -79,4 +75,10 @@ python3 -m examples.frozenlake.train_frozenlake_agent \
     +agent.engine_args.retry_limit=5 \
     +agent.agent_args.use_accumulate_thinking=False \
     +agent.agent_args.use_full_conversation=False \
-    trainer.total_epochs=20
+    +agent.agent_args.chat_mode=False \
+    +agent.agent_args.use_html=True \
+    +agent.agent_args.use_axtree=True \
+    +agent.agent_args.use_screenshot=False \
+    +agent.agent_args.cot_prompt=False \
+    +agent.agent_args.use_reward_shaping=False \
+    trainer.total_epochs=10

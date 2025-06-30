@@ -15,7 +15,7 @@ def main():
     parser = argparse.ArgumentParser(description="Generate trajectories using specified environment and policy.")
     parser.add_argument("--local_dir", default=os.path.join(RLLM_DIR, "data/rllm-frozenlake"))
     parser.add_argument("--hdfs_dir", default=None)
-    parser.add_argument("--train_size", type=int, default=30000, help="Number of trajectories to generate (default: 30000).")
+    parser.add_argument("--train_size", type=int, default=10000, help="Number of trajectories to generate (default: 10000).")
     parser.add_argument("--test_size", type=int, default=100, help="Number of trajectories to generate (default: 100).")
 
     args = parser.parse_args()
