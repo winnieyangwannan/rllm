@@ -2,7 +2,7 @@
 Generates SFT data from DeepScaleR trajectories.
 Usage:
     CUDA_VISIBLE_DEVICES=0,1 python -m vllm.entrypoints.openai.api_server   --model agentica-org/DeepScaleR-1.5B-Preview   --port 30000   --tensor-parallel-size 2
-    python generate_sft_data.py --num_samples 500 --reward_threshold 0.5
+    python generate_sft_data.py --num_samples 500 --reward_threshold 1.0
 
 """
 
@@ -12,19 +12,26 @@ import os
 
 import pandas as pd
 
+from rllm.agents.agent import Trajectory
+from rllm.data.dataset import DatasetRegistry
 from rllm.trainer.agent_sft_trainer import AgentSFTTrainer
 
 
 def load_problems(num_samples):
-    """Load problems from dataset."""
-    df = pd.read_parquet("../../data/train.parquet")
-    if num_samples < len(df):
+    dataset = DatasetRegistry.load_dataset("deepscaler_math", "train")
+    if dataset is None:
+        raise RuntimeError("Dataset 'deepscaler_math' not found. Run prepare_math_data.py first to register the dataset.")
+
+    data = dataset.get_data()
+    if num_samples < len(data):
+        df = pd.DataFrame(data)
         df = df.sample(n=num_samples, random_state=42)
+        data = df.to_dict("records")
 
-    return [{"question": row["task"]["question"], "ground_truth": row["task"]["ground_truth"], "uid": row["uid"]} for _, row in df.iterrows()]
+    return [{"question": row["question"], "ground_truth": row["ground_truth"], "uid": i} for i, row in enumerate(data)]
 
 
-async def generate_trajectories(tasks):
+async def generate_trajectories(tasks) -> list[Trajectory]:
     """Generate trajectories using DeepScaleR-1.5B."""
     from transformers import AutoTokenizer
 

@@ -1,5 +1,6 @@
 from torch.distributed.device_mesh import init_device_mesh
 
+from rllm.agents.agent import Trajectory
 from verl.trainer.fsdp_sft_trainer import FSDPSFTTrainer, create_sft_dataset
 from verl.utils import hf_tokenizer
 from verl.utils.device import get_device_name
@@ -26,7 +27,7 @@ class AgentSFTTrainer(FSDPSFTTrainer):
         super().__init__(config=config, device_mesh=device_mesh, ulysses_device_mesh=ulysses_device_mesh, tokenizer=tokenizer, train_dataset=train_dataset, val_dataset=val_dataset)
 
     @staticmethod
-    def process_trajectories(trajectories: list, reward_threshold: float):
+    def process_trajectories(trajectories: list[Trajectory], reward_threshold: float):
         """Process trajectories into SFT format."""
         sft_data = []
 
@@ -43,9 +44,6 @@ class AgentSFTTrainer(FSDPSFTTrainer):
             messages = None
             if traj.steps and hasattr(traj.steps[-1], "chat_completions"):
                 messages = traj.steps[-1].chat_completions
-            elif hasattr(traj, "chat_completions"):
-                # Fallback: check if trajectory itself has chat_completions
-                messages = traj.chat_completions
 
             if not messages:
                 continue
