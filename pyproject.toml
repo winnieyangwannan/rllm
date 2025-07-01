@@ -19,46 +19,50 @@ classifiers = [
 license = {file = "LICENSE"}
 dependencies = [
     # Core ML/AI packages
-    "torch",
+    "torch>=2.7",
     "transformers",
     "accelerate",
-    "flash-attn",
+    "flash-attn>=2.8.0.post2",
     "sentence-transformers",
     "torchmetrics",
-    
+
     # Training and inference
     "deepspeed",
-    "vllm",
+    "vllm>=0.8.3",
+    "sgl-kernel>=0.2.0",
+    "sglang>=0.4.8.post1",
+    "sglang-router",
     "peft",
-    
+    "torchao",
+
     # Data processing
     "datasets",
     "polars",
     "dm-tree",
-    
+
     # Cloud and infrastructure
     "google-cloud-aiplatform",
     "vertexai",
     "kubernetes",
     "ray",
-    
+
     # Web and automation
     "gradio",
     "selenium",
     "browsergym",
     "firecrawl",
-    
+
     # Math and science
     "latex2sympy2",
     "pylatexenc",
     "nltk",
     "scipy",
     "scikit-learn",
-    
+
     # Code evaluation
     "swebench",
     "e2b_code_interpreter",
-    
+
     # Utilities
     "fire",
     "gdown",
@@ -69,13 +73,13 @@ dependencies = [
     "wandb",
     "pybind11",
     "gym",
-    
+
     # Development and testing
     "pytest",
     "pre-commit",
     "ruff",
     "mypy",
-    
+
     # Documentation
     "mkdocs>=1.5.0",
     "mkdocs-material>=9.0.0",

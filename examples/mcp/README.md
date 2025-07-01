@@ -1,156 +1,84 @@
+# MCP (Model Context Protocol) Integration Example
+
+This example demonstrates how to use external MCP servers as tool providers with RLLM's `AgentExecutionEngine`. It runs HotpotQA question-answering evaluation using the Tavily MCP server for web search capabilities.
+
 ## Dependencies
 
 ```bash
-pip install mcp-cli
-```
+# Install MCP CLI (if needed for other MCP servers)
+uv pip install mcp
 
-For Tavily demo, also install Node.js and the Tavily MCP server:
-```bash
-# Install Node.js (if not already installed)
-# Then install Tavily MCP server
-npx @tavily/mcp-server
-```
 
 ## Files
 
-- `mcp_client.py` - Core MCP client with refactored, reusable components
-- `mcp_server.py` - Local MCP server exposing RLLM tools  
-- `tavily_demo.py` - Interactive demo using Tavily MCP server for web search
+- `run_tool_mcp.py` - Main script running HotpotQA evaluation with Tavily MCP server
+- `prepare_hotpotqa_data.py` - Dataset preparation script for HotpotQA
+
+## Model Hosting
+
+### Option 1: Using vLLM
+
+Start a vLLM server with OpenAI-compatible API:
+
+```bash
+python -m vllm.entrypoints.openai.api_server \
+  --model Qwen/Qwen3-4B \
+  --host 0.0.0.0 \
+  --port 30000 \
+  --dtype bfloat16 \
+  --max-model-len 8192 \
+  --gpu-memory-utilization 0.85
+```
+
+### Option 2: Using SGLang
+
+```bash
+python -m sglang_router.launch_server \
+    --model-path Qwen/Qwen3-4B \
+    --dp-size 1 \
+    --dtype bfloat16
+```
+
+The server should be accessible at `http://localhost:30000/v1`
 
 ## Setup
 
 ### Prerequisites
 
 1. **Python environment** with RLLM installed
-2. **Local model server** running on port 30000 (for inference)
-3. **Node.js** (for Tavily demo)
-
-### Environment Variables
-
-Create a `.env` file in this directory with:
-
-```bash
-# For Tavily demo
-TAVILY_API_KEY=tvly-your-api-key-here
-
-# For RLLM tools (if using web search tools)
-GOOGLE_API_KEY=your-google-api-key
-GOOGLE_CSE_ID=your-custom-search-engine-id
-FIRECRAWL_API_KEY=your-firecrawl-key
+2. **Model server** running on port 30000 (see Model Hosting above)
+3. **Node.js** (for Tavily MCP server)
+4. **Tavily API key** from [https://app.tavily.com/home](https://app.tavily.com/home)
 
 ## Usage
 
-### 1. Tavily MCP Demo (Recommended)
-
-The simplest way to try MCP with external search capabilities:
-
 ```bash
-# Get Tavily API key from https://app.tavily.com/home
-export TAVILY_API_KEY=tvly-your-key-here
-
-# Run the demo
-python tavily_demo.py
+# Get your Tavily API key and run the evaluation
+python run_tool_mcp.py your-tavily-api-key-here
 ```
 
-This connects to the external Tavily MCP server and provides an interactive chat interface for web search.
-
-### 2. Local RLLM Tools Server
-
-To use local RLLM tools via MCP:
-
-```bash
-# Terminal 1: Start the local MCP server
-python mcp_server.py
-
-# Terminal 2: Connect a client to it
-python mcp_client.py mcp_server.py
-```
-
-This runs the AIME math evaluation using local tools like calculator and Python interpreter.
+This will:
+1. Start the Tavily MCP server via npx
+2. Load the first 10 HotpotQA questions 
+3. Run parallel evaluation using web search tools
+4. Save results to `./trajectories/mcp_tavily/`
 
 ## Architecture
 
-The refactored code provides these reusable components:
+### Key Components
 
-- **`MCPTool`** - Adapts MCP tools to RLLM's Tool interface
-- **`MCPToolAgent`** - ToolAgent subclass that works with Tool instances
-- **`MCPClient`** - Core client for connecting to any MCP server
-- **`TavilyMCPDemo`** - Example usage with external MCP server
+- **`MCPToolAgent`** - ToolAgent that works with MCP tools
+- **`MCPEnvironment`** - Environment that manages MCP server connections and tool execution
+- **`MCPConnectionManager`** - Handles MCP server lifecycle and tool discovery
 
-# MCP (Model Context Protocol) Integration with AsyncAgentExecutionEngine
+### Integration with RLLM
 
-This example demonstrates how to use MCP servers as tool interfaces with the AsyncAgentExecutionEngine, similar to the pattern used in `examples/math_tool/run_math_with_tool.py`.
+The example follows standard RLLM patterns:
+- Uses `AgentExecutionEngine` for parallel execution
+- Uses `ToolAgent` for agent logic with search system prompt
+- Integrates with RLLM's evaluation pipeline and reward system
+- Saves trajectories in standard format
 
-## Overview
+## Dataset
 
-The refactored `mcp_client.py` now follows the standard RLLM pattern:
-- Uses `AsyncAgentExecutionEngine` for parallel execution
-- Uses `ToolAgent` for agent logic
-- Uses `MCPEnvironment` (custom) for MCP tool integration
-- Follows the same evaluation pipeline as other tool examples
-
-## Key Components
-
-### MCPEnvironment
-- Extends `BaseEnv` to work with `AsyncAgentExecutionEngine`
-- Manages MCP server connections and tool discovery
-- Handles tool execution asynchronously
-- Integrates with the reward system for evaluation
-
-### MCPTool
-- Implements the `Tool` interface for MCP tools
-- Provides async execution of MCP tool calls
-- Handles error cases and result formatting
-
-## Usage
-
-1. **Start your MCP server** (example provided):
-   ```bash
-   python examples/mcp/math_mcp_server.py
-   ```
-
-2. **Run the evaluation**:
-   ```bash
-   python examples/mcp/mcp_client.py examples/mcp/math_mcp_server.py
-   ```
-
-## Differences from Original
-
-### Before (Original mcp_client.py)
-- Custom `MCPClient` class managing everything
-- Manual query processing loop
-- Direct OpenAI API calls
-- Sequential processing of problems
-
-### After (Refactored)
-- Uses `AsyncAgentExecutionEngine` for execution
-- Standard `ToolAgent` for agent logic
-- Custom `MCPEnvironment` for MCP integration
-- Parallel processing of multiple problems
-- Integrated with RLLM's evaluation pipeline
-
-## Benefits of Refactoring
-
-1. **Consistency**: Follows the same pattern as other RLLM examples
-2. **Scalability**: Supports parallel execution of multiple tasks
-3. **Integration**: Works with RLLM's reward system and evaluation metrics
-4. **Maintainability**: Uses standard RLLM components instead of custom implementations
-5. **Extensibility**: Easy to add new MCP servers or modify evaluation logic
-
-## Example MCP Server
-
-The included `math_mcp_server.py` provides:
-- `python`: Execute Python code (similar to built-in python tool)
-- `finish`: Mark task completion with final answer
-
-You can create your own MCP servers following the MCP specification and use them with this client.
-
-## Configuration
-
-The client is configured similarly to other RLLM examples:
-- `n_parallel_agents`: Number of parallel agent instances
-- `model_name`: Model to use for inference
-- `max_steps`: Maximum steps per task
-- `reward_fn`: Function to evaluate task completion
-
-Note: MCP connections may not be fully thread-safe, so `n_parallel_agents` is set lower than typical tool examples.
+Uses HotpotQA dataset for multi-hop question answering that requires web search. The dataset is automatically downloaded and processed on first run.

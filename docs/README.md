@@ -27,7 +27,6 @@ The documentation will be available at `http://localhost:8000`.
 ```
 docs/
 ├── mkdocs.yml          # MkDocs configuration
-├── requirements.txt    # Documentation dependencies (legacy)
 ├── build_docs.sh      # Build script
 ├── docs/              # Documentation content
 │   ├── index.md       # Homepage

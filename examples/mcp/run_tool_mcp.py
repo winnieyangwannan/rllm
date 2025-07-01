@@ -67,7 +67,6 @@ async def main():
         _, test_dataset = prepare_hotpotqa_data()
 
     tasks = test_dataset.get_data()
-    tasks = tasks[:25]
     print(f"Running evaluation on {len(tasks)} HotpotQA tasks...")
 
     try:
