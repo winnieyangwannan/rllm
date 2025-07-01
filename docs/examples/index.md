@@ -7,6 +7,9 @@ This section contains examples demonstrating how to use rLLM to train agents for
 ### 🧮 [DeepScaler](deepscaler.md) & 💻 [DeepCoder](deepcoder.md)
 Train reasoning models that aces math competition (e.g. DeepScaleR) and coding contests (e.g. DeepCoder)
 
+### 📚 [Math SFT Training](sft.md)
+Supervised fine-tuning of base math models(e.g. Qwen/Qwen2.5-Math-1.5B) using high-quality trajectories generated from teacher models (e.g. DeepScaleR)
+
 ### 🛠️ [SWEAgent](swe.md)
 Train SWEAgent that can write software patches to resolve real-world Github issues.
 
