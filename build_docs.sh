@@ -1,8 +1,8 @@
 #!/bin/bash
 
 # Install mkdocs and required plugins if not already installed
-echo "Installing documentation dependencies..."
-pip install -r requirements.txt
+echo "Installing documentation dependencies with uv..."
+uv pip install -e .
 
 # Ensure the rllm package is available for import
 export PYTHONPATH="../:$PYTHONPATH"

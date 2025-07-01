@@ -53,15 +53,24 @@ rLLM is an open-source project to fully democratize reinforcement learning (RL) 
 
 ## Getting Started 🎯
 ### Installation
-```bash
-# Installing Python 3.10 Environment.
-conda create -n rllm python=3.10 -y
-conda activate rllm
 
-# Installing RLLM dependencies.
+```bash
+# Install uv if you haven't already
+curl -LsSf https://astral.sh/uv/install.sh | sh
+
+# Clone the repository
+git clone <repository-url>
 cd rllm
-pip install -e ./verl
-pip install -e .
+
+# Create virtual environment and install all dependencies
+uv venv --python 3.10
+uv pip install -e ./verl
+uv pip install -e .
+
+# Activate the virtual environment
+source .venv/bin/activate  # On Linux/macOS
+# or
+.venv\Scripts\activate  # On Windows
 ```
 
 ### Data

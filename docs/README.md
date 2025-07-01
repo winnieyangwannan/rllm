@@ -27,7 +27,7 @@ The documentation will be available at `http://localhost:8000`.
 ```
 docs/
 ├── mkdocs.yml          # MkDocs configuration
-├── requirements.txt    # Documentation dependencies
+├── requirements.txt    # Documentation dependencies (legacy)
 ├── build_docs.sh      # Build script
 ├── docs/              # Documentation content
 │   ├── index.md       # Homepage
@@ -102,7 +102,7 @@ Currently enabled extensions:
 
 ## 📝 Dependencies
 
-Documentation dependencies are specified in `requirements.txt`:
+Documentation dependencies are automatically installed with the main package:
 - `mkdocs`: Static site generator
 - `mkdocs-material`: Material Design theme
 - `mkdocstrings[python]`: API documentation from docstrings
@@ -114,7 +114,7 @@ Documentation dependencies are specified in `requirements.txt`:
 ### Common Issues
 
 **Import errors when building**:
-- Ensure the rLLM package is properly installed: `pip install -e ..`
+- Ensure the rLLM package is properly installed: `uv pip install -e ..`
 - Check that all dependencies are available
 
 **Missing API documentation**:
@@ -122,7 +122,7 @@ Documentation dependencies are specified in `requirements.txt`:
 - Check that the module has proper docstrings
 
 **Build fails**:
-- Check that all requirements are installed: `pip install -r requirements.txt`
+- Check that all dependencies are installed: `uv pip install -e .`
 - Verify that the `mkdocs.yml` syntax is correct
 
 ### Getting Help
