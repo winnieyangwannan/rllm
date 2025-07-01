@@ -26,16 +26,18 @@ rLLM uses [verl](https://github.com/volcengine/verl) as its training backend. Fo
 # Clone the repository with submodules
 git clone --recurse-submodules https://github.com/agentica-project/rllm.git
 
-# Create virtual environment and install dependencies
+# Create virtual environment
 cd rllm
 uv venv --python 3.10
-uv pip install -e ./verl[vllm,gpu,sglang]
-uv pip install -e .
 
 # Activate the virtual environment
 source .venv/bin/activate  # On Linux/macOS
 # or
 .venv\Scripts\activate  # On Windows
+
+# Install dependencies
+uv pip install -e ./verl[vllm,gpu,sglang]
+uv pip install -e .
 ```
 
 This will install rLLM and all its dependencies in development mode.

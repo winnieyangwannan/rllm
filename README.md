@@ -62,15 +62,17 @@ curl -LsSf https://astral.sh/uv/install.sh | sh
 git clone <repository-url>
 cd rllm
 
-# Create virtual environment and install all dependencies
+# Create virtual environment
 uv venv --python 3.10
-uv pip install -e ./verl
-uv pip install -e .
 
 # Activate the virtual environment
 source .venv/bin/activate  # On Linux/macOS
 # or
 .venv\Scripts\activate  # On Windows
+
+# Install all dependencies
+uv pip install -e ./verl
+uv pip install -e .
 ```
 
 ### Data
