@@ -19,18 +19,20 @@ def load_search_data(train_size=3000, test_size=100):
     Load search data, preparing it if not already available.
     Returns the test dataset data for evaluation.
     """
-    test_dataset = DatasetRegistry.load_dataset("search_combined", "test")
+    test_dataset = DatasetRegistry.load_dataset("hotpotqa", "test")
     if test_dataset is None:
         print("Dataset not found, preparing search dataset...")
-        from prepare_search_data import prepare_search_data
+        from prepare_hotpotqa_data import prepare_hotpotqa_data
 
-        _, test_dataset = prepare_search_data(train_size=train_size, test_size=test_size)
+        _, test_dataset = prepare_hotpotqa_data(train_size=train_size, test_size=test_size)
 
     return test_dataset.get_data()
 
 
 if __name__ == "__main__":
     os.environ["TOKENIZERS_PARALLELISM"] = "true"
+    if "RETRIEVAL_SERVER_URL" not in os.environ:
+        os.environ["RETRIEVAL_SERVER_URL"] = "http://127.0.0.1:8000"
 
     load_dotenv()
 

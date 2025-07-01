@@ -65,7 +65,7 @@ def download_wikipedia_corpus(save_path: str):
                         for chunk in tqdm(iter(lambda: f_in.read(chunk_size), b""), desc="Extracting corpus", total=total_size // chunk_size, unit="chunks"):
                             f_out.write(chunk)
                             processed += len(chunk)
-                            if processed % (500 * 1024 * 1024) == 0:  # print every 500MB
+                            if processed % (2000 * 1024 * 1024) == 0:  # print every 2GB
                                 tqdm.write(f"Processed {processed / 1024 / 1024:.1f} MB")
 
         except tarfile.TarError as e:
@@ -116,22 +116,25 @@ def download_prebuilt_indices(save_path: str):
 
     except Exception as e:
         print(f"Warning: Could not download pre-built indices: {e}")
-        print("You can still build indices from scratch using build_index.py")
+        print("You can still run with sparse index only if needed")
         return None
 
 
-def setup_search_data(data_dir: str = "./search_data", download_prebuilt: bool = True):
-    print(f"Setting up Search data in {data_dir}")
+def setup_search_data(data_dir: str = "./search_data", max_docs: int | None = None):
+    print(f"Setting up Search data (dense-only) in {data_dir}")
 
     Path(data_dir).mkdir(parents=True, exist_ok=True)
 
     wiki_file = download_wikipedia_corpus(data_dir)
 
-    prebuilt_dir = None
-    if download_prebuilt:
-        prebuilt_dir = download_prebuilt_indices(data_dir)
+    # Download dense index shards
+    prebuilt_dir = download_prebuilt_indices(data_dir)
 
-    summary = {"wikipedia_corpus": wiki_file, "prebuilt_indices": prebuilt_dir, "setup_complete": wiki_file is not None and prebuilt_dir is not None}
+    summary = {
+        "wikipedia_corpus": wiki_file,
+        "prebuilt_dense_indices": prebuilt_dir,
+        "setup_complete": wiki_file is not None and prebuilt_dir is not None,
+    }
 
     summary_file = os.path.join(data_dir, "data_summary.json")
     with open(summary_file, "w") as f:
@@ -142,25 +145,25 @@ def setup_search_data(data_dir: str = "./search_data", download_prebuilt: bool =
 
     if summary["setup_complete"]:
         print("\nNext steps:")
-        if prebuilt_dir:
-            print("1. (Optional) Use pre-built indices or build your own:")
-            print("   cd examples/search && python retrieval/build_index.py")
-        else:
-            print("1. Build retrieval indices: cd examples/search && python retrieval/build_index.py")
-        print("2. Launch retrieval server: cd examples/search && bash retrieval/launch_server.sh")
-        print("3. Start training: cd examples/search && python train_search_agent.py")
+        print("1. Launch dense retrieval server:")
+        print("   cd examples/search && bash retrieval/launch_server.sh ./search_data/prebuilt_indices 8000")
+        print("2. Start training:")
+        print("   cd examples/search && python train_search_agent.py")
 
     return summary
 
 
 def main():
-    parser = argparse.ArgumentParser(description="Download Search training data")
+    parser = argparse.ArgumentParser(description="Download Search training data & dense indices")
     parser.add_argument("--data_dir", default="./search_data", help="Directory to save data")
-    parser.add_argument("--download_prebuilt", action="store_true", help="Also download pre-built E5 indices")
+    parser.add_argument("--max_docs", type=int, help="Limit number of docs (for quick dev)")
 
     args = parser.parse_args()
 
-    setup_search_data(args.data_dir, args.download_prebuilt)
+    setup_search_data(
+        data_dir=args.data_dir,
+        max_docs=args.max_docs,
+    )
 
 
 if __name__ == "__main__":

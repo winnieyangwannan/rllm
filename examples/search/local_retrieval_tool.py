@@ -13,14 +13,14 @@ logger = logging.getLogger(__name__)
 
 class LocalRetrievalTool(Tool):
     """
-    A tool for searching using the local retrieval server.
+    A tool for dense search using the local retrieval server.
 
-    This tool connects to a locally running retrieval server (launched via retrieval_launch.sh)
-    and performs dense/sparse/hybrid retrieval on the indexed Wikipedia corpus.
+    This tool connects to a locally running dense retrieval server (launched via retrieval_launch.sh)
+    and performs dense retrieval using E5 embeddings on the indexed Wikipedia corpus.
     """
 
     NAME = "local_search"
-    DESCRIPTION = "Search for information using a local retrieval server with Wikipedia corpus"
+    DESCRIPTION = "Search for information using a dense retrieval server with Wikipedia corpus"
 
     def __init__(
         self,
@@ -29,7 +29,6 @@ class LocalRetrievalTool(Tool):
         server_url: str = None,
         timeout: float = 30.0,
         max_results: int = 10,
-        retriever_type: str = "hybrid",  # "dense", "sparse", or "hybrid"
     ):
         """
         Initialize the Local Retrieval Tool.
@@ -40,7 +39,6 @@ class LocalRetrievalTool(Tool):
             server_url: URL of the local retrieval server (if None, checks RETRIEVAL_SERVER_URL env var)
             timeout: Request timeout in seconds
             max_results: Maximum number of results to return
-            retriever_type: Type of retriever to use ("dense", "sparse", "hybrid")
         """
         # Use environment variable if server_url not provided
         if server_url is None:
@@ -49,7 +47,6 @@ class LocalRetrievalTool(Tool):
         self.server_url = server_url.rstrip("/")
         self.timeout = timeout
         self.max_results = max_results
-        self.retriever_type = retriever_type
         self.client = httpx.Client(timeout=timeout)
 
         super().__init__(name=name, description=description)
@@ -81,7 +78,6 @@ class LocalRetrievalTool(Tool):
                     "properties": {
                         "query": {"type": "string", "description": "Search query to retrieve relevant documents"},
                         "top_k": {"type": "integer", "description": f"Number of results to return (default: {self.max_results})", "minimum": 1, "maximum": 50},
-                        "retriever_type": {"type": "string", "enum": ["dense", "sparse", "hybrid"], "description": f"Type of retriever to use (default: {self.retriever_type})"},
                     },
                     "required": ["query"],
                 },
@@ -109,14 +105,13 @@ class LocalRetrievalTool(Tool):
 
         return "\n".join(formatted_results)
 
-    def forward(self, query: str, top_k: int | None = None, retriever_type: str | None = None) -> ToolOutput:
+    def forward(self, query: str, top_k: int | None = None) -> ToolOutput:
         """
-        Execute a search query using the local retrieval server.
+        Execute a search query using the dense retrieval server.
 
         Args:
             query: Search query
             top_k: Number of results to return
-            retriever_type: Type of retriever to use
 
         Returns:
             ToolOutput: Search results or error message
@@ -124,13 +119,11 @@ class LocalRetrievalTool(Tool):
         try:
             # Use provided parameters or defaults
             top_k = top_k or self.max_results
-            retriever_type = retriever_type or self.retriever_type
 
             # Prepare request payload
             payload = {
                 "query": query,
                 "top_k": min(top_k, 50),  # Cap at 50 results
-                "retriever_type": retriever_type,
             }
 
             # Make request to retrieval server
@@ -158,7 +151,7 @@ class LocalRetrievalTool(Tool):
             formatted_output = self._format_search_results(results)
 
             # Create metadata for potential downstream use
-            metadata = {"query": query, "num_results": len(results), "retriever_type": retriever_type, "server_url": self.server_url}
+            metadata = {"query": query, "num_results": len(results), "retriever_type": "dense", "server_url": self.server_url}
 
             return ToolOutput(name=self.name, output=formatted_output, metadata=metadata)
 
@@ -179,16 +172,15 @@ class LocalRetrievalTool(Tool):
 
 
 # Convenience function for tool registry
-def create_local_retrieval_tool(server_url: str = "http://127.0.0.1:8000", max_results: int = 10, retriever_type: str = "hybrid") -> LocalRetrievalTool:
+def create_local_retrieval_tool(server_url: str = "http://127.0.0.1:8000", max_results: int = 10) -> LocalRetrievalTool:
     """
     Create a LocalRetrievalTool instance with specified configuration.
 
     Args:
-        server_url: URL of the local retrieval server
+        server_url: URL of the dense retrieval server
         max_results: Maximum number of results to return
-        retriever_type: Type of retriever to use
 
     Returns:
         LocalRetrievalTool instance
     """
-    return LocalRetrievalTool(server_url=server_url, max_results=max_results, retriever_type=retriever_type)
+    return LocalRetrievalTool(server_url=server_url, max_results=max_results)

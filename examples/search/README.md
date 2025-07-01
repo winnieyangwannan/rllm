@@ -1,146 +1,72 @@
-# Search Training with RLLM
+# Dense Search Training with RLLM
 
-## Dependencies
+Train search agents using dense retrieval on Wikipedia with pre-built E5 embeddings. Only uses the dense index.
 
-```bash
-pip install faiss-gpu sentence-transformers rank-bm25 flask
-```
+## Quick Setup
 
-## Local Retrieval Setup
-
-### 1. Download Data
-
+### 1. Download Data & Setup
 ```bash
 cd examples/search
-python data/download_search_data.py --data_dir ./search_data
+python download_search_data.py --data_dir ./search_data
 ```
 
-This downloads:
-- Wikipedia corpus (wiki-18.jsonl format) from [PeterJinGo/wiki-18-corpus](https://huggingface.co/datasets/PeterJinGo/wiki-18-corpus)
-- Natural Questions dataset
-- Creates data summary
+Downloads:
+- Wikipedia corpus from [PeterJinGo/wiki-18-corpus](https://huggingface.co/datasets/PeterJinGo/wiki-18-corpus)
+- Pre-built E5 dense index from [PeterJinGo/wiki-18-e5-index](https://huggingface.co/datasets/PeterJinGo/wiki-18-e5-index)
 
-### 3. Build Retrieval Indices
-
-First need to install additional dependencies:
+### 2. Launch Retrieval Server
 ```bash
-## install the gpu version faiss to guarantee efficient RL rollout
-conda install -c pytorch -c nvidia faiss-gpu=1.8.0
-
-pip install uvicorn fastapi
+bash retrieval/launch_server.sh ./search_data/prebuilt_indices 8000
 ```
 
-Then build retrival indices with the following command:
-```bash
-python retrieval/build_index.py \
-    --corpus_file ./search_data/wikipedia/wiki-18.jsonl \
-    --output_dir ./indices \
-    --max_docs 100000
-```
+## Model Hosting
 
-This creates:
-- Dense index: E5 embeddings + FAISS
-- Sparse index: BM25 with tokenized corpus
-- Corpus file for the server
+### Option 1: Using vLLM
 
-### 4. Launch Retrieval Server
+Start a vLLM server with OpenAI-compatible API:
 
 ```bash
-bash retrieval/launch_server.sh ./indices 8500
+python -m vllm.entrypoints.openai.api_server \
+  --model Qwen/Qwen3-4B \
+  --host 0.0.0.0 \
+  --port 30000 \
+  --dtype bfloat16 \
+  --max-model-len 8192 \
+  --gpu-memory-utilization 0.85
 ```
 
-The server provides REST API endpoints:
-- `GET /health` - Health check
-- `POST /retrieve` - Search endpoint
+### Option 2: Using SGLang
 
-### 5. Run Training with Local Retrieval
+```bash
+python -m sglang_router.launch_server \
+    --model-path Qwen/Qwen3-4B \
+    --dp-size 1 \
+    --dtype bfloat16
+```
+
+The server should be accessible at `http://localhost:30000/v1`
+
+### 3. Train Agent
+
+Train the search agent using reinforcement learning:
 
 ```bash
 export RETRIEVAL_SERVER_URL="http://127.0.0.1:8000"
 bash train_search_agent.sh
 ```
 
-## Training Script Details
+This will:
+- Fine-tune the Qwen3-4B model using PPO on HotpotQA dataset
+- Use the local retrieval server for training
+- Save checkpoints every 40 steps
+- Run for 100 epochs with validation every 10 steps
 
-The training script (`train_search_agent.py`) uses RLLM's existing infrastructure:
+### 4. Run/Evaluate Agent
 
-### Dataset Loading
-```python
-# Uses existing RLLM pattern from examples/search/run_search_agent.py
-train_data, val_data = load_search_data(train_size=3000, test_size=100)
-```
-- Automatically loads HotpotQA + Natural Questions from HuggingFace
-- Processes into RLLM format with proper prompts and metadata
-- Registers with DatasetRegistry for reuse
-
-### Search Configuration
-Control search behavior via environment variables:
+Run evaluation with a trained model:
 
 ```bash
-export RETRIEVAL_SERVER_URL="http://127.0.0.1:8000"  # Local server
-export MAX_SEARCH_RESULTS=10                         # Results per query
+export RETRIEVAL_SERVER_URL="http://127.0.0.1:8000"
+python run_search_agent.py
 ```
 
-## API Reference
-
-#### Search
-```bash
-curl -X POST http://127.0.0.1:8000/retrieve \
-  -H "Content-Type: application/json" \
-  -d '{
-    "query": "What is the capital of France?",
-    "method": "hybrid",
-    "k": 5,
-    "dense_weight": 0.7
-  }'
-```
-
-Response:
-```json
-{
-  "query": "What is the capital of France?",
-  "method": "hybrid",
-  "results": [
-    {
-      "content": "Paris is the capital and most populous city of France...",
-      "score": 0.95,
-      "type": "hybrid"
-    }
-  ],
-  "num_results": 5
-}
-```
-
-### Search Methods
-- `dense`: E5 embeddings + FAISS similarity search
-- `sparse`: BM25 keyword matching
-- `hybrid`: Weighted combination (default: 70% dense, 30% sparse)
-
-## Troubleshooting
-
-### Common Issues
-
-1. **Missing Dependencies**
-```bash
-pip install faiss-gpu sentence-transformers rank-bm25 flask
-```
-
-2. **CUDA Out of Memory**
-```bash
-# Reduce batch size in build_index.py
-python retrieval/build_index.py --max_docs 10000
-```
-
-3. **Server Won't Start**
-```bash
-# Check if indices were built
-ls -la ./indices/
-# Should contain: corpus.json, dense_index.faiss, sparse_index.json
-```
-
-### Performance Tips
-
-1. **For Large Corpora**: Use `--max_docs` to limit corpus size during development
-2. **Memory Optimization**: Build indices on a machine with sufficient RAM (16GB+ recommended)
-3. **Speed vs Accuracy**: Dense search is more accurate, sparse is faster
-4. **Hybrid Tuning**: Adjust `dense_weight` parameter (0.7 works well for most cases)
