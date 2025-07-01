@@ -6,6 +6,13 @@ data:
   val_files: ~/data/gsm8k/test.parquet
   prompt_key: question
   response_key: answer
+  # Multi-turn settings
+  multiturn:
+    enable: True  # to use multi-turn dataset
+    messages_key: messages 
+  custom_cls:
+    path: null
+    name: null
   max_length: 1024
   truncation: error
   balance_dp_token: False
@@ -24,6 +31,7 @@ model:
   lora_alpha: 16  # LoRA scaling factor
   target_modules: all-linear  # Target modules for LoRA adaptation
   use_liger: False
+  strategy: fsdp2
 optim:
   lr: 1e-5
   betas: [0.9, 0.95]
