@@ -88,9 +88,9 @@ class DeepseekQwenChatTemplateParser(ChatTemplateParser):
         self.bos_token = tokenizer.bos_token
         self.eos_token = tokenizer.eos_token
         self.system_token = ""
-        self.user_token = " "
-        self.assistant_token = " "
-        self.generation_prompt = self.assistant_token
+        self.user_token = "<｜User｜>"
+        self.assistant_token = "<｜Assistant｜>"
+        self.generation_prompt = self.eos_token + self.assistant_token + "<think>\n"
 
     def parse(self, messages, add_generation_prompt=False, is_first_msg=False, **kwargs) -> str:
         result = ""
@@ -119,7 +119,7 @@ class DeepseekQwenChatTemplateParser(ChatTemplateParser):
         return self.user_token + message["content"]
 
     def parse_assistant(self, message):
-        return self.assistant_token + message["content"]  # + self.eos_token
+        return self.assistant_token + message["content"] + self.eos_token
 
 
 class QwenChatTemplateParser(ChatTemplateParser):
