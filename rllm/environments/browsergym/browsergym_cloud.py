@@ -4,8 +4,13 @@ import time
 from typing import Dict
 from rllm.environments.base.base_env import BaseEnv
 
-from browser_pilot.entrypoint.client import CloudClient
-from browser_pilot.entrypoint.env import CloudEnv
+
+try:
+    from browser_pilot.entrypoint.client import CloudClient
+    from browser_pilot.entrypoint.env import CloudEnv
+except ImportError:
+    CloudClient = None
+    CloudEnv = None
 
 logger = logging.getLogger(__name__)
 

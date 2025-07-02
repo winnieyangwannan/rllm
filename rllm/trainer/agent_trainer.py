@@ -1,5 +1,6 @@
 import concurrent.futures
 import asyncio
+import json
 from threading import Thread
 from queue import Queue
 from typing import Type, Dict, List
@@ -11,6 +12,8 @@ import uuid
 from functools import partial
 from jinja2 import Template
 import re
+import os
+from concurrent.futures import ThreadPoolExecutor, as_completed
 
 from verl import DataProto
 from verl.trainer.ppo.ray_trainer import (
@@ -33,6 +36,8 @@ from rllm.engine.agent_execution_engine import AgentExecutionEngine
 from rllm.engine.async_agent_execution_engine import AsyncAgentExecutionEngine
 import math
 from functools import reduce
+
+
 class AgentPPOTrainer(RayPPOTrainer):
 
     def __init__(
@@ -90,6 +95,7 @@ class AgentPPOTrainer(RayPPOTrainer):
                 env_args=self.config.env.get("env_args", {}),
                 enforce_max_prompt_length=self.config.agent.use_stepwise_advantage,
                 trajectory_timeout=self.config.agent.trajectory_timeout,
+                overlong_filter=self.config.agent.overlong_filter,
                 **self.config.agent.get("engine_args", {})
             )
         else:
@@ -111,8 +117,30 @@ class AgentPPOTrainer(RayPPOTrainer):
         Initialize environment depending on env_class with the necessary extra_info, also set uid of the batch.
         """
         env_args = batch.non_tensor_batch["extra_info"].tolist()
-        envs = [self.env_class.from_json({**env_args[i], **self.config.env.get("env_args", {})}) for i in range(len(env_args))]
-        agents = [self.agent_class(**self.config.agent.get("agent_args", {})) for _ in range(len(envs))]
+        
+        def _create_env(i):
+            if isinstance(env_args[i], str):
+                env_args[i] = json.loads(env_args[i])
+            return i, self.env_class.from_json({**env_args[i], **self.config.env.get("env_args", {})})
+        
+        def _create_agent(i):
+            return i, self.agent_class(**self.config.agent.get("agent_args", {}))
+        
+        # Create environments in parallel while preserving order
+        envs = [None] * len(env_args)
+        with ThreadPoolExecutor(max_workers=64) as executor:
+            env_futures = [executor.submit(_create_env, i) for i in range(len(env_args))]
+            for future in as_completed(env_futures):
+                idx, env = future.result()
+                envs[idx] = env
+        
+        # Create agents in parallel while preserving order
+        agents = [None] * len(envs)
+        with ThreadPoolExecutor(max_workers=64) as executor:
+            agent_futures = [executor.submit(_create_agent, i) for i in range(len(envs))]
+            for future in as_completed(agent_futures):
+                idx, agent = future.result()
+                agents[idx] = agent
         self.agent_execution_engine.update_envs_and_agents(envs, agents)
         return envs
 
@@ -181,7 +209,8 @@ class AgentPPOTrainer(RayPPOTrainer):
                         batch = batch.union(final_gen_batch_output)
                         batch = self._pad_dataproto_to_world_size(batch=batch)
                     else:
-                        final_gen_batch_output = self.generate_agent_trajectory(timing_raw=timing_raw, meta_info=batch.meta_info)
+                        final_gen_batch_output, generate_metrics = self.generate_agent_trajectory(timing_raw=timing_raw, meta_info=batch.meta_info)
+                        metrics.update(generate_metrics)
                         batch = batch.union(final_gen_batch_output)
 
                     # compute values
@@ -464,7 +493,7 @@ class AgentPPOTrainer(RayPPOTrainer):
                 last_step_indices = np.where(is_last_step == True)[0]  
                 test_output_gen_batch = test_output_gen_batch.select_idxs(last_step_indices) # This batch only has last steps
             else:
-                test_output_gen_batch = self.generate_agent_trajectory(
+                test_output_gen_batch, _ = self.generate_agent_trajectory(
                     meta_info=test_batch.meta_info
                 )
             
@@ -563,10 +592,10 @@ class AgentPPOTrainer(RayPPOTrainer):
 
         with _timer("transform_trajectory", timing_raw):
             # Transform the raw trajectories into DataProto format.
-            final_gen_batch_output = self._transform_agent_trajectories(
+            final_gen_batch_output, metrics = self._transform_agent_trajectories(
                 trajectories
             )
-        return final_gen_batch_output
+        return final_gen_batch_output, metrics
 
     def generate_agent_steps(self, timing_raw={}, meta_info=None, uids=[]):
         """
@@ -615,6 +644,9 @@ class AgentPPOTrainer(RayPPOTrainer):
         all_masks_list = []
         traj_scores = []
         environment_scores = []
+        chat_completions = []
+        traj_metrics = []
+        metrics = {}
 
         for traj in trajectories:
             prompt_tokens = traj["prompt_tokens"]
@@ -626,7 +658,31 @@ class AgentPPOTrainer(RayPPOTrainer):
             all_masks_list.append(traj["response_masks"])
             traj_scores.append(traj["training_reward"])
             environment_scores.append(traj["environment_reward"])
-
+            chat_completions.append(traj["chat_completions"])
+            traj_metrics.append(traj["metrics"])
+            
+        # Flatten traj_metrics into a dict of lists
+        traj_metrics = {k: [d[k] for d in traj_metrics] for k in traj_metrics[0]}
+        # Aggregate metrics (mean, min, max)
+        for k, v_list in traj_metrics.items():
+            v_list = [v for v in v_list if v is not None and v>=0]
+            if not v_list:
+                continue
+            v_list = np.array(v_list)
+            metrics.update({
+                f'traj/{k}_mean': v_list.mean(),
+                f'traj/{k}_min': v_list.min(),
+                f'traj/{k}_max': v_list.max(),
+            })
+        
+        # Save chat completions to a file
+        save_dir = os.path.join(self.config.trainer.default_local_dir, "chat_completions")
+        os.makedirs(save_dir, exist_ok=True)
+        # Save it into a jsonl files (self.global_steps)
+        with open(os.path.join(save_dir, f"{self.global_steps}.jsonl"), "w") as f:
+            for chat_completion in chat_completions:
+                f.write(json.dumps(chat_completion) + "\n")
+            
         # reverse the list and create tensors, pad, then flip to achieve left padding
         prompts_batch = torch.nn.utils.rnn.pad_sequence(
             [torch.flip(i, dims=[0]) for i in all_initial_tokens_list], 
@@ -683,7 +739,7 @@ class AgentPPOTrainer(RayPPOTrainer):
 
         self.visualize_trajectory(DataProto.from_dict(tensors=tensor_batch))
 
-        return DataProto.from_dict(tensors=tensor_batch)
+        return DataProto.from_dict(tensors=tensor_batch), metrics
     
 
 

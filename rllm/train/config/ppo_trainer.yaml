@@ -299,6 +299,7 @@ agent:
   async_engine: True
   n_parallel_agents: null
   trajectory_timeout: null
+  overlong_filter: False
   normalize_step_advantage: False
   use_stepwise_advantage: False
   stepwise_advantage_mode: "broadcast" 

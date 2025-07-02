@@ -48,6 +48,7 @@ class AsyncAgentExecutionEngine(AgentExecutionEngine):
         env_args={},
         max_workers=64,
         enforce_max_prompt_length=False,  # If enabled, applies max_prompt check per step
+        overlong_filter=False, # Filter for overlong trajectories (i.e. TRUNCATION, MAX_STEPS, TIMEOUT)
         **kwargs,
     ):
         self.config = config
@@ -56,6 +57,7 @@ class AsyncAgentExecutionEngine(AgentExecutionEngine):
         self.engine_name = engine_name
         self.n_parallel_agents = n_parallel_agents
         self.model_path = model_path
+        self.overlong_filter = overlong_filter
 
         # For interaction
         self.gamma = gamma
@@ -208,6 +210,10 @@ class AsyncAgentExecutionEngine(AgentExecutionEngine):
         response_tokens = []
         response_masks = []
         total_time = 0
+        reward_time = None
+        llm_time = 0.0
+        env_time = 0.0
+        reward = 0.0
 
         # for step return
         episode_steps = []
@@ -216,7 +222,6 @@ class AsyncAgentExecutionEngine(AgentExecutionEngine):
         loop = asyncio.get_event_loop()
         observation, info = await loop.run_in_executor(self.executor, lambda: env.reset(task=task) if task else env.reset())
         info['max_steps'] = self.max_steps
-
         # Reset agent
         agent.reset()
         # Update agent internal state from environment.
@@ -266,6 +271,9 @@ class AsyncAgentExecutionEngine(AgentExecutionEngine):
                 application_id,
                 **kwargs
             )
+            delta_time = time.time() - start_time
+            llm_time += delta_time
+            total_time += delta_time
 
             # Update steps
             prompt_response_pair = {
@@ -275,7 +283,6 @@ class AsyncAgentExecutionEngine(AgentExecutionEngine):
             episode_steps.append(prompt_response_pair)
 
             # Update agent with model response
-            total_time += time.time() - start_time
             agent.update_from_model(response)
 
             # Fetch action from agent's internal state.
@@ -284,8 +291,11 @@ class AsyncAgentExecutionEngine(AgentExecutionEngine):
             # Take step in environment using the executor
             start_time = time.time()
             next_observation, reward, done, info = await loop.run_in_executor(self.executor, env.step, action)
-            total_time += time.time() - start_time
+            delta_time = time.time() - start_time
+            env_time += delta_time
+            total_time += delta_time
             info['max_steps'] = self.max_steps
+            info['cur_tokens'] = response_token_len
             # Update agent internal state.
             agent.update_from_env(
                 observation=next_observation,
@@ -330,7 +340,7 @@ class AsyncAgentExecutionEngine(AgentExecutionEngine):
                 response_masks.extend(truncated_response_masks)
 
                 cur_step = agent.get_current_state()
-                if response_token_len - len(env_msg_tokens) > self.max_response_length and not hasattr(env, 'compute_final_reward'):
+                if response_token_len - len(env_msg_tokens) > self.max_response_length:
                     cur_step.reward = 0.0
                 cur_step.done = True
                 termination_reason = "TRUNCATION"
@@ -361,13 +371,23 @@ class AsyncAgentExecutionEngine(AgentExecutionEngine):
             if step_idx == self.max_steps - 1:
                 termination_reason = "MAX_STEPS"
 
-        if hasattr(env, 'compute_final_reward'):
+        masked_out = False
+        if self.overlong_filter:
+            if (termination_reason == "TRUNCATION" or termination_reason == "MAX_STEPS" or termination_reason == "TIMEOUT"):
+                # Mask out the entire response for overlong trajectories if the reward is 0.
+                response_masks = [0] * len(response_masks)
+                masked_out = True
+
+        if hasattr(env, 'compute_final_reward') and not masked_out:
             cur_step = agent.get_current_state()
+            start_time = time.time()
             reward = await loop.run_in_executor(self.executor, env.compute_final_reward)
+            reward_time = time.time() - start_time
             cur_step.reward = reward
         # Closing environment using the executor.
         await loop.run_in_executor(self.executor, env.close)
         print(f"Environment closed for trajectory {idx}.")
+        
         if termination_reason:
             if reward > 0:
                 color = "green"
@@ -377,6 +397,9 @@ class AsyncAgentExecutionEngine(AgentExecutionEngine):
                 f"Trajectory {idx} completed due to: {termination_reason}. Reward is {reward}. \n",
                 color,
             )
+            if masked_out:
+                colorful_print(f"Trajectory {idx} is masked out due to overlong filter.", "red")
+
         trajectory = agent.trajectory 
         # Aggregate final trajectory statistics
         compute_trajectory_reward(trajectory)
@@ -392,6 +415,19 @@ class AsyncAgentExecutionEngine(AgentExecutionEngine):
                 "training_reward": agent.compute_training_reward(trajectory) if hasattr(agent, "compute_training_reward") else trajectory.steps[-1].reward,
                 "environment_reward": trajectory.reward,
                 "idx": env.idx,
+                "chat_completions": agent.chat_completions,
+                'metrics': {
+                    # Total number of steps taken in the trajectory
+                    'steps': len(trajectory.steps),
+                    # Time to calculate reward
+                    'reward_time': reward_time,
+                    # Total time spent in environment execution (env.step)
+                    'env_time': env_time,
+                    # Time to calculate response tokens
+                    'llm_time': llm_time,
+                    # Total time spent in the trajectory
+                    'total_time': total_time,
+                }
             }
             return token_result
         elif mode == "Conversation":
@@ -411,9 +447,9 @@ class AsyncAgentExecutionEngine(AgentExecutionEngine):
     ):
         for _ in range(self.retry_limit):
             try:
-                return await self.run_agent_trajectory_async(
+                return await asyncio.wait_for(self.run_agent_trajectory_async(
                     idx, application_id=application_id, seed=seed, mode=mode, **kwargs
-                )
+                ), timeout=4500)
             except Exception:
                 traceback.print_exc()
                 continue
@@ -468,7 +504,7 @@ class AsyncAgentExecutionEngine(AgentExecutionEngine):
                 tasks_completed += 1
                 colorful_print(f"Number of Trajectories {tasks_completed}/{len(self.envs)} completed", "cyan")
                 if tasks_completed == len(self.envs)-2:
-                    self.is_last_trajectory = True
+                    self.is_last_trajectory = False
                 yield result
             except Exception as e:
                 raise e
@@ -476,7 +512,7 @@ class AsyncAgentExecutionEngine(AgentExecutionEngine):
         if self.engine_name == "verl":
             self.rollout_engine.sleep()
         
-        self.executor.shutdown(wait=False)
+        self.executor.shutdown(wait=False, cancel_futures=True)
 
     async def execute_tasks(self, tasks):
         """

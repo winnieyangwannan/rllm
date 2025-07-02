@@ -4,8 +4,13 @@ import os
 import time
 
 import requests
-from browser_pilot.entrypoint.client import CloudClient
 from transformers import AutoTokenizer
+
+
+try:
+    from browser_pilot.entrypoint.client import CloudClient
+except ImportError:
+    CloudClient = None
 
 from rllm.agents import WebArenaAgent
 from rllm.environments.browsergym.browsergym_cloud import BrowserGymCloud
