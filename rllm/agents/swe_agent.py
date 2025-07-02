@@ -3,11 +3,11 @@ import logging
 import re
 
 try:
-    from r2egym.agenthub.action import Action
+    from r2egym.agenthub.action import Action as SWEAction
 except ImportError:
-    Action = None
+    SWEAction = None
 
-from rllm.agents.agent import BaseAgent, Step, Trajectory
+from rllm.agents.agent import Action, BaseAgent, Step, Trajectory
 from rllm.agents.system_prompts import SWE_SYSTEM_PROMPT, SWE_SYSTEM_PROMPT_FN_CALL, SWE_USER_PROMPT, SWE_USER_PROMPT_FN_CALL, SWEAGENT_SYSTEM_PROMPT, SWEAGENT_USER_PROMPT
 
 TOKEN_WARNING_THRESHOLD = 28000
@@ -20,13 +20,13 @@ def parse_oai_response(response):
     try:
         function_name = response.choices[0].message.tool_calls[0].function.name
         parameters = json.loads(response.choices[0].message.tool_calls[0].function.arguments)
-        action = Action(function_name, parameters)
+        action = SWEAction(function_name, parameters)
     except Exception:
-        action = Action(function_name="", parameters={})
+        action = SWEAction(function_name="", parameters={})
     return thought, action
 
 
-def parse_xml_response(response_text: str) -> tuple[str, Action]:
+def parse_xml_response(response_text: str) -> tuple[str, SWEAction]:
     """
     Extracts:
     - thought: everything before the first <function=...> block
@@ -50,7 +50,7 @@ def parse_xml_response(response_text: str) -> tuple[str, Action]:
     action = action.strip()
 
     # convert action to Action object
-    action = Action.from_string(action)
+    action = SWEAction.from_string(action)
 
     return thought, action
 
@@ -129,7 +129,7 @@ class SWEAgent(BaseAgent):
             prior_step.info = info
 
         self.messages.append({"role": "user", "content": observation})
-        cur_step = Step(observation=observation, step=self.step)
+        cur_step = Step(observation=observation)
         self._trajectory.steps.append(cur_step)
 
     def update_from_model(self, response: str, **kwargs):

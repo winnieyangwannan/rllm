@@ -2,7 +2,7 @@
 
 <!-- paper . data and models . project page -->
 <p align="center">
-<a href="#">📃 Blog Post</a>
+<a href="https://pretty-radio-b75.notion.site/DeepSWE-Training-a-Fully-Open-sourced-State-of-the-Art[…]-by-Scaling-RL-22281902c1468193aabbe9a8c59bbe33?pvs=73">📃 Blog Post</a>
 •
 <a href="https://huggingface.co/datasets/R2E-Gym/R2E-Gym-Subset" > 🤗 HF Dataset (R2E-Gym) </a>
 •
