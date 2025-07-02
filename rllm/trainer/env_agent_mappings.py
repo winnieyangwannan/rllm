@@ -16,13 +16,11 @@ ENV_CLASSES = {
     "code": safe_import("rllm.environments.base.single_turn_env", "SingleTurnEnvironment"),
     # "swe": safe_import("rllm.environments.swe.swe", "SWEEnv"),
     "competition_coding": safe_import("rllm.environments.code.competition_coding", "CompetitionCodingEnv"),
-    "browsergym_cloud": safe_import("rllm.environments.browsergym.browsergym_cloud", "BrowserGymCloud"),
 }
 
 # Import agent classes
 AGENT_CLASSES = {
     "miniwobagent": safe_import("rllm.agents.miniwob_agent", "MiniWobAgent"),
-    "webarenaagent": safe_import("rllm.agents.webarena_agent", "WebArenaAgent"),
     "frozenlakeagent": safe_import("rllm.agents.frozenlake_agent", "FrozenLakeAgent"),
     "tool_agent": safe_import("rllm.agents.tool_agent", "ToolAgent"),
     # "sweagent": safe_import("rllm.agents.swe_agent", "SWEAgent"),

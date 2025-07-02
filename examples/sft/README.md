@@ -26,6 +26,13 @@ The server should be accessible at `http://localhost:30000/v1`
 
 ## Dataset Preparation
 
+First prepare the dataset:
+
+```bash
+cd examples/sft
+python prepare_math_data.py
+```
+
 Generate SFT training data from teacher model trajectories:
 
 ```bash
@@ -50,8 +57,7 @@ This will:
 Run SFT with the generated data:
 
 ```bash
-cd examples/sft
-bash train_math_sft.sh
+bash examples/sft/train_math_sft.sh
 ```
 
 ### Configuration Options
@@ -70,3 +76,15 @@ The training script will:
 1. Load the base model (Qwen2.5-Math-1.5B)
 2. Fine-tune on the generated SFT data
 3. Save checkpoints to `outputs/qwen2.5_math_sft/`
+
+
+## Evaluation
+
+Evaluate the trained model using the saved checkpoint:
+
+```bash
+cd examples/sft
+python run_sft_model.py --model_path outputs/qwen2.5_math_sft/
+```
+
+Replace `outputs/qwen2.5_math_sft/` with the actual path to your trained model checkpoint.

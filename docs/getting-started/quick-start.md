@@ -21,7 +21,7 @@ The example uses:
 
 Before starting, ensure you have:
 
-1. **rLLM Installation**: Follow the [installation guide](../installation.md)
+1. **rLLM Installation**: Follow the [installation guide](./installation.md)
 2. **GPU Requirements**: At least 1 GPU with 16GB+ memory for inference, 8+ GPUs for training
 3. **Model Server**: We'll use vLLM or SGLang to serve the base model
 
@@ -80,7 +80,7 @@ python run_math_with_tool.py
 
 The script above configures a `ToolAgent` from rLLM with access to the `python` tool for solving math problems in AIME2024, and a `ToolEnvironment` for handling Python tool calls and returning results. 
 
-The `AsyncAgentExecutionEngine` orchestrates the interaction between the `ToolAgent` and `ToolEnvironment`. The `execute_tasks` function launches 64 agent-environment pairs in parallel (`n_parallel_agents=64`) for rollout generation and returns results after all problems from the AIME2024 dataset are processed. Finally, the Pass@1 and Pass@K metrics for AIME are computed and printed. 
+The `AgentExecutionEngine` orchestrates the interaction between the `ToolAgent` and `ToolEnvironment`. The `execute_tasks` function launches 64 agent-environment pairs in parallel (`n_parallel_agents=64`) for rollout generation and returns results after all problems from the AIME2024 dataset are processed. Finally, the Pass@1 and Pass@K metrics for AIME are computed and printed. 
 
 ## Step 4: Agent Training with GRPO
 
@@ -96,9 +96,9 @@ cd examples/math_tool
 bash train_math_with_tool.sh
 ```
 
-The script above launches an RL training job for our ToolAgent, using `deepscaler_math` as the training set and `aime2024` as the test set. Under the hood, rLLM handles agent trajectory generation using our `AsyncAgentExecutionEngine` and transforms the trajectories into `verl`'s format for model training using FSDP or Megatron. The training process works as follows:
+The script above launches an RL training job for our ToolAgent, using `deepscaler_math` as the training set and `aime2024` as the test set. Under the hood, rLLM handles agent trajectory generation using our `AgentExecutionEngine` and transforms the trajectories into `verl`'s format for model training using FSDP or Megatron. The training process works as follows:
 
-1. **Rollout Generation**: A batch of data is passed to `AsyncAgentExecutionEngine`, which launches multiple agent-environment pairs in parallel to process the batch. The engine returns all trajectories along with rewards computed by the environment.
+1. **Rollout Generation**: A batch of data is passed to `AgentExecutionEngine`, which launches multiple agent-environment pairs in parallel to process the batch. The engine returns all trajectories along with rewards computed by the environment.
 2. **Transform Trajectories**: Agent trajectories are transformed into the corresponding format for our training backend `verl`. 
 3. **Advantage Calculation with GRPO**: `verl` uses GRPO for advantage calculation.
 4. **Model Update**: `verl` updates the model parameters to increase the probability of successful actions. The updated model is then used to generate trajectories for the next batch of data.
@@ -110,7 +110,7 @@ The script above launches an RL training job for our ToolAgent, using `deepscale
 | `ToolAgent` | Agent with tool usage capabilities | Reasoning + Python execution |
 | `ToolEnvironment` | Safe tool execution environment | Sandboxed Python interpreter |
 | `DatasetRegistry` | Centralized dataset management | Load/register math datasets |
-| `AsyncAgentExecutionEngine` | Parallel agent execution | Efficient batch inference |
+| `AgentExecutionEngine` | Parallel agent execution | Efficient batch inference |
 | `AgentTrainer` | RL training orchestration | PPO-based agent improvement |
 
 ## Next Steps

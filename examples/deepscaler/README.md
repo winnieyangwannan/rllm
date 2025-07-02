@@ -53,8 +53,8 @@ This will:
 Once your model server is running and datasets are prepared, you can run inference:
 
 ```bash
-cd examples/deepscalr
-python run_deepscalr.py
+cd examples/deepscaler
+python run_deepscaler.py
 ```
 
 ### Configuration Options
@@ -82,12 +82,11 @@ The script will:
 To train Deepscaler with iterative context lengthening (8K -> 16K -> 24K):
 
 ```bash
-cd examples/math_tool
-bash train_deepscaler_8k.sh
+bash examples/deepscaler/train_deepscaler_8k.sh
 
 # modify MODEL_PATH to the 8k checkpoint path before running the script.
-bash train_deepscaler_16k.sh
+bash examples/deepscaler/train_deepscaler_16k.sh
 
 # modify MODEL_PATH to the 16k checkpoint path before running the script
-bash train_deepscaler_24k.sh
+bash examples/deepscaler/train_deepscaler_24k.sh
 ```

@@ -91,6 +91,5 @@ The script will:
 To train a basic web agent:
 
 ```bash
-cd examples/miniwob
-bash train_miniwob.sh
+bash examples/miniwob/train_miniwob.sh
 ```

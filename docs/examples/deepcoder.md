@@ -28,7 +28,7 @@ Start a model server (choose one option):
 **Option 1: Using vLLM**
 ```bash
 python -m vllm.entrypoints.openai.api_server \
-    --model deepseek-ai/DeepSeek-R1-Distill-Qwen-14B \
+    --model agentica-org/DeepCoder-14B-Preview \
     --host 0.0.0.0 \
     --port 30000 \
     --dtype bfloat16 \
@@ -38,7 +38,7 @@ python -m vllm.entrypoints.openai.api_server \
 **Option 2: Using SGLang**
 ```bash
 python -m sglang_router.launch_server \
-    --model-path deepseek-ai/DeepSeek-R1-Distill-Qwen-14B \ 
+    --model-path agentica-org/DeepCoder-14B-Preview \ 
     --dp-size 1 \
     --dtype bfloat16
 ```
@@ -69,8 +69,8 @@ bash train_deepcoder_32k.sh
 
 Main script for evaluating coding performance:
 
-```python title="examples/deepcoder/evaluate_deepcoder.py"
---8<-- "examples/deepcoder/evaluate_deepcoder.py"
+```python title="examples/deepcoder/run_deepcoder.py"
+--8<-- "examples/deepcoder/run_deepcoder.py"
 ```
 
 ### Training Script

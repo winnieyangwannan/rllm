@@ -93,6 +93,5 @@ The script will:
 To train a FrozenLake agent:
 
 ```bash
-cd examples/frozenlake
-bash train_frozenlake_agent.sh
+bash examples/frozenlake/train_frozenlake_agent.sh
 ```

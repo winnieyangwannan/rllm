@@ -1,101 +1,176 @@
-# Agent-Environment Orchestration
+![rLLM's main components](../assets/rllm_components.png)
 
-rLLM is built around several core components that work together to enable reinforcement learning for language models. This page provides a high-level overview of these components and how they interact.
+A typical RL system consists of two components:
 
-rLLM consists of the following main components:
+1. **Sampler**: Generates trajectories from the current policy (i.e., the agent).
+2. **Trainer**: Computes gradients from the sampled trajectories and updates the policy.
 
-1. **Agents**: LLM-based agents that generate actions based on environment observations
-2. **Environments**: Task-specific environments that provide observations and rewards
-3. **AgentExecutionEngine**: Orchestrates interactions between agents and environments
-4. **AgentTrainer**: RL algorithms to update agent policies based on rewards
+In *online RL*, this forms a closed training loop:
 
-## Agents
+1. The **sampler** generates a batch of trajectories using the current agent.
+2. The **trainer** updates the agent’s weights using those trajectories.
+3. A new batch is generated using the **updated agent**, and the cycle repeats.
 
-Agents are the core components in rLLM that generate intelligent actions based on environmental observations. They serve as the bridge between language models and interactive environments, enabling autonomous problem-solving and decision-making.
+In rLLM, we design multiple components to implement the training loop in a modular way:
 
-All agents inherit from the `BaseAgent` class, which defines the essential methods for environment interaction:
+1. **`BaseAgent`** and **`BaseEnv`** class that user can easily extend to build their custom agents and environments
+2. **`AgentExecutionEngine`** that orchestrates the interaction between agent and environment for parallelized and fully async trajectory generation.
+3. **`AgentTrainer`** that orchestrates the RL training loop between the sampler (**`AgentExecutionEngine`**) and the model trainer (verl).
 
-```python
-from rllm.agents.agent import BaseAgent, Step, Trajectory
+Below, we explain in more details how each components works, and show examples on how to use them.
 
-class BaseAgent(ABC):
-    @abstractmethod
-    def update_from_env(self, observation, reward, done, info, **kwargs):
-        """Updates agent state after receiving environment feedback."""
-        pass
-        
-    @abstractmethod
-    def update_from_model(self, response, **kwargs):
-        """Updates agent state after receiving model response."""
-        pass
-        
-    @abstractmethod
-    def reset(self):
-        """Resets agent's internal state for new episode."""
-        pass
-        
-    @property
-    def chat_completions(self) -> List[Dict[str, str]]:
-        """Returns messages formatted for chat completion."""
-        return []
+### I. Agent and Environment Abstractions
+
+rLLM provides simple, modular interfaces for defining custom agents and environments. Users can quickly prototype new agents and environments with minimal boilerplate. Check out the examples below to get started building your own agentic workflows.
+
+- **Example:** A math agent that can self-correct its answer each turn.
     
-    @property
-    def trajectory(self) -> Trajectory:
-        """Returns complete interaction history."""
-        return Trajectory()
+    ```python
+    class MathAgent(BaseAgent):
+        def __init__(self, accumulate_thinking=True):
+            self.instruction = "Let's think step by step, and put your final answer within \\boxed{}."
+            self._trajectory = Trajectory()
+            self.messages = []
+            self.accumulate_thinking = accumulate_thinking
+    
+        def update_from_env(self, observation, reward, done, info, **kwargs):
+            if not self.trajectory.steps:
+                question = observation["question"]
+                formatted_observation = f"{question} {self.instruction}"
+            else:
+                formatted_observation = "Your previous answer may contain a mistake. Please review it."
+    
+            self.messages.append({"role": "user", "content": formatted_observation})
+    
+        def update_from_model(self, response, **kwargs):
+            self.messages.append({"role": "assistant", "content": response})
+            new_step = Step(chat_completions=copy.deepcopy(self.chat_completions))
+            self.trajectory.steps.append(new_step)
+            return Action(action=response)
+    
+        def reset(self):
+            self._trajectory = Trajectory()
+            self.messages = []
+    
+        @property
+        def chat_completions(self):
+            messages = copy.deepcopy(self.messages)
+            if not self.accumulate_thinking:
+                for msg in messages[:-1]:
+                    if msg["role"] == "assistant":
+                        _, sep, after = msg["content"].partition("</think>")
+                        if sep:
+                            msg["content"] = after
+            return messages
+    
+        @property
+        def trajectory(self):
+            return self._trajectory
+    
+        def get_current_state(self):
+            assert self._trajectory.steps
+            return self._trajectory.steps[-1]
+    
+    ```
+    
+- **Example:** Base environment class
+    
+    ```python
+    class BaseEnv(ABC):
+        @abstractmethod
+        def reset(self) -> tuple[dict, dict]:
+            pass
+    
+        @abstractmethod
+        def step(self, action: Any) -> tuple[Any, float, bool, dict]:
+            pass
+    
+        def close(self):
+            return
+    
+        @staticmethod
+        @abstractmethod
+        def from_dict(info: dict) -> "BaseEnv":
+            raise NotImplementedError("Subclasses must implement 'from_dict'")
+    ```
+    
 
-    def get_current_state(self) -> Step:
-        """Return the most recent step."""
-        assert self._trajectory.steps, "No active step available"
-        return self._trajectory.steps[-1]
+### **II. `AgentExecutionEngine` for Agent-Environment Orchestration**
+
+At the heart of this architecture is the `AgentExecutionEngine`, a high-performance sampler that:
+
+- Orchestrates interactions between agents and environments
+- Supports **fully** **asynchronous**, **parallel** trajectory rollout
+
+During RL training, `AgentExecutionEngine` integrates seamlessly with the trainer to support RL algorithms like GRPO, PPO**,** and beyond.
+
+- **Example:** Using `AgentExecutionEngine` for trajectory collection
+    
+    ```python
+    engine = AgentExecutionEngine(
+        agent_class=ToolAgent,
+        agent_args={"tools": ["python"], "parser_name": "qwen"},
+        env_class=ToolEnvironment,
+        env_args={"tools": ["python"], "reward_fn": math_reward_fn},
+        engine_name="openai",
+        rollout_engine_args={"base_url": "http://localhost:30000/v1"},
+        tokenizer=AutoTokenizer.from_pretrained("Qwen/Qwen3-4B"),
+        sampling_params={"temperature": 0.6, "top_p": 0.95, "model": "Qwen/Qwen3-4B"},
+        max_response_length=16384,
+        max_prompt_length=2048,
+        n_parallel_agents=64,
+    )
+    
+    test_dataset = DatasetRegistry.load_dataset("aime2024", "test")
+    tasks = test_dataset.repeat(n=8)  # For pass@k evaluation
+    
+    results = asyncio.run(engine.execute_tasks(tasks))
+    compute_pass_at_k(results)
+    ```
+    
+
+### III. `AgentTrainer` for Efficient RL Training
+
+rLLM’s `AgentTrainer` exposes a simple high-level interface for users to specify their training workload and configurations, where users can easily specify the agent, environment, and training/validation dataset, and calls `trainer.train()` to train their agents with RL. 
+
+```go
+trainer = AgentTrainer(
+    agent_class=ToolAgent,
+    env_class=ToolEnvironment,
+    config=config,
+    train_dataset=train_dataset,
+    val_dataset=val_dataset,
+    agent_args=agent_args,
+    env_args=env_args,
+)
+trainer.train()
 ```
 
-## Environments
+Under the hood, the `AgentTrainer` uses rLLM’s `AgentExeuctionEngine` as trajectory sampler, [**verl](https://github.com/volcengine/verl)** as the model trainer, and uses [Ray](https://docs.ray.io/en/latest/ray-overview/getting-started.html?_gl=1*1tl1nie*_up*MQ..*_ga*MTAwODEyODkzNC4xNzUxMzk3NzA3*_ga_0LCWHW1N3S*czE3NTEzOTc3MDYkbzEkZzAkdDE3NTEzOTc3MDYkajYwJGwwJGgw) to orchestrate the control-flow between the sampler and the trainer. 
 
-Environments in rLLM define tasks and provide observations and rewards to agents. This page explains the environment architecture, available environment types, and how to create custom environments.
-
-All environments in rLLM inherit from the `BaseEnv` class, which follows the Gymnasium interface with rLLM-specific extensions:
-
-```python
-from rllm.environments.base.base_env import BaseEnv
-
-class BaseEnv(ABC):
-    @abstractmethod
-    def reset(self) -> Tuple[Any, Dict]:
-        """Reset environment and return initial observation and info."""
-        pass
-
-    @abstractmethod
-    def step(self, action: Any) -> Tuple[Any, float, bool, bool, Dict]:
-        """Execute action and return (observation, reward, done, info)."""
-        pass
-
-    def close(self):
-        """Clean up environment resources."""
-        pass
-
-    @staticmethod
-    @abstractmethod
-    def from_dict(env_args: Dict) -> "BaseEnv":
-        """Create environment instance from dictionary. This function is used both during inference and training to instantiate a new environment instance, so it has to be implemented properly."""
-        pass
-```
-
-## Interaction Flow between Agent and Environment 
-
-The agent-environment interaction follows this pattern:
-
-1. **Initialization**: Agent calls `agent.reset()` to prepare for a new episode, environment calls `env.reset()` to provide initial observation.
-2. **State Update**: Agent processes environment observation via `update_from_env()`
-3. **Model Interaction**: Language model generates response using agent's `chat_completions`
-4. **Response Processing**: Agent updates state via `update_from_model()`
-5. **Repeat from Step 2**: Process repeats from Step 2 again until episode completion
-
-
-## AgentExecutionEngine
- 
-The AgentExecutionEngine manages the interaction between agents and environments. It handles:
-
-- **Agent-environment interaction**: Passing observations and actions
-- **Async Parallel Rollout**: Running multiple agent-environment pairs simultaneously and asynchronously
-- **Integration with training backend**: The agent execution engine handles trajectory rollout for RL integration
+- **Example:** Using `AgentTrainer` for RL training
+    
+    ```python
+    @hydra.main(config_path="pkg://rllm.trainer.config", config_name="ppo_trainer", version_base=None)
+    def main(config):
+        train_dataset = DatasetRegistry.load_dataset("hotpotqa_combined", "train")
+        val_dataset = DatasetRegistry.load_dataset("hotpotqa_combined", "test")
+    
+        tool_map = {"local_search": LocalRetrievalTool}
+        env_args = {
+            "max_steps": 20,
+            "tool_map": tool_map,
+            "reward_fn": search_reward_fn,
+        }
+        agent_args = {"system_prompt": SEARCH_SYSTEM_PROMPT, "tool_map": tool_map, "parser_name": "qwen"}
+        trainer = AgentTrainer(
+            agent_class=ToolAgent,
+            env_class=ToolEnvironment,
+            config=config,
+            train_dataset=train_dataset,
+            val_dataset=val_dataset,
+            agent_args=agent_args,
+            env_args=env_args,
+        )
+        trainer.train()
+    ```

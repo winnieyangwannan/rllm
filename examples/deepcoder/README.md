@@ -16,7 +16,7 @@ Start a vLLM server with OpenAI-compatible API:
 
 ```bash
 python -m vllm.entrypoints.openai.api_server \
-    --model deepseek-ai/DeepSeek-R1-Distill-Qwen-14B \
+    --model agentica-org/DeepCoder-14B-Preview \
     --host 0.0.0.0 \
     --port 30000 \
     --dtype bfloat16 \
@@ -27,7 +27,7 @@ python -m vllm.entrypoints.openai.api_server \
 
 ```bash
 python -m sglang_router.launch_server \
-    --model-path deepseek-ai/DeepSeek-R1-Distill-Qwen-14B \ 
+    --model-path agentica-org/DeepCoder-14B-Preview \ 
     --dp-size 1 \
     --dtype bfloat16
 # increase dp_size to enable data-parallel processing on multi-GPU 
@@ -54,7 +54,7 @@ Once your model server is running and datasets are prepared, you can run inferen
 
 ```bash
 cd examples/deepcoder
-python evaluate_deepcoder.py
+python run_deepcoder.py
 ```
 
 ### Configuration Options
@@ -81,9 +81,8 @@ The script will:
 To train DeepCoder with iterative context lengthening (16K -> 32K -> 64K):
 
 ```bash
-cd examples/deepcoder
-bash train_deepcoder_16k.sh
+bash examples/deepcoder/train_deepcoder_16k.sh
 
 # modify MODEL_PATH to the 16k checkpoint path before running the script.
-bash train_deepcoder_32k.sh
+bash examples/deepcoder/train_deepcoder_32k.sh
 ```
