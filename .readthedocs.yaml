@@ -24,15 +24,4 @@ mkdocs:
 # Python configuration
 python:
   install:
-    # Install documentation dependencies
     - requirements: docs/requirements.txt
-    # Install the package itself in development mode to enable mkdocstrings
-    # to import and document the Python modules
-    - method: pip
-      path: .
-  system_packages: false
-
-# Formats of the documentation to build
-formats:
-  - pdf
-  - htmlzip 

@@ -11,7 +11,7 @@
 
 <div align="center">
 
-[![Github](https://img.shields.io/badge/RLLM-000000?style=for-the-badge&logo=github&logoColor=000&logoColor=white)](https://github.com/agentica-project/rllm)
+[![Notion](https://img.shields.io/badge/RLLM-000000?style=for-the-badge&logo=github&logoColor=000&logoColor=white)](https://github.com/agentica-project/rllm)
 [![Website](https://img.shields.io/badge/Site-%23000000.svg?style=for-the-badge&logo=semanticweb&logoColor=white)](https://www.agentica-project.com) 
 [![Twitter](https://img.shields.io/badge/Agentica-white?style=for-the-badge&logo=X&logoColor=000&color=000&labelColor=white)](https://x.com/Agentica_)
 [![Hugging Face Collection](https://img.shields.io/badge/Agentica-fcd022?style=for-the-badge&logo=huggingface&logoColor=000&labelColor)](https://huggingface.co/agentica-org)
@@ -20,35 +20,19 @@
 
 </div>
 
+rLLM is an open-source framework for post-training language agents via reinforcement learning. With rLLM, you can easily build their custom agents and environments, train them with reinforcement learning, and deploy them for real-world workloads. 
 
-## Overview
-
-rLLM is an open-source framework for post-training language agents via reinforcement learning.
-
-rLLM is an open-source project to fully democratize reinforcement learning (RL) for LLMs and reproduce DeepSeek R1 and OpenAI O1/O3 at scale on real tasks. For all releases, we open source all our efforts here-including training scripts (including hyperparameters), models, systems, dataset, and logs. 
 
 
 ## Releases  📰
 
-<strong>[2025/04/08]</strong> We release `DeepSWE`, 
+<strong>[2025/04/08]</strong> We release [`DeepSWE-Preview`](https://pretty-radio-b75.notion.site/DeepSWE-Training-a-Fully-Open-sourced-State-of-the-Art[…]-by-Scaling-RL-22281902c1468193aabbe9a8c59bbe33?pvs=73
+), a 32B software engineering agent trained with RL only that achieves 59% on SWEBench-Verified with test-time scaling,(42.2% Pass@1), topping the SWEBench leaderboard for open-weight models. 
 
-<strong>[2025/04/08]</strong> We release `DeepCoder-14B-Preview`, a 14B coding model that achieves an impressive **60.6%** Pass@1 accuracy on LiveCodeBench (+8% improvement), matching the performance of `o3-mini-2025-01-031 (Low)` and `o1-2024-12-17`. As part of this release, we open-source:
-- ⬆️ An In-Depth Blog Post on our [Training Recipe and Insights](https://pretty-radio-b75.notion.site/DeepCoder-A-Fully-Open-Source-14B-Coder-at-O3-mini-Level-1cf81902c14680b3bee5eb349a512a51)
-- 🤗 HF Model [`DeepCoder-14B-Preview`](https://huggingface.co/agentica-org/DeepCoder-14B-Preview), [`DeepCoder-1.5B-Preview`](https://huggingface.co/agentica-org/DeepCoder-1.5B-Preview)
-- 🤗 HF Dataset [`DeepCoder-Preview-Dataset`](https://huggingface.co/datasets/agentica-org/DeepCoder-Preview-Dataset)
-- 📄 [Training Scripts](https://github.com/agentica-project/rllm/tree/main/scripts/deepcoder/train)—Exact hyperparameters we used to achieve `o3-mini` performance.
-- 📈 [Wandb Training Logs](https://wandb.ai/mluo/deepcoder)—All training runs and ablations.
-- 🔎 [Evaluation Logs](https://drive.google.com/file/d/1tr_xXvCJnjU0tLO7DNtFL85GIr3aGYln/view?usp=sharing)—LiveCodeBench and Codeforces logs for DeepCoder.
 
-<strong>[2025/02/10]</strong> We release `DeepScaleR-1.5B-Preview`, a 1.5B model that surpasses O1-Preview and achieves <strong>43.1% Pass@1</strong> on AIME. We achieve this by iteratively scaling Deepseek's GRPO algorithm from 8K→16K->24K context length for thinking. As part of this release, we open-source:
+<strong>[2025/04/08]</strong> We release [`DeepCoder-14B-Preview`](https://pretty-radio-b75.notion.site/DeepCoder-A-Fully-Open-Source-14B-Coder-at-O3-mini-Level-1cf81902c14680b3bee5eb349a512a51), a 14B coding model that achieves an impressive **60.6%** Pass@1 accuracy on LiveCodeBench (+8% improvement), matching the performance of `o3-mini-2025-01-031 (Low)` and `o1-2024-12-17`. 
 
-- 🍗 An In-Depth Blog Post on our [Training Recipe and Insights](https://pretty-radio-b75.notion.site/DeepScaleR-Surpassing-O1-Preview-with-a-1-5B-Model-by-Scaling-RL-19681902c1468005bed8ca303013a4e2)
-- 🤗 HF Model [`DeepScaleR-1.5B-Preview`](https://huggingface.co/agentica-org/DeepScaleR-1.5B-Preview)
-- 🤗 HF Dataset [`DeepScaleR-Preview-Dataset`](https://huggingface.co/datasets/agentica-org/DeepScaleR-Preview-Dataset) / 🗂️  [JSON Dataset](https://github.com/agentica-project/deepscaler/tree/main/deepscaler/data)
-- 📄 [Training Scripts](https://github.com/agentica-project/deepscaler/tree/main/scripts/train)—Exact hyperparameters we used to achieve 43.1% on AIME.
-- 📈 [Wandb Training Logs](https://wandb.ai/mluo/deepscaler-1.5b)—All training runs and ablations.
-  - Due to Wandb migration bugs, the 8k training run is compressed to 400-500 steps. The data is identical, but our original run was 1600 steps.
-- 🔎 [Evaluation Logs](https://drive.google.com/file/d/1V_rYKoL35WmubbmWN6PeFg4zo5QOug8X/view?pli=1)—DeepScaleR, Deepseek Distill, and Still 1.5B generations over 1000+ math problems.
+<strong>[2025/02/10]</strong> We release [`DeepScaleR-1.5B-Preview`](https://pretty-radio-b75.notion.site/DeepScaleR-Surpassing-O1-Preview-with-a-1-5B-Model-by-Scaling-RL-19681902c1468005bed8ca303013a4e2), a 1.5B model that surpasses O1-Preview and achieves <strong>43.1% Pass@1</strong> on AIME. We achieve this by iteratively scaling Deepseek's GRPO algorithm from 8K→16K->24K context length for thinking. 
 
 
 ## Getting Started 🎯
@@ -75,86 +59,6 @@ uv pip install -e ./verl
 uv pip install -e .
 ```
 
-### Data
-Our raw training data is in `rllm/data/[train|test]/[code|math]/`, along with preprocessing scripts in `rllm/data/preprocess`. To convert the raw data into Parquet files for training, run:
-
-```bash
-# Download datasets from GDrive, populates rllm/data/[train|test]/[math|code]/*.json
-python scripts/data/download_datasets.py
-
-# Generate parquet files for Deepcoder/DeepscaleR in data/*.parquet
-python scripts/data/[deepcoder|deepscaler]_dataset.py
-```
-
-### Training Scripts
-
-We provide training scripts for both DeepCoder and DeepScaleR models in the `scripts/[deepcoder|deepscaler]/train/`. To fully reproduce our DeepCoder and DeepScaleR results, please refer to the corresponding `README.md` files in each directory.
-
-#### Single-Node Training
-```bash
-export MODEL_PATH="deepseek-ai/DeepSeek-R1-Distill-Qwen-1.5B"
-./scripts/[deepscaler|deepcoder]/train/[file].sh --model $MODEL_PATH
-```
-
-#### Multi-Node Training
-
-For experiments that require multiple nodes, 
-
-1. On the head node:
-```bash
-# Set XFormers backend to avoid CUDA errors
-export VLLM_ATTENTION_BACKEND=XFORMERS
-# Start Ray head node
-ray start --head
-```
-
-2. On each worker node:
-```bash
-# Set XFormers backend to avoid CUDA errors
-export VLLM_ATTENTION_BACKEND=XFORMERS
-# Connect to head node (replace with your head node's address)
-ray start --address=[RAY_ADDRESS]
-```
-
-3. Finally, on the head node, run the training script:
-```bash
-# Run 16K or 24K context length training
-./scripts/[deepscaler|deepcoder]/train/[file].sh --model [CHECKPOINT_PATH]
-```
-We welcome the community to try out different models, context lengths, and RL parameters in our provided training scripts!
-
-## Evaluation ⚖️
-
-Our evaluation scripts automatically runs many replicas of vLLM. To run our evaluation scripts, run:
-```bash
-./scripts/eval/eval_model.sh --model [CHECKPOINT_PATH] --datasets [DATASET1] [DATASET2] --output-dir [OUTPUT_DIR] --n [N_PASSES] --tp [TENSOR_PARALLEL_SIZE] --max-length [MAX_CONTEXT_LENGTH]
-```
-
-To replicate our Deepcoder/Deepscaler evaluation, see `scripts/eval/README.md`.
-
-## Results ✅
-
-### DeepCoder
-
-We evaluate `Deepcoder-14B-Preview` on LiveCodeBench (LCB), Codeforces, and HumanEval+, and AIME2024. Notably,`DeepCoder-14B-Preview` AIME score improves without training on math data!
-
-| **Model** | LCB (8/1/24-2/1/25) | Codeforces Rating | Codeforces Percentile | HumanEval+ Pass@1 | AIME 2024 |
-| --- | --- | --- | --- | --- | --- |
-| **DeepCoder-14B-Preview (ours)** | ***60.6*** | ***1936*** | ***95.3*** | ***92.6*** | ***73.8*** |
-| **DeepSeek-R1-Distill-Qwen-14B** | 53.0 | 1791 | 92.7 | 92.0 | 69.7 |
-| **O1-2024-12-17 (Low)** | 59.5 | **1991** | **96.1** | 90.8 | **74.4** |
-| **O3-Mini-2025-1-31 (Low)** | **60.9** | 1918 | 94.9 | 92.6 | 60.0 |
-
-### DeepScaler
-
-We report Pass@1 accuracy averaged over 16 samples for each problem. Notably, our `DeepScaleR-1.5B-Preview` surpasses many open-source 7B models!
-
-| Model | AIME 2024 | MATH 500 | AMC 2023 | Minerva Math | OlympiadBench | Avg. |
-|-------|-----------|-----------|-----------|--------------|---------------|------|
-| DeepSeek-R1-Distill-Qwen-1.5B | 28.8 | 82.8 | 62.9 | 26.5 | 43.3 | 48.9 |
-| <strong>DeepScaleR-1.5B-Preview</strong> | <strong>43.1</strong> | <strong>87.8</strong> | <strong>73.6</strong> | 30.2 | <strong>50.0</strong> | <strong>57.0</strong> |
-| O1-Preview | 40.0 | 81.4 | - | - | - | - |
-
 
 ## Acknowledgements
 
@@ -166,16 +70,28 @@ We report Pass@1 accuracy averaged over 16 samples for each problem. Notably, ou
 ## Citation
 Citing rLLM:
 ```bibtex
-@misc{rllm2025}
+@misc{rllm2025,
+  title={rLLM: A Framework for Post-Training Language Agents},
+  author={Sijun Tan and Michael Luo and Colin Cai and Tarun Venkat and Kyle Montgomery and Aaron Hao and Tianhao Wu and Arnav Balyan and Manan Roongta and Chenguang Wang and Li Erran Li and Raluca Ada Popa and Ion Stoica},
+  year={2025},
+  howpublished={\url{https://pretty-radio-b75.notion.site/rLLM-A-Framework-for-Post-Training-Language-Agents-21b81902c146819db63cd98a54ba5f31}},
+  note={Notion Blog}
+  year={2025}
+}
 ```
 
 Citing DeepSWE:
 ```bibtex
-@misc{deepswe2025}
+@misc{deepswe2025,
+  title={DeepSWE: Training a State-of-the-Art Coding Agent from Scratch by Scaling RL},
+  author={Michael Luo and Naman Jain and Jaskirat Singh and Sijun Tan and Ameen Patel and Qingyang Wu and Alpay Ariyak and Colin Cai and Tarun Venkat and Shang Zhu and Ben Athiwaratkun and Manan Roongta and Ce Zhang and Li Erran Li and Raluca Ada Popa and Koushik Sen and Ion Stoica},
+  howpublished={\url{https://pretty-radio-b75.notion.site/DeepSWE-Training-a-Fully-Open-sourced-State-of-the-Art-Coding-Agent-by-Scaling-RL-22281902c1468193aabbe9a8c59bbe33}},
+  note={Notion Blog},
+  year={2025}
+}
 ```
 
-
-Citing DeepCoder:
+Citing DeepCoder and DeepScaleR:
 ```bibtex
 @misc{deepcoder2025,
   title={DeepCoder: A Fully Open-Source 14B Coder at O3-mini Level},
