@@ -56,7 +56,29 @@ pip install -e .
 
 ### 2. 🤗 Data and Agent Scaffold
 
-We use the R2E-Gym environments for RL training. R2E-Gym environment can be simply used as:
+We provide two ways to interface with SWE-based environments.
+
+**rLLM**
+
+rLLM's `SWEEnv` provides a nice wrapper and abstraction on top of `R2E-Gym`. Here is a short code snippet:
+```python
+from rllm.environments.swe.swe import SWEEnv
+from datasets import load_dataset
+
+# load gym dataset
+ds = load_dataset("R2E-Gym/R2E-Gym-Subset", split="train")
+idx = 0
+
+env = SWEEnv(entry=ds[idx], backend='kubernetes', scaffold='r2egym')
+env.reset()
+env.close()
+```
+
+For further integration with rLLM's agents, see `run_deepswe.py`.
+
+**R2E-Gym**
+
+R2E-Gym environment can be simply used as:
 ```python
 from r2egym.agenthub.environment.env import EnvArgs, RepoEnv
 from r2egym.agenthub.agent.agent import AgentArgs, Agent
@@ -89,8 +111,9 @@ First, start the VLLM server to serve the DeepCoder model:
 ```bash
 # Start VLLM server with tensor parallelism across 8 GPUs
 export MAX_CONTEXT_LEN=65536
+export TENSOR_PARALLEL_SIZE=8
 VLLM_ALLOW_LONG_MAX_MODEL_LEN=1 vllm serve agentica-org/DeepSWE-Preview \
-    --tensor-parallel-size 8 \
+    --tensor-parallel-size $TENSOR_PARALLEL_SIZE \
     --max-model-len $MAX_CONTEXT_LEN \
     --hf-overrides '{"max_position_embeddings": '$MAX_CONTEXT_LEN'}' \
     --enable_prefix_caching
@@ -148,7 +171,7 @@ python app/app.py --traj_dir "./traj"
 
 To train DeepSWE-Preview, we suggest deploying a Kubernetes (K8) cluster on AWS/GCP/Azure. Each node should have a large number of CPUs and diskspace. Each node in our K8 cluster contains 200 CPUs and over 6 TB+ of disk space to store 1000s of Docker images.
 
-To run Kubernetes locally, we suggest installing [`kind`](https://kind.sigs.k8s.io/) and launching it with `kind create cluster`. However, we do note that this is not sufficient to launch a full training run.
+To run Kubernetes locally, we suggest installing [`kind`](https://kind.sigs.k8s.io/) and launching it with `kind create cluster`. However, please do note that this is not sufficient to launch a full training run.
 
 We provide the exact scripts to replicate our training curves in the DeepSWE-Preview blog post. It requires at least 64 GPUs and launches 512 Docker containers in parallel.
 ```bash
