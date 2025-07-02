@@ -1,4 +1,5 @@
 import argparse
+import json
 import os
 
 import pandas as pd
@@ -17,6 +18,7 @@ SWE_DATASETS = [
     "R2E-Gym/R2E-Gym-V1",
     "R2E-Gym/SWE-Bench-Lite",
     "R2E-Gym/SWE-Bench-Verified",
+    "r2e-edits/SweSmith-RL-Dataset",
 ]
 
 
@@ -41,7 +43,7 @@ def main():
                 "prompt": [{"role": "system", "content": SWE_SYSTEM_PROMPT}, {"role": "user", "content": SWE_USER_PROMPT.format(problem_statement=problem_statement)}],
                 "ability": "swe",
                 "reward_model": {"style": "rule", "ground_truth": ""},
-                "extra_info": row_dict,
+                "extra_info": json.dumps(row_dict),
             }
 
         return process_fn

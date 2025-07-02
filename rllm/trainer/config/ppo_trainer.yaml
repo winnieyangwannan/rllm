@@ -298,6 +298,7 @@ agent:
   max_steps: 20
   async_engine: True
   trajectory_timeout: null
+  overlong_filter: False
   normalize_step_advantage: False
   use_stepwise_advantage: False
   stepwise_advantage_mode: "broadcast" 

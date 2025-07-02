@@ -2,8 +2,12 @@ import logging
 import random
 import time
 
-from browser_pilot.entrypoint.client import CloudClient
-from browser_pilot.entrypoint.env import CloudEnv
+try:
+    from browser_pilot.entrypoint.client import CloudClient
+    from browser_pilot.entrypoint.env import CloudEnv
+except ImportError:
+    CloudClient = None
+    CloudEnv = None
 
 from rllm.environments.base.base_env import BaseEnv
 

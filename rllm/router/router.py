@@ -42,7 +42,7 @@ async def poll_completions_openai(address: str, **completions_request) -> Comple
         try:
             # Create a new session for each request to avoid blocking
             async with aiohttp.ClientSession() as session:
-                async with session.post(base_url, json=completions_request, headers=headers, timeout=aiohttp.ClientTimeout(total=10800)) as response:
+                async with session.post(base_url, json=completions_request, headers=headers, timeout=aiohttp.ClientTimeout(total=2700)) as response:
                     if response.status != 200:
                         error_text = await response.text()
                         raise Exception(f"API request failed with status {response.status}: {error_text}")
