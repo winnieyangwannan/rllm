@@ -42,6 +42,7 @@ conda activate rllm
 # Installing RLLM dependencies.
 cd rllm
 pip install -e ./verl
+pip install -e ./verl[vllm]
 pip install -e .
 ```
 
@@ -104,6 +105,9 @@ In a new terminal session, run the DeepSWE agent evaluation:
 # Activate the virtual environment (if in new terminal)
 source .venv/bin/activate
 
+export EXP_NAME="deepswe-run"
+export TEMP=1.0
+
 # Run the DeepSWE agent on SWE-Bench Verified
 time python src/r2egym/agenthub/run/edit.py runagent_multiple \
     --traj_dir "./traj" \
@@ -128,7 +132,7 @@ time python src/r2egym/agenthub/run/edit.py runagent_multiple \
 - `--max_workers 54`: Number of parallel workers for processing, reduce if you hit trajectory time limit errors
 - `--k 500`: Number of instances to evaluate (max 500 for SWE-Bench Verified)
 - `--temperature 1`: Sampling temperature for model responses
-- `--max_steps 40`: Maximum steps per trajectory
+- `--max_steps 40`: Soft maximum steps per trajectory. Outputs warnings after steps exceed `max_steps`.
 - `--max_steps_absolute 100`: Absolute maximum steps limit
 
 > 📊 **Expected Runtime**: This evaluation may take several hours depending on your hardware configuration.
@@ -136,14 +140,23 @@ time python src/r2egym/agenthub/run/edit.py runagent_multiple \
 **Trajectory Visualization:** 
 The generated trajectories are saved in `./traj` directory. You can visualize the trajectories using the trajectory visualization tool in [R2E-Gym](https://github.com/R2E-Gym/R2E-Gym),
 ```bash
+cd R2E-Gym
 python app/app.py --traj_dir "./traj"
 ```
 
 ## 🔥 4. Training DeepSWE-Preview with rLLM and R2E-Gym
 
-[TODO]
+To train DeepSWE-Preview, we suggest deploying a Kubernetes (K8) cluster on AWS/GCP/Azure. Each node should have a large number of CPUs and diskspace. Each node in our K8 cluster contains 200 CPUs and over 6 TB+ of disk space to store 1000s of Docker images.
 
-# 🔬 5. DeepSWE-Preview Reproduction Guide
+To run Kubernetes locally, we suggest installing [`kind`](https://kind.sigs.k8s.io/) and launching it with `kind create cluster`. However, we do note that this is not sufficient to launch a full training run.
+
+We provide the exact scripts to replicate our training curves in the DeepSWE-Preview blog post. It requires at least 64 GPUs and launches 512 Docker containers in parallel.
+```bash
+cd rllm/examples/swe
+bash deepswe_32b.sh
+```
+
+## 🔬 5. DeepSWE-Preview Reproduction Guide
 
 Please refer the following for detailed reproduction guide for DeepSWE-Preview.
 * [DeepSWE-Preview Reproduction Guide](https://github.com/agentica-project/R2E-Gym/blob/master/reproduction/DEEPSWE_REPRODUCTION.MD)
