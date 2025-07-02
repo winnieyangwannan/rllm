@@ -48,7 +48,7 @@ pip install -e .
 
 Also, install [**R2E-Gym**](https://github.com/R2E-Gym/R2E-Gym) for high-quality SWE-Bench environments used for RL training.
 ```bash
-git clone https://github.com/agentica-project/R2E-Gym.git
+git clone https://github.com/R2E-Gym/R2E-Gym.git
 cd R2E-Gym
 pip install -e .
 ```
@@ -182,8 +182,8 @@ bash deepswe_32b.sh
 ## 🔬 5. DeepSWE-Preview Reproduction Guide
 
 Please refer the following for detailed reproduction guide for DeepSWE-Preview.
-* [DeepSWE-Preview Reproduction Guide](https://github.com/agentica-project/R2E-Gym/blob/master/reproduction/DEEPSWE_REPRODUCTION.MD)
-* [DeepSWE-Preview with Hybrid Test-time Scaling](https://github.com/agentica-project/R2E-Gym/blob/master/reproduction/DEEPSWE_TTS_REPRODUCTION.MD)
+* [DeepSWE-Preview Reproduction Guide](https://github.com/R2E-Gym/R2E-Gym/blob/master/reproduction/DEEPSWE_REPRODUCTION.MD)
+* [DeepSWE-Preview with Hybrid Test-time Scaling](https://github.com/R2E-Gym/R2E-Gym/blob/master/reproduction/DEEPSWE_TTS_REPRODUCTION.MD)
 
 ## Citation
 
