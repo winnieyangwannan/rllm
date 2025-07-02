@@ -1,11 +1,3 @@
-"""
-Generates SFT data from DeepScaleR trajectories.
-Usage:
-    CUDA_VISIBLE_DEVICES=0,1 python -m vllm.entrypoints.openai.api_server   --model agentica-org/DeepScaleR-1.5B-Preview   --port 30000   --tensor-parallel-size 2
-    python generate_sft_data.py --num_samples 500 --reward_threshold 1.0
-
-"""
-
 import argparse
 import asyncio
 import os

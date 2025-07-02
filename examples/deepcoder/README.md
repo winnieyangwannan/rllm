@@ -54,7 +54,7 @@ Once your model server is running and datasets are prepared, you can run inferen
 
 ```bash
 cd examples/deepcoder
-python evaluate_deepcoder.py
+python run_deepcoder.py
 ```
 
 ### Configuration Options
