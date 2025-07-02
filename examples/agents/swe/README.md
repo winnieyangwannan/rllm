@@ -146,7 +146,7 @@ python app/app.py --traj_dir "./traj"
 # 🔬 5. DeepSWE-Preview Reproduction Guide
 
 Please refer the following for detailed reproduction guide for DeepSWE-Preview.
-* [DeepSWE-Preview Reproduction Guide](https://github.com/agentica-project/R2E-Gym/edit/master/reproduction/DEEPSWE_REPRODUCTION.MD)
+* [DeepSWE-Preview Reproduction Guide](https://github.com/agentica-project/R2E-Gym/blob/master/reproduction/DEEPSWE_REPRODUCTION.MD)
 * [DeepSWE-Preview with Hybrid Test-time Scaling](https://github.com/agentica-project/R2E-Gym/blob/master/reproduction/DEEPSWE_TTS_REPRODUCTION.MD)
 
 ## Citation
