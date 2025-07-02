@@ -50,8 +50,7 @@ This will:
 Run SFT with the generated data:
 
 ```bash
-cd examples/sft
-bash train_math_sft.sh
+bash examples/sft/train_math_sft.sh
 ```
 
 ### Configuration Options

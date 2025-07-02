@@ -82,6 +82,5 @@ The script will:
 To train a math reasoning agent with tool usage:
 
 ```bash
-cd examples/math_tool
-bash train_math_with_tool.sh
+bash examples/math_tool/train_math_with_tool.sh
 ```
