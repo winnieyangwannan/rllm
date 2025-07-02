@@ -4,10 +4,12 @@
 <p align="center">
 <a href="#">📃 Blog Post</a>
 •
-<a href="https://huggingface.co/agentica-org/DeepSWE-Preview" > 🤗 Data & Models</a>
+<a href="https://huggingface.co/datasets/R2E-Gym/R2E-Gym-Subset" > 🤗 HF Dataset (R2E-Gym) </a>
 •
 <!-- project page -->
 <a href="https://wandb.ai/mluo/deepswe" >🔥 WandB Logs</a>
+•
+<a href="https://huggingface.co/agentica-org/DeepSWE-Preview" > 🤗 DeepSWE-Preview</a>
 •
 <a href="https://drive.google.com/file/d/10LIwpJeaFuiX6Y-qEG2a4a335PEuQJeS/view?usp=sharing" > 📈 Evaluation Logs</a>
 •
@@ -25,14 +27,13 @@
 
 </div>
 
-We introduce **`DeepSWE-Preview`**, a reasoning-enabled coding agent trained from scratch from `Qwen3-32B` with only reinforcement learning (RL). It achieves 59.2**%** on SWE-Bench-Verified with test-time scaling, reaching SOTA for open-weight coding agents  (**42.2%** Pass@1, **71.0%** Pass@16).
+We introduce DeepSWE-Preview, a reasoning-enabled coding agent trained from scratch from Qwen3-32B with only reinforcement learning (RL). It achieves 59.2% on SWE-Bench-Verified with test-time scaling, reaching SOTA for open-weight coding agents (42.2% Pass@1, 71.0% Pass@16).
 
-DeepSWE is trained using [**rLLM**](https://www.notion.so/21b81902c146819db63cd98a54ba5f31?pvs=21), our framework for post-training language agents. We’ve **open sourced** everything—our dataset, code, training, and eval logs, for everyone to progress on scaling and improving agents with RL.
+DeepSWE is trained using [**rLLM**](https://github.com/agentica-project/rllm), our framework for post-training language agents using high-quality SWE environments from [**R2E-Gym**](https://github.com/R2E-Gym/R2E-Gym). We’ve open-sourced everything—our dataset, code, training, and evaluation logs, for everyone to progress on scaling and improving agents with RL.
 
+## Quick Start 🎯
 
-## Getting Started 🎯
-
-### Installation
+### 1. Installation
 ```bash
 # Installing Python 3.10 Environment.
 conda create -n rllm python=3.10 -y
@@ -44,7 +45,7 @@ pip install -e ./verl
 pip install -e .
 ```
 
-Also, install R2E-Gym for high-quality SWE-Bench environments used for RL training.
+Also, install [**R2E-Gym**](https://github.com/R2E-Gym/R2E-Gym) for high-quality SWE-Bench environments used for RL training.
 ```bash
 git clone https://github.com/agentica-project/R2E-Gym.git
 cd R2E-Gym
@@ -52,7 +53,7 @@ pip install -e .
 ```
 
 
-### Data and Agent Scaffold
+### 2. Data and Agent Scaffold
 
 We use the R2E-Gym environments for RL training. R2E-Gym environment can be simply used as:
 ```python
@@ -61,9 +62,9 @@ from r2egym.agenthub.agent.agent import AgentArgs, Agent
 from pathlib import Path
 from datasets import load_dataset
 
-# load gym dataset [R2E-Gym/R2E-Gym-Subset, R2E-Gym/R2E-Gym-Full, R2E-Gym/SWE-Bench-Verified, R2E-Gym/SWE-Bench-Lite]
-ds = load_dataset("R2E-Gym/R2E-Gym-Lite")
-split = 'train' # split of the dataset [train, test]
+# load gym dataset
+ds = load_dataset("R2E-Gym/R2E-Gym-Subset")
+split = 'train'
 
 # load gym environment
 env_index = 100 # index of the environment [0, len(ds)]
@@ -71,93 +72,90 @@ env_args = EnvArgs(ds = ds[split][env_index])
 env = RepoEnv(env_args)
 
 # load agent
-agent_args = AgentArgs.from_yaml(Path('./src/r2egym/agenthub/config/edit_fn_calling.yaml'))
-# define llm: ['claude-3-5-sonnet-20241022', 'gpt-4o', 'vllm/R2E-Gym/R2EGym-32B-Agent']
-agent_args.llm_name = 'claude-3-5-sonnet-20241022'
+agent_args = AgentArgs.from_yaml(Path('./src/r2egym/agenthub/config/r2egym/edit_non_fn_calling.yaml'))
+# define llm: ['claude-3-5-sonnet-20241022', 'gpt-4o', 'vllm/agentica-org/DeepSWE-Preview']
+agent_args.llm_name = 'vllm/agentica-org/DeepSWE-Preview'
 agent = Agent(name="EditingAgent", args=agent_args)
 
-# run the agent (note: disable fn_calling for R2E-Gym agents)
-output = agent.run(env, max_steps=40, use_fn_calling=True)
+# run the agent
+output = agent.run(env, max_steps=40)
 ```
 
-### Inference using DeepSWE-Preview
+## 🤖 3. Running DeepSWE-Preview Inference
 
-First, launch a [DeepSWE-Preview](https://huggingface.co/agentica-org/DeepSWE-Preview) using vllm or sglang.
+First, start the VLLM server to serve the DeepCoder model:
+
 ```bash
-VLLM_ALLOW_LONG_MAX_MODEL_LEN=1 vllm serve agentica-org/DeepSWE-Preview   --tensor-parallel-size 8   --max-model-len 70000   --hf-overrides '{"max_position_embeddings": 70000}'
+# Start VLLM server with tensor parallelism across 8 GPUs
+export MAX_CONTEXT_LEN=65536
+VLLM_ALLOW_LONG_MAX_MODEL_LEN=1 vllm serve agentica-org/DeepSWE-Preview \
+    --tensor-parallel-size 8 \
+    --max-model-len $MAX_CONTEXT_LEN \
+    --hf-overrides '{"max_position_embeddings": '$MAX_CONTEXT_LEN'}' \
+    --enable_prefix_caching
 ```
 
-Run inference using DeepSWE-Preview and [R2E-Agent](https://github.com/R2E-Gym/R2E-Gym)
-```
-python -m r2egym.agenthub.run.edit runagent_multiple   --traj_dir "./traj"   --max_workers 54   --start_idx 0   --k 500   --dataset "R2E-Gym/SWE-Bench-Verified"   --split "test"   --llm_name "openai/agentica-org/DeepSWE-Preview"   --use_fn_calling False   --exp_name deepswe-preview-eval-v1 --temperature 1   --max_steps_absolute 100   --backend "docker"
-```
+> ⚠️ **Important**: Wait for the server to fully load before proceeding to the next step. You should see logs indicating the server is ready to accept requests.
 
 
-**Trajectory Visualization:** The generated trajectories are saved in `./traj` directory. You can visualize the trajectories using,
+In a new terminal session, run the DeepSWE agent evaluation:
+
+```bash
+# Activate the virtual environment (if in new terminal)
+source .venv/bin/activate
+
+# Run the DeepSWE agent on SWE-Bench Verified
+time python src/r2egym/agenthub/run/edit.py runagent_multiple \
+    --traj_dir "./traj" \
+    --max_workers 48 \
+    --start_idx 0 \
+    --k 500 \
+    --dataset "R2E-Gym/SWE-Bench-Verified" \
+    --split "test" \
+    --llm_name "openai/agentica-org/DeepSWE-Preview" \
+    --scaffold "r2egym" \
+    --use_fn_calling False \
+    --exp_name "$EXP_NAME" \
+    --temperature "$TEMP" \
+    --max_steps_absolute 100 \
+    --backend "docker" \
+    --condense_history False \
+    --max_reward_calc_time 1200 \
+    --max_tokens 65536
+```
+
+**Parameter Explanation:**
+- `--max_workers 54`: Number of parallel workers for processing, reduce if you hit trajectory time limit errors
+- `--k 500`: Number of instances to evaluate (max 500 for SWE-Bench Verified)
+- `--temperature 1`: Sampling temperature for model responses
+- `--max_steps 40`: Maximum steps per trajectory
+- `--max_steps_absolute 100`: Absolute maximum steps limit
+
+> 📊 **Expected Runtime**: This evaluation may take several hours depending on your hardware configuration.
+
+**Trajectory Visualization:** 
+The generated trajectories are saved in `./traj` directory. You can visualize the trajectories using the trajectory visualization tool in [R2E-Gym](https://github.com/R2E-Gym/R2E-Gym),
 ```bash
 python app/app.py --traj_dir "./traj"
 ```
 
+## 4. Training DeepSWE-Preview with rLLM and R2E-Gym
 
-### Hybrid Test-time Scaling
+[TODO]
 
-We adopt the hybrid test-time scaling approach from [R2E-Gym](https://github.com/R2E-Gym/R2E-Gym) for scaling test-time compute.
+# 🔬 5. DeepSWE-Preview Reproduction Guide
 
-First collect the desired number of rollouts for scaling test-time compute.
-```bash
-N=16 # number of rollouts to collect
-
-for i in {1..N}; do
-    python -m r2egym.agenthub.run.edit runagent_multiple   --traj_dir "./traj"   --max_workers 54   --start_idx 0   --k 500   --dataset "R2E-Gym/SWE-Bench-Verified"   --split "test"   --llm_name "openai/agentica-org/DeepSWE-Preview"   --use_fn_calling False   --exp_name deepswe-preview-eval-v1-rollout$i --temperature 1   --max_steps_absolute 100   --backend "docker"
-done
-```
-
-For ease of use, we already provide 16 rollouts here: [Eval Logs](https://drive.google.com/file/d/10LIwpJeaFuiX6Y-qEG2a4a335PEuQJeS/view?usp=sharing)
-
-
-The hybrid test-time scaling consists of three steps:
-
-#### Execution-free Verifier
-
-Prepare the data in execution-free verifier format.
-```bash
-python verifier_data_prep.py create --push_to_hub=True --verifier_traj_dir="./traj" --hub_repo_name="deepswe-verifier-debug-condense-v1" --max_workers=54 --filter_method="agent_priority"
-```
-
-For ease of use, we already provide the verifier dataset here: [Verifier Dataset](https://huggingface.co/datasets/r2e-edits/deepswe-verifier-debug-condense-v1)
-
-
-Run the execution-free verifier on the collected rollouts.
-```bash
-# launch a vllm server for the verifier
-vllm serve Qwen/Qwen3-14B --max-model-len 76800 --hf-overrides '{"max_position_embeddings": 76800}' --enable-lora --lora-modules a=/home/ubuntu/360-LLaMA-Factory/output/verifier --port 8000 --dtype bfloat16 --max-lora-rank 64 --tensor-parallel-size 8  
-
-# run the verifier
-python verifier_eval.py --llm_name "hosted_vllm/a" --eval_dataset "r2e-edits/deepswe-swebv-eval-n16-verifier-v1" --out_file 'deepswe-verifier.csv'
-```
-
-For ease of use, we already provide the verifier output here: [Verifier Output](https://drive.google.com/file/d/10LIwpJeaFuiX6Y-qEG2a4a335PEuQJeS/view?usp=sharing)
-
-Compute the accuracy with EF verifier.
-```bash
-python verifier_analyze.py --dir "./verifier_traj"
-```
-
-#### Execution-based Verifier
-
-
-#### Hybrid Test-time Scaling
-
-
-
+Please refer the following for detailed reproduction guide for DeepSWE-Preview.
+* [DeepSWE-Preview Reproduction Guide](https://github.com/agentica-project/R2E-Gym/edit/master/reproduction/DEEPSWE_REPRODUCTION.MD)
+* [DeepSWE-Preview with Hybrid Test-time Scaling](https://github.com/agentica-project/R2E-Gym/blob/master/reproduction/DEEPSWE_TTS_REPRODUCTION.MD)
 
 ## Citation
 
 ```
 @misc{deepswe2025,
   title={DeepSWE: Training a State-of-the-Art Coding Agent from Scratch by Scaling RL},
-  author={Michael Luo, Naman Jain, Jaskirat Singh, Sijun Tan, Ameen Patel, Qingyang Wu, Alpay Ariyak, Colin Cai, Tarun Venkat, Shang Zhu, Ben Athiwaratkun, Manan Roongta, Ce Zhang, Li Erran Li, Raluca Ada Popa, Koushik Sen, Ion Stoica},
-  howpublished={\url{N/A}},
+  author={Michael Luo and Naman Jain and Jaskirat Singh and Sijun Tan and Ameen Patel and Qingyang Wu and Alpay Ariyak and Colin Cai and Tarun Venkat and Shang Zhu and Ben Athiwaratkun and Manan Roongta and Ce Zhang and Li Erran Li and Raluca Ada Popa and Koushik Sen and Ion Stoica},
+  howpublished={\url{https://pretty-radio-b75.notion.site/DeepSWE-Training-a-Fully-Open-sourced-State-of-the-Art-Coding-Agent-by-Scaling-RL-22281902c1468193aabbe9a8c59bbe33}},
   note={Notion Blog},
   year={2025}
 }
