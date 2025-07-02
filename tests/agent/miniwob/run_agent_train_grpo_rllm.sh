@@ -34,9 +34,7 @@ python3 -m rllm.train.train_agent_ppo \
     actor_rollout_ref.actor.fsdp_config.optimizer_offload=True \
     actor_rollout_ref.rollout.tensor_model_parallel_size=1 \
     actor_rollout_ref.rollout.name=vllm \
-    actor_rollout_ref.rollout.async_engine=False \
     actor_rollout_ref.rollout.enforce_eager=False \
-    actor_rollout_ref.rollout.enable_log_prob=False \
     actor_rollout_ref.rollout.temperature=0.7 \
     actor_rollout_ref.rollout.gpu_memory_utilization=0.65 \
     actor_rollout_ref.rollout.n=8 \
@@ -62,13 +60,9 @@ python3 -m rllm.train.train_agent_ppo \
     trainer.test_freq=5 \
     trainer.default_hdfs_dir=null \
     env.name=browsergym \
-    env.subtask=miniwob \
-    env.miniwob_url="file:///data/sijun/colin/code/miniwob-plusplus/miniwob/html/miniwob/" \
+    +env.env_args.subtask=miniwob \
+    +env.env_args.miniwob_url="file:///data/sijun/colin/code/miniwob-plusplus/miniwob/html/miniwob/" \
     agent.name=webagent \
     agent.max_steps=10 \
     agent.async_engine=False \
     trainer.total_epochs=100
-
-        # env.miniwob_url="$MINIWOB_URL" \
-    #         data.train_files=${RLLM_DIR}/data/rllm-miniwob/train.parquet \
-    # data.val_files=${RLLM_DIR}/data/rllm-miniwob/test.parquet \

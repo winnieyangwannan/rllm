@@ -3,17 +3,19 @@ import json
 class ChatTemplateParser:
     def __init__(self, tokenizer):
         self.tokenizer = tokenizer
+        self.assistant_token = ""
 
     def parse(self, messages, add_generation_prompt=False, **kwargs):
         return self.tokenizer.apply_chat_template(messages, tokenize=False, add_generation_prompt=add_generation_prompt)
 
     @classmethod
-    def get_parser(cls, tokenizer):
+    def get_parser(cls, tokenizer, disable_thinking=False):
         """Factory method to get the appropriate parser based on a string identifier.
         
         Args:
             parser_type (str): String identifier for the parser type
             tokenizer: The tokenizer to use with the parser
+            disable_thinking: Whether generation prompt will disable thinking.
             
         Returns:
             ChatTemplateParser: An instance of the requested parser
@@ -28,9 +30,8 @@ class ChatTemplateParser:
                 parser = DeepseekQwenChatTemplateParser(tokenizer)
                 print(f"Using DeepseekQwenChatTemplateParser for {tokenizer.name_or_path}")
                 return parser
-            elif "qwen" in model_name or 'r2e' in model_name or 'r2e-edits' in model_name or 'mluo' in model_name:
-                enable_thinking = False #'qwen3' in model_name
-                parser = QwenChatTemplateParser(tokenizer, enable_thinking=enable_thinking)
+            elif "qwen" in model_name or 'r2e' in model_name:
+                parser = QwenChatTemplateParser(tokenizer, disable_thinking=disable_thinking)
                 print(f"Using QwenChatTemplateParser for {tokenizer.name_or_path}")
                 return parser
             else:
@@ -83,17 +84,18 @@ class DeepseekQwenChatTemplateParser(ChatTemplateParser):
     
 
 class QwenChatTemplateParser(ChatTemplateParser):
-    def __init__(self, tokenizer, enable_thinking=True):
+    def __init__(self, tokenizer, disable_thinking=True):
         super().__init__(tokenizer)
         self.bos_token = tokenizer.bos_token
         self.eos_token = tokenizer.eos_token
+        self.eot_token = '<|im_end|>\n'
         self.system_token = '<|im_start|>system\n'
         self.user_token = '<|im_start|>user\n'
         self.assistant_token = '<|im_start|>assistant\n'
-        if enable_thinking:
-            self.assistant_token += '<think>\n\n</think>\n\n'
-        self.eot_token = '<|im_end|>\n'
+        if disable_thinking:
+            self.assistant_token += '<think>\\n\\n</think>\\n\\n'
         self.generation_prompt = self.assistant_token
+        
         
         self.tool_start_token = "\n<tool_call>\n"
         self.tool_end_token = "\n</tool_call>"

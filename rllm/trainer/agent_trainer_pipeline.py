@@ -33,7 +33,7 @@ from verl.trainer.ppo.ray_trainer_pipeline import (
 class PipelineAgentPPOTrainer(AgentPPOTrainer):
 
     def init_workers(self):
-       
+        assert self.config.agent.async_engine, "PPO pipeline trainer must use async engine"
         assert not self.hybrid_engine, "PPO pipeline trainer does not support hybrid engine, assumes Rollout and Actor are not in the different worker group"
         """Init resource pool and worker group"""
         self.resource_pool_manager.create_resource_pool()
@@ -82,6 +82,7 @@ class PipelineAgentPPOTrainer(AgentPPOTrainer):
             agent_args=self.config.agent.get("agent_args", {}),
             env_class=self.env_class,
             env_args=self.config.env.get("env_args", {}),
+            **self.config.agent.get("engine_args", {})
         )
     
     def fit_agent(self):
@@ -156,6 +157,8 @@ class PipelineAgentPPOTrainer(AgentPPOTrainer):
                                     del uid_to_trajectories[uid] # so even if there is replicas it's still grouped correctly
 
                     # Get the generator function which will yield results as they complete
+                    if self.config.agent.step_advantage_broadcast:
+                        raise Exception("Stepwise advantage broadcasting not supported on pipelined trainer yet")
                     gen_seq_generator = self.generate_agent_trajectories_async(timing_raw=timing_raw, meta_info=batch.meta_info)
                     thread = threading.Thread(target=create_replay_queue, args=(gen_seq_generator, replay_queue))
                     thread.start()
@@ -217,17 +220,10 @@ class PipelineAgentPPOTrainer(AgentPPOTrainer):
                             mini_batch_metrics['batch/solve_all'] = solve_all
                             mini_batch_metrics['batch/solve_partial'] = solve_partial
                             
-                            if self.config.actor_rollout_ref.rollout.enable_log_prob:
-                                # Avoid recompute log_prob bugs. Log probs from vLLM. (Could be buggy)
-                                mini_batch.meta_info['micro_batch_size'] = self.config.actor_rollout_ref.rollout.log_prob_micro_batch_size_per_gpu
-                                mini_batch.meta_info['max_token_len'] = self.config.actor_rollout_ref.rollout.log_prob_max_token_len_per_gpu
-                                mini_batch.meta_info['use_dynamic_bsz'] = self.config.actor_rollout_ref.rollout.log_prob_use_dynamic_bsz
-                                mini_batch.meta_info['temperature'] = self.config.actor_rollout_ref.rollout.temperature
-                            else:
-                                # Recompute old_log_probs using Pytorch FSDP.
-                                with Timer('old_log_prob', timing_raw):
-                                    old_log_prob = self.actor_wg.compute_log_prob(mini_batch)
-                                    mini_batch = mini_batch.union(old_log_prob)
+                            # Recompute old_log_probs using Pytorch FSDP.
+                            with Timer('old_log_prob', timing_raw):
+                                old_log_prob = self.actor_wg.compute_log_prob(mini_batch)
+                                mini_batch = mini_batch.union(old_log_prob)
 
                             if self.use_reference_policy:
                                 # compute reference log_prob

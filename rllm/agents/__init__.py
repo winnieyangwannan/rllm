@@ -1,7 +1,25 @@
-from rllm.agents.web_agent import WebAgent
-from rllm.agents.frozenlake_agent import FrozenLakeAgent
-from rllm.agents.tool_agent import ToolAgent
-from rllm.agents.swe_agent import SWEAgent
-from rllm.agents.math_agent import MathAgent
+def safe_import(module_path, class_name):
+    try:
+        module = __import__(module_path, fromlist=[class_name])
+        return getattr(module, class_name)
+    except ImportError:
+        return None
 
-__all__ = ["WebAgent", "FrozenLakeAgent", "ToolAgent", "SWEAgent", "MathAgent"]
+# Define all agent imports
+AGENT_IMPORTS = [
+    ("rllm.agents.web_agent", "WebAgent"),
+    ("rllm.agents.frozenlake_agent", "FrozenLakeAgent"),
+    ("rllm.agents.tool_agent", "ToolAgent"),
+    ("rllm.agents.swe_agent", "SWEAgent"),
+    ("rllm.agents.math_agent", "MathAgent"),
+    ("rllm.agents.code_agent", "CompetitionCodingAgent"),
+    ("rllm.agents.webarena_agent", "WebArenaAgent"),
+]
+
+__all__ = []
+
+for module_path, class_name in AGENT_IMPORTS:
+    imported_class = safe_import(module_path, class_name)
+    if imported_class is not None:
+        globals()[class_name] = imported_class
+        __all__.append(class_name)

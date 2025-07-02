@@ -3,7 +3,7 @@ This module defines data structures and base classes for reward calculations
 to evaluate model responses for various problem types, including math and coding.
 """
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from enum import Enum
 
 @dataclass
@@ -102,6 +102,7 @@ class RewardOutput:
     """
     reward: float
     is_correct: bool
+    metadata: dict = field(default_factory=dict)
 
 
 class RewardFn:

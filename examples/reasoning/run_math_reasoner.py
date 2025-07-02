@@ -1,9 +1,10 @@
 import asyncio
+import json
+from rllm.agents.math_agent import MathAgent
+from rllm.environments.base.single_turn_env import SingleTurnEnvironment
 
-from rllm.agents import ToolAgent
-from rllm.environments.tools.tool_env import ToolEnvironment
 
-from rllm.data.dataset_types import TestDataset, TrainDataset
+from rllm.data.dataset_types import TestDataset
 from rllm.data.utils import load_dataset
 from copy import deepcopy
 from transformers import AutoTokenizer
@@ -25,7 +26,6 @@ def load_data(n=1, dataset_enum=None):
 
 
 def process_math_fn(example, idx):
-    print(example)
     question = example.pop("problem")
     instruction = "Let's think step by step, put your final answer within \\boxed{}, and write python to evaluate math expressions if needed."
     question = f"{question} {instruction}"
@@ -41,15 +41,26 @@ def process_math_fn(example, idx):
 
 
 def process_code_fn(example, idx):
-    # print(example)
     question = example.pop("problem")
+    tests = example.pop('tests')
+
+    if example.get('metadata', {}):
+        assert 'func_name' in example['metadata'], f"Function name is not found, check if your LCB data is preprocessed correctly: {example['metadata']}"
+        if isinstance(tests, dict):
+            tests['metadata'] = example['metadata']
+        else:
+            for test in tests:
+                assert isinstance(test, dict), "Test is not a dict"
+                test['metadata'] = example['metadata']
+    
+    tests = json.dumps(tests)
+
     instruction = fetch_live_code_bench_system_prompt(prompt=question, starter_code=example.pop("starter_code"))
 
-    question = f"{instruction}. You have access to a python interpreter. You can use it to write code and test it before outputting your final answer."
-    ground_truth = example.pop("tests")
+    question = f"{instruction}"
 
     task = {
-        "ground_truth": ground_truth,
+        "ground_truth": tests,
         "question": instruction,
         "idx": idx,
         'data_source': 'livecodebench' 
@@ -66,9 +77,8 @@ def evaluate_results(results):
 
     # Count correct answers for each problem
     for trajectory in results:
-        problem = trajectory.steps[0].observation['question']
+        problem = trajectory.steps[0].observation
         
-        # Get is_correct directly from the trajectory's reward
         is_correct = 1 if trajectory.reward > 0 else 0
         
         problem_correct_map[problem] += is_correct
@@ -88,25 +98,27 @@ def evaluate_results(results):
     
 
 if __name__ == "__main__":
+    import os
+    os.environ["TOKENIZERS_PARALLELISM"] = "true"
+
     # Create the environment (no batch_size parameter)
-    n_parallel_agents = 1
+    n_parallel_agents = 256
 
     model_name = "Qwen/Qwen3-4B"
     
     tokenizer = AutoTokenizer.from_pretrained(model_name)
 
     envs = [
-        ToolEnvironment(tools=["python"]) for _ in range(n_parallel_agents)
+        SingleTurnEnvironment() for _ in range(n_parallel_agents)
     ]
 
     agents = [
-        ToolAgent(tools=envs[i].tools.tools, model_name=model_name, parser_name='qwen') for i in range(n_parallel_agents)
+        MathAgent() for i in range(n_parallel_agents)
     ]
 
     sampling_params = {
         "temperature": 0.6,
         "top_p": 0.95,
-        "tools": envs[0].tools.json, 
         "model": model_name
     }
     
@@ -122,10 +134,13 @@ if __name__ == "__main__":
         rollout_engine_args={"base_url": "http://localhost:30000/v1", "api_key": "None"},
         max_response_length=32768,
         max_prompt_length=2048,
+        config=None,
+        n_parallel_agents=n_parallel_agents,
+        disable_thinking=False
     )
     # engine.update_envs_and_agents(envs, agents)
 
-    tasks = load_data(n=1, dataset_enum=TestDataset.Code.LIVECODEBENCH)
+    tasks = load_data(n=32, dataset_enum=TestDataset.Math.AIME)
 
     results = asyncio.run(engine.execute_tasks(tasks))
     evaluate_results(results)

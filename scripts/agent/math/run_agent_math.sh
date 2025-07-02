@@ -2,6 +2,9 @@ set -x
 
 export VLLM_ATTENTION_BACKEND=FLASH_ATTN
 export PYTORCH_CUDA_ALLOC_CONF="expandable_segments:False"
+export VLLM_USE_V1=1
+export VLLM_ALLOW_LONG_MAX_MODEL_LEN=1
+export VLLM_ENGINE_ITERATION_TIMEOUT_S=100000000000
 
 # Find the directory where rllm package is located
 RLLM_DIR=$(python3 -c "import rllm; import os; print(os.path.dirname(os.path.dirname(rllm.__file__)))")
@@ -31,8 +34,8 @@ python3 -m rllm.train.train_agent_ppo \
     actor_rollout_ref.actor.fsdp_config.optimizer_offload=False \
     actor_rollout_ref.rollout.tensor_model_parallel_size=1 \
     actor_rollout_ref.rollout.name=vllm \
-    actor_rollout_ref.rollout.async_engine=False \
-    actor_rollout_ref.rollout.enable_log_prob=False \
+    actor_rollout_ref.rollout.mode="async" \
+    actor_rollout_ref.rollout.chat_scheduler=verl.schedulers.completions_scheduler.CompletionsScheduler \
     actor_rollout_ref.rollout.temperature=0.6 \
     actor_rollout_ref.rollout.val_kwargs.temperature=0.6 \
     actor_rollout_ref.rollout.gpu_memory_utilization=0.85 \
@@ -46,7 +49,7 @@ python3 -m rllm.train.train_agent_ppo \
     trainer.logger=['console','wandb'] \
     trainer.project_name='deepscaler-agent' \
     trainer.experiment_name='deepscaler-math-debug-sync' \
-    trainer.val_before_train=True \
+    trainer.val_before_train=False \
     trainer.n_gpus_per_node=8 \
     trainer.nnodes=1 \
     trainer.save_freq=10 \
@@ -55,4 +58,5 @@ python3 -m rllm.train.train_agent_ppo \
     env.name=math \
     agent.name=math_agent \
     agent.max_steps=1 \
+    agent.async_engine=True \
     trainer.total_epochs=30 "${@:1}" \

@@ -1,6 +1,6 @@
 from abc import ABC, abstractmethod
 from typing import Any, Tuple, Dict, List
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, asdict
 
 
 @dataclass
@@ -22,6 +22,12 @@ class Trajectory:
     steps: List[Step] = field(default_factory=list)
     reward: float = 0.0
 
+    def to_dict(self):
+        return {
+            "steps": [asdict(step) for step in self.steps],
+            "reward": float(self.reward)  # Convert numpy float to Python float
+        }
+
 class BaseAgent(ABC):
     
     @property
@@ -33,6 +39,11 @@ class BaseAgent(ABC):
     def trajectory(self) -> Trajectory:
         """Converts agent's internal state into a Trajectory object."""
         return Trajectory()
+    
+    @property
+    def prompt(self) -> List[Dict[str, str]]:
+        """Converts agent's internal state to list of OAI chat completions used for next prompt"""
+        return self.chat_completions
 
     @abstractmethod
     def update_from_env(self, observation: Any, action: Any, reward: float, done: bool, info: Dict, **kwargs):

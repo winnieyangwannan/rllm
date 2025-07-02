@@ -54,6 +54,10 @@ class WebAgent(BaseAgent):
         self.step = 0
         self.reset()
 
+        self.accumulate_thinking = False
+        self.cot_prompt = False
+        self.full_conversation = False
+
     def update_from_env(self, observation: Any, reward: float, done: bool, info: Dict, **kwargs):
         """
         Updates the agent's internal state after an environment step.
@@ -108,6 +112,11 @@ class WebAgent(BaseAgent):
                 logger.error(f"Failed to extract content from response: {response}. Error: {e}")
                 content = str(response)
 
+        if not self.accumulate_thinking:
+            _, sep, after = content.partition("</think>")
+            if sep:
+                content = after
+
         assert self._trajectory.steps, "Trajectory should not be empty when update_from_model is called."
 
         thought, action_str = self._parse_model_response(content)
@@ -124,6 +133,22 @@ class WebAgent(BaseAgent):
     @property
     def chat_completions(self) -> List[Dict[str, str]]:
         return self.messages
+    
+    @property
+    def prompt(self) -> List[Dict[str, str]]:
+        if self.full_conversation:
+            return self.messages
+
+        latest_msgs = [self.messages[0]] # system message
+        has_assistant_msg = False
+        for i in range(len(self.messages) - 1, -1, -1):
+            if self.messages[i].get("role") == "assistant":
+                latest_msgs += self.messages[i + 1:] 
+                has_assistant_msg = True
+                break
+        if not has_assistant_msg:
+            latest_msgs += self.messages[1:]
+        return latest_msgs
 
     @property
     def trajectory(self) -> Trajectory:
@@ -150,7 +175,7 @@ class WebAgent(BaseAgent):
         # Add goal information
         system_msgs.append({
             "type": "text",
-            "text": "# Goal (Below is the goal you want to accomplish)\n"
+            "text": "\n # Goal (Below is the goal you want to accomplish)\n"
         })
         system_msgs.extend(obs["goal_object"])  
         return system_msgs
@@ -262,7 +287,8 @@ class WebAgent(BaseAgent):
 
 
     def _get_action_space_description(self):
-        return f"""\
+        if self.cot_prompt:
+            return f"""\
 # Action Space (This is the list of valid actions you are allowed to output after your chain-of-thought reasoning, YOU MUST OUTPUT EXACTLY IN THIS FORMAT FOR ACTION TO BE VALID)
 {self.action_set.describe(with_long_description=False, with_examples=False)}
 Here are examples of actions with chain-of-thought reasoning:
@@ -270,6 +296,11 @@ Thought: I now need to click on the Submit button to send the form. I will use t
 Action: ```click("12")```
 Thought: I found the information requested by the user, I will send it to the chat.
 Action: ```send_msg_to_user("The price for a 15\\" laptop is 1499 USD.")```
+"""
+        else:
+            return f"""\
+# Action Space (This is the list of valid actions you are allowed to output, YOU MUST OUTPUT EXACTLY IN THIS FORMAT FOR ACTION TO BE VALID)
+{self.action_set.describe(with_long_description=False, with_examples=False)}
 """
 
     def _format_msgs_as_str(self, msgs):
@@ -320,7 +351,7 @@ Action: ```send_msg_to_user("The price for a 15\\" laptop is 1499 USD.")```
     def compute_training_reward(self, trajectory: Trajectory) -> float:
         if not trajectory:
             return 0
-        print(trajectory.steps)
+
         reward = trajectory.steps[-1].reward
         reward_penalty = 0    
         # for step in trajectory.steps:
