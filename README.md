@@ -61,7 +61,7 @@ rLLM is an open-source framework for post-training language agents via reinforce
 curl -LsSf https://astral.sh/uv/install.sh | sh
 
 # Clone the repository
-git clone <repository-url>
+git clone --recurse-submodules https://github.com/agentica-project/rllm.git
 cd rllm
 
 # Create virtual environment
