@@ -68,7 +68,7 @@ def read_logs(filename):
 for f in files:
     try:
         logs_dict[f] = read_logs(f)
-    except:
+    except Exception:
         pass
 
 
@@ -173,7 +173,7 @@ def trajectory(filename, log_id):
 
         url = f"https://github.com/{repo_org}/{repo_name}/pull/{pr_id}/files"
         log["report"] = swebench_report(log["ds"], log["test_output"])
-    except:
+    except Exception:
         url = f"https://github.com/{repo_name_map[log['ds']['repo_name']]}/commit/{log['ds']['commit_hash']}"
 
     t = Trajectory(**log)

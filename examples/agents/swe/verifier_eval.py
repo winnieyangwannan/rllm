@@ -152,13 +152,13 @@ def run_model(arg) -> list[str]:
     [REASON] {reasoning} [/REASON] [ANSWER] {answer} [/ANSWER]
     we extract the answer and then collect the corresponding logits for YES/NO
     """
-    outputs = [response.choices[i].message.content for i in range(num_samples)]
+    # outputs = [response.choices[i].message.content for i in range(num_samples)]
 
     yes_probs = []
 
     for i in range(num_samples):
-        tokens = [x["token"] for x in response.choices[i].logprobs["content"]]
-        logits = [x["logprob"] for x in response.choices[i].logprobs["content"]]
+        # tokens = [x["token"] for x in response.choices[i].logprobs["content"]]
+        # logits = [x["logprob"] for x in response.choices[i].logprobs["content"]]
         # print (response.choices[0].logprobs.content[0].top_logprobs)
         all_logits = [{lp.token: lp.logprob for lp in response.choices[0].logprobs.content[4].top_logprobs}]
         # all_logits = [
@@ -170,7 +170,6 @@ def run_model(arg) -> list[str]:
         # print(tokens)
 
         # find YES / NO in the string after the tokens
-        j = 4
         # for j in range(len(tokens) - 1):
         #     if tokens[j] == 'YES' or tokens[j] == 'NO':
         #         break
@@ -216,7 +215,7 @@ def eval_row(row: dict, args: ReasoningVerifierArgs):
         if len(yes_probs) == 0:
             return (row["docker_images"], None, None)
         avg_yes_prob = float(sum(yes_probs) / len(yes_probs))
-    except:
+    except Exception:
         avg_yes_prob = 0
     gt_correct = row["rewards"] == 1
     return (row["docker_images"], avg_yes_prob, gt_correct)
@@ -342,7 +341,6 @@ def main_old(args: ReasoningVerifierArgs):
     with concurrent.futures.ThreadPoolExecutor(max_workers=32) as executor:
         futures_map = {executor.submit(eval_row, row, args): row for row in rows}
         for future in tqdm(concurrent.futures.as_completed(futures_map), total=len(futures_map)):
-            row = futures_map[future]
             docker_images, avg_yes_prob, gt_correct = future.result()
             if avg_yes_prob is not None:
                 dockerwise_results[docker_images].append((avg_yes_prob, gt_correct))
