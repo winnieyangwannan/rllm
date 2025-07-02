@@ -61,6 +61,7 @@ nav:
         - Installation Guide: getting-started/installation.md
         - Quick Start: getting-started/quick-start.md
       - Core Concepts:
+        - rLLM's Main Components: core-concepts/overview.md
         - Agent and Environment: core-concepts/agent_env.md
         - AgentExecutionEngine for Trajectory Rollout: core-concepts/execution-engine.md
         - AgentTrainer for RL Training: core-concepts/training.md
@@ -72,17 +73,18 @@ nav:
       - Installation: getting-started/installation.md
       - Quick Start: getting-started/quick-start.md
   - Core Concepts:
+      - rLLM's Main Components: core-concepts/overview.md
       - Agent and Environment: core-concepts/agent_env.md
       - AgentExecutionEngine for Trajectory Rollout: core-concepts/execution-engine.md
       - AgentTrainer for RL Training: core-concepts/training.md
       - RL Algorithms for Agents: core-concepts/rl-algos.md
   - Examples:
       - Overview: examples/index.md
-      - DeepSWE Agent: examples/swe.md
       - DeepScaleR: examples/deepscaler.md
       - DeepCoder: examples/deepcoder.md
       - Search Agent: examples/search.md
       - FrozenLake Agent: examples/frozenlake.md
+      - Math SFT: examples/sft.md
 
   - API Reference:
       - Overview: api/index.md

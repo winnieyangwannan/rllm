@@ -64,8 +64,4 @@ Main script for generating SFT training data:
 
 Script for evaluating SFT model performance:
 
-```python title="examples/sft/eval_math_sft.py"
---8<-- "examples/sft/eval_math_sft.py"
-```
-
 For detailed setup instructions, see the [README](https://github.com/agentica-project/rllm-internal/blob/v0.1/examples/sft/README.md) in the sft example directory.

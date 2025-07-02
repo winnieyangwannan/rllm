@@ -19,10 +19,9 @@ Here's how the workflow operates:
 
 ```python
 import asyncio
-from rllm.engine.async_agent_execution_engine import AsyncAgentExecutionEngine
+from rllm.engine.agent_execution_engine import AgentExecutionEngine
 
-# Initialize async engine
-engine = AsyncAgentExecutionEngine(
+engine = AgentExecutionEngine(
     agent_class=CustomAgent,
     env_class=CustonEnvironment,
     engine_name="openai",  # or "verl"
