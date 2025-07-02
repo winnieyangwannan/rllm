@@ -99,7 +99,7 @@ class AgentPPOTrainer(RayPPOTrainer):
         def _create_env(i):
             if isinstance(env_args[i], str):
                 env_args[i] = json.loads(env_args[i])
-            return i, self.env_class.from_json({**env_args[i], **self.config.env.get("env_args", {})})
+            return i, self.env_class.from_dict({**env_args[i], **self.config.env.get("env_args", {})})
 
         def _create_agent(i):
             return i, self.agent_class(**self.config.agent.get("agent_args", {}))

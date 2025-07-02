@@ -326,7 +326,7 @@ def filter_with_agent_priority(all_trajectories: list[dict]) -> list[dict]:
         try:
             exit_reason = traj["data"].get("exit_reason", "")
             return (exit_reason != "agent", exit_reason)  # False comes first, so 'agent' is prioritized
-        except:
+        except Exception:
             return (True, "")
 
     # Process mixed reward docker images first
