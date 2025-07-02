@@ -37,7 +37,7 @@ plugins:
             show_symbol_type_toc: true
 
 watch:
-  - ../rllm/
+  - ./rllm/
 
 markdown_extensions:
   - pymdownx.highlight:
@@ -82,6 +82,7 @@ nav:
       - Overview: examples/index.md
       - DeepScaleR: examples/deepscaler.md
       - DeepCoder: examples/deepcoder.md
+      - DeepSWE: examples/swe.md
       - Search Agent: examples/search.md
       - FrozenLake Agent: examples/frozenlake.md
       - Math SFT: examples/sft.md

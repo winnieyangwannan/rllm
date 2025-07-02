@@ -9,7 +9,7 @@ from rllm.trainer.agent_trainer import AgentTrainer
 @hydra.main(config_path="pkg://rllm.trainer.config", config_name="ppo_trainer", version_base=None)
 def main(config):
     # Load SWE datasets - using names from prepare_swe_data.py
-    train_dataset = DatasetRegistry.load_dataset("SWE_Bench_Verified", "train")
+    train_dataset = DatasetRegistry.load_dataset("R2E_Gym_Subset", "train")
     val_dataset = DatasetRegistry.load_dataset("SWE_Bench_Verified", "test")
 
     trainer = AgentTrainer(
