@@ -115,7 +115,7 @@ Behavior notes:
   •	If the command times out, it will be interrupted (SIGINT). The assistant may then retry or do further steps if needed.
 
 Parameters:
-  1.	command (string, required)
+  1.	cmd (string, required)
 The bash command (and optional arguments) to execute.
   •	Can be empty ("") to retrieve more logs if the process is still running.
   •	Can be "ctrl+c" to interrupt the running process.
@@ -149,7 +149,7 @@ Parameters:
   1.	command (string, required)
 Currently allowed value: [submit]
   2.	result (string, optional)
-The result textåor final message to submit. Defaults to an empty string if not provided.
+The result text or final message to submit. Defaults to an empty string if not provided.
 
 –– END FUNCTION #4 ––
 
