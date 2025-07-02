@@ -33,7 +33,7 @@ DeepSWE is trained using [**rLLM**](https://github.com/agentica-project/rllm), o
 
 ## Quick Start 🎯
 
-### 1. Installation
+### 1. 📦 Installation
 ```bash
 # Installing Python 3.10 Environment.
 conda create -n rllm python=3.10 -y
@@ -53,7 +53,7 @@ pip install -e .
 ```
 
 
-### 2. Data and Agent Scaffold
+### 2. 🤗 Data and Agent Scaffold
 
 We use the R2E-Gym environments for RL training. R2E-Gym environment can be simply used as:
 ```python
@@ -139,7 +139,7 @@ The generated trajectories are saved in `./traj` directory. You can visualize th
 python app/app.py --traj_dir "./traj"
 ```
 
-## 4. Training DeepSWE-Preview with rLLM and R2E-Gym
+## 🔥 4. Training DeepSWE-Preview with rLLM and R2E-Gym
 
 [TODO]
 
