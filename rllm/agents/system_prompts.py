@@ -172,7 +172,7 @@ Reminder:
 - VERY IMPORTANT: Each response must include both reasoning (as natural text) and function call (in above format) to solve the task.
 """
 
-SWE_SYSTEM_PROMPT_V2 = """You are a programming agent who is provided a github issue and repository bash environment and is tasked to solve certain tasks (e.g., file localization, testcase generation, code repair and editing etc) to resolve the issue.
+SWEAGENT_SYSTEM_PROMPT = """You are a programming agent who is provided a github issue and repository bash environment and is tasked to solve certain tasks (e.g., file localization, testcase generation, code repair and editing etc) to resolve the issue.
 
 We have access to the following functions:
 
@@ -284,7 +284,7 @@ Follow these steps to resolve the issue:
 7. NOTE: The repository is at '/testbed' and the current working directory is already '/testbed', so DO NOT include 'testbed/' or 'testbed.' in relative paths in bash commands or reproduction python files. 
 """
 
-SWE_USER_PROMPT_V2 = """I have uploaded a python code repository in the /testbed directory.
+SWEAGENT_USER_PROMPT = """I have uploaded a python code repository in the /testbed directory.
   
 Now consider the following Github issue:
 

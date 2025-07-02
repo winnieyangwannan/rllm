@@ -7,7 +7,7 @@ import numpy as np
 
 from r2egym.agenthub.action import Action
 from rllm.agents.system_prompts import SWE_SYSTEM_PROMPT, SWE_USER_PROMPT, \
-    SWE_SYSTEM_PROMPT_FN_CALL, SWE_USER_PROMPT_FN_CALL, SWE_SYSTEM_PROMPT_V2, SWE_USER_PROMPT_V2
+    SWE_SYSTEM_PROMPT_FN_CALL, SWE_USER_PROMPT_FN_CALL, SWEAGENT_SYSTEM_PROMPT, SWEAGENT_USER_PROMPT
 from rllm.agents.agent import BaseAgent, Step, Trajectory
 
 TOKEN_WARNING_THRESHOLD = 28000
@@ -59,16 +59,18 @@ logger = logging.getLogger(__name__)
 
 class SWEAgent(BaseAgent):
 
-    def __init__(self, use_fn_calling: bool = False, format_model_response: bool = False, version: str = "v1"):
+    def __init__(self, use_fn_calling: bool = False, format_model_response: bool = False, scaffold: str = "r2egym"):
         self.use_fn_calling = use_fn_calling
         self.format_model_response = format_model_response
+        self.scaffold = scaffold
+        assert scaffold in ["r2egym", "sweagent"], f"Invalid scaffold: {scaffold}, must be one of ['r2egym', 'sweagent']"
         
         self.system_prompt = SWE_SYSTEM_PROMPT_FN_CALL if use_fn_calling else SWE_SYSTEM_PROMPT
-        if version == "v2":
-            self.system_prompt = SWE_SYSTEM_PROMPT_V2
+        if scaffold == "sweagent":
+            self.system_prompt = SWEAGENT_SYSTEM_PROMPT
         self.user_prompt_template = SWE_USER_PROMPT_FN_CALL if use_fn_calling else SWE_USER_PROMPT
-        if version == "v2":
-            self.user_prompt_template = SWE_USER_PROMPT_V2
+        if scaffold == "sweagent":
+            self.user_prompt_template = SWEAGENT_USER_PROMPT
 
         self._trajectory = Trajectory()
         self.reset()

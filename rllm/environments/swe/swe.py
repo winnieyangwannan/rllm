@@ -13,14 +13,14 @@ from rllm.environments.base.base_env import BaseEnv
 
 R2EGYM_PATH = os.path.dirname(r2egym.__file__)
 # List of tools to be used in the environment.
-R2EGYM_COMMAND_FILES_V1 = [
-    os.path.join(R2EGYM_PATH, "agenthub/tools/file_editor.py"),
+R2EGYM_COMMAND_FILES = [
+    os.path.join(R2EGYM_PATH, "agenthub/tools/r2egym/file_editor.py"),
     os.path.join(R2EGYM_PATH, "agenthub/tools/search.py"),
-    os.path.join(R2EGYM_PATH, "agenthub/tools/execute_bash.py"),
+    os.path.join(R2EGYM_PATH, "agenthub/tools/r2egym/execute_bash.py"),
     os.path.join(R2EGYM_PATH, "agenthub/tools/finish.py"),
 ]
 
-R2EGYM_COMMAND_FILES_V2 = [
+SWEAGENT_COMMAND_FILES = [
     os.path.join(R2EGYM_PATH, "agenthub/tools/str_replace_editor.py"),
     os.path.join(R2EGYM_PATH, "agenthub/tools/execute_bash.py"),
     os.path.join(R2EGYM_PATH, "agenthub/tools/submit.py"),
@@ -49,7 +49,7 @@ class SWEEnv(BaseEnv):
         backend: str = "kubernetes",
         delete_image: bool = False,
         verbose: bool = False,
-        version: str = "v1",
+        scaffold: str = "r2egym",
     ):
         """Initialize the SWE environment.
 
@@ -80,7 +80,8 @@ class SWEEnv(BaseEnv):
         self.backend = backend
         self.env = None
         self.verbose = verbose
-        self.version = version
+        self.scaffold = scaffold
+        assert scaffold in ["r2egym", "sweagent"], f"Invalid scaffold: {scaffold}, must be one of ['r2egym', 'sweagent']"
 
     def reset(self) -> Tuple[str, Dict]:
         """Reset the environment to initial state.
@@ -99,10 +100,10 @@ class SWEEnv(BaseEnv):
                                verbose=self.verbose)
         else:
             self.env.reset()
-        if self.version == "v1":
-            self.env.add_commands(R2EGYM_COMMAND_FILES_V1)
+        if self.scaffold == "r2egym":
+            self.env.add_commands(R2EGYM_COMMAND_FILES)
         else:
-            self.env.add_commands(R2EGYM_COMMAND_FILES_V2)
+            self.env.add_commands(SWEAGENT_COMMAND_FILES)
         self.total_steps = 0
 
         # gt_patch = self.env.runtime.commit.get_patch(
