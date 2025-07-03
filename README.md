@@ -9,15 +9,9 @@
 <div>
 <br>
 
-<div align="center">
-
-[![rLLM](https://img.shields.io/badge/RLLM-000000?style=for-the-badge&logo=github&logoColor=000&logoColor=white)](https://github.com/agentica-project/rllm)
-[![Website](https://img.shields.io/badge/Site-%23000000.svg?style=for-the-badge&logo=semanticweb&logoColor=white)](https://www.agentica-project.com) 
-[![Twitter](https://img.shields.io/badge/Agentica-white?style=for-the-badge&logo=X&logoColor=000&color=000&labelColor=white)](https://x.com/Agentica_)
-[![Hugging Face Collection](https://img.shields.io/badge/Agentica-fcd022?style=for-the-badge&logo=huggingface&logoColor=000&labelColor)](https://huggingface.co/agentica-org)
-
-</div>
-
+<p align="center">
+| <a href="https://rllm-project.readthedocs.io/en/latest/"><b>Documentation</b></a> | <a href="https://pretty-radio-b75.notion.site/rLLM-A-Framework-for-Post-Training-Language-Agents-21b81902c146819db63cd98a54ba5f31?pvs=74"><b>Blog</b></a> | <a href="https://agentica-project.com/index.html"><b>About Agentica</b></a> | <a href="https://x.com/Agentica_"><b>Twitter/X</b></a> | <a href="https://discord.gg/BDH46HT9en"><b>Discord</b></a> |
+</p>
 </div>
 
 rLLM is an open-source framework for post-training language agents via reinforcement learning. With rLLM, you can easily build their custom agents and environments, train them with reinforcement learning, and deploy them for real-world workloads. 
