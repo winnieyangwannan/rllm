@@ -1,61 +1,56 @@
 import concurrent.futures
+import re
 from collections import defaultdict
 
-
-import litellm
 import datasets
+import litellm
 import numpy as np
-from tqdm import tqdm
+import pandas as pd
 from fire import Fire
 from pydantic import BaseModel
+from tqdm import tqdm
 
-import re
-import litellm
-from typing import Any, Dict, List, Optional, Tuple
-import pandas as pd
-from collections import defaultdict
 
 #########################################################
 # condenser
 #########################################################
-def _count_tokens(messages: List[Dict[str, str]], llm_name='gpt4o') -> int:
-        """
-        Counts the tokens for a list of messages using the litellm library.
-        Adjust as needed depending on the model and library.
-        """
-        token_count = litellm.token_counter(model=llm_name, messages=messages)
-        # print(f"Total tokens in conversation: {token_count}")
-        return token_count
-    
+def _count_tokens(messages: list[dict[str, str]], llm_name="gpt4o") -> int:
+    """
+    Counts the tokens for a list of messages using the litellm library.
+    Adjust as needed depending on the model and library.
+    """
+    token_count = litellm.token_counter(model=llm_name, messages=messages)
+    # print(f"Total tokens in conversation: {token_count}")
+    return token_count
+
+
 def dummy_count_tokens(s: str) -> int:
     """
     Dummy token counter that counts words.
     Replace this with your actual token counting logic.
     """
-    messages = [
-        {'role': 'system', 'content': "Identify whether the following agent trajectory is correct or not. Answer 'YES' or 'NO'"},
-        {'role': 'user', 'content': s}
-    ]
-    
+    messages = [{"role": "system", "content": "Identify whether the following agent trajectory is correct or not. Answer 'YES' or 'NO'"}, {"role": "user", "content": s}]
+
     return _count_tokens(messages)
+
 
 def condense(input_str: str, max_tokens: int = 25000) -> str:
     """
     If the token count of input_str exceeds max_tokens, then starting with the second
     [USER]...[/USER] block (the oldest after the first), replace its inner content with
     a placeholder until the total token count is under the limit.
-    
+
     The first [USER] block is left intact.
     """
     placeholder = "<Observation condensed for saving context>"
-    
+
     # Check initial token count
     if dummy_count_tokens(input_str) <= max_tokens:
         return input_str
 
     # Regex to match [USER] blocks
-    pattern = re.compile(r'(\[USER\])(.*?)(\[/USER\])', re.DOTALL)
-    
+    pattern = re.compile(r"(\[USER\])(.*?)(\[/USER\])", re.DOTALL)
+
     new_str = input_str
     # Continue condensing until token count is below the threshold or nothing changes.
     while dummy_count_tokens(new_str) > max_tokens:
@@ -87,23 +82,26 @@ def condense(input_str: str, max_tokens: int = 25000) -> str:
 
     return new_str
 
+
 # sudo docker run --gpus all -v ~/.cache/huggingface:/root/.cache/huggingface -v /home/ubuntu/LLaMA-Factory/saves:/models -p 8000:8000     --ipc=host     vllm/vllm-openai:latest --model Qwen/Qwen2.5-Coder-32B-instruct --lora-modules model1=/models/qwen25coder-32b-instruct-reasoning_patch_verif_2kcontext_lora40_3epoch_lr1en5-v1/ model2=/models/qwen25coder-32b-instruct-reasoning_patch_verif_2kcontext_lora40_3epoch_lr1en4-v1 model3=/models/qwen25coder-32b-instruct-reasoning_patch_verif_2kcontext_lora40_4epoch_lr1en5-v1 model4=/models/qwen25coder-32b-instruct-reasoning_patch_verif_2kcontext_lora40_lr1en5-v1 --enable-lora --host 0.0.0.0 --port 8000 --tensor-parallel-size 8 --gpu-memory-utilization 0.95 --dtype bfloat16 --enable-prefix-caching  --max-lora-rank 64 --max-logprobs 500
+
 
 #########################################################
 # main eval verifier
 #########################################################
 class ReasoningVerifierArgs(BaseModel):
     # llm_name: str = 'hosted_vllm//data/home/jaskirats/project/r2e/r2e-edits-internal/LLaMA-Factory/saves/qwen25coder-14b-instruct-verifier-sonnet_32b_gpt4o_combined_32k_verifier_ep2-32k-v1'
-    llm_name: str = 'hosted_vllm//data/home/jaskirats/project/r2e/r2e-edits-internal/LLaMA-Factory/saves/qwen25coder-14b-instruct-verifier-sonnet_32b_gpt4o_combined_32k_verifiernew_reasoning_ep2-32k-v1'
+    llm_name: str = "hosted_vllm//data/home/jaskirats/project/r2e/r2e-edits-internal/LLaMA-Factory/saves/qwen25coder-14b-instruct-verifier-sonnet_32b_gpt4o_combined_32k_verifiernew_reasoning_ep2-32k-v1"
     # llm_name: str = 'hosted_vllm//data/home/jaskirats/project/r2e/r2e-edits-internal/LLaMA-Factory/saves/qwen25coder-32b-instruct-verifier-sonnet_32b_gpt4o_combined_32k_verifiernew_reasoning_ep2-20k-v1'
     # llm_name: str = 'hosted_vllm//data/home/jaskirats/project/r2e/r2e-edits-internal/LLaMA-Factory/saves/qwen25coder-14b-instruct-verifier-sonnet_32b_gpt4o_combined_32k_verifier_ep2-32k-v1'
-    temperature: float = 0.
+    temperature: float = 0.0
     num_samples: int = 1
     max_retries: int = 3
     # eval_dataset: str = "r2e-edits/32b_swebv_temp08_10_verifier"
     eval_dataset: str = "r2e-edits/32b_swebv_temp08_10_patch_verifier"
-    out_file: str= 'results_traj_verifiernew_p2p-14B-v1.csv'
+    out_file: str = "results_traj_verifiernew_p2p-14B-v1.csv"
     port: int = 8000
+
 
 def run_model(arg) -> list[str]:
     message_list: list[dict]
@@ -118,34 +116,31 @@ def run_model(arg) -> list[str]:
     retries = 0
 
     # condense messages
-    condensed_user_msg = message_list[1]['content'] #condense(input_str=message_list[1]['content'], max_tokens = 28000)
-    message_list = [
-        {'role': 'system', 'content': message_list[0]['content']},
-        {'role': 'user', 'content': condensed_user_msg}
-    ]
+    condensed_user_msg = message_list[1]["content"]  # condense(input_str=message_list[1]['content'], max_tokens = 28000)
+    message_list = [{"role": "system", "content": message_list[0]["content"]}, {"role": "user", "content": condensed_user_msg}]
     # query the model with retries
     while retries < args.max_retries:
         try:
             response = litellm.completion(
-                        model=llm_name,
-                        tools=[],
-                        messages=message_list,
-                        n=num_samples,
-                        function_call=None,
-                        tool_choice="none",
-                        timeout=120,
-                        api_key=None,
-                        temperature=temperature,
-                        # api_base="http://localhost:8000/v1",
-                        api_base=f"http://localhost:{args.port}/v1",
-                        vertex_ai_project="r2eg-441800",
-                        vertex_ai_location="europe-west1",
-                        logprobs=True,
-                        # extra_body={
-                        #     "guided_choice": ["YES", "NO"]
-                        # },
-                        top_logprobs=20,
-                    )
+                model=llm_name,
+                tools=[],
+                messages=message_list,
+                n=num_samples,
+                function_call=None,
+                tool_choice="none",
+                timeout=120,
+                api_key=None,
+                temperature=temperature,
+                # api_base="http://localhost:8000/v1",
+                api_base=f"http://localhost:{args.port}/v1",
+                vertex_ai_project="r2eg-441800",
+                vertex_ai_location="europe-west1",
+                logprobs=True,
+                # extra_body={
+                #     "guided_choice": ["YES", "NO"]
+                # },
+                top_logprobs=20,
+            )
             break
         except Exception as e:
             print(f"LLM query failed: {e}")
@@ -157,18 +152,15 @@ def run_model(arg) -> list[str]:
     [REASON] {reasoning} [/REASON] [ANSWER] {answer} [/ANSWER]
     we extract the answer and then collect the corresponding logits for YES/NO
     """
-    outputs = [response.choices[i].message.content for i in range(num_samples)]
+    # outputs = [response.choices[i].message.content for i in range(num_samples)]
 
     yes_probs = []
 
     for i in range(num_samples):
-        tokens = [x["token"] for x in response.choices[i].logprobs["content"]]
-        logits = [x["logprob"] for x in response.choices[i].logprobs["content"]]
+        # tokens = [x["token"] for x in response.choices[i].logprobs["content"]]
+        # logits = [x["logprob"] for x in response.choices[i].logprobs["content"]]
         # print (response.choices[0].logprobs.content[0].top_logprobs)
-        all_logits = [{
-                lp.token: lp.logprob
-                for lp in response.choices[0].logprobs.content[4].top_logprobs
-            }]
+        all_logits = [{lp.token: lp.logprob for lp in response.choices[0].logprobs.content[4].top_logprobs}]
         # all_logits = [
         #     {lp["token"]: lp["logprob"] for lp in x}
         #     for x in response.choices[i].logprobs["content"][0]["top_logprobs"]
@@ -178,13 +170,13 @@ def run_model(arg) -> list[str]:
         # print(tokens)
 
         # find YES / NO in the string after the tokens
-        j = 4
+        # j = 4
         # for j in range(len(tokens) - 1):
         #     if tokens[j] == 'YES' or tokens[j] == 'NO':
         #         break
-            # if tokens[j] == ">":
-            #     if tokens[j + 1] == "ANS" and tokens[j + 2] == "WER":
-            #         break
+        # if tokens[j] == ">":
+        #     if tokens[j + 1] == "ANS" and tokens[j + 2] == "WER":
+        #         break
 
         # try:
         #     k = tokens.index("YES", j)
@@ -205,17 +197,16 @@ def run_model(arg) -> list[str]:
         #         yes_probs.append(-1)
         #         continue
 
-        k=0
+        k = 0
         # print(all_logits[k])
         p_yes = all_logits[k].get("YES", -10000)
         p_no = all_logits[k].get("NO", -10000)
         # print(p_yes, p_no)
-        yes_probs.append(
-            (np.exp(p_yes)) / (np.exp(p_yes) + np.exp(p_no))
-        )
+        yes_probs.append((np.exp(p_yes)) / (np.exp(p_yes) + np.exp(p_no)))
         # print(yes_probs[-1])
 
     return yes_probs
+
 
 def eval_row(row: dict, args: ReasoningVerifierArgs):
     message = list(row["messages"][:2])
@@ -225,10 +216,11 @@ def eval_row(row: dict, args: ReasoningVerifierArgs):
         if len(yes_probs) == 0:
             return (row["docker_images"], None, None)
         avg_yes_prob = float(sum(yes_probs) / len(yes_probs))
-    except:
+    except Exception:
         avg_yes_prob = 0
     gt_correct = row["rewards"] == 1
     return (row["docker_images"], avg_yes_prob, gt_correct)
+
 
 def flush_to_csv(results_data, file_path, header_cols, write_header=False):
     """
@@ -238,9 +230,10 @@ def flush_to_csv(results_data, file_path, header_cols, write_header=False):
     if not results_data:
         return  # Nothing to flush
     df_temp = pd.DataFrame(results_data, columns=header_cols)
-    df_temp.to_csv(file_path, mode='a', header=write_header, index=False)
+    df_temp.to_csv(file_path, mode="a", header=write_header, index=False)
     # Clear the list after writing
     results_data.clear()
+
 
 def main(args):
     # 1. Load dataset into a DataFrame
@@ -266,15 +259,11 @@ def main(args):
     # 5. Evaluate each row in parallel
     rows = [row for _, row in df.iterrows()]
     with concurrent.futures.ThreadPoolExecutor(max_workers=32) as executor:
-        futures_map = {
-            executor.submit(eval_row, row, args): i
-            for i, row in enumerate(rows)
-        }
+        futures_map = {executor.submit(eval_row, row, args): i for i, row in enumerate(rows)}
 
         # We’ll track how many we’ve processed so we know when to flush
         processed_count = 0
-        for future in tqdm(concurrent.futures.as_completed(futures_map),
-                           total=len(futures_map)):
+        for future in tqdm(concurrent.futures.as_completed(futures_map), total=len(futures_map)):
             i = futures_map[future]
             row = rows[i]
             docker_images, avg_yes_prob, gt_correct = future.result()
@@ -295,13 +284,13 @@ def main(args):
             if processed_count % BATCH_SIZE == 0:
                 # Write to CSV in append mode
                 # If this is the first flush (processed_count == BATCH_SIZE), write header
-                write_header = (processed_count == BATCH_SIZE)
+                write_header = processed_count == BATCH_SIZE
                 flush_to_csv(results_data, output_file, header_cols, write_header=write_header)
 
         # After the loop, flush any leftover rows that didn't reach the batch size
         if results_data:
             # If no flush has happened yet, we do want the header
-            write_header = (processed_count <= BATCH_SIZE)
+            write_header = processed_count <= BATCH_SIZE
             flush_to_csv(results_data, output_file, header_cols, write_header=write_header)
 
     # 6. Optionally, do post-processing/aggregation on *all results* in memory.
@@ -316,35 +305,19 @@ def main(args):
 
     # Aggregation example:
     # (a) Max avg_yes_prob per docker_images
-    aggregated_max_yes = (
-        final_df.groupby("docker_images", as_index=False)
-                .apply(lambda g: g.loc[g["avg_yes_prob"].idxmax()])
-                .reset_index(drop=True)
-    )
+    aggregated_max_yes = final_df.groupby("docker_images", as_index=False).apply(lambda g: g.loc[g["avg_yes_prob"].idxmax()]).reset_index(drop=True)
     overall_accuracy_max_yes = aggregated_max_yes["gt_correct"].mean()
 
     # (b) Min num_steps
-    aggregated_min_steps = (
-        final_df.groupby("docker_images", as_index=False)
-                .apply(lambda g: g.loc[g["num_steps"].idxmin()])
-                .reset_index(drop=True)
-    )
+    aggregated_min_steps = final_df.groupby("docker_images", as_index=False).apply(lambda g: g.loc[g["num_steps"].idxmin()]).reset_index(drop=True)
     overall_accuracy_min_steps = aggregated_min_steps["gt_correct"].mean()
 
     # (c) Min patch_size
-    aggregated_min_patch = (
-        final_df.groupby("docker_images", as_index=False)
-                .apply(lambda g: g.loc[g["patch_size"].idxmin()])
-                .reset_index(drop=True)
-    )
+    aggregated_min_patch = final_df.groupby("docker_images", as_index=False).apply(lambda g: g.loc[g["patch_size"].idxmin()]).reset_index(drop=True)
     overall_accuracy_min_patch = aggregated_min_patch["gt_correct"].mean()
 
     # (d) Max p2p_rate
-    aggregated_max_p2p = (
-        final_df.groupby("docker_images", as_index=False)
-                .apply(lambda g: g.loc[g["p2p_rate"].idxmax()])
-                .reset_index(drop=True)
-    )
+    aggregated_max_p2p = final_df.groupby("docker_images", as_index=False).apply(lambda g: g.loc[g["p2p_rate"].idxmax()]).reset_index(drop=True)
     overall_accuracy_max_p2p = aggregated_max_p2p["gt_correct"].mean()
 
     print("Total number of rows in final CSV:", len(final_df))
@@ -353,30 +326,30 @@ def main(args):
     print("Accuracy (min patch_size):", overall_accuracy_min_patch)
     print("Accuracy (max p2p_rate):", overall_accuracy_max_p2p)
 
+
 def main_old(args: ReasoningVerifierArgs):
     dataset = datasets.load_dataset(args.eval_dataset)
-    dataset = dataset["train"].to_pandas()#.iloc[:200]
+    dataset = dataset["train"].to_pandas()  # .iloc[:200]
     rows = [row[1] for row in dataset.iterrows()]
     print(eval_row(rows[0], args))
 
     # Write header to file
-    output_file = args.out_file # "results.csv"
+    output_file = args.out_file  # "results.csv"
     with open(output_file, "w") as f:
         f.write("docker_images,avg_yes_prob,gt_correct\n")
-    
+
     dockerwise_results = defaultdict(list)
     with concurrent.futures.ThreadPoolExecutor(max_workers=32) as executor:
         futures_map = {executor.submit(eval_row, row, args): row for row in rows}
         for future in tqdm(concurrent.futures.as_completed(futures_map), total=len(futures_map)):
-            row = futures_map[future]
             docker_images, avg_yes_prob, gt_correct = future.result()
             if avg_yes_prob is not None:
                 dockerwise_results[docker_images].append((avg_yes_prob, gt_correct))
-            
+
             # Save each result immediately
             with open(output_file, "a") as f:
                 f.write(f"{docker_images},{avg_yes_prob},{gt_correct}\n")
-    
+
     #  can still do aggregation if needed after saving individual results.
     all_results = []
     for docker_images, results in dockerwise_results.items():
@@ -386,6 +359,7 @@ def main_old(args: ReasoningVerifierArgs):
         correct = max_yes_correct
         all_results.append(correct)
         print(len(all_results), np.mean(all_results))
+
 
 # def main(args: ReasoningVerifierArgs):
 #     dataset = datasets.load_dataset(
