@@ -2,17 +2,13 @@
 
 import json
 import os
-from typing import Any, Dict, List, Union
+from typing import Any
 
-from rllm.data.dataset_types import TrainDataset, TestDataset
-
-from rllm.system_prompts import (LCB_FORMATTING_MESSAGE_WITH_STARTER_CODE,
-                               LCB_FORMATTING_WITHOUT_STARTER_CODE,
-                               LCB_SYSTEM_MESSAGE_GENERIC)
+from rllm.data.dataset_types import TestDataset, TrainDataset
+from rllm.system_prompts import LCB_FORMATTING_MESSAGE_WITH_STARTER_CODE, LCB_FORMATTING_WITHOUT_STARTER_CODE, LCB_SYSTEM_MESSAGE_GENERIC
 
 
-def load_dataset(dataset_enum: Union[TrainDataset.Math, TrainDataset.Code, 
-                                   TestDataset.Math, TestDataset.Code]) -> List[Dict[str, Any]]:
+def load_dataset(dataset_enum: TrainDataset.Math | TrainDataset.Code | TestDataset.Math | TestDataset.Code) -> list[dict[str, Any]]:
     """Load a dataset from a JSON file based on the dataset enum.
 
     This function takes a dataset enum value and loads the corresponding JSON file
@@ -33,7 +29,7 @@ def load_dataset(dataset_enum: Union[TrainDataset.Math, TrainDataset.Code,
 
     Raises:
         ValueError: If the dataset file cannot be found or contains invalid JSON.
-        
+
     Examples:
         >>> # Load training AIME dataset
         >>> aime_data = load_dataset(TrainDataset.Math.AIME)
@@ -42,58 +38,57 @@ def load_dataset(dataset_enum: Union[TrainDataset.Math, TrainDataset.Code,
     """
     dataset_name = dataset_enum.value.lower()
     category_dir = dataset_enum.__class__.__name__.lower()
-    
+
     # Determine if dataset is for training or testing
     if dataset_enum.__class__ in [TrainDataset.Math, TrainDataset.Code, TrainDataset.Web]:
-        data_dir = 'train'
+        data_dir = "train"
     else:
-        data_dir = 'test'
-    
+        data_dir = "test"
+
     # Construct file path
     current_dir = os.path.dirname(os.path.realpath(__file__))
 
-    file_path = os.path.join(current_dir, data_dir, category_dir,
-                            f"{dataset_name}.json")
+    file_path = os.path.join(current_dir, data_dir, category_dir, f"{dataset_name}.json")
 
     if not os.path.exists(file_path):
         raise ValueError(f"Dataset file not found: {file_path}")
-        
+
     try:
-        with open(file_path, "r", encoding="utf-8") as f:
+        with open(file_path, encoding="utf-8") as f:
             data = json.load(f)
         return data
     except json.JSONDecodeError:
-        raise ValueError(f"Invalid JSON format in {file_path}")
+        raise ValueError(f"Invalid JSON format in {file_path}") from None
     except Exception as e:
-        raise ValueError(f"Error loading dataset: {str(e)}")
+        raise ValueError(f"Error loading dataset: {str(e)}") from e
 
-def fetch_live_code_bench_system_prompt(prompt: str, starter_code: str = None):
+
+def fetch_live_code_bench_system_prompt(prompt: str, starter_code: str | None = None):
     # https://github.com/LiveCodeBench/LiveCodeBench/blob/main/lcb_runner/prompts/code_generation.py
-    prompt= LCB_SYSTEM_MESSAGE_GENERIC + "\n\n" + prompt
+    prompt = LCB_SYSTEM_MESSAGE_GENERIC + "\n\n" + prompt
     if starter_code:
-        prompt += (
-                f"### Format: {LCB_FORMATTING_MESSAGE_WITH_STARTER_CODE}\n"
-        )
+        prompt += f"### Format: {LCB_FORMATTING_MESSAGE_WITH_STARTER_CODE}\n"
         prompt += f"```python\n{starter_code}\n```\n\n"
     else:
         prompt += f"### Format: {LCB_FORMATTING_WITHOUT_STARTER_CODE}\n"
         prompt += "```python\n# YOUR CODE HERE\n```\n\n"
-    prompt += f"### Answer: (use the provided format with backticks)\n\n"
+    prompt += "### Answer: (use the provided format with backticks)\n\n"
     return prompt
 
-if __name__ == '__main__':
+
+if __name__ == "__main__":
     # Example usage
     aime_data = load_dataset(TrainDataset.Math.AIME)
     print(f"Loaded {len(aime_data)} AIME training problems")
-    
-    apps_data = load_dataset(TrainDataset.Code.APPS) 
+
+    apps_data = load_dataset(TrainDataset.Code.APPS)
     print(f"Loaded {len(apps_data)} APPS test problems")
 
-    lcb_data = load_dataset(TestDataset.Code.LIVECODEBENCH) 
+    lcb_data = load_dataset(TestDataset.Code.LIVECODEBENCH)
     print(f"Loaded {len(lcb_data)} Livecodebench test problems")
 
-    code_contests_data = load_dataset(TestDataset.Code.CODE_CONTESTS) 
+    code_contests_data = load_dataset(TestDataset.Code.CODE_CONTESTS)
     print(f"Loaded {len(code_contests_data)} Code Contests test problems")
 
-    codeforces_data = load_dataset(TestDataset.Code.CODEFORCES) 
+    codeforces_data = load_dataset(TestDataset.Code.CODEFORCES)
     print(f"Loaded {len(codeforces_data)} Codeforces test problems")

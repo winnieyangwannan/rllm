@@ -1,113 +1,69 @@
-import json
-import logging
-from typing import Dict, List, Any, Tuple
+import copy
+from typing import Any
 
-from rllm.agents.agent import BaseAgent, Step, Trajectory
-from rllm.rewards.math_reward import rllm_reward_fn_math
+from rllm.agents.agent import Action, BaseAgent, Step, Trajectory
 
-logger = logging.getLogger(__name__)
 
 class MathAgent(BaseAgent):
     """
     A math agent that solves mathematical problems step by step, following the BaseAgent interface.
     """
-    def __init__(self, remove_thinking=False):
+
+    def __init__(self, accumulate_thinking=True):
         """
         Initialize the MathAgent.
         """
-        self.instruction = "Let's think step by step and put the final answer within \\boxed{}."
+        self.instruction = "Let's think step by step, and put your final answer within \\boxed{}."
         self._trajectory = Trajectory()
         self.messages = []
-        self.step = 0
-        self.remove_thinking = remove_thinking
-        
-    def update_from_env(self, observation: Any, reward: float, done: bool, info: Dict, **kwargs):
-        """
-        Updates the agent's internal state after an environment step.
-        """
+        self.accumulate_thinking = accumulate_thinking
+
+    def update_from_env(self, observation: Any, reward: float, done: bool, info: dict, **kwargs):
+        """Process environment feedback and update internal state."""
+
         # Format observation based on whether it's the initial problem or subsequent feedback
-        if not self._trajectory.steps:
-            # Initial problem statement
-            assert isinstance(observation, dict) and 'question' in observation, "Initial observation must be a dict with a 'question' key."
-            question = observation['question']
-            formatted_observation = f'{question} {self.instruction}'
+        if not self.trajectory.steps:
+            # Initial problem presentation
+            assert isinstance(observation, dict) and "question" in observation
+            question = observation["question"]
+            formatted_observation = f"{question} {self.instruction}"
         else:
+            # Follow-up correction prompt
             formatted_observation = "Your previous answer may contain a mistake. Please review it carefully and answer again. Put your final answer within \\boxed{}."
 
-        # If there are previous steps, update the last step's outcome
-        if self._trajectory.steps:
-            prior_step = self._trajectory.steps[-1]
-            prior_step.next_observation = formatted_observation
-            prior_step.reward = reward
-            prior_step.done = done
-            prior_step.info = info
-        
-        if done:
-            return
-        
-        self.messages.append({
-            "role": "user",
-            "content": formatted_observation
-        })
-        cur_step = Step(
-            observation=formatted_observation,
-            step=self.step
-        )
-        self._trajectory.steps.append(cur_step)
+        self.messages.append({"role": "user", "content": formatted_observation})
 
-    def update_from_model(self, response: Any, **kwargs):
+    def update_from_model(self, response: str, **kwargs) -> Action:
         """
         Updates the agent's internal state based on the model's response.
         """
-        # Extract content from the response
-        if isinstance(response, str):
-            content = response
-        else:
-            # Assuming response object similar to OAI completion
-            content = response.choices[0].message.content
-        
-        assert self._trajectory.steps, "Trajectory should not be empty when update_from_model is called."
-        
-        # Update the current step in the trajectory
-        cur_step = self._trajectory.steps[-1]
-        # For MathAgent, the model response represents both the thought and action.
-        cur_step.thought = content 
-        cur_step.action = content  # Or potentially parse out the boxed answer? For now, use full content.
-        cur_step.model_response = content
+        self.messages.append({"role": "assistant", "content": response})
+        new_step = Step(chat_completions=copy.deepcopy(self.chat_completions))
+        self.trajectory.steps.append(new_step)
 
-        if self.remove_thinking:
-            think_start = content.find("<think>")
-            think_end = content.find("</think>")
-            if think_start != -1 and think_end != -1 and think_end > think_start:
-                # Remove full <think>...</think> block
-                think_end += len("</think>")
-                content = content[:think_start] + content[think_end:]
-            elif think_end != -1:
-                # Remove everything before and including </think>
-                think_end += len("</think>")
-                content = content[think_end:]
-
-        # Add the assistant's response to the messages
-        self.messages.append({"role": "assistant", "content": content})
-        
-        self.step += 1
+        return Action(action=response)
 
     def reset(self):
-        """
-        Resets the agent's internal state for a new episode.
-        """
+        """Reset agent state for new episode."""
         self._trajectory = Trajectory()
         self.messages = []
-        self.step = 0
 
     @property
-    def chat_completions(self) -> List[Dict[str, str]]:
-        """Returns the history of messages for chat completion."""
-        return self.messages
-    
+    def chat_completions(self) -> list[dict[str, str]]:
+        """Return conversation history for model interaction."""
+        # remove thinking from assistant messages if not accumulate_thinking except the last one
+        messages = copy.deepcopy(self.messages)
+        if not self.accumulate_thinking:
+            for msg in messages[:-1]:
+                if msg["role"] == "assistant":
+                    _, sep, after = msg["content"].partition("</think>")
+                    if sep:
+                        msg["content"] = after
+        return messages
+
     @property
     def trajectory(self) -> Trajectory:
-        """Returns the trajectory object."""
+        """Return complete interaction trajectory."""
         return self._trajectory
 
     def get_current_state(self) -> Step:

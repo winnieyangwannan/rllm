@@ -1,25 +1,18 @@
-import base64
-import io
+import copy
 import logging
 import re
-import collections
-from typing import List, Dict, Any, Tuple
+from typing import Any
 
-import numpy as np
-from browsergym.core.action.highlevel import HighLevelActionSet
-from browsergym.utils.obs import flatten_axtree_to_str, flatten_dom_to_str, prune_html
-from PIL import Image
-
+from rllm.agents.agent import Action, BaseAgent, Step, Trajectory
 from rllm.agents.system_prompts import *
-from rllm.agents.agent import BaseAgent, Step, Trajectory
 from rllm.environments.frozenlake.frozenlake import FrozenLakeEnv
-
 
 logger = logging.getLogger(__name__)
 
 
 class FrozenLakeAgent(BaseAgent):
-    SYSTEM_PROMPT = """You are Qwen, created by Alibaba Cloud. You are a helpful assistant. You are walking on a frozen lake.
+    # Prompting format inspired by the RAGEN project: https://github.com/RAGEN-AI/RAGEN
+    SYSTEM_PROMPT: str = """You are Qwen, created by Alibaba Cloud. You are a helpful assistant. You are walking on a frozen lake.
 
 FrozenLake Quick Guide
 Goal: Reach the goal (G). Player (P) and Goal (G) must overlap.
@@ -47,7 +40,7 @@ You should be aware that frozen tiles can be slippery, but the chance is small a
 Please show your thinking process and put the final action in ``` ```. In every turn, the final action MUST be one of Up, Down, Left, Right.
 """
 
-    MULTI_SHOT_SYSTEM_PROMPT = """You are Qwen, created by Alibaba Cloud. You are a helpful assistant. You are walking on a frozen lake.
+    MULTI_SHOT_SYSTEM_PROMPT: str = """You are Qwen, created by Alibaba Cloud. You are a helpful assistant. You are walking on a frozen lake.
 
 FrozenLake Quick Guide
 Goal: Reach the goal (G). Player (P) and Goal (G) must overlap.
@@ -129,16 +122,18 @@ Assistant: G is at the bottom right corner of P. I can move left, right, or up. 
 Now it is your turn, please show your thinking process and put the final action in ``` ```. In every turn, the final action MUST be one of Up, Down, Left, Right.
 """
 
-    def __init__(self, max_steps=None):
+    def __init__(self, max_steps: int | None = None, use_accumulate_thinking: bool | None = True, use_multistep_prompt: bool | None = False, use_accumulate_history: bool | None = True):
         self._trajectory = Trajectory()
-        self.messages: List[Dict[str, str]] = []
-        self.step = 0
-        self.accumulate_thinking = False # controlls whether to accumulate the thinking portion of the response
-        self.multistep_prompt = False
-        self.max_steps = max_steps
+        self.messages: list[dict[str, str]] = []
+        self.step: int = 0
+        self.accumulate_thinking: bool | None = use_accumulate_thinking  # controlls whether to accumulate the thinking portion of the response
+        self.multistep_prompt: bool | None = use_multistep_prompt
+        self.max_steps: int | None = max_steps
+        self.accumulate_history: bool | None = use_accumulate_history
+        self.current_observation: Any = None
         self.reset()
 
-    def update_from_env(self, observation: Any, reward: float, done: bool, info: Dict, **kwargs):
+    def update_from_env(self, observation: Any, reward: float, done: bool, info: dict, **kwargs):
         """
         Updates the agent's internal state after an environment step.
         Includes logic to check if the observation changed from the previous step.
@@ -147,10 +142,9 @@ Now it is your turn, please show your thinking process and put the final action 
         # Base message for the user
         user_prompt_content = f"Current Observation ({self.step}): \n" + current_obs_str + "\n" + "You have not achieved the goal, P has not reached G yet. Please give the next action."
 
-
         # Check if the observation is the same as the previous step's observation
         # This check only makes sense if we have completed at least one step (i.e., received a model response and acted)
-        if self._trajectory.steps and self._trajectory.steps[-1].action is not None: # Check if the last step has an action (meaning it's a completed step)
+        if self._trajectory.steps and self._trajectory.steps[-1].action is not None:  # Check if the last step has an action (meaning it's a completed step)
             last_step_obs_str = self._trajectory.steps[-1].observation
             if last_step_obs_str == current_obs_str:
                 user_prompt_content += "\nYour last response is invalid. Your position didn't change at all. You may need to recheck your thinking process, action outputted, and the format of response. Remember, you should only output the NEXT ACTION at each interation in the ``` ```. For example, if you want to move up, you should output ```Up```."
@@ -158,42 +152,13 @@ Now it is your turn, please show your thinking process and put the final action 
         if self.max_steps is not None and self.max_steps - self.step > 0:
             user_prompt_content += f"\nThe maximum number of steps remaining is {self.max_steps - self.step}."
 
-        # Update the last step in the trajectory with the outcome (next_observation, reward, done, info)
-        if self._trajectory.steps:
-            prior_step = self._trajectory.steps[-1]
-            # The observation received here is the 'next_observation' for the *previous* action/step
-            prior_step.next_observation = current_obs_str
-            prior_step.reward = reward
-            prior_step.done = done
-            prior_step.info = info
-
         # Add the user message for the *next* interaction turn
-        self.messages.append({
-            "role": "user",
-            "content": user_prompt_content
-        })
+        self.messages.append({"role": "user", "content": user_prompt_content})
 
-        # Create a new step for the current state (with the observation that resulted from the last action)
-        # This step's action, reward, etc., will be filled in by subsequent update_from_model and update_from_env calls
-        if done:
-            return
-        cur_step = Step(
-            observation=current_obs_str, # Store raw observation string for the *new* state
-            step=self.step
-        )
-        self._trajectory.steps.append(cur_step)
+        self.current_observation = current_obs_str
 
-    def update_from_model(self, response: Any, **kwargs):
-        if isinstance(response, str):
-            content = response
-        else: # OpenAI response
-            try:
-                content = response.choices[0].message.content
-            except Exception as e:
-                logger.error(f"Failed to extract content from response: {response}. Error: {e}")
-                content = str(response)
-
-        assert self._trajectory.steps, "Trajectory should not be empty when update_from_model is called."
+    def update_from_model(self, response: str, **kwargs) -> Action:
+        content = response
 
         if not self.accumulate_thinking:
             _, sep, after = content.partition("</think>")
@@ -202,22 +167,22 @@ Now it is your turn, please show your thinking process and put the final action 
 
         thought, action_str = self._parse_model_response(content)
 
-        cur_step = self._trajectory.steps[-1]
-        cur_step.thought = thought
-        cur_step.action = action_str
-        cur_step.model_response = content
+        new_step = Step(chat_completions=copy.deepcopy(self.chat_completions), thought=thought, action=action_str, model_response=content, observation=self.current_observation)
+        self._trajectory.steps.append(new_step)
 
         self.messages.append({"role": "assistant", "content": content})
 
         self.step += 1
 
-    def _parse_model_response(self, response: str) -> Tuple[str, str]:
+        return Action(action=action_str)
+
+    def _parse_model_response(self, response: str) -> tuple[str, str]:
         DIRECTION_MAP = {"left": 1, "down": 2, "right": 3, "up": 4}
 
         thought = response
         action_str = str(FrozenLakeEnv.INVALID_ACTION)
 
-        matches = re.findall(r'```(.*?)```', response, re.DOTALL)
+        matches = re.findall(r"```(.*?)```", response, re.DOTALL)
 
         if matches:
             last_match_content = matches[-1].strip()
@@ -234,45 +199,30 @@ Now it is your turn, please show your thinking process and put the final action 
 
         return thought, action_str
 
-    def _process_action_for_validation(self, response):
+    def _process_action_for_validation(self, response: str) -> str:
         _, action_str = self._parse_model_response(response)
         return action_str
 
     @property
-    def chat_completions(self) -> List[Dict[str, str]]:
-        return self.messages
+    def chat_completions(self) -> list[dict[str, str]]:
+        if self.accumulate_history:
+            return self.messages
+        else:
+            if len(self.messages) <= 1:
+                return self.messages
+            else:
+                return [self.messages[0], self.messages[-1]]
 
     @property
     def trajectory(self) -> Trajectory:
         return self._trajectory
 
-    def reset(self):
+    def reset(self) -> None:
         self._trajectory = Trajectory()
-        self.messages = [{
-            'role': 'system',
-            'content': self.SYSTEM_PROMPT if not self.multistep_prompt else self.MULTI_SHOT_SYSTEM_PROMPT,
-        }]
+        self.messages = [
+            {
+                "role": "system",
+                "content": self.SYSTEM_PROMPT if not self.multistep_prompt else self.MULTI_SHOT_SYSTEM_PROMPT,
+            }
+        ]
         self.step = 0
-
-    def get_current_state(self) -> Step:
-        if not self._trajectory.steps:
-            raise ValueError("get_current_state called before the first observation was processed.")
-        return self._trajectory.steps[-1]
-
-    def compute_training_reward(self, trajectory: Trajectory) -> float:
-        if not trajectory.steps:
-            return 0
-        
-        reward = trajectory.steps[-1].reward
-        # reward_penalty = 0    
-        # for step in trajectory.steps:
-        #     if not self.validate_step(step):
-        #         reward_penalty -= 0.2
-        #eturn reward + reward_penalty
-        return reward
-
-    def validate_step(self, trajectory_step: Step) -> bool:
-        action_str = trajectory_step.action
-        if action_str == str(FrozenLakeEnv.INVALID_ACTION):
-            return False
-        return True

@@ -1,7 +1,11 @@
-import numpy as np
 import concurrent.futures
+from collections.abc import Callable, Iterator
 from contextlib import contextmanager
-from typing import List, Dict, Any, Tuple, Callable, Iterator, Optional, Union
+from typing import Any
+
+import numpy as np
+
+from rllm.agents.agent import Trajectory
 
 
 def compute_trajectory_reward(trajectory: "Trajectory") -> "Trajectory":
@@ -44,27 +48,21 @@ def compute_mc_return(trajectory: "Trajectory", gamma: float = 0.95) -> "Traject
 
 
 @contextmanager
-def parallel_task_manager(
-    func: Callable, 
-    items: List[Any], 
-    max_workers: int = 32
-) -> Iterator[List[Tuple[int, Any]]]:
+def parallel_task_manager(func: Callable, items: list[Any], max_workers: int = 32) -> Iterator[list[tuple[int, Any]]]:
     """
     Execute a function in parallel for all items and collect results.
-    
+
     Args:
         func: Function to execute
         items: List of items to process
         max_workers: Maximum number of workers
-        
+
     Yields:
         List of (idx, result) tuples
     """
     results = []
     with concurrent.futures.ThreadPoolExecutor(max_workers=max_workers) as executor:
-        future_to_item = {
-            executor.submit(func, *item): i for i, item in enumerate(items)
-        }
+        future_to_item = {executor.submit(func, *item): i for i, item in enumerate(items)}
         for future in concurrent.futures.as_completed(future_to_item):
             idx = future_to_item[future]
             result = future.result()

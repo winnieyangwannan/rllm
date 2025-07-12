@@ -1,37 +1,45 @@
 from abc import ABC, abstractmethod
-from typing import Any, Tuple, Dict, List
-from dataclasses import dataclass, field, asdict
+from dataclasses import asdict, dataclass, field
+from typing import Any
 
 
 @dataclass
 class Step:
-    observation: Any = None
+    chat_completions: list[dict[str, str]] = field(default_factory=list)
+
     thought: str = ""
     action: Any = None
-    reward: float = 0.0
-    next_observation: Any = None
-    done: bool = False
-    # Store additional information from the environment or anything else.
-    info: Dict = field(default_factory=dict)
-    step: int = 0
+    observation: Any = None
     model_response: str = ""
-    mc_return: float = 0.0 # Monte Carlo estimate of returns.
+    info: dict = field(default_factory=dict)  # Store any additional info.
+
+    # field below are filled by the engine
+    reward: float = 0.0
+    done: bool = False
+    mc_return: float = 0.0
+
+
+@dataclass
+class Action:
+    action: Any = None
+
 
 @dataclass
 class Trajectory:
-    steps: List[Step] = field(default_factory=list)
+    task: Any = None
+    steps: list[Step] = field(default_factory=list)
     reward: float = 0.0
 
     def to_dict(self):
         return {
             "steps": [asdict(step) for step in self.steps],
-            "reward": float(self.reward)  # Convert numpy float to Python float
+            "reward": float(self.reward),
         }
 
+
 class BaseAgent(ABC):
-    
     @property
-    def chat_completions(self) -> List[Dict[str, str]]:
+    def chat_completions(self) -> list[dict[str, str]]:
         """Converts agent's internal state into a list of OAI chat completions."""
         return []
 
@@ -39,23 +47,14 @@ class BaseAgent(ABC):
     def trajectory(self) -> Trajectory:
         """Converts agent's internal state into a Trajectory object."""
         return Trajectory()
-    
-    @property
-    def prompt(self) -> List[Dict[str, str]]:
-        """Converts agent's internal state to list of OAI chat completions used for next prompt"""
-        return self.chat_completions
 
     @abstractmethod
-    def update_from_env(self, observation: Any, action: Any, reward: float, done: bool, info: Dict, **kwargs):
+    def update_from_env(self, observation: Any, reward: float, done: bool, info: dict, **kwargs):
         """
         Updates the agent's internal state after an environment step.
 
-        This function is called during environment interaction to incorporate the latest action's
-        outcome into the agent's learning process.
-
         Args:
             observation (Any): The observation after stepping through environment.
-            action (Any): The action taken by the agent.
             reward (float): The reward received after taking the action.
             done (bool): Whether the episode has ended due to termination.
             info (dict): Additional metadata from the environment.
@@ -63,12 +62,9 @@ class BaseAgent(ABC):
         raise NotImplementedError("Subclasses must implement this method")
 
     @abstractmethod
-    def update_from_model(self, response: Any, **kwargs):
+    def update_from_model(self, response: str, **kwargs) -> Action:
         """
-        Updates the agent's internal state after an environment step.
-
-        This function is called during environment interaction to incorporate the latest action's
-        outcome into the agent's learning process.
+        Updates the agent's internal state after the model generates a response.
 
         Args:
             response (str): The response from the model.
@@ -83,23 +79,24 @@ class BaseAgent(ABC):
         """
         Resets the agent's internal state, typically called at the beginning of a new episode.
 
-        This function should clear any stored history or state information necessary 
+        This function should clear any stored history or state information necessary
         for a fresh interaction.
 
         Returns:
             None
         """
-        return 
-    
-    @abstractmethod
-    def get_current_state(self) -> Step:
+        return
+
+    def get_current_state(self) -> Step | None:
         """
         Returns the agent's current state as a dictionary.
-        
+
         This method provides access to the agent's internal state at the current step,
         which can be useful for debugging, logging, or state management.
-        
+
         Returns:
-            Dict: A dictionary containing the agent's current state information.
+            Step: The agent's current state.
         """
-        return Step()
+        if not self.trajectory.steps:
+            return None
+        return self.trajectory.steps[-1]

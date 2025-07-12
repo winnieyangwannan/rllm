@@ -1,13 +1,16 @@
+import concurrent.futures
 import os
-import time
 import subprocess
-import yaml
 import threading
 import uuid
+
+import yaml
+from datasets import load_dataset
 
 counter_lock = threading.Lock()
 total_images = 0
 processed_images = set()
+
 
 def create_daemonset_yaml(docker_image, name):
     return {
@@ -25,9 +28,7 @@ def create_daemonset_yaml(docker_image, name):
                             "image": docker_image,
                             "command": ["sleep", "1000000"],
                             "imagePullPolicy": "Always",
-                            "resources": {
-                                "requests": {"cpu": "1", "memory": "1Gi"}
-                            },
+                            "resources": {"requests": {"cpu": "1", "memory": "1Gi"}},
                         }
                     ],
                     "restartPolicy": "Always",
@@ -37,6 +38,7 @@ def create_daemonset_yaml(docker_image, name):
             },
         },
     }
+
 
 def pull_image_on_all_nodes(docker_image, total_targets):
     global total_images, processed_images
@@ -84,7 +86,7 @@ def pull_image_on_all_nodes(docker_image, total_targets):
         print(f"[error] {e}")
         return False
 
-from datasets import load_dataset
+
 # Load the dataset
 dataset = load_dataset("R2E-Gym/R2E-Gym-V1", split="train")
 
@@ -97,14 +99,12 @@ for entry in dataset:
 print(f"Found {len(unique_images)} unique Docker images to cache")
 
 # Process all unique images in parallel with 64 threads
-import concurrent.futures
-import threading
 
 # Process images using a ThreadPoolExecutor with 64 workers
 with concurrent.futures.ThreadPoolExecutor(max_workers=48) as executor:
     # Submit all tasks to the executor
     future_to_image = {executor.submit(pull_image_on_all_nodes, image, len(unique_images)): image for image in unique_images}
-    
+
     # Collect results as they complete
     results = []
     for future in concurrent.futures.as_completed(future_to_image):

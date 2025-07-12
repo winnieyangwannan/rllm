@@ -1,7 +1,9 @@
+from rllm.environments.base.base_env import BaseEnv
 from rllm.environments.base.single_turn_env import SingleTurnEnvironment
 from rllm.environments.tools.tool_env import ToolEnvironment
 
-__all__ = ["SingleTurnEnvironment", "ToolEnvironment"]
+__all__ = ["BaseEnv", "SingleTurnEnvironment", "ToolEnvironment"]
+
 
 def safe_import(module_path, class_name):
     try:
@@ -9,12 +11,12 @@ def safe_import(module_path, class_name):
         return getattr(module, class_name)
     except ImportError:
         return None
-    
+
 
 ENVIRONMENT_IMPORTS = [
-    ("rllm.environments.browsergym.browsergym", "BrowserGym"),
+    ("rllm.environments.browsergym.browsergym", "BrowserGymEnv"),
     ("rllm.environments.frozenlake.frozenlake", "FrozenLakeEnv"),
-    ("rllm.environments.swe.swe", "SWEEnv"),
+    # ("rllm.environments.swe.swe", "SWEEnv"),
     ("rllm.environments.code.competition_coding", "CompetitionCodingEnv"),
 ]
 

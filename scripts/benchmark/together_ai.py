@@ -1,37 +1,30 @@
-import os
-import json
-import time
-from together import Together
-import pandas as pd
 import argparse
 import concurrent.futures
+import json
+import os
+import time
+
+import pandas as pd
+from together import Together
 from tqdm import tqdm
 
-from rllm.data.utils import load_dataset, TrainDataset, TestDataset, fetch_live_code_bench_system_prompt
+from rllm.data.utils import TestDataset, TrainDataset, fetch_live_code_bench_system_prompt, load_dataset
 from rllm.rewards.code_reward import RewardCodeFn, extract_code_from_model
-from rllm.rewards.reward_types import RewardInput, RewardConfig, RewardType
+from rllm.rewards.reward_types import RewardConfig, RewardInput, RewardType
 
 HUMANEVALPLUS_PROMPT = "Think step by step: please provide an efficient and self-contained Python script that solves the following problem in a markdown code block:\n\n"
 
+
 def generate_response(client, prompt, model="deepseek-ai/DeepSeek-R1"):
     # append the prompt to the messages
-    messages = [
-        {"role": "user", "content": prompt}
-    ]
-    
+    messages = [{"role": "user", "content": prompt}]
+
     max_retries = 3
     attempts = 0
-    
+
     while attempts < max_retries:
         try:
-            stream = client.chat.completions.create(
-                model=model,
-                messages=messages,
-                temperature=0.6,
-                top_p=0.95,
-                max_tokens=32768,
-                stream=True
-            )
+            stream = client.chat.completions.create(model=model, messages=messages, temperature=0.6, top_p=0.95, max_tokens=32768, stream=True)
             full_response = ""
             for chunk in stream:
                 full_response += chunk.choices[0].delta.content or ""
@@ -54,9 +47,10 @@ def preload_data(dataset_name):
     else:
         # throw error if dataset is not found
         raise ValueError(f"Dataset {dataset_name} not found.")
-    
+
     dataset = load_dataset(ds)
     return dataset
+
 
 def generation_loop(client, dataset_name, model, output_dir, n=1, skip_rewards=False):
     skip_generation = False
@@ -87,7 +81,7 @@ def generation_loop(client, dataset_name, model, output_dir, n=1, skip_rewards=F
                 if dataset_name == "humanevalplus":
                     prompt = HUMANEVALPLUS_PROMPT + prompt
                 response = generate_response(client, prompt, model=model)
-            
+
             if "def solve():" in response:
                 extracted_code = extract_code_from_model(response)
                 # check if extracted_code ends with solve()
@@ -102,13 +96,7 @@ def generation_loop(client, dataset_name, model, output_dir, n=1, skip_rewards=F
                     tests = item["tests"]
                 else:
                     tests = item["tests"].tolist() if not isinstance(item["tests"], list) else item["tests"]
-                input_obj = RewardInput(
-                    problem="",
-                    problem_type=RewardType.CODE,
-                    model_response=response,
-                    metadata=tests,
-                    data_source=dataset_name
-                )
+                input_obj = RewardInput(problem="", problem_type=RewardType.CODE, model_response=response, metadata=tests, data_source=dataset_name)
                 score = reward(input_obj).reward
             scores_lst.append(score)
         return idx, response_lst, scores_lst
@@ -136,23 +124,17 @@ def generation_loop(client, dataset_name, model, output_dir, n=1, skip_rewards=F
     os.makedirs(output_dir, exist_ok=True)
     df.to_parquet(os.path.join(output_dir, "responses.parquet"))
 
-    results_path = os.path.join(output_dir, 'results.json')
-    with open(results_path, 'w') as f:
+    results_path = os.path.join(output_dir, "results.json")
+    with open(results_path, "w") as f:
         json.dump(all_scores, f)
 
 
 def main():
-    parser = argparse.ArgumentParser(
-        description="Generate a response from the OpenAI reasoning model given a prompt."
-    )
+    parser = argparse.ArgumentParser(description="Generate a response from the OpenAI reasoning model given a prompt.")
     # arg for specifying dataset name
-    parser.add_argument(
-        "--dataset-name", type=str, required=True, help="Name of the dataset to use."
-    )
+    parser.add_argument("--dataset-name", type=str, required=True, help="Name of the dataset to use.")
     # arg for specifying output dir
-    parser.add_argument(
-        "--output-dir", type=str, required=True, help="Output directory to save the results."
-    )
+    parser.add_argument("--output-dir", type=str, required=True, help="Output directory to save the results.")
     args = parser.parse_args()
 
     client = Together()
@@ -163,7 +145,9 @@ def main():
         print(f"An error occurred: {e}")
         # print stack trace
         import traceback
+
         traceback.print_exc()
+
 
 if __name__ == "__main__":
     main()

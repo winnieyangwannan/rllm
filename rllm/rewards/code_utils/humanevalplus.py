@@ -1,9 +1,9 @@
 import ast
-import os
-import subprocess
 import faulthandler
-from tempfile import TemporaryDirectory
+import os
 import platform
+import subprocess
+from tempfile import TemporaryDirectory
 
 from rllm.rewards.code_utils.utils import BASE_IMPORTS
 
@@ -16,21 +16,21 @@ _DEFAULT_TIMEOUT_SECONDS = 60
 def get_num_test_cases(test_code):
     # Parse the code into an AST
     parsed = ast.parse(test_code)
-    
+
     # Find the assignment node for 'inputs'
     inputs_node = None
     results_node = None
-    
+
     for node in ast.walk(parsed):
         if isinstance(node, ast.Assign):
             for target in node.targets:
                 if isinstance(target, ast.Name):
-                    if target.id == 'inputs':
+                    if target.id == "inputs":
                         inputs_node = node.value
-    
+
     if inputs_node is None:
         return "Could not find inputs or results in the code"
-    
+
     # Count number of test cases
     if isinstance(inputs_node, ast.List):
         input_count = len(inputs_node.elts)
@@ -41,11 +41,10 @@ def get_num_test_cases(test_code):
 
 def run_test(code, test: str = None, timeout=_DEFAULT_TIMEOUT_SECONDS):
     env = os.environ.copy()
-    
+
     # Create a preexec_fn function to set resource limits
     def preexec_fn():
         reliability_guard()
-
 
     if not test:
         raise ValueError("No test provided.")
@@ -66,26 +65,17 @@ def run_test(code, test: str = None, timeout=_DEFAULT_TIMEOUT_SECONDS):
 
         with open(solution_path, "w") as f:
             f.write(code_to_run)
-            
+
         command = ["python3", solution_path]
         try:
-            result = subprocess.run(
-                command,
-                cwd=tmpdir,
-                stdout=subprocess.PIPE,
-                stderr=subprocess.PIPE,
-                env=env,
-                check=False,
-                preexec_fn=preexec_fn,
-                timeout=timeout
-            )
-            
+            result = subprocess.run(command, cwd=tmpdir, stdout=subprocess.PIPE, stderr=subprocess.PIPE, env=env, check=False, preexec_fn=preexec_fn, timeout=timeout)
+
             stderr = result.stderr.decode().strip()
             stdout = result.stdout.decode()
             if result.returncode == 0:
                 return True, stdout
             return False, _ERROR_MSG_PREFIX + f"STDOUT:\n{stdout}\n\nSTDERR:\n{stderr}"
-            
+
         except subprocess.TimeoutExpired:
             return False, _ERROR_MSG_PREFIX + f"Execution timed out after {timeout} seconds."
         except Exception as e:

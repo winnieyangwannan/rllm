@@ -1,6 +1,8 @@
 import os
-import gdown
 import shutil
+
+import gdown
+
 import rllm
 
 # Define the Google Drive file IDs for the JSON files
@@ -19,7 +21,7 @@ RLLM_PATH = os.path.dirname(os.path.dirname(rllm.__file__))
 # Define the destination paths
 DEST_PATHS = {
     "train_taco.json": os.path.join(RLLM_PATH, "rllm/data/train/code/taco.json"),
-    "olympiad.json": os.path.join(RLLM_PATH, "rllm/data/train/math/olympiad.json"), 
+    "olympiad.json": os.path.join(RLLM_PATH, "rllm/data/train/math/olympiad.json"),
     "test_livecodebench.json": os.path.join(RLLM_PATH, "rllm/data/test/code/livecodebench.json"),
     "train_livecodebench.json": os.path.join(RLLM_PATH, "rllm/data/train/code/livecodebench.json"),
     "kodcode.json": os.path.join(RLLM_PATH, "rllm/data/train/code/kodcode.json"),

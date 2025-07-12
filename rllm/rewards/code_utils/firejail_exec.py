@@ -1,10 +1,9 @@
 # https://github.com/ganler/code-r1/blob/main/verl/utils/reward_score/coder1/firejail_exec.py
 import os
 import subprocess
-
 from tempfile import NamedTemporaryFile, TemporaryDirectory
-from .utils import BASE_IMPORTS, BASE_LEETCODE_IMPORTS
 
+from .utils import BASE_IMPORTS, BASE_LEETCODE_IMPORTS
 
 # sudo add-apt-repository ppa:deki/firejail
 # sudo apt-get update
@@ -57,24 +56,14 @@ def code_exec_firejail(code, stdin: str = None, timeout=_DEFAULT_TIMEOUT_SECONDS
         code = BASE_IMPORTS + "\n" + BASE_LEETCODE_IMPORTS + "\n" + code
         if len(code) < CLI_ARG_SIZE_LIMIT:
             command.extend(["python3", "-c", code])
-            result = subprocess.run(command,
-                                    input=stdin.encode() if stdin else None,
-                                    stdout=subprocess.PIPE,
-                                    stderr=subprocess.PIPE,
-                                    env=env,
-                                    check=False)
+            result = subprocess.run(command, input=stdin.encode() if stdin else None, stdout=subprocess.PIPE, stderr=subprocess.PIPE, env=env, check=False)
         else:
             with NamedTemporaryFile(dir="/tmp", suffix=".py") as tmp:
                 tmp.write(code.encode())
                 tmp.flush()
                 command.insert(4, f"--whitelist={tmp.name}")
                 command.extend(["python3", tmp.name])
-                result = subprocess.run(command,
-                                        input=stdin.encode() if stdin else None,
-                                        stdout=subprocess.PIPE,
-                                        stderr=subprocess.PIPE,
-                                        env=env,
-                                        check=False)
+                result = subprocess.run(command, input=stdin.encode() if stdin else None, stdout=subprocess.PIPE, stderr=subprocess.PIPE, env=env, check=False)
 
     stderr = result.stderr.decode().strip()
     stdout = result.stdout.decode()

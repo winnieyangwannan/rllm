@@ -1,109 +1,125 @@
-
 import json
-from rllm.tools.multi_tool import MultiTool
-from typing import List, Dict, Union
+import queue
+import warnings
+from typing import Any
 
 from rllm.environments.base.base_env import BaseEnv
-from rllm.rewards.rl_reward import rllm_reward_fn
+from rllm.rewards.reward_fn import RewardFunction, zero_reward
+from rllm.tools.multi_tool import MultiTool
+from rllm.tools.tool_base import Tool
 
-from typing import Any, Tuple, Optional
 
 class ToolEnvironment(BaseEnv):
     """
     A simple environment for tool-based agents that provides questions and evaluates responses.
     """
-    
-    def __init__(self, task: Optional[Dict] = None, tools: List[str] = [], max_steps=10):
+
+    def __init__(self, task: dict | None = None, tools: list[str] | None = None, tool_map: dict[str, type[Tool]] | None = None, reward_fn: RewardFunction | None = None, max_steps=10):
+        """
+        Initialize the ToolEnvironment.
+
+        Args:
+            task: Task information for the environment.
+            tools: List of tool names to look up in the registry (legacy behavior).
+            tool_map: Dictionary mapping tool names to Tool classes (new behavior).
+            reward_fn: Reward function to use for evaluation.
+            max_steps: Maximum number of steps allowed in the environment.
+        """
+        if tool_map is not None and tools is not None:
+            raise ValueError("Cannot specify both 'tools' and 'tool_map' parameters")
+
         self.step_count = 0
         self.max_steps = max_steps
 
-        self.tools = MultiTool(tools)
-        self.task = task
-        self.reward_fn = rllm_reward_fn
-        self.current_data = None
-        self.data_source = ""
-        if self.task:
-            self.data_source = self.task.get("data_source", "")
-    
-    def reset(self, task=None, seed=None):
-        """Reset the environment and return initial observations."""
-        import random
-        if seed is not None:
-            random.seed(seed)
+        # Initialize MultiTool with either tools or tool_map
+        if tool_map is not None:
+            self.tools = MultiTool(tool_map=tool_map)
+        elif tools is not None:
+            self.tools = MultiTool(tools=tools)
+        else:
+            self.tools = MultiTool(tools=[])
 
+        self.task = task
+        if reward_fn is None:
+            warnings.warn("No reward function specified, will get 0 reward.", stacklevel=2)
+            self.reward_fn = zero_reward
+        else:
+            self.reward_fn = reward_fn
+
+    def reset(self):
+        """Reset the environment and return initial observations."""
         self.step_count = 0
-        
-        # Use the provided task if available, otherwise use the default task
-        if task is not None:
-            self.task = task
-        
-        # Return a single observation in a list to maintain the batch structure
-        return {"question": self.task["question"]}, {}
-    
-    def step(self, action: Union[List[Dict], str, Dict]):
+
+        return self.task, {}
+
+    def step(self, action: list[dict] | str | dict):
         """
         Take a step in the environment based on the action.
-        
+
         Args:
             actions: List containing a single action string from the agent
-            
+
         Returns:
             next_observations, rewards, terminateds, infos
         """
         if isinstance(action, dict):
             action = [action]
         self.step_count += 1
-        
+
         reward = 0
         # Check if we should terminate
         done = self.step_count >= self.max_steps or isinstance(action, str)
         # Check if action contains a "finish" tool call
         if isinstance(action, list) and action:
             for tool_call in action:
-                if tool_call.get('function', {}).get('name') == 'finish':
+                if tool_call.get("function", {}).get("name") == "finish":
                     done = True
                     break
         if done:
             # Cannot find tool calls which means the agent is not using the tool and is done.
             if isinstance(action, str):
-                llm_solution = action
+                llm_response = action
             elif isinstance(action, list):
                 # Find the finish tool call
                 finish_action = None
                 for tool_call in action:
-                    if tool_call.get('function', {}).get('name') == 'finish':
+                    if tool_call.get("function", {}).get("name") == "finish":
                         finish_action = tool_call
                         break
-                arguments = finish_action.get('function', {}).get('arguments', {})
-                llm_solution = arguments.get('response', '')
-                # llm_solution = json.loads(arguments).get('response', '')
-            reward = self.reward_fn(data_source=self.data_source, llm_solution=llm_solution, ground_truth=self.task["ground_truth"])
-            return {}, reward, done, {"response": action}
+                if finish_action:
+                    arguments = finish_action.get("function", {}).get("arguments", {})
+                    llm_response = arguments.get("response", "")
+                else:
+                    # No finish tool call found, use the action itself
+                    llm_response = str(action)
+
+            task_info = self.task if self.task is not None else {}
+            reward_output = self.reward_fn(task_info=task_info, action=llm_response)
+            return {}, reward_output.reward, done, {"response": action, "metadata": reward_output.metadata}
 
         tool_calls = action
+        assert isinstance(tool_calls, list)
         tool_outputs = self._execute_tool_calls(tool_calls)
         next_obs = {"tool_outputs": tool_outputs}
 
         # Return results as lists with single items to maintain batch structure
-        return next_obs, reward, done, {"response": action}
-    
+        return next_obs, reward, done, {"response": action, "metadata": {}}
 
-    def _execute_tool_calls(self, tool_calls: List[Dict]):
+    def _execute_tool_calls(self, tool_calls: list[dict[Any, Any]]) -> dict[str, str]:
         import threading
-        import queue
 
         # Create a dictionary to store results in order
-        tool_outputs = {}
-        output_queue = queue.Queue()
+        tool_outputs: dict[str, str] = {}
+        output_queue: queue.Queue[tuple[str, str]] = queue.Queue()
         threads = []
 
         def execute_tool(tool_call):
-            tool_name = tool_call['function']['name']
-            tool_args = json.loads(tool_call['function']['arguments'])
+            tool_name = tool_call["function"]["name"]
+            tool_args = json.loads(tool_call["function"]["arguments"])
             tool_output = self.tools(tool_name=tool_name, **tool_args)
             tool_output_str = tool_output.to_string()
 
-            output_queue.put((tool_call['id'], tool_output_str))
+            output_queue.put((tool_call["id"], tool_output_str))
 
         # Create and start a thread for each tool call
         for idx, tool_call in enumerate(tool_calls):
@@ -121,23 +137,11 @@ class ToolEnvironment(BaseEnv):
             tool_outputs[tool_call_id] = output_str
 
         return tool_outputs
-    
+
     @staticmethod
-    def from_json(json_dict: Dict) -> "ToolEnvironment":
-        return ToolEnvironment(task=json_dict['task'], tools=json_dict['tools'])
-
-if __name__ == "__main__":
-    env = ToolEnvironment(task={"question": "What is the 1+2?", "answer": "3"}, tools=["google_search"])
-    obs, _ = env.reset()
-    next_obs, reward, done, info = env.step(action=[{"function": {"name": "google_search", "arguments": json.dumps({"query": "What is the 1+2?"})}, "id": "1"}])
-    print(next_obs)
-    print(reward)
-    print(done)
-    print(info)
-
-    # Finish enviornment, note that this function is created in tool_agent.py if no tool calls are found in LLM response.
-    next_obs, reward, done, info = env.step(action=[{"function": {"name": "finish", "arguments": json.dumps({"response": "<think> I think the answer is </think> \\boxed{{3}}"})}, "id": "2"}])
-    print(next_obs)
-    print(reward)
-    print(done)
-    print(info)
+    def from_dict(env_args: dict) -> "ToolEnvironment":
+        tools = env_args.pop("tools", None)
+        tool_map = env_args.pop("tool_map", None)
+        reward_fn = env_args.pop("reward_fn", None)
+        max_steps = env_args.pop("max_steps", 10)
+        return ToolEnvironment(task=env_args, tools=tools, tool_map=tool_map, max_steps=max_steps, reward_fn=reward_fn)

@@ -1,11 +1,12 @@
-import os
 import json
-from flask import Flask, render_template, request, redirect, url_for, abort
+import os
 from collections import defaultdict
-import markdown
 
-from r2egym.agenthub.trajectory.trajectory import Trajectory
+import markdown
+from flask import Flask, abort, render_template, url_for
+
 from r2egym.agenthub.trajectory.swebench_utils import swebench_report
+from r2egym.agenthub.trajectory.trajectory import Trajectory
 
 app = Flask(__name__)
 
@@ -15,6 +16,7 @@ BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 BASE_DIR = os.path.dirname(BASE_DIR)
 # TRAJ_DIR = os.path.join(BASE_DIR, "traj")
 TRAJ_DIR = os.path.join(BASE_DIR, "deepswe")
+
 
 def get_jsonl_files():
     """Retrieve all JSONL files in the TRAJ_DIR directory."""
@@ -41,7 +43,7 @@ def read_logs(filename):
     if not os.path.exists(filepath):
         return []
     logs = []
-    with open(filepath, "r") as file:
+    with open(filepath) as file:
         for idx, line in enumerate(file):
             try:
                 log = json.loads(line)
@@ -50,16 +52,10 @@ def read_logs(filename):
                 # Convert markdown fields to HTML with extensions for better formatting
                 system_prompt_md = log.get("system_prompt", "")
                 instance_prompt_md = log.get("instance_prompt", "")
-                log["system_prompt_html"] = markdown.markdown(
-                    system_prompt_md, extensions=["fenced_code", "nl2br"]
-                )
-                log["instance_prompt_html"] = markdown.markdown(
-                    instance_prompt_md, extensions=["fenced_code", "nl2br"]
-                )
+                log["system_prompt_html"] = markdown.markdown(system_prompt_md, extensions=["fenced_code", "nl2br"])
+                log["instance_prompt_html"] = markdown.markdown(instance_prompt_md, extensions=["fenced_code", "nl2br"])
                 if "[ISSUE]" in log["ds"]["problem_statement"]:
-                    log["ds"]["problem_statement"] = log["ds"][
-                        "problem_statement"
-                    ].split("[ISSUE]")[1]
+                    log["ds"]["problem_statement"] = log["ds"]["problem_statement"].split("[ISSUE]")[1]
                 logs.append(log)
             except json.JSONDecodeError:
                 continue  # Skip invalid JSON lines
@@ -73,7 +69,7 @@ def read_logs(filename):
 for f in files:
     try:
         logs_dict[f] = read_logs(f)
-    except:
+    except Exception:
         pass
 
 
@@ -178,7 +174,7 @@ def trajectory(filename, log_id):
 
         url = f"https://github.com/{repo_org}/{repo_name}/pull/{pr_id}/files"
         log["report"] = swebench_report(log["ds"], log["test_output"])
-    except:
+    except Exception:
         url = f"https://github.com/{repo_name_map[log['ds']['repo_name']]}/commit/{log['ds']['commit_hash']}"
 
     t = Trajectory(**log)
