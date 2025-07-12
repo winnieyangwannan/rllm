@@ -12,7 +12,6 @@ from rllm.agents.system_prompts import SWE_SYSTEM_PROMPT, SWE_SYSTEM_PROMPT_FN_C
 
 TOKEN_WARNING_THRESHOLD = 28000
 
-
 def parse_oai_response(response):
     thought = response.choices[0].message.content
     if not thought:
@@ -64,7 +63,6 @@ class SWEAgent(BaseAgent):
         self.format_model_response = format_model_response
         self.scaffold = scaffold
         assert scaffold in ["r2egym", "sweagent"], f"Invalid scaffold: {scaffold}, must be one of ['r2egym', 'sweagent']"
-
         self.system_prompt = SWE_SYSTEM_PROMPT_FN_CALL if use_fn_calling else SWE_SYSTEM_PROMPT
         if scaffold == "sweagent":
             self.system_prompt = SWEAGENT_SYSTEM_PROMPT
@@ -116,6 +114,10 @@ class SWEAgent(BaseAgent):
                 observation += f"\nSteps Remaining: {remaining_steps}"
             else:
                 observation += "\nYou have reached the maximum number of steps. Please submit your answer NOW."
+        
+        cur_tokens = info.get('cur_tokens', None)
+        if cur_tokens is not None and cur_tokens >= TOKEN_WARNING_THRESHOLD:
+            observation += f"\nYou are running out of tokens. Please submit your answer NOW."
 
         cur_tokens = info.get("cur_tokens", None)
         if cur_tokens is not None and cur_tokens >= TOKEN_WARNING_THRESHOLD:

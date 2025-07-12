@@ -60,7 +60,7 @@ python3 -m rllm.trainer.verl.train_agent_ppo \
     trainer.experiment_name='swe-agent-rl' \
     trainer.val_before_train=False \
     trainer.n_gpus_per_node=8 \
-    trainer.nnodes=2 \
+    trainer.nnodes=8 \
     trainer.save_freq=10 \
     trainer.test_freq=10 \
     trainer.default_hdfs_dir=null \
