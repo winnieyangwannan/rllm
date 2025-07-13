@@ -11,9 +11,11 @@
 
 <div align="center">
 
-[![Notion](https://img.shields.io/badge/RLLM-000000?style=for-the-badge&logo=github&logoColor=000&logoColor=white)](https://github.com/agentica-project/rllm)
+[![Documentation](https://img.shields.io/badge/Documentation-black?style=for-the-badge&logo=googledocs&logoColor=white)](https://rllm-project.readthedocs.io/en/latest)
+[![Discord](https://img.shields.io/badge/Discord-5865F2?style=for-the-badge&logo=discord&logoColor=white)](https://discord.gg/BDH46HT9en)
 [![Website](https://img.shields.io/badge/Site-%23000000.svg?style=for-the-badge&logo=semanticweb&logoColor=white)](https://www.agentica-project.com) 
-[![Twitter](https://img.shields.io/badge/Agentica-white?style=for-the-badge&logo=X&logoColor=000&color=000&labelColor=white)](https://x.com/Agentica_)
+[![Twitter/X](https://img.shields.io/badge/Agentica-white?style=for-the-badge&logo=X&logoColor=000&color=000&labelColor=white)](https://x.com/Agentica_)
+[![Github](https://img.shields.io/badge/RLLM-000000?style=for-the-badge&logo=github&logoColor=000&logoColor=white)](https://github.com/agentica-project/rllm)
 [![Hugging Face Collection](https://img.shields.io/badge/Agentica-fcd022?style=for-the-badge&logo=huggingface&logoColor=000&labelColor)](https://huggingface.co/agentica-org)
 
 </div>
@@ -23,12 +25,11 @@
 rLLM is an open-source framework for post-training language agents via reinforcement learning. With rLLM, you can easily build their custom agents and environments, train them with reinforcement learning, and deploy them for real-world workloads. 
 
 
-
 ## Releases  📰
 
 <strong>[2025/07/01]</strong> We release [`DeepSWE-Preview`](https://pretty-radio-b75.notion.site/DeepSWE-Training-a-Fully-Open-sourced-State-of-the-Art[…]-by-Scaling-RL-22281902c1468193aabbe9a8c59bbe33?pvs=73
 ), a 32B software engineering agent (SWE) trained with purely RL that achieves 59% on SWEBench-Verified with test-time scaling,(42.2% Pass@1), topping the SWEBench leaderboard for open-weight models. 
-- ⬆🍽️ An In-Depth Blog Post on our [SWE Agents and RL Training Recipes](https://pretty-radio-b75.notion.site/DeepSWE-Training-a-Fully-Open-sourced-State-of-the-Art[…]-by-Scaling-RL-22281902c1468193aabbe9a8c59bbe33?pvs=73)
+- 🍽️ An In-Depth Blog Post on our [SWE Agents and RL Training Recipes](https://pretty-radio-b75.notion.site/DeepSWE-Training-a-Fully-Open-sourced-State-of-the-Art[…]-by-Scaling-RL-22281902c1468193aabbe9a8c59bbe33?pvs=73)
 - 🤗 HF Model [`DeepSWE-Preview`](https://huggingface.co/agentica-org/DeepSWE-Preview)
 - 🤗 HF Dataset [`R2E-Gym-Subset`](https://huggingface.co/datasets/R2E-Gym/R2E-Gym-Subset)
 - 📄 [Training Scripts](https://github.com/agentica-project/rllm/tree/main/examples/swe)
@@ -61,7 +62,7 @@ rLLM is an open-source framework for post-training language agents via reinforce
 curl -LsSf https://astral.sh/uv/install.sh | sh
 
 # Clone the repository
-git clone <repository-url>
+git clone --recurse-submodules https://github.com/agentica-project/rllm.git
 cd rllm
 
 # Create virtual environment
@@ -109,7 +110,7 @@ Citing DeepSWE:
 }
 ```
 
-Citing DeepCoder and DeepScaleR:
+Citing DeepCoder:
 ```bibtex
 @misc{deepcoder2025,
   title={DeepCoder: A Fully Open-Source 14B Coder at O3-mini Level},

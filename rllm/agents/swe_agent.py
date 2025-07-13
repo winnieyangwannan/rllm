@@ -120,10 +120,6 @@ class SWEAgent(BaseAgent):
         if cur_tokens is not None and cur_tokens >= TOKEN_WARNING_THRESHOLD:
             observation += "\nYou are running out of tokens. Please submit your answer NOW."
 
-        cur_tokens = info.get("cur_tokens", None)
-        if cur_tokens is not None and cur_tokens >= TOKEN_WARNING_THRESHOLD:
-            observation += "\nYou are running out of tokens. Please submit your answer NOW."
-
         if self._trajectory.steps:
             prior_step = self._trajectory.steps[-1]
             prior_step.next_observation = observation

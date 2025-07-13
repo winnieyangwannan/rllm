@@ -173,24 +173,21 @@ cython_debug/
 # DS_Store
 .DS_Store
 
-# Ignore parquet files.
-data/* 
-
 # Ignore verl script outputs.
 **/outputs/
 **/wandb/
 **/checkpoints/
 
+# Ignore parquet files.
+data/* 
+
 rllm/data/preprocess/*.json
 rllm/data/preprocess/code/*.json
 rllm/data/preprocess/math/*.json
 tmp/
-scripts/train/debug_code_dataloader.sh
-debug.sh
 
 # Ignore debug logs and run result logs
 logs/
-rllm.*.json
 
 # Ignore the big datasets
 rllm/data/test/code/taco.json
