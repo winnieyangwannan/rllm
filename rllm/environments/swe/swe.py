@@ -16,7 +16,10 @@ except ImportError:
 
 from rllm.environments.base.base_env import BaseEnv
 
-R2EGYM_PATH = os.path.dirname(r2egym.__file__)
+try:
+    R2EGYM_PATH = os.path.dirname(r2egym.__file__)
+except Exception:
+    R2EGYM_PATH = ""
 # List of tools to be used in the environment.
 R2EGYM_COMMAND_FILES = [
     os.path.join(R2EGYM_PATH, "agenthub/tools/r2egym/file_editor.py"),
