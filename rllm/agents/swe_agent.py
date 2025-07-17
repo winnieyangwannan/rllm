@@ -128,8 +128,7 @@ class SWEAgent(BaseAgent):
             prior_step.info = info
 
         self.messages.append({"role": "user", "content": observation})
-        cur_step = Step(observation=observation)
-        self._trajectory.steps.append(cur_step)
+        self.cur_step = Step(observation=observation)
 
     def update_from_model(self, response: str, **kwargs):
         """
@@ -144,6 +143,7 @@ class SWEAgent(BaseAgent):
         Returns:
             None
         """
+        self._trajectory.steps.append(self.cur_step)
         if self.use_fn_calling:
             thought, action = parse_oai_response(response)
         else:
