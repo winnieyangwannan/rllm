@@ -15,7 +15,7 @@ python3 -m examples.deepscaler.train_deepscaler \
     algorithm.adv_estimator=grpo \
     data.train_batch_size=128 \
     data.val_batch_size=30 \
-    data.max_prompt_length=1024 \
+    data.max_prompt_length=2048 \
     data.max_response_length=8192 \
     actor_rollout_ref.model.path=$MODEL_PATH \
     actor_rollout_ref.hybrid_engine=True \
@@ -57,7 +57,7 @@ python3 -m examples.deepscaler.train_deepscaler \
     trainer.project_name='rllm-agent' \
     trainer.experiment_name='deepscaler-1.5b-8k' \
     trainer.val_before_train=True \
-    trainer.n_gpus_per_node=8 \
+    trainer.n_gpus_per_node=2 \
     trainer.nnodes=1 \
     trainer.save_freq=20 \
     trainer.test_freq=20 \
