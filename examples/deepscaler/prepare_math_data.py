@@ -24,5 +24,5 @@ def prepare_math_data():
 
 if __name__ == "__main__":
     train_dataset, test_dataset = prepare_math_data()
-    print(train_dataset)
-    print(test_dataset)
+    print(train_dataset.get_data_path())
+    print(test_dataset.get_data_path())

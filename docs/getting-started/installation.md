@@ -23,21 +23,17 @@ curl -LsSf https://astral.sh/uv/install.sh | sh
 rLLM uses [verl](https://github.com/volcengine/verl) as its training backend. Follow these steps to install rLLM and our custom fork of verl:
 
 ```bash
-# Clone the repository with submodules
+# Clone the repository
 git clone --recurse-submodules https://github.com/agentica-project/rllm.git
-
-# Create virtual environment
 cd rllm
-uv venv --python 3.10
 
-# Activate the virtual environment
-source .venv/bin/activate  # On Linux/macOS
-# or
-.venv\Scripts\activate  # On Windows
+# create a conda environment
+conda create -n rllm python=3.10
+conda activate rllm
 
-# Install dependencies
-uv pip install -e ./verl[vllm,gpu,sglang]
-uv pip install -e .
+# Install all dependencies
+pip install -e ./verl
+pip install -e .
 ```
 
 This will install rLLM and all its dependencies in development mode.

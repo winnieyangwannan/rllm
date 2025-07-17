@@ -16,26 +16,23 @@ except ImportError:
 
 from rllm.environments.base.base_env import BaseEnv
 
-# Initialize r2egym-related constants only if r2egym is available
-if r2egym is not None:
+try:
     R2EGYM_PATH = os.path.dirname(r2egym.__file__)
-    # List of tools to be used in the environment.
-    R2EGYM_COMMAND_FILES = [
-        os.path.join(R2EGYM_PATH, "agenthub/tools/r2egym/file_editor.py"),
-        os.path.join(R2EGYM_PATH, "agenthub/tools/search.py"),
-        os.path.join(R2EGYM_PATH, "agenthub/tools/r2egym/execute_bash.py"),
-        os.path.join(R2EGYM_PATH, "agenthub/tools/finish.py"),
-    ]
+except Exception:
+    R2EGYM_PATH = ""
+# List of tools to be used in the environment.
+R2EGYM_COMMAND_FILES = [
+    os.path.join(R2EGYM_PATH, "agenthub/tools/r2egym/file_editor.py"),
+    os.path.join(R2EGYM_PATH, "agenthub/tools/search.py"),
+    os.path.join(R2EGYM_PATH, "agenthub/tools/r2egym/execute_bash.py"),
+    os.path.join(R2EGYM_PATH, "agenthub/tools/finish.py"),
+]
 
-    SWEAGENT_COMMAND_FILES = [
-        os.path.join(R2EGYM_PATH, "agenthub/tools/str_replace_editor.py"),
-        os.path.join(R2EGYM_PATH, "agenthub/tools/execute_bash.py"),
-        os.path.join(R2EGYM_PATH, "agenthub/tools/submit.py"),
-    ]
-else:
-    R2EGYM_PATH = None
-    R2EGYM_COMMAND_FILES = []
-    SWEAGENT_COMMAND_FILES = []
+SWEAGENT_COMMAND_FILES = [
+    os.path.join(R2EGYM_PATH, "agenthub/tools/str_replace_editor.py"),
+    os.path.join(R2EGYM_PATH, "agenthub/tools/execute_bash.py"),
+    os.path.join(R2EGYM_PATH, "agenthub/tools/submit.py"),
+]
 
 R2E_ENV_IDS = [
     "R2E-Gym/R2E-Gym-Subset",
@@ -70,8 +67,6 @@ class SWEEnv(BaseEnv):
             timeout: Timeout for each step in seconds.
             delete_image: Whether to delete the Docker image after closing.
         """
-        if r2egym is None:
-            raise ImportError("r2egym is required for SWEEnv but is not installed. Please install r2egym to use this environment.")
         if entry is not None:
             self.entry = entry
             self.dataset = None
