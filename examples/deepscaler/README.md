@@ -1,9 +1,9 @@
-# Math Tool Agent Examples
+# DeepScaleR Examples
 
 This directory contains examples for training and running math reasoning agents with tool usage capabilities using the RLLM framework. The math tool agent has access to a Python interepreter to solve mathematical problems through step-by-step reasoning and tool-use.
 
 Our examples uses the following:
-* Qwen3-4B as the base model
+* Deepseek-R1-Distill-1.5B as the base model
 * DeepScaleR-Math dataset for training
 * AIME2024 dataset for evaluation
 

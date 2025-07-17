@@ -4,7 +4,6 @@ from collections import defaultdict
 
 import markdown
 from flask import Flask, abort, render_template, url_for
-
 from r2egym.agenthub.trajectory.swebench_utils import swebench_report
 from r2egym.agenthub.trajectory.trajectory import Trajectory
 
