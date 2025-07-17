@@ -58,24 +58,17 @@ rLLM is an open-source framework for post-training language agents via reinforce
 ### Installation
 
 ```bash
-# Install uv if you haven't already
-curl -LsSf https://astral.sh/uv/install.sh | sh
-
 # Clone the repository
 git clone --recurse-submodules https://github.com/agentica-project/rllm.git
 cd rllm
 
-# Create virtual environment
-uv venv --python 3.10
-
-# Activate the virtual environment
-source .venv/bin/activate  # On Linux/macOS
-# or
-.venv\Scripts\activate  # On Windows
+# create a conda environment
+conda create -n rllm python=3.10
+conda activate rllm
 
 # Install all dependencies
-uv pip install -e ./verl
-uv pip install -e .
+pip install -e ./verl
+pip install -e .
 ```
 
 

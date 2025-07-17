@@ -2,8 +2,7 @@ def safe_import(module_path, class_name):
     try:
         module = __import__(module_path, fromlist=[class_name])
         return getattr(module, class_name)
-    except ImportError as e:
-        raise e
+    except (ImportError, AttributeError, ModuleNotFoundError):
         return None
 
 
