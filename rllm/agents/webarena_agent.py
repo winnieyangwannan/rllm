@@ -141,7 +141,7 @@ def remove_unwanted_characters(text: str):
     Percentage sign (%)
     Mathematical operators (+, -, =, *)
     HTML/XML brackets (<, >, [, ], {, })
-    Other useful web symbols (#, ~, ^, |, \, °)
+    Other useful web symbols (#, ~, ^, |, \\, °)
     This will ensure that important information like:
 
     Prices (e.g., "$19.99")

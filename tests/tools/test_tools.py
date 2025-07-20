@@ -1,6 +1,8 @@
 #!/usr/bin/env python3
 import asyncio
 
+import pytest
+
 from rllm.tools import tool_registry
 from rllm.tools.tool_base import ToolOutput
 
@@ -208,6 +210,7 @@ def test_python_tool():
             print(actual_stdout)
 
 
+@pytest.mark.parametrize("tool_name", search_test_cases.keys())
 def test_search_tool(tool_name: str):
     """Test a search tool with multiple test cases."""
     print(f"\nTesting {tool_name} tool...")
@@ -235,34 +238,3 @@ def test_search_tool(tool_name: str):
             print("Test passed!")
         else:
             print("Test failed!")
-
-
-def main():
-    print("=" * 50)
-    print("RLLM TOOLS FUNCTIONAL TEST")
-    print("=" * 50)
-
-    # Test Python tool
-    try:
-        test_python_tool()
-    except Exception as e:
-        print(f"Python tool test failed with error: {e}")
-        import traceback
-
-        traceback.print_exc()
-
-    # Test search tools
-    for tool_name in search_test_cases.keys():
-        try:
-            test_search_tool(tool_name)
-        except Exception as e:
-            print(f"{tool_name} test failed with error: {e}")
-            import traceback
-
-            traceback.print_exc()
-
-    print("\nTest complete!")
-
-
-if __name__ == "__main__":
-    main()

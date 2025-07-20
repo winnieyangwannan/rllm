@@ -62,6 +62,9 @@ class ToolEnvironment(BaseEnv):
         Returns:
             next_observations, rewards, terminateds, infos
         """
+        if action is None:
+            action = []
+
         if isinstance(action, dict):
             action = [action]
         self.step_count += 1
