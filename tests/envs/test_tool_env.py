@@ -415,8 +415,9 @@ class TestToolEnvironment:
         assert done is False
 
         # None action (should be handled gracefully)
-        with pytest.raises((TypeError, AttributeError)):
-            env.step(None)
+        obs, reward, done, info = env.step(None)
+        assert obs == {"tool_outputs": {}}
+        assert done is False
 
     def test_reward_function_integration(self):
         """Test integration with different reward functions."""
