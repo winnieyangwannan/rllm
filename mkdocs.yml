@@ -1,6 +1,6 @@
 site_name: rLLM
 site_description: A library for training LLM agents with reinforcement learning
-repo_url: https://github.com/agentica-project/rllm
+repo_url: https://github.com/rllm-org/rllm
 docs_dir: docs
 theme:
   name: material
