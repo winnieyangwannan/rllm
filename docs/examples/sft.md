@@ -127,4 +127,4 @@ Script for evaluating SFT model performance:
 --8<-- "examples/sft/run_sft_model.py"
 ```
 
-For detailed setup instructions, see the [README](https://github.com/agentica-project/rllm-internal/blob/v0.1/examples/sft/README.md) in the sft example directory.
+For detailed setup instructions, see the [README](https://github.com/rllm-org/rllm/blob/main/examples/sft/README.md) in the sft example directory.
