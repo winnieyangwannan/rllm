@@ -15,7 +15,7 @@
 [![Discord](https://img.shields.io/badge/Discord-5865F2?style=for-the-badge&logo=discord&logoColor=white)](https://discord.gg/BDH46HT9en)
 [![Website](https://img.shields.io/badge/Site-%23000000.svg?style=for-the-badge&logo=semanticweb&logoColor=white)](https://www.agentica-project.com) 
 [![Twitter/X](https://img.shields.io/badge/Agentica-white?style=for-the-badge&logo=X&logoColor=000&color=000&labelColor=white)](https://x.com/Agentica_)
-[![Github](https://img.shields.io/badge/RLLM-000000?style=for-the-badge&logo=github&logoColor=000&logoColor=white)](https://github.com/agentica-project/rllm)
+[![Github](https://img.shields.io/badge/RLLM-000000?style=for-the-badge&logo=github&logoColor=000&logoColor=white)](https://github.com/rllm-org/rllm)
 [![Hugging Face Collection](https://img.shields.io/badge/Agentica-fcd022?style=for-the-badge&logo=huggingface&logoColor=000&labelColor)](https://huggingface.co/agentica-org)
 
 </div>
@@ -32,7 +32,7 @@ rLLM is an open-source framework for post-training language agents via reinforce
 - 🍽️ An In-Depth Blog Post on our [SWE Agents and RL Training Recipes](https://pretty-radio-b75.notion.site/DeepSWE-Training-a-Fully-Open-sourced-State-of-the-Art[…]-by-Scaling-RL-22281902c1468193aabbe9a8c59bbe33?pvs=73)
 - 🤗 HF Model [`DeepSWE-Preview`](https://huggingface.co/agentica-org/DeepSWE-Preview)
 - 🤗 HF Dataset [`R2E-Gym-Subset`](https://huggingface.co/datasets/R2E-Gym/R2E-Gym-Subset)
-- 📄 [Training Scripts](https://github.com/agentica-project/rllm/tree/main/examples/swe)
+- 📄 [Training Scripts](https://github.com/rllm-org/rllm/tree/main/examples/swe)
 - 📈 [Wandb Training Logs](https://wandb.ai/mluo/deepswe)—All training runs and ablations.
 - 🔎 [Evaluation Logs](https://drive.google.com/file/d/10LIwpJeaFuiX6Y-qEG2a4a335PEuQJeS/view?usp=sharing)—16 passes over SWE-Bench-Verified.
 
@@ -40,7 +40,7 @@ rLLM is an open-source framework for post-training language agents via reinforce
 - ⬆️ An In-Depth Blog Post on our [Training Recipe and Insights](https://pretty-radio-b75.notion.site/DeepCoder-A-Fully-Open-Source-14B-Coder-at-O3-mini-Level-1cf81902c14680b3bee5eb349a512a51)
 - 🤗 HF Model [`DeepCoder-14B-Preview`](https://huggingface.co/agentica-org/DeepCoder-14B-Preview), [`DeepCoder-1.5B-Preview`](https://huggingface.co/agentica-org/DeepCoder-1.5B-Preview)
 - 🤗 HF Dataset [`DeepCoder-Preview-Dataset`](https://huggingface.co/datasets/agentica-org/DeepCoder-Preview-Dataset)
-- 📄 [Training Scripts](https://github.com/agentica-project/rllm/tree/main/scripts/deepcoder/train)—Exact hyperparameters we used to achieve `o3-mini` performance.
+- 📄 [Training Scripts](https://github.com/rllm-org/rllm/tree/main/scripts/deepcoder/train)—Exact hyperparameters we used to achieve `o3-mini` performance.
 - 📈 [Wandb Training Logs](https://wandb.ai/mluo/deepcoder)—All training runs and ablations.
 - 🔎 [Evaluation Logs](https://drive.google.com/file/d/1tr_xXvCJnjU0tLO7DNtFL85GIr3aGYln/view?usp=sharing)—LiveCodeBench and Codeforces logs for DeepCoder.
 
@@ -59,7 +59,7 @@ rLLM is an open-source framework for post-training language agents via reinforce
 
 ```bash
 # Clone the repository
-git clone --recurse-submodules https://github.com/agentica-project/rllm.git
+git clone --recurse-submodules https://github.com/rllm-org/rllm.git
 cd rllm
 
 # create a conda environment
