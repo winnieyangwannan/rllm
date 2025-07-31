@@ -7,8 +7,18 @@ theme:
   logo: assets/agentica-logo.png
   favicon: assets/agentica-logo-black.png
   palette:
-    primary: black
-    accent: black
+    - scheme: default
+      primary: black
+      accent: black
+      toggle:
+        icon: material/brightness-7
+        name: Switch to dark mode
+    - scheme: slate
+      primary: black
+      accent: black
+      toggle:
+        icon: material/brightness-4
+        name: Switch to light mode
   features:
     - navigation.instant
     - navigation.tracking
