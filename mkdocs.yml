@@ -6,15 +6,13 @@ theme:
   name: material
   logo: assets/agentica-logo.png
   favicon: assets/agentica-logo-black.png
-  palette: 
-    # Palette toggle for light mode
+  palette:
     - scheme: default
       primary: black
       accent: black
       toggle:
         icon: material/brightness-7
         name: Switch to dark mode
-    # Palette toggle for dark mode
     - scheme: slate
       primary: black
       accent: black
