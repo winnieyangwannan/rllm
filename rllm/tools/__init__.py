@@ -2,6 +2,15 @@ from rllm.tools.code_tools import (
     PythonInterpreter,
 )
 from rllm.tools.registry import ToolRegistry
+from rllm.tools.request_manager import (
+    ToolRequestManager, 
+    BaseScheduler, 
+    FIFOScheduler,
+    ToolManagerRegistry,
+    tool_manager_registry,
+    get_tool_manager,
+    submit_tool_request
+)
 from rllm.tools.web_tools import (
     FirecrawlTool,
     GoogleSearchTool,
@@ -14,8 +23,8 @@ DEFAULT_TOOLS = {
     "python": PythonInterpreter,
     "google_search": GoogleSearchTool,
     "firecrawl": FirecrawlTool,
-    "tavily_extract": TavilyExtractTool,
-    "tavily_search": TavilySearchTool,
+    "tavily-extract": TavilyExtractTool,
+    "tavily-search": TavilySearchTool,
 }
 
 # Create the singleton registry instance and register all default tools
@@ -31,4 +40,11 @@ __all__ = [
     "TavilySearchTool",
     "ToolRegistry",
     "tool_registry",
+    "ToolRequestManager",
+    "BaseScheduler",
+    "FIFOScheduler",
+    "ToolManagerRegistry",
+    "tool_manager_registry",
+    "get_tool_manager",
+    "submit_tool_request",
 ]
