@@ -6,10 +6,7 @@ from rllm.tools.request_manager import (
     ToolRequestManager, 
     BaseScheduler, 
     FIFOScheduler,
-    ToolManagerRegistry,
-    tool_manager_registry,
-    get_tool_manager,
-    submit_tool_request
+    ToolManagerRegistry
 )
 from rllm.tools.web_tools import (
     FirecrawlTool,
@@ -43,8 +40,5 @@ __all__ = [
     "ToolRequestManager",
     "BaseScheduler",
     "FIFOScheduler",
-    "ToolManagerRegistry",
-    "tool_manager_registry",
-    "get_tool_manager",
-    "submit_tool_request",
+    "ToolManagerRegistry"
 ]
