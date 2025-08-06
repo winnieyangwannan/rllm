@@ -71,6 +71,23 @@ pip install -e ./verl
 pip install -e .
 ```
 
+### Installation with Docker 🐳
+
+For a containerized setup, you can use Docker:
+
+```bash
+
+# Build the Docker image
+docker build -t rllm .
+
+# Create and start the container
+docker create --runtime=nvidia --gpus all --net=host --shm-size="10g" --cap-add=SYS_ADMIN -v .:/workspace/rllm -v /tmp:/tmp --name rllm-container rllm sleep infinity
+docker start rllm-container
+
+# Enter the container
+docker exec -it rllm-container bash
+```
+
 
 ## Acknowledgements
 
