@@ -48,14 +48,14 @@ git clone --recurse-submodules https://github.com/rllm-org/rllm.git
 cd rllm
 
 # create a conda environment
-conda create -n rllm python=3.10
+conda create -n rllm python=3.10 (use python=3.11 for MacOS)
 conda activate rllm
 
 # Install all dependencies
 pip install -e ./verl
 pip install -e .
 
-**Note:** On macOS, GPU features (flash-attn, deepspeed, vllm) are automatically excluded for compatibility. For GPU support on macOS, you can install with: `pip install -e .[gpu]`
+**Note:** On macOS, GPU features (flash-attn, deepspeed, vllm) are automatically excluded for compatibility. For GPU support on macOS, you can install with: `pip install -e .[gpu]`.
 ```
 
 ### Installation with Docker 🐳
