@@ -1,4 +1,6 @@
 import asyncio
+import hashlib
+import logging
 
 import numpy as np
 import openai
@@ -19,12 +21,11 @@ class RolloutEngine:
         elif self.chat_parser is not None and self.tokenizer is None:
             self.tokenizer = self.chat_parser.tokenizer
 
-        self.sampling_params = sampling_params
-
         self.api_retries = kwargs.get("api_retries", 3)
 
         if self.engine_name == "openai":
             self.client = openai.AsyncOpenAI(**kwargs.get("openai_kwargs", {}))
+            logging.getLogger("httpx").setLevel(logging.WARNING)
 
         elif self.engine_name == "verl":
             assert self.chat_parser is not None and self.tokenizer is not None, "ChatTemplateParser and tokenizer are required for verl engine"  # is this passed from the trainer?
@@ -34,6 +35,8 @@ class RolloutEngine:
             self.router = Router(config=self.config, tokenizer=self.tokenizer, addresses=self.rollout_manager.server_addresses)
         else:
             raise NotImplementedError(f"Engine type '{self.engine_name}' not supported")
+
+        self.sampling_params = sampling_params or {}
 
     def wake_up(self):
         """Wake up the rollout engine (for verl engine)"""
@@ -62,7 +65,6 @@ class RolloutEngine:
         Raises:
             NotImplementedError: If the engine type is not supported
         """
-        application_id = kwargs.pop("application_id", None)
 
         if self.engine_name == "openai":
             if self.chat_parser is None:
@@ -70,13 +72,15 @@ class RolloutEngine:
             else:
                 return await self._get_response_openai(messages, **kwargs)
         elif self.engine_name == "verl":
-            assert application_id is not None, "application_id is required for verl engine"
-            return await self._get_response_verl(messages, application_id, **kwargs)
+            return await self._get_response_verl(messages, **kwargs)
         else:
             raise NotImplementedError(f"Engine type '{self.engine_name}' not supported")
 
-    async def _get_response_verl(self, messages: list[dict], application_id: str, **kwargs) -> str:
+    async def _get_response_verl(self, messages: list[dict], application_id: str | None = None, **kwargs) -> str:
         batch = self._convert_messages_verl([messages], **kwargs)
+        if application_id is None:
+            messages_str = str(batch.non_tensor_batch["formatted_prompts"][0])
+            application_id = hashlib.md5(messages_str.encode()).hexdigest()
 
         if "max_tokens" in kwargs:
             batch.meta_info["max_tokens"] = kwargs["max_tokens"]
@@ -116,6 +120,11 @@ class RolloutEngine:
 
         async def get_response(prompt_text: str):
             retries = self.api_retries
+            if "model" in kwargs and "model" in self.sampling_params:
+                kwargs.pop("model")
+            if "model" not in kwargs and "model" not in self.sampling_params:
+                kwargs["model"] = ""
+
             while retries > 0:
                 try:
                     response = await self.client.completions.create(

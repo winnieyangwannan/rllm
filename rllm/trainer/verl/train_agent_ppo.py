@@ -7,9 +7,10 @@ import hydra
 import ray
 
 from rllm.trainer.env_agent_mappings import AGENT_CLASS_MAPPING, ENV_CLASS_MAPPING
+from rllm.trainer.verl.agent_ppo_trainer import AgentPPOTrainer
 
 # Local application imports
-from rllm.trainer.verl.agent_ppo_trainer import AgentPPOTrainer
+from rllm.trainer.verl.agent_workflow_trainer import AgentWorkflowPPOTrainer
 from verl.trainer.ppo.reward import load_reward_manager
 
 
@@ -27,7 +28,7 @@ def run_ppo_agent(config):
 
 
 @ray.remote(num_cpus=1)  # please make sure main_task is not scheduled on head
-def train_agent(config, agent_class=None, env_class=None, agent_args=None, env_args=None):
+def train_agent(config, workflow_class=None, workflow_args=None, agent_class=None, env_class=None, agent_args=None, env_args=None):
     # print initial config
     from pprint import pprint
 
@@ -35,8 +36,9 @@ def train_agent(config, agent_class=None, env_class=None, agent_args=None, env_a
 
     from verl.utils.fs import copy_local_path_from_hdfs
 
-    pprint(OmegaConf.to_container(config, resolve=True))  # resolve=True will eval symbol values
+    OmegaConf.register_new_resolver("eval", lambda x: eval(x))
     OmegaConf.resolve(config)
+    pprint(OmegaConf.to_container(config))
 
     # download the checkpoint from hdfs
     local_path = copy_local_path_from_hdfs(config.actor_rollout_ref.model.path)
@@ -82,34 +84,55 @@ def train_agent(config, agent_class=None, env_class=None, agent_args=None, env_a
     val_reward_fn = load_reward_manager(config, tokenizer, num_examine=1)
     resource_pool_manager = ResourcePoolManager(resource_pool_spec=resource_pool_spec, mapping=mapping)
 
-    if env_class is None:
-        env_class = ENV_CLASS_MAPPING[config.env.name]
-    if agent_class is None:
-        agent_class = AGENT_CLASS_MAPPING[config.agent.name]
+    if config.workflow.use_workflow:
+        workflow_args = workflow_args or {}
+        if config.workflow.get("workflow_args") is not None:
+            workflow_args.update(config.workflow.get("workflow_args"))
 
-    env_args = env_args or {}
-    agent_args = agent_args or {}
-    if config.env.get("env_args") is not None:
-        env_args.update(config.env.get("env_args"))
-    if config.agent.get("agent_args") is not None:
-        agent_args.update(config.agent.get("agent_args"))
+        trainer = AgentWorkflowPPOTrainer(
+            config=config,
+            tokenizer=tokenizer,
+            role_worker_mapping=role_worker_mapping,
+            resource_pool_manager=resource_pool_manager,
+            ray_worker_group_cls=ray_worker_group_cls,
+            reward_fn=reward_fn,
+            val_reward_fn=val_reward_fn,
+            workflow_class=workflow_class,
+            workflow_args=workflow_args,
+        )
 
-    trainer = AgentPPOTrainer(
-        config=config,
-        tokenizer=tokenizer,
-        role_worker_mapping=role_worker_mapping,
-        resource_pool_manager=resource_pool_manager,
-        ray_worker_group_cls=ray_worker_group_cls,
-        reward_fn=reward_fn,
-        val_reward_fn=val_reward_fn,
-        env_class=env_class,
-        agent_class=agent_class,
-        env_args=env_args,
-        agent_args=agent_args,
-    )
+    else:
+        if env_class is None:
+            env_class = ENV_CLASS_MAPPING[config.env.name]
+        if agent_class is None:
+            agent_class = AGENT_CLASS_MAPPING[config.agent.name]
+
+        env_args = env_args or {}
+        agent_args = agent_args or {}
+        if config.env.get("env_args") is not None:
+            env_args.update(config.env.get("env_args"))
+        if config.agent.get("agent_args") is not None:
+            agent_args.update(config.agent.get("agent_args"))
+
+        trainer = AgentPPOTrainer(
+            config=config,
+            tokenizer=tokenizer,
+            role_worker_mapping=role_worker_mapping,
+            resource_pool_manager=resource_pool_manager,
+            ray_worker_group_cls=ray_worker_group_cls,
+            reward_fn=reward_fn,
+            val_reward_fn=val_reward_fn,
+            env_class=env_class,
+            agent_class=agent_class,
+            env_args=env_args,
+            agent_args=agent_args,
+        )
 
     trainer.init_workers()
-    trainer.fit_agent()
+    try:
+        trainer.fit_agent()
+    finally:
+        trainer.shutdown()
 
 
 if __name__ == "__main__":
