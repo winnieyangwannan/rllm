@@ -7,9 +7,9 @@ from typing import Any
 class Step:
     chat_completions: list[dict[str, str]] = field(default_factory=list)
 
+    observation: Any = None
     thought: str = ""
     action: Any = None
-    observation: Any = None
     model_response: str = ""
     info: dict = field(default_factory=dict)  # Store any additional info.
 
@@ -17,6 +17,9 @@ class Step:
     reward: float = 0.0
     done: bool = False
     mc_return: float = 0.0
+
+    step_id: str = ""
+    step_num: int = 0
 
 
 @dataclass
@@ -32,8 +35,29 @@ class Trajectory:
 
     def to_dict(self):
         return {
+            "task": self.task,
             "steps": [asdict(step) for step in self.steps],
             "reward": float(self.reward),
+        }
+
+
+@dataclass
+class Episode:
+    id: str = ""
+    task: Any = None
+    termination_reason = None
+    is_correct: bool = False
+    trajectories: list[tuple[str, Trajectory]] = field(default_factory=list)  # [(agent_name, Trajectory), ...]
+    metrics: dict = field(default_factory=dict)
+
+    def to_dict(self):
+        return {
+            "id": self.id,
+            "task": self.task,
+            "termination_reason": self.termination_reason.value if self.termination_reason is not None else None,
+            "is_correct": bool(self.is_correct),
+            "trajectories": [(agent_name, trajectory.to_dict()) for agent_name, trajectory in self.trajectories],
+            "metrics": self.metrics,
         }
 
 
