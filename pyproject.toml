@@ -41,8 +41,6 @@ dependencies = [
     "dm-tree",
 
     # Cloud and infrastructure
-    "google-cloud-aiplatform",
-    "vertexai",
     "kubernetes",
     "ray",
 
@@ -93,6 +91,9 @@ gpu = [
     "flash-attn>=2.8.0.post2; sys_platform != 'darwin'",
     "deepspeed; sys_platform != 'darwin'",
     "vllm>=0.8.3; sys_platform != 'darwin'",
+]
+smolagents = [
+    "smolagents==1.20.0",
 ]
 
 [tool.ruff]
