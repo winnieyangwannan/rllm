@@ -347,22 +347,12 @@ class RLLMOpenAIModel(SmolModel):
             # Extract text and token usage from ModelOutput
             response_text = model_output.text
             completion_tokens = model_output.completion_tokens
+            prompt_tokens = model_output.prompt_tokens
 
             # Create a ChatMessage-like response object
             if SMOLAGENTS_AVAILABLE:
-                # Estimate input tokens (rough approximation)
-                total_content_length = 0
-                for msg in prompt:
-                    content = msg.get("content", "")
-                    if isinstance(content, list):
-                        # Handle content that's a list of content parts
-                        content_str = " ".join(str(part.get("text", "")) if isinstance(part, dict) else str(part) for part in content)
-                    else:
-                        content_str = str(content)
-                    total_content_length += len(content_str.split())
-
-                input_tokens = int(total_content_length * 1.3)
-                # Use actual completion tokens from ModelOutput
+                # Use actual token counts from ModelOutput
+                input_tokens = prompt_tokens
                 output_tokens = completion_tokens
 
                 self._last_input_token_count = input_tokens
@@ -371,7 +361,7 @@ class RLLMOpenAIModel(SmolModel):
                 return ChatMessage(role="assistant", content=response_text, token_usage=TokenUsage(input_tokens=input_tokens, output_tokens=output_tokens))
             else:
                 # Fallback for when SmolAgent is not available
-                return {"role": "assistant", "content": response_text, "token_usage": {"input_tokens": 0, "output_tokens": completion_tokens}}
+                return {"role": "assistant", "content": response_text, "token_usage": {"input_tokens": prompt_tokens, "output_tokens": completion_tokens}}
 
         except Exception as e:
             logger.error(f"Error in RLLMOpenAIModel.generate_async: {e}")

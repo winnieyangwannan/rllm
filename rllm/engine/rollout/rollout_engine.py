@@ -7,6 +7,7 @@ class ModelOutput:
     tool_calls: list
     finish_reason: str
     completion_tokens: int
+    prompt_tokens: int
 
 
 class RolloutEngine:

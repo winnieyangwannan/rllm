@@ -42,7 +42,7 @@ class OpenAIEngine(RolloutEngine):
                 text = response.choices[0].message.content
                 if hasattr(response.choices[0].message, "reasoning") and isinstance(response.choices[0].message.reasoning, str):
                     text = f"{THOUGHT_DELIMITER_START}\n{response.choices[0].message.reasoning}\n{THOUGHT_DELIMITER_END}\n\n{text}"
-                return ModelOutput(text=text, tool_calls=response.choices[0].message.tool_calls, finish_reason=response.choices[0].finish_reason, completion_tokens=response.usage.completion_tokens)
+                return ModelOutput(text=text, tool_calls=response.choices[0].message.tool_calls, finish_reason=response.choices[0].finish_reason, completion_tokens=response.usage.completion_tokens, prompt_tokens=response.usage.prompt_tokens)
             except openai.RateLimitError:
                 retries -= 1
                 if retries == 0:
@@ -59,11 +59,12 @@ class OpenAIEngine(RolloutEngine):
     async def completion(self, prompt: str, **kwargs) -> ModelOutput:
         sampling_params = self.sampling_params.copy()
         sampling_params.update(kwargs)
+        sampling_params.pop("model")
         retries = self.api_retries
         while retries > 0:
             try:
                 response = await self.client.completions.create(model=self.model, prompt=prompt, timeout=3600, **sampling_params)
-                return ModelOutput(text=response.choices[0].text, tool_calls=[], finish_reason=response.choices[0].finish_reason, completion_tokens=response.usage.completion_tokens)
+                return ModelOutput(text=response.choices[0].text, tool_calls=[], finish_reason=response.choices[0].finish_reason, completion_tokens=response.usage.completion_tokens, prompt_tokens=response.usage.prompt_tokens)
             except openai.RateLimitError:
                 retries -= 1
                 if retries == 0:
