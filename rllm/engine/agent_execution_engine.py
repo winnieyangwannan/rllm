@@ -23,7 +23,6 @@ from rllm.environments.env_utils import (
 )
 from rllm.misc import colorful_print
 from rllm.parser.chat_template.parser import ChatTemplateParser
-from rllm.router.router import Router
 
 logger = logging.getLogger(__name__)
 
@@ -104,6 +103,7 @@ class AgentExecutionEngine:
             logging.getLogger("httpx").setLevel(logging.WARNING)
         elif self.engine_name == "verl":
             # All generation is done via scheduler. Currently only works for verl
+            from rllm.router.router import Router
             self.server_addresses = getattr(self.rollout_engine, "server_addresses", [])
             self.router = Router(config=self.config, tokenizer=self.tokenizer, addresses=self.server_addresses)
 
