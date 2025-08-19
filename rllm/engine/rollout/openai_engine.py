@@ -59,7 +59,7 @@ class OpenAIEngine(RolloutEngine):
     async def completion(self, prompt: str, **kwargs) -> ModelOutput:
         sampling_params = self.sampling_params.copy()
         sampling_params.update(kwargs)
-        sampling_params.pop("model")
+        sampling_params.pop("model", None)
         retries = self.api_retries
         while retries > 0:
             try:
