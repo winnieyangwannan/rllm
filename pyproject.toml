@@ -21,19 +21,7 @@ dependencies = [
     # Core ML/AI packages
     "torch>=2.7",
     "transformers",
-    "accelerate",
-    "flash-attn>=2.8.0.post2; sys_platform != 'darwin'",  # Skip on macOS
-    "sentence-transformers",
-    "torchmetrics",
-
-    # Training and inference
-    "deepspeed; sys_platform != 'darwin'",  # Skip on macOS
-    "vllm>=0.8.3; sys_platform != 'darwin'",  # Skip on macOS
-    "sgl-kernel",
-    "sglang>=0.4.8.post1",
-    "sglang-router",
-    "peft",
-    "torchao",
+    "openai",
 
     # Data processing
     "datasets",
@@ -41,7 +29,6 @@ dependencies = [
     "dm-tree",
 
     # Cloud and infrastructure
-    "kubernetes",
     "ray",
 
     # Web and automation
@@ -54,8 +41,8 @@ dependencies = [
     "latex2sympy2",
     "pylatexenc",
     "nltk",
+    "sympy",
     "scipy",
-    "scikit-learn",
 
     # Code evaluation
     "swebench",
