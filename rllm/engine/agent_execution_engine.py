@@ -104,6 +104,7 @@ class AgentExecutionEngine:
         elif self.engine_name == "verl":
             # All generation is done via scheduler. Currently only works for verl
             from rllm.router.router import Router
+
             self.server_addresses = getattr(self.rollout_engine, "server_addresses", [])
             self.router = Router(config=self.config, tokenizer=self.tokenizer, addresses=self.server_addresses)
 
