@@ -1,6 +1,7 @@
 import random
 import re
 
+from rllm import Action
 from rllm.rewards.reward_types import RewardOutput
 
 
@@ -109,7 +110,7 @@ def compute_score(solution_str, ground_truth, method="strict", format_score=0.1,
         return format_score
 
 
-def countdown_reward_fn(task_info: dict, action: str) -> RewardOutput:
+def countdown_reward_fn(task_info: dict, action: str | Action) -> RewardOutput:
     """
     A specialized reward function for countdown tasks using the compute_score helper.
 
@@ -124,6 +125,9 @@ def countdown_reward_fn(task_info: dict, action: str) -> RewardOutput:
         RewardOutput with reward and metadata
     """
     try:
+        if isinstance(action, Action):
+            action = action.action
+
         # Extract basic info
         target = task_info.get("target")
         nums = task_info.get("nums", [])
