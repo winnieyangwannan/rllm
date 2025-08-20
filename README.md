@@ -44,15 +44,16 @@ rLLM is an open-source framework for post-training language agents via reinforce
 
 ```bash
 # Clone the repository
-git clone https://github.com/rllm-org/rllm.git
+git clone --recurse-submodules https://github.com/rllm-org/rllm.git
 cd rllm
 
 # Create a conda environment
 conda create -n rllm python=3.10
 conda activate rllm
 
-# Install verl v0.5.0
-bash scripts/install_verl.sh # (or follow the instructions at https://verl.readthedocs.io/en/v0.5.x/start/install.html)
+# Install verl
+bash verl/scripts/install_vllm_sglang_mcore.sh
+pip install --no-deps -e ./verl
 
 # Install rllm
 pip install -e .
@@ -77,7 +78,7 @@ docker exec -it rllm-container bash
 
 ## Acknowledgements
 
-- Our training experiments are powered by our heavily modified fork of [verl](https://github.com/volcengine/verl), an open-source RLHF library.
+- Our training experiments are powered by [verl](https://github.com/volcengine/verl), an open-source RLHF library.
 - Our models are trained on top of [`DeepSeek-R1-Distill-Qwen-1.5B`](https://huggingface.co/deepseek-ai/DeepSeek-R1-Distill-Qwen-1.5B), [`DeepSeek-R1-Distill-Qwen-14B`](https://huggingface.co/deepseek-ai/DeepSeek-R1-Distill-Qwen-14B), and [`Qwen3-32B`](https://huggingface.co/Qwen/Qwen3-32b).
 - Our work is done as part of [Berkeley Sky Computing Lab](https://skycomputing.berkeley.edu/), [Berkeley AI Research](https://bair.berkeley.edu/), and a successful collaboration with Together AI.
 
