@@ -1,9 +1,10 @@
 from typing import Any
 
 import ray
+from verl.trainer.constants_ppo import get_ppo_ray_runtime_env
 
 from rllm.data import Dataset
-from rllm.trainer.verl.train_agent_ppo import train_agent
+from rllm.trainer.verl.train_agent_ppo import TaskRunner
 
 
 class AgentTrainer:
@@ -55,10 +56,12 @@ class AgentTrainer:
 
     def train(self):
         if not ray.is_initialized():
-            ray.init(runtime_env={"env_vars": {"TOKENIZERS_PARALLELISM": "true", "NCCL_DEBUG": "WARN"}})
+            ray.init(runtime_env=get_ppo_ray_runtime_env(), num_cpus=self.config.ray_init.num_cpus)
+
+        runner = TaskRunner.remote()
 
         ray.get(
-            train_agent.remote(
+            runner.run.remote(
                 config=self.config,
                 workflow_class=self.workflow_class,
                 workflow_args=self.workflow_args,

@@ -4,13 +4,9 @@ ENV DEBIAN_FRONTEND=noninteractive
 
 WORKDIR /workspace
 
-RUN pip uninstall verl -y || true
+RUN git clone https://github.com/rllm-org/rllm.git rllm
 
-RUN git clone --recurse-submodules https://github.com/rllm-org/rllm.git rllm
-
-RUN cd rllm && \
-    pip install -e ./verl && \
-    pip install -e .
+RUN cd rllm && pip install -e .
 
 RUN pip install playwright && \
     playwright install chromium && \

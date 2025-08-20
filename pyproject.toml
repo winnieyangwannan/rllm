@@ -89,11 +89,6 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
-gpu = [
-    "flash-attn>=2.7.4.post1; sys_platform != 'darwin'",
-    "vllm>=0.8.3; sys_platform != 'darwin'",
-    "sglang>=0.4.6.post1; sys_platform != 'darwin'",
-]
 
 smolagents = [
     "smolagents==1.20.0",

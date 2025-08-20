@@ -56,8 +56,6 @@ bash scripts/install_verl.sh # (or follow the instructions at https://verl.readt
 
 # Install rllm
 pip install -e .
-
-**Note:** On macOS, GPU features (flash-attn, deepspeed, vllm) are automatically excluded for compatibility. For GPU support on macOS, you can install with: `pip install -e .[gpu]`
 ```
 
 ### Installation with Docker 🐳
