@@ -18,17 +18,17 @@ Note that we don't combine the main with ray_trainer as ray_trainer is used by o
 import hydra
 import ray
 
-from rllm.trainer.env_agent_mappings import AGENT_CLASS_MAPPING, ENV_CLASS_MAPPING, setup_environment
-from rllm.trainer.verl.agent_ppo_trainer_pipeline import PipelineAgentPPOTrainer
-
 # Local application imports
 from verl.single_controller.ray import RayWorkerGroup
 from verl.trainer.ppo.ray_trainer import ResourcePoolManager, Role
 from verl.workers.fsdp_workers import ActorRolloutRefWorker
 from verl.workers.reward_manager import NaiveRewardManager
 
+from rllm.trainer.env_agent_mappings import AGENT_CLASS_MAPPING, ENV_CLASS_MAPPING, setup_environment
+from rllm.trainer.verl.agent_ppo_trainer_pipeline import PipelineAgentPPOTrainer
 
-@hydra.main(config_path="../config", config_name="ppo_trainer", version_base=None)
+
+@hydra.main(config_path="../config", config_name="agent_ppo_trainer", version_base=None)
 def main(config):
     run_ppo_agent_async(config)
 
@@ -47,7 +47,6 @@ def main_task(config, compute_score=None):
     from pprint import pprint
 
     from omegaconf import OmegaConf
-
     from verl.utils.fs import copy_local_path_from_hdfs
 
     pprint(OmegaConf.to_container(config, resolve=True))  # resolve=True will eval symbol values
@@ -80,8 +79,8 @@ def main_task(config, compute_score=None):
     role_worker_mapping = {Role.Actor: ray.remote(ActorRolloutRefWorker), Role.Rollout: ray.remote(max_concurrency=512)(ActorRolloutRefWorker)}
 
     # Below are agent specific initialization
-    env_class = ENV_CLASS_MAPPING[config.env.name]
-    agent_class = AGENT_CLASS_MAPPING[config.agent.name]
+    env_class = ENV_CLASS_MAPPING[config.rllm.env.name]
+    agent_class = AGENT_CLASS_MAPPING[config.rllm.agent.name]
     setup_environment(config)
 
     trainer = PipelineAgentPPOTrainer(config=config, tokenizer=tokenizer, role_worker_mapping=role_worker_mapping, resource_pool_manager=resource_pool_manager, ray_worker_group_cls=RayWorkerGroup, reward_fn=reward_fn, val_reward_fn=val_reward_fn, env_class=env_class, agent_class=agent_class)

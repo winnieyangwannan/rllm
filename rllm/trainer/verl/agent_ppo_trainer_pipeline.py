@@ -6,9 +6,6 @@ from queue import Queue
 
 import numpy as np
 import torch
-
-from rllm.engine.agent_execution_engine import AsyncAgentExecutionEngine
-from rllm.trainer.verl.agent_ppo_trainer import AgentPPOTrainer
 from verl import DataProto
 from verl.single_controller.ray import (
     RayClassWithInitArgs,
@@ -26,10 +23,12 @@ from verl.trainer.ppo.ray_trainer_pipeline import (
     update_metrics,
 )
 
+from rllm.engine.agent_execution_engine import AsyncAgentExecutionEngine
+from rllm.trainer.verl.agent_ppo_trainer import AgentPPOTrainer
+
 
 class PipelineAgentPPOTrainer(AgentPPOTrainer):
     def init_workers(self):
-        assert self.config.agent.async_engine, "PPO pipeline trainer must use async engine"
         assert not self.hybrid_engine, "PPO pipeline trainer does not support hybrid engine, assumes Rollout and Actor are not in the different worker group"
         """Init resource pool and worker group"""
         self.resource_pool_manager.create_resource_pool()
@@ -71,14 +70,14 @@ class PipelineAgentPPOTrainer(AgentPPOTrainer):
             engine_name="verl",
             tokenizer=self.tokenizer,
             model_path=self.config.actor_rollout_ref.model.path,
-            max_steps=self.config.agent.max_steps,
+            max_steps=self.config.rllm.agent.max_steps,
             max_response_length=self.config.data.max_response_length,
             max_prompt_length=self.config.data.max_prompt_length,
             agent_class=self.agent_class,
-            agent_args=self.config.agent.get("agent_args", {}),
+            agent_args=self.config.rllm.agent.get("agent_args", {}),
             env_class=self.env_class,
-            env_args=self.config.env.get("env_args", {}),
-            **self.config.agent.get("engine_args", {}),
+            env_args=self.config.rllm.env.get("env_args", {}),
+            **self.config.rllm.agent.get("engine_args", {}),
         )
 
     def fit_agent(self):
@@ -88,7 +87,6 @@ class PipelineAgentPPOTrainer(AgentPPOTrainer):
         The light-weight advantage computation is done on the driver process.
         """
         from omegaconf import OmegaConf
-
         from verl.utils.tracking import Tracking
 
         logger = Tracking(project_name=self.config.trainer.project_name, experiment_name=self.config.trainer.experiment_name, default_backend=self.config.trainer.logger, config=OmegaConf.to_container(self.config, resolve=True))
@@ -125,9 +123,6 @@ class PipelineAgentPPOTrainer(AgentPPOTrainer):
 
                 # must pop those keys for generation so they no longer exist
                 batch.pop(batch_keys=["input_ids", "attention_mask", "position_ids"])
-                batch.meta_info = {
-                    "agent_rollout": True,  # no need to generate multiple ones since environment is repeated already
-                }
 
                 metrics = {}
                 timing_raw = {}
@@ -150,7 +145,7 @@ class PipelineAgentPPOTrainer(AgentPPOTrainer):
                                     del uid_to_trajectories[uid]  # so even if there is replicas it's still grouped correctly
 
                     # Get the generator function which will yield results as they complete
-                    if self.config.agent.step_advantage_broadcast:
+                    if self.config.rllm.agent.step_advantage_broadcast:
                         raise Exception("Stepwise advantage broadcasting not supported on pipelined trainer yet")
                     gen_seq_generator = self.generate_agent_trajectories_async(timing_raw=timing_raw, meta_info=batch.meta_info)
                     thread = threading.Thread(target=create_replay_queue, args=(gen_seq_generator, replay_queue, batch_iter, timing_raw))
@@ -226,7 +221,15 @@ class PipelineAgentPPOTrainer(AgentPPOTrainer):
 
                             mini_batch.batch["token_level_rewards"] = mini_batch.batch["token_level_scores"]
                             # compute advantages, executed on the driver process
-                            mini_batch = compute_advantage(mini_batch, adv_estimator=self.config.algorithm.adv_estimator, gamma=self.config.algorithm.gamma, lam=self.config.algorithm.lam, mask_truncated_samples=self.config.algorithm.mask_truncated_samples, clip_advantages=self.config.algorithm.clip_advantages)
+                            mini_batch = compute_advantage(
+                                batch,
+                                adv_estimator=self.config.algorithm.adv_estimator,
+                                gamma=self.config.algorithm.gamma,
+                                lam=self.config.algorithm.lam,
+                                num_repeat=self.config.actor_rollout_ref.rollout.n,
+                                norm_adv_by_std_in_grpo=self.config.algorithm.norm_adv_by_std_in_grpo,
+                                config=self.config.algorithm,
+                            )
 
                         self._balance_batch(mini_batch, metrics=mini_batch_metrics)
                         # compute global_valid tokens
@@ -302,7 +305,6 @@ class PipelineAgentPPOTrainer(AgentPPOTrainer):
                 "recompute_log_prob": False,
                 "do_sample": self.config.actor_rollout_ref.rollout.val_kwargs.do_sample,
                 "validate": True,
-                "agent_rollout": True,
             }
 
             self.init_envs_and_agents(test_batch)
