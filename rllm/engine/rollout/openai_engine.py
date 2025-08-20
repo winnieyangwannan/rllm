@@ -34,6 +34,7 @@ class OpenAIEngine(RolloutEngine):
     async def chat_completion(self, messages: list[dict], **kwargs) -> ModelOutput:
         sampling_params = self.sampling_params.copy()
         sampling_params.update(kwargs)
+        sampling_params.pop("model", None)
         retries = self.api_retries
         while retries > 0:
             try:

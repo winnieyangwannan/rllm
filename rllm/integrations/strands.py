@@ -9,7 +9,7 @@ from strands.types.streaming import StreamEvent
 from strands.types.tools import ToolSpec
 
 from rllm.agents.agent import Step, Trajectory
-from rllm.engine.rollout import ModelOutput, RolloutEngine
+from rllm.engine import ModelOutput, RolloutEngine
 
 T = TypeVar("T", bound=BaseModel)
 
@@ -17,37 +17,14 @@ T = TypeVar("T", bound=BaseModel)
 class RLLMModel(Model):
     """Model class that uses rLLM's RolloutEngine for inference."""
 
-    def __init__(self, rollout_engine: RolloutEngine, model_id: str = "gpt-4", **model_config):
+    def __init__(self, rollout_engine: RolloutEngine, **kwargs):
         """Initialize the RLLMModel.
 
         Args:
             rollout_engine: The rLLM RolloutEngine instance to use for inference
-            model_id: The model ID to use
-            **model_config: Additional model configuration
         """
         self.rollout_engine = rollout_engine
-        self.config = {"model_id": model_id, "params": model_config}
-
-    def update_config(self, **model_config: Any) -> None:
-        """Update the model configuration.
-
-        Args:
-            **model_config: Configuration overrides.
-        """
-        if "model_id" in model_config:
-            self.config["model_id"] = model_config.pop("model_id")
-
-        if "params" not in self.config:
-            self.config["params"] = {}
-        self.config["params"].update(model_config)
-
-    def get_config(self) -> dict[str, Any]:
-        """Get the model configuration.
-
-        Returns:
-            The model's configuration.
-        """
-        return self.config.copy()
+        self.kwargs = kwargs
 
     async def structured_output(self, output_model: type[T], prompt: Messages, system_prompt: str | None = None, **kwargs: Any) -> AsyncGenerator[dict[str, T | Any], None]:
         """Get structured output from the model.
@@ -73,9 +50,7 @@ class RLLMModel(Model):
             messages[-1]["content"] = f"{original_content}\n\nPlease respond with a JSON object that matches this schema: {output_model.model_json_schema()}"
 
         # Get response from rollout engine
-        model_output: ModelOutput = await self.rollout_engine.get_model_response(messages, model=self.config["model_id"], **self.config.get("params", {}), **kwargs)
-
-        response_text = model_output.text
+        response_text = (await self.rollout_engine.get_model_response(messages, **kwargs)).text
 
         try:
             # Try to parse the response as JSON and convert to the output model
@@ -129,7 +104,7 @@ class RLLMModel(Model):
         yield {"contentBlockStart": {"start": {}}}
 
         # Get response from rollout engine
-        model_output: ModelOutput = await self.rollout_engine.get_model_response(chat_messages, model=self.config["model_id"], **self.config.get("params", {}), **kwargs)
+        model_output: ModelOutput = await self.rollout_engine.get_model_response(chat_messages, **kwargs)
 
         # Extract text from ModelOutput
         response_text = model_output.text
@@ -203,11 +178,10 @@ class RLLMModel(Model):
 
 
 class StrandsAgent(Agent):
-    def __init__(self, model: str, **kwargs):
+    def __init__(self, model: RLLMModel, **kwargs):
         """Initialize StrandsAgent with trajectory tracking.
 
         Args:
-            model: The model to use (can be a string or Model instance)
             **kwargs: Additional arguments to pass to the base Agent class
         """
 
