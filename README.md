@@ -44,11 +44,7 @@ rLLM is an open-source framework for post-training language agents via reinforce
 
 ```bash
 # Clone the repository
-<<<<<<< HEAD
-git clone --recurse-submodules https://github.com/rllm-org/rllm.git
-=======
 git clone https://github.com/rllm-org/rllm.git
->>>>>>> private/v0.2-verl-stable
 cd rllm
 
 # Create a conda environment
