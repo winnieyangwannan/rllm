@@ -68,7 +68,7 @@ class AgentWorkflowEngine:
             try:
                 for retry_attempt in range(1, self.retry_limit + 1):
                     try:
-                        episode = await workflow(task=task, uid=uid, **kwargs)
+                        episode = await workflow.run_with_termination_handling(task=task, uid=uid, **kwargs)
                         return episode
                     except Exception as e:
                         print(f"Rollout {uid} failed on attempt {retry_attempt}/{self.retry_limit}: {e}")
@@ -177,7 +177,7 @@ class AgentWorkflowEngine:
 
             episode_ids.extend([episode.id] * total_steps)
             is_correct.extend([episode.is_correct] * total_steps)
-            termination_reasons.extend([episode.termination_reason if episode.termination_reason is not None else TerminationReason.ENV_DONE] * total_steps)
+            termination_reasons.extend([episode.termination_reason if episode.termination_reason is not None else TerminationReason.UNKNOWN] * total_steps)
             metrics.extend([episode.metrics] * total_steps)
             repeat_counts.append(total_steps)
 
