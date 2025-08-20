@@ -44,15 +44,21 @@ rLLM is an open-source framework for post-training language agents via reinforce
 
 ```bash
 # Clone the repository
+<<<<<<< HEAD
 git clone --recurse-submodules https://github.com/rllm-org/rllm.git
+=======
+git clone https://github.com/rllm-org/rllm.git
+>>>>>>> private/v0.2-verl-stable
 cd rllm
 
-# create a conda environment
+# Create a conda environment
 conda create -n rllm python=3.10
 conda activate rllm
 
-# Install all dependencies
-pip install -e ./verl
+# Install verl v0.5.0
+bash scripts/install_verl.sh # (or follow the instructions at https://verl.readthedocs.io/en/v0.5.x/start/install.html)
+
+# Install rllm
 pip install -e .
 
 **Note:** On macOS, GPU features (flash-attn, deepspeed, vllm) are automatically excluded for compatibility. For GPU support on macOS, you can install with: `pip install -e .[gpu]`

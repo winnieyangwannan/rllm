@@ -19,16 +19,30 @@ classifiers = [
 license = {file = "LICENSE"}
 dependencies = [
     # Core ML/AI packages
+<<<<<<< HEAD
     "torch>=2.7",
     "transformers",
     "openai",
+=======
+    "torch>=2.6",
+    "transformers>=4.5",
+    "sentence-transformers",
+>>>>>>> private/v0.2-verl-stable
 
     # Data processing
     "datasets",
+    "pandas",
     "polars",
-    "dm-tree",
+    "pillow",
 
     # Cloud and infrastructure
+<<<<<<< HEAD
+=======
+    "google-cloud-aiplatform",
+    "vertexai",
+    "docker",
+    "kubernetes",
+>>>>>>> private/v0.2-verl-stable
     "ray",
 
     # Web and automation
@@ -38,26 +52,45 @@ dependencies = [
     "firecrawl",
 
     # Math and science
-    "latex2sympy2",
+    "numpy",
+    "sympy",
     "pylatexenc",
+<<<<<<< HEAD
     "nltk",
     "sympy",
     "scipy",
+=======
+    "antlr4-python3-runtime==4.9.3",
+>>>>>>> private/v0.2-verl-stable
 
     # Code evaluation
     "swebench",
     "e2b_code_interpreter",
 
+    # Tools
+    "mcp",
+    "camel-ai",
+
+    # DB
+    "supabase",
+
     # Utilities
+    "hydra-core",
+    "openai",
     "fire",
     "gdown",
-    "tabulate",
-    "sortedcontainers",
-    "PyMuPDF",
-    "together",
+    "together>=1.4",
     "wandb",
-    "pybind11",
-    "gym",
+    "gymnasium",
+    "click",
+    "fastapi",
+    "uvicorn",
+    "httpx",
+    "jupyter",
+    "tqdm",
+    "rich",
+    "PyYAML",
+    "pydantic",
 
     # Development and testing
     "pytest",
