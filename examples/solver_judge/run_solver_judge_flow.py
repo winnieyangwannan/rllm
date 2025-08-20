@@ -1,16 +1,18 @@
 import asyncio
 import json
 import os
+
+# Import countdown-specific modules
 import sys
 from copy import deepcopy
 
+from solver_judge_flow import SolverJudgeWorkflow
 from transformers import AutoTokenizer
 
 from rllm.data.dataset import DatasetRegistry
+from rllm.engine import OpenAIEngine
 from rllm.engine.agent_workflow_engine import AgentWorkflowEngine
-from rllm.engine.rollout_engine import RolloutEngine
 from rllm.rewards.countdown_reward import countdown_reward_fn
-from rllm.workflows.solver_judge_flow import SolverJudgeWorkflow
 
 sys.path.append(os.path.join(os.path.dirname(__file__), "..", "countdown"))
 
@@ -85,28 +87,26 @@ if __name__ == "__main__":
     os.environ["TOKENIZERS_PARALLELISM"] = "true"
 
     # Configuration
-    n_parallel_tasks = 64
+    n_parallel_tasks = 128
     n_solutions = 2  # Number of solutions to generate per problem
 
     model_name = "Qwen/Qwen3-0.6B"
     tokenizer = AutoTokenizer.from_pretrained(model_name)
 
-    rollout_engine = RolloutEngine(
-        engine_name="openai",
+    rollout_engine = OpenAIEngine(
+        model=model_name,
         tokenizer=tokenizer,
-        openai_kwargs={
-            "base_url": "http://localhost:30000/v1",
-            "api_key": "None",
-        },
-        sampling_params={"temperature": 0.6, "top_p": 0.95, "max_tokens": 2048, "model": model_name},
+        base_url="http://localhost:30000/v1",
+        api_key="None",
+        sampling_params={"temperature": 0.6, "top_p": 0.95, "max_tokens": 1024},
     )
 
     engine = AgentWorkflowEngine(
         workflow_cls=SolverJudgeWorkflow,
         workflow_args={
             "n_solutions": n_solutions,
-            "max_prompt_length": 4096,
-            "max_response_length": 2048,
+            "max_prompt_length": 2048,
+            "max_response_length": 1024,
             "reward_function": countdown_reward_fn,
         },
         rollout_engine=rollout_engine,
