@@ -27,6 +27,12 @@ AGENT_CLASSES = {
     "code_agent": safe_import("rllm.agents.code_agent", "CompetitionCodingAgent"),
 }
 
+WORKFLOW_CLASSES = {
+    "single_turn_workflow": safe_import("rllm.workflows.single_turn_workflow", "SingleTurnWorkflow"),
+    "multi_turn_workflow": safe_import("rllm.workflows.multi_turn_workflow", "MultiTurnWorkflow"),
+}
+
 # Filter out None values for unavailable imports
 ENV_CLASS_MAPPING = {k: v for k, v in ENV_CLASSES.items() if v is not None}
 AGENT_CLASS_MAPPING = {k: v for k, v in AGENT_CLASSES.items() if v is not None}
+WORKFLOW_CLASS_MAPPING = {k: v for k, v in WORKFLOW_CLASSES.items() if v is not None}

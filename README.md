@@ -47,15 +47,16 @@ rLLM is an open-source framework for post-training language agents via reinforce
 git clone --recurse-submodules https://github.com/rllm-org/rllm.git
 cd rllm
 
-# create a conda environment
+# Create a conda environment
 conda create -n rllm python=3.10
 conda activate rllm
 
-# Install all dependencies
-pip install -e ./verl
-pip install -e .
+# Install verl
+bash verl/scripts/install_vllm_sglang_mcore.sh
+pip install --no-deps -e ./verl
 
-**Note:** On macOS, GPU features (flash-attn, deepspeed, vllm) are automatically excluded for compatibility. For GPU support on macOS, you can install with: `pip install -e .[gpu]`
+# Install rllm
+pip install -e .
 ```
 
 ### Installation with Docker 🐳
@@ -77,7 +78,7 @@ docker exec -it rllm-container bash
 
 ## Acknowledgements
 
-- Our training experiments are powered by our heavily modified fork of [verl](https://github.com/volcengine/verl), an open-source RLHF library.
+- Our training experiments are powered by [verl](https://github.com/volcengine/verl), an open-source RLHF library.
 - Our models are trained on top of [`DeepSeek-R1-Distill-Qwen-1.5B`](https://huggingface.co/deepseek-ai/DeepSeek-R1-Distill-Qwen-1.5B), [`DeepSeek-R1-Distill-Qwen-14B`](https://huggingface.co/deepseek-ai/DeepSeek-R1-Distill-Qwen-14B), and [`Qwen3-32B`](https://huggingface.co/Qwen/Qwen3-32b).
 - Our work is done as part of [Berkeley Sky Computing Lab](https://skycomputing.berkeley.edu/), [Berkeley AI Research](https://bair.berkeley.edu/), and a successful collaboration with Together AI.
 

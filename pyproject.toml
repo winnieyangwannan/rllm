@@ -19,16 +19,21 @@ classifiers = [
 license = {file = "LICENSE"}
 dependencies = [
     # Core ML/AI packages
-    "torch>=2.7",
-    "transformers",
-    "openai",
+    "torch>=2.6",
+    "transformers>=4.5",
+    "sentence-transformers",
 
     # Data processing
     "datasets",
+    "pandas",
     "polars",
-    "dm-tree",
+    "pillow",
 
     # Cloud and infrastructure
+    "google-cloud-aiplatform",
+    "vertexai",
+    "docker",
+    "kubernetes",
     "ray",
 
     # Web and automation
@@ -38,26 +43,36 @@ dependencies = [
     "firecrawl",
 
     # Math and science
-    "latex2sympy2",
-    "pylatexenc",
-    "nltk",
+    "numpy",
     "sympy",
-    "scipy",
+    "pylatexenc",
+    "antlr4-python3-runtime==4.9.3",
 
     # Code evaluation
     "swebench",
     "e2b_code_interpreter",
 
+    # Tools
+    "mcp",
+    "camel-ai",
+
     # Utilities
+    "hydra-core",
+    "openai",
     "fire",
     "gdown",
-    "tabulate",
-    "sortedcontainers",
-    "PyMuPDF",
-    "together",
+    "together>=1.4",
     "wandb",
-    "pybind11",
-    "gym",
+    "gymnasium",
+    "click",
+    "fastapi",
+    "uvicorn",
+    "httpx",
+    "jupyter",
+    "tqdm",
+    "rich",
+    "PyYAML",
+    "pydantic",
 
     # Development and testing
     "pytest",
@@ -74,11 +89,7 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
-gpu = [
-    "flash-attn>=2.8.0.post2; sys_platform != 'darwin'",
-    "deepspeed; sys_platform != 'darwin'",
-    "vllm>=0.8.3; sys_platform != 'darwin'",
-]
+
 smolagents = [
     "smolagents==1.20.0",
 ]

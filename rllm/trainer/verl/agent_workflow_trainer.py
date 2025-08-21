@@ -11,20 +11,24 @@ import torch
 from omegaconf import OmegaConf
 
 from rllm.engine.agent_workflow_engine import AgentWorkflowEngine
-from rllm.engine.rollout_engine import RolloutEngine
+from rllm.engine.rollout.verl_engine import VerlEngine
 from rllm.workflows.workflow import TerminationReason
 from verl import DataProto
 from verl.protocol import pad_dataproto_to_divisor
 from verl.trainer.ppo.ray_trainer import (
+    AdvantageEstimator,
     RayPPOTrainer,
     RayWorkerGroup,
     ResourcePoolManager,
     Role,
     WorkerType,
-    _timer,
+    agg_loss,
+    apply_kl_penalty,
     compute_advantage,
     compute_data_metrics,
+    compute_throughout_metrics,
     compute_timing_metrics,
+    marked_timer,
     reduce_metrics,
 )
 
@@ -42,14 +46,6 @@ class AgentWorkflowPPOTrainer(RayPPOTrainer):
         workflow_class=None,
         workflow_args=None,
     ):
-        # TODO: remove after patching verl
-        if config.algorithm.rejection_sample.enable:
-            assert config.trainer.rejection_sample == False, (
-                "Rejection sampling through config.trainer.rejection_sample is deprecated. \
-                Please set config.trainer.rejection_sample = False and config.algorithm.rejection_sample.enable = True"
-            )
-            config.data.gen_batch_size = int(config.data.train_batch_size * config.algorithm.rejection_sample.multiplier)
-
         super().__init__(config=config, tokenizer=tokenizer, role_worker_mapping=role_worker_mapping, resource_pool_manager=resource_pool_manager, ray_worker_group_cls=ray_worker_group_cls, reward_fn=reward_fn, val_reward_fn=val_reward_fn)
 
         self.workflow_class = workflow_class
@@ -59,23 +55,31 @@ class AgentWorkflowPPOTrainer(RayPPOTrainer):
         self._thread = threading.Thread(target=self._loop.run_forever, daemon=True)
         self._thread.start()
 
-        if self.config.algorithm.stepwise_advantage.enable:
+    def _validate_config(self):
+        assert self.config.actor_rollout_ref.hybrid_engine is True, "Only hybrid engine is supported"
+        assert self.config.actor_rollout_ref.rollout.mode == "async", "Only async rollout mode is supported"
+        assert self.use_rm is False, "Reward models are not supported. Rewards should be assigned using a reward function in the workflow or environment."
+
+        if self.config.rllm.stepwise_advantage.enable:
+            self.config.rllm.workflow.workflow_args.accumulate_response_length = False
             print("Using step-level advantage, max_prompt_length and max_response_length will be applied step-wise")
         else:
+            self.config.rllm.workflow.workflow_args.accumulate_response_length = True
             print("Using trajectory-level advantage, max_prompt_length and max_response_length will be applied trajectory-wise")
+
+        if self.config.algorithm.adv_estimator == AdvantageEstimator.REMAX:
+            raise NotImplementedError("REMAX is not supported yet")
+
+        super()._validate_config()
 
     def init_workers(self):
         super().init_workers()
 
-        assert self.config.workflow.async_engine, "Async engine is required when using a workflow."
-        assert self.config.actor_rollout_ref.rollout.mode == "async", "Async rollout mode is required when using a workflow."
-
-        rollout_engine = RolloutEngine(
-            engine_name="verl",
-            tokenizer=self.tokenizer,
+        rollout_engine = VerlEngine(
             config=self.config,
             rollout_manager=self.async_rollout_manager,
-            disable_thinking=self.config.workflow.disable_thinking,
+            tokenizer=self.tokenizer,
+            disable_thinking=self.config.rllm.disable_thinking,
         )
 
         self.agent_execution_engine = AgentWorkflowEngine(
@@ -83,10 +87,11 @@ class AgentWorkflowPPOTrainer(RayPPOTrainer):
             workflow_args=self.workflow_args,
             rollout_engine=rollout_engine,
             config=self.config,
-            n_parallel_tasks=self.config.workflow.n_parallel_tasks,
-            retry_limit=self.config.workflow.retry_limit,
+            n_parallel_tasks=self.config.rllm.workflow.n_parallel_tasks,
+            retry_limit=self.config.rllm.workflow.retry_limit,
         )
 
+        # init workflow workers
         asyncio.run_coroutine_threadsafe(self.agent_execution_engine.initialize_pool(), self._loop).result()
 
     def fit_agent(self):
@@ -134,49 +139,41 @@ class AgentWorkflowPPOTrainer(RayPPOTrainer):
         for epoch in range(self.config.trainer.total_epochs):
             pprint(f"epoch {epoch}, step {self.global_steps} started")
             for batch_dict in self.train_dataloader:
-                pprint(f"step: {self.global_steps}/{len(self.train_dataloader)}")
+                do_profile = self.global_steps in self.config.trainer.profile_steps if self.config.trainer.profile_steps is not None else False
+                with marked_timer("start_profile", timing_raw):
+                    self._start_profiling(do_profile)
+
                 new_batch: DataProto = DataProto.from_single_dict(batch_dict)
                 num_tasks += len(new_batch.batch)
 
                 new_batch.non_tensor_batch["task_ids"] = np.array([str(uuid.uuid4()) for _ in range(len(new_batch.batch))], dtype=object)
-                new_batch = new_batch.repeat(
-                    repeat_times=self.config.actor_rollout_ref.rollout.n,
-                    interleave=True,
-                )
+                new_batch = new_batch.repeat(repeat_times=self.config.actor_rollout_ref.rollout.n)
 
                 new_batch.pop(batch_keys=["input_ids", "attention_mask", "position_ids"], non_tensor_batch_keys=["raw_prompt_ids"])
-                new_batch.meta_info = {
-                    "agent_rollout": True,  # no need to generate multiple ones since environment is repeated already
-                }
 
-                with _timer("step", timing_raw):
+                with marked_timer("step", timing_raw):
                     # generate trajectories
                     final_gen_batch_output = self.generate_trajectories(batch=new_batch, timing_raw=timing_raw)
-                    self.visualize_trajectory_last_step(final_gen_batch_output)
 
                     # need to repeat to make shape match
                     repeat_counts = final_gen_batch_output.meta_info["repeat_counts"]
-                    new_batch = new_batch.repeat_by_counts(repeat_counts, interleave=True)
+                    new_batch = new_batch.sample_level_repeat(repeat_counts)
                     final_gen_batch_output.meta_info.pop("repeat_counts", None)  # no longer needed after this
                     new_batch = new_batch.union(final_gen_batch_output)
 
-                    # rejection sampling (at the task level)
-                    # we do rejection sampling at the task level instead of the step level
-                    # in multi-step workflows, this can be overly optimistic
-                    # (e.g., turn 1 all incorrect and turn 2 all correct -> keep the uid, but once we group by step both turns get have 0 advantage)
-                    # but stepwise rejection sampling will not work for the broadcast mode since we cannot drop the last step and keep earlier steps
+                    # rejection sampling
+                    # we do rejection sampling at the episode level instead of the traj/step level
                     uids = new_batch.non_tensor_batch["task_ids"]
                     unique_uids = np.unique(uids)
                     is_correct = new_batch.non_tensor_batch["is_correct"]
-                    is_valid = new_batch.non_tensor_batch["is_valid"]  # exclude items that will be filtered out later
                     drop_uids = set()
 
                     for uid in unique_uids:
-                        candidate_rows = (uids == uid) & is_valid
+                        candidate_rows = uids == uid
                         candidate_is_correct = is_correct[candidate_rows]
 
                         # Check if all episodes are correct or incorrect
-                        if not candidate_is_correct.any():  # also catches case where not candidate_rows.any() i.e., all rows are invalid
+                        if not candidate_is_correct.any():
                             drop_uids.add(uid)
                             solve_none += 1
                         elif candidate_is_correct.all():
@@ -194,7 +191,7 @@ class AgentWorkflowPPOTrainer(RayPPOTrainer):
                             episode_unique_idxs.append(i)
                     episode_unique_batch = new_batch.select_idxs(episode_unique_idxs)
 
-                    # log metrics from workflows
+                    # log metrics returned by workflows
                     for metric_dict in episode_unique_batch.non_tensor_batch["metrics"]:
                         for key, value in metric_dict.items():
                             workflow_metrics[key].append(value)
@@ -208,7 +205,7 @@ class AgentWorkflowPPOTrainer(RayPPOTrainer):
                         print("No valid samples remain, skipping batch")
                         continue
 
-                    if not self.config.algorithm.rejection_sample.enable:
+                    if not self.config.rllm.rejection_sample.enable:
                         batch = new_batch
                     else:
                         rejection_mask = np.isin(uids, list(drop_uids))
@@ -230,7 +227,7 @@ class AgentWorkflowPPOTrainer(RayPPOTrainer):
                             selected_mask = np.isin(uids, selected_uids)
                             batch = batch[selected_mask]
 
-                    if self.config.algorithm.stepwise_advantage.enable and self.config.algorithm.stepwise_advantage.mode == "broadcast":
+                    if self.config.rllm.stepwise_advantage.enable and self.config.rllm.stepwise_advantage.mode == "broadcast":
                         # need to make sure both number of last steps (number of uids) and number of total steps in the batch
                         # (batch size after processing) are both multiples of world size
 
@@ -263,35 +260,51 @@ class AgentWorkflowPPOTrainer(RayPPOTrainer):
                         # then we just pad the batch size to a multiple of world size
                         batch = self._pad_dataproto_to_world_size(batch=batch)
 
+                    with marked_timer("old_log_prob", timing_raw, color="blue"):
+                        old_log_prob = self.actor_rollout_wg.compute_log_prob(batch)
+                        entropys = old_log_prob.batch["entropys"]
+                        response_masks = batch.batch["response_mask"]
+                        loss_agg_mode = self.config.actor_rollout_ref.actor.loss_agg_mode
+                        entropy_agg = agg_loss(loss_mat=entropys, loss_mask=response_masks, loss_agg_mode=loss_agg_mode)
+                        old_log_prob_metrics = {"actor/entropy": entropy_agg.detach().item()}
+                        metrics.update(old_log_prob_metrics)
+                        old_log_prob.batch.pop("entropys")
+                        batch = batch.union(old_log_prob)
+
+                    if self.use_reference_policy:
+                        # compute reference log_prob
+                        with marked_timer("ref", timing_raw, color="olive"):
+                            if not self.ref_in_actor:
+                                ref_log_prob = self.ref_policy_wg.compute_ref_log_prob(batch)
+                            else:
+                                ref_log_prob = self.actor_rollout_wg.compute_ref_log_prob(batch)
+                            batch = batch.union(ref_log_prob)
+
                     # compute values
                     if self.use_critic:
-                        with _timer("values", timing_raw):
-                            values = self.critic_wg.compute_values(new_batch)
-                            new_batch = new_batch.union(values)
+                        with marked_timer("values", timing_raw, color="cyan"):
+                            values = self.critic_wg.compute_values(batch)
+                            batch = batch.union(values)
 
-                    with _timer("adv", timing_raw):
-                        # recompute old_log_probs
-                        with _timer("old_log_prob", timing_raw):
-                            old_log_prob = self.actor_rollout_wg.compute_log_prob(batch)
-                            batch = batch.union(old_log_prob)
-
-                        if self.use_reference_policy:
-                            # compute reference log_prob
-                            with _timer("ref", timing_raw):
-                                ref_log_prob = self.ref_policy_wg.compute_ref_log_prob(batch)
-                                batch = batch.union(ref_log_prob)
-
-                        if self.config.algorithm.stepwise_advantage.enable and self.config.algorithm.stepwise_advantage.mode == "per_step":
-                            batch.batch["token_level_scores"] = batch.batch["step_rewards"]
-                            batch.batch["token_level_rewards"] = batch.batch["step_rewards"]
-                        else:
-                            batch.batch["token_level_scores"] = batch.batch["traj_rewards"]
-                            batch.batch["token_level_rewards"] = batch.batch["traj_rewards"]
-
-                        # if we're not using computing advantages stepwise (i.e., for cumulative agents) step_ids == trajectory_ids
+                    with marked_timer("adv", timing_raw, color="brown"):
+                        # step_ids is safe to always use for advantage computation
+                        # if we're not using computing advantages stepwise (i.e., for cumulative agents or single turn workflows)
+                        # then step_ids == trajectory_ids
                         batch.non_tensor_batch["uid"] = batch.non_tensor_batch["step_ids"]
 
-                        if self.config.algorithm.stepwise_advantage.enable and self.config.algorithm.stepwise_advantage.mode == "broadcast":
+                        if self.config.rllm.stepwise_advantage.enable and self.config.rllm.stepwise_advantage.mode == "per_step":
+                            batch.batch["token_level_scores"] = batch.batch["step_rewards"]
+                        else:
+                            batch.batch["token_level_scores"] = batch.batch["traj_rewards"]
+
+                        # compute rewards. apply_kl_penalty if available
+                        if self.config.algorithm.use_kl_in_reward:
+                            batch, kl_metrics = apply_kl_penalty(batch, kl_ctrl=self.kl_ctrl_in_reward, kl_penalty=self.config.algorithm.kl_penalty)
+                            metrics.update(kl_metrics)
+                        else:
+                            batch.batch["token_level_rewards"] = batch.batch["token_level_scores"]
+
+                        if self.config.rllm.stepwise_advantage.enable and self.config.rllm.stepwise_advantage.mode == "broadcast":
                             is_last_step = batch.non_tensor_batch["is_last_step"]
                             last_step_indices = np.where(is_last_step == True)[0]
                             not_last_step_indices = np.where(is_last_step == False)[0]
@@ -307,11 +320,12 @@ class AgentWorkflowPPOTrainer(RayPPOTrainer):
                             adv_estimator=self.config.algorithm.adv_estimator,
                             gamma=self.config.algorithm.gamma,
                             lam=self.config.algorithm.lam,
-                            mask_truncated_samples=False,  # deprecated, loss is masked based on termination reason
-                            clip_advantages=self.config.algorithm.clip_advantages,
+                            num_repeat=self.config.actor_rollout_ref.rollout.n,
+                            norm_adv_by_std_in_grpo=self.config.algorithm.norm_adv_by_std_in_grpo,
+                            config=self.config.algorithm,
                         )
 
-                        if self.config.algorithm.stepwise_advantage.enable and self.config.algorithm.stepwise_advantage.mode == "broadcast":
+                        if self.config.rllm.stepwise_advantage.enable and self.config.rllm.stepwise_advantage.mode == "broadcast":
                             # Merging the separated out steps using the advantage from last steps
                             self._stepwise_advantage_broadcast(batch, non_last_step_batch)
                             batch = DataProto.concat([batch, non_last_step_batch])
@@ -321,20 +335,28 @@ class AgentWorkflowPPOTrainer(RayPPOTrainer):
                     valid_idxs = np.where(is_valid == True)[0]
                     batch = batch.select_idxs(valid_idxs)
 
+                    # for backward compatibility
+                    if self.config.rllm.mask_truncated_samples:
+                        mask = batch.batch["attention_mask"][:, -1] == 1
+                        batch = batch[~mask]
+
                     # re-pad batch size to world size for gradient update
                     batch = self._pad_dataproto_to_world_size(batch=batch)
 
-                    # balance the number of valid tokens on each dp rank.
-                    # Note that this breaks the order of data inside the batch.
-                    # Please take care when you implement group based adv computation such as GRPO and rloo
-                    self._balance_batch(batch, metrics=metrics)
+                    # Balance the number of valid tokens across DP ranks.
+                    # NOTE: This usually changes the order of data in the `batch`,
+                    # which won't affect the advantage calculation (since it's based on uid),
+                    # but might affect the loss calculation (due to the change of mini-batching).
+                    # TODO: Decouple the DP balancing and mini-batching.
+                    if self.config.trainer.balance_batch:
+                        self._balance_batch(batch, metrics=metrics)
 
                     # compute global_valid tokens
                     batch.meta_info["global_token_num"] = torch.sum(batch.batch["attention_mask"], dim=-1).tolist()
 
                     # update critic
                     if self.use_critic:
-                        with _timer("update_critic", timing_raw):
+                        with marked_timer("update_critic", timing_raw, color="pink"):
                             critic_output = self.critic_wg.update_critic(batch)
                         critic_output_metrics = reduce_metrics(critic_output.meta_info["metrics"])
                         metrics.update(critic_output_metrics)
@@ -342,25 +364,37 @@ class AgentWorkflowPPOTrainer(RayPPOTrainer):
                     # implement critic warmup
                     if self.config.trainer.critic_warmup <= self.global_steps:
                         # update actor
-                        with _timer("update_actor", timing_raw):
+                        with marked_timer("update_actor", timing_raw, color="red"):
                             actor_output = self.actor_rollout_wg.update_actor(batch)
                         actor_output_metrics = reduce_metrics(actor_output.meta_info["metrics"])
                         metrics.update(actor_output_metrics)
 
                     # validate
                     if self.val_reward_fn is not None and self.config.trainer.test_freq > 0 and self.global_steps % self.config.trainer.test_freq == 0:
-                        with _timer("testing", timing_raw):
+                        with marked_timer("testing", timing_raw, color="green"):
                             val_metrics: dict = self._validate_agent()
-                            pprint(f"Validation metrics at step {self.global_steps}: {val_metrics}")
                         metrics.update(val_metrics)
 
                     if self.config.trainer.save_freq > 0 and self.global_steps % self.config.trainer.save_freq == 0:
-                        with _timer("save_checkpoint", timing_raw):
+                        with marked_timer("save_checkpoint", timing_raw, color="green"):
                             self._save_checkpoint()
 
-                # collect and logmetrics
+                with marked_timer("stop_profile", timing_raw):
+                    self._stop_profiling(do_profile)
+
+                # training metrics
+                metrics.update(
+                    {
+                        "training/global_step": self.global_steps,
+                        "training/epoch": epoch,
+                    }
+                )
+                # collect metrics
                 metrics.update(compute_data_metrics(batch=batch, use_critic=self.use_critic))
                 metrics.update(compute_timing_metrics(batch=batch, timing_raw=timing_raw))
+                # TODO: implement actual tflpo and theoretical tflpo
+                n_gpus = self.resource_pool_manager.get_n_gpus()
+                metrics.update(compute_throughout_metrics(batch=batch, timing_raw=timing_raw, n_gpus=n_gpus))
 
                 metrics["batch/solve_none"] = solve_none / num_tasks
                 metrics["batch/solve_all"] = solve_all / num_tasks
@@ -370,7 +404,7 @@ class AgentWorkflowPPOTrainer(RayPPOTrainer):
                     metrics[f"batch/{key}"] = np.mean(value)
 
                 for r in TerminationReason:
-                    metrics[f"batch/{r.value}"] = termination_counts[r.value] / num_tasks
+                    metrics[f"batch/{r.value}"] = termination_counts[r.value] / len(set(new_batch.non_tensor_batch["episode_ids"]))
 
                 metrics["batch/num_tasks"] = num_tasks
 
@@ -411,21 +445,12 @@ class AgentWorkflowPPOTrainer(RayPPOTrainer):
             test_batch = test_batch.repeat(repeat_times=n_val_samples, interleave=True)
 
             test_batch.pop(batch_keys=["input_ids", "attention_mask", "position_ids"], non_tensor_batch_keys=["raw_prompt_ids"])  # these are not needed for environment based interaction
-            test_batch.meta_info = {
-                "eos_token_id": self.tokenizer.eos_token_id,
-                "pad_token_id": self.tokenizer.pad_token_id,
-                "recompute_log_prob": False,
-                "do_sample": False,
-                "validate": True,
-                "agent_rollout": True,
-            }
+            test_batch.meta_info = {"validate": True}
 
             test_output_gen_batch = self.generate_trajectories(batch=test_batch)
-            self.visualize_trajectory_last_step(test_output_gen_batch)
-
             repeat_counts = test_output_gen_batch.meta_info["repeat_counts"]
             # need to repeat to make shape match
-            test_batch = test_batch.repeat_by_counts(repeat_counts, interleave=True)
+            test_batch = test_batch.sample_level_repeat(repeat_counts)
             test_output_gen_batch.meta_info.pop("repeat_counts", None)  # no longer needed after this
             test_batch = test_batch.union(test_output_gen_batch)
 
@@ -494,7 +519,7 @@ class AgentWorkflowPPOTrainer(RayPPOTrainer):
         if timing_raw is None:
             timing_raw = {}
 
-        with _timer("generate_trajectories", timing_raw):
+        with marked_timer("generate_trajectories", timing_raw, color="red"):
             coro = self.agent_execution_engine.execute_tasks_verl(batch, **kwargs)
             final_gen_batch_output = asyncio.run_coroutine_threadsafe(coro, self._loop).result()
 
@@ -524,7 +549,7 @@ class AgentWorkflowPPOTrainer(RayPPOTrainer):
             mask = src_mask[i].bool()
             scalar = src_advantages[i][mask].mean()
 
-            if self.config.algorithm.stepwise_advantage.normalize_by_steps:
+            if self.config.rllm.stepwise_advantage.normalize_by_steps:
                 # normalize the advantage against number of steps
                 scalar = scalar / src_steps[i]
                 # reassign the normalized advantage to last_step_batch as well
@@ -609,9 +634,8 @@ class AgentWorkflowPPOTrainer(RayPPOTrainer):
 
         prompts = tensor_batch.batch["prompts"]
         responses = tensor_batch.batch["responses"]
-        # Prefer traj_mask; fall back to response_mask if present
-        mask = tensor_batch.batch.get("traj_mask", tensor_batch.batch.get("response_mask"))
-        token_level_scores = tensor_batch.batch.get("traj_rewards", tensor_batch.batch.get("step_rewards"))
+        mask = tensor_batch.batch.get("response_mask")
+        token_level_scores = tensor_batch.batch.get("step_rewards" if self.config.algorithm.stepwise_advantage.enable and self.config.algorithm.stepwise_advantage.mode == "per_step" else "traj_rewards")
 
         # Optional meta to print outcome
         is_correct = tensor_batch.non_tensor_batch.get("is_correct", None)

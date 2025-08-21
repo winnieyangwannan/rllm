@@ -38,7 +38,7 @@ except ImportError:
 
 # Import BaseAgent from rLLM for wrapper classes
 from rllm.agents.agent import Step, Trajectory
-from rllm.engine.rollout.rollout_engine import ModelOutput, RolloutEngine
+from rllm.engine import ModelOutput
 
 logger = logging.getLogger(__name__)
 
@@ -94,7 +94,7 @@ You have been provided with these additional arguments, that you can access usin
 
         self.logger.log_task(
             content=self.task.strip(),
-            subtitle=f"{type(self.model).__name__} - {(self.model.model_id if hasattr(self.model, 'model_id') else '')}",
+            subtitle=f"{type(self.model).__name__}",
             level=LogLevel.INFO,
             title=self.name if hasattr(self, "name") else None,
         )
@@ -128,7 +128,7 @@ You have been provided with these additional arguments, that you can access usin
             total_output_tokens = 0
             correct_token_usage = True
             for step in self.memory.steps:
-                if isinstance(step, ActionStep | PlanningStep):
+                if isinstance(step, ActionStep) or isinstance(step, PlanningStep):
                     if step.token_usage is None:
                         correct_token_usage = False
                         break
@@ -312,15 +312,12 @@ class RLLMOpenAIModel(SmolModel):
     - Skips MessageRole.TOOL_CALL messages (handled as part of assistant messages)
     """
 
-    def __init__(self, rollout_engine: RolloutEngine, **kwargs):
+    def __init__(self, rollout_engine=None, **kwargs):
         """
         Initialize the RLLM-integrated OpenAI model.
 
         Args:
             rollout_engine: rLLM's RolloutEngine instance
-            application_id: Unique identifier for the application
-            model_id: The model identifier (for compatibility)
-            sampling_params: Sampling parameters for generation
             **kwargs: Additional arguments (ignored, for compatibility)
         """
         self.rollout_engine = rollout_engine
@@ -329,6 +326,9 @@ class RLLMOpenAIModel(SmolModel):
 
         # Store kwargs for potential future use
         self.kwargs = kwargs
+
+        if not rollout_engine:
+            raise ValueError("rollout_engine is required for RLLMOpenAIModel. Pass an instance of rLLM's RolloutEngine.")
 
     async def generate_async(self, messages: list[dict[str, Any]], stop_sequences: list[str] | None = None, response_format: dict[str, str] | None = None, tools_to_call_from: list | None = None, **kwargs) -> Any:
         """
@@ -342,7 +342,7 @@ class RLLMOpenAIModel(SmolModel):
                 # Handle ChatMessage objects from SmolAgent using the helper method
                 prompt = self._convert_smolagent_messages_to_openai(messages)
 
-            model_output: ModelOutput = await self.rollout_engine.get_model_response(prompt, **kwargs)
+            model_output: ModelOutput = await self.rollout_engine.get_model_response(prompt, max_tokens=kwargs.pop("max_tokens", 4096), **kwargs)
 
             # Extract text and token usage from ModelOutput
             response_text = model_output.text

@@ -9,7 +9,7 @@ RUN pip uninstall verl -y || true
 RUN git clone --recurse-submodules https://github.com/rllm-org/rllm.git rllm
 
 RUN cd rllm && \
-    pip install -e ./verl && \
+    pip install --no-deps -e ./verl && \
     pip install -e .
 
 RUN pip install playwright && \

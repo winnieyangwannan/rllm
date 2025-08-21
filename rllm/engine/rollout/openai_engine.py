@@ -6,8 +6,7 @@ import openai
 
 from rllm.engine.rollout.rollout_engine import ModelOutput, RolloutEngine
 from rllm.globals import THOUGHT_DELIMITER_END, THOUGHT_DELIMITER_START
-from rllm.parser.chat_template import ChatTemplateParser
-from rllm.parser.tool_parser import ToolParser
+from rllm.parser import ChatTemplateParser, ToolParser
 
 
 class OpenAIEngine(RolloutEngine):
@@ -35,6 +34,7 @@ class OpenAIEngine(RolloutEngine):
     async def chat_completion(self, messages: list[dict], **kwargs) -> ModelOutput:
         sampling_params = self.sampling_params.copy()
         sampling_params.update(kwargs)
+        sampling_params.pop("model", None)
         retries = self.api_retries
         while retries > 0:
             try:
@@ -80,6 +80,7 @@ class OpenAIEngine(RolloutEngine):
 
     async def get_model_response(self, messages: list[dict], **kwargs) -> ModelOutput:
         kwargs.pop("application_id", None)  # only needed for verl engine
+        kwargs.pop("validate", None)  # only needed for verl engine
         if self._use_chat_completions:
             return await self.chat_completion(messages, **kwargs)
         else:

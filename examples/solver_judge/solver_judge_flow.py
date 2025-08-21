@@ -1,7 +1,7 @@
 from typing import Any
 
 from rllm.agents.agent import Action, Episode, Step, Trajectory
-from rllm.engine.rollout_engine import RolloutEngine
+from rllm.engine import RolloutEngine
 from rllm.rewards.reward_fn import RewardFunction
 from rllm.workflows.workflow import Workflow
 
@@ -19,7 +19,7 @@ class Solver:
         for i in range(n_solutions):
             messages = [{"role": "user", "content": f"{problem}. Output the final answer within <answer>...</answer>"}]
 
-            response = await self.rollout_engine.get_model_response(messages)
+            response = (await self.rollout_engine.get_model_response(messages)).text
 
             if "</think>" in response:
                 action = response[response.find("</think>") + len("</think>") :].strip()
@@ -59,7 +59,7 @@ class Judge:
 
         # Get model response for verification
         messages = [{"role": "user", "content": verification_prompt}]
-        response = await self.rollout_engine.get_model_response(messages)
+        response = (await self.rollout_engine.get_model_response(messages)).text
 
         # Parse the verification response to extract the selected solution
         selected_solution, confidence_score = self._parse_verification_response(response, solutions)
@@ -144,7 +144,7 @@ class SolverJudgeWorkflow(Workflow):
         self.solver = Solver(rollout_engine)
         self.judge = Judge(rollout_engine)
 
-    async def __call__(self, task: dict, uid: str, **kwargs) -> Episode:
+    async def run(self, task: dict, uid: str, **kwargs) -> Episode:
         """Execute the solver-judge workflow."""
         # Reset components for new task
         self.reset(task, uid)
