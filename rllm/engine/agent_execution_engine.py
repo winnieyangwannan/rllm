@@ -5,7 +5,6 @@ import time
 import traceback
 import uuid
 from concurrent.futures import ThreadPoolExecutor
-from copy import deepcopy
 
 import torch
 

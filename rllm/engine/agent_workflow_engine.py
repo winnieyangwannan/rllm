@@ -6,12 +6,12 @@ from concurrent.futures import ThreadPoolExecutor
 import numpy as np
 import torch
 from tqdm import tqdm
-from verl import DataProto
-from verl.utils.torch_functional import pad_sequence_to_length
 
 from rllm.agents.agent import Episode
 from rllm.engine.rollout.rollout_engine import RolloutEngine
 from rllm.workflows.workflow import TerminationReason, Workflow
+from verl import DataProto
+from verl.utils.torch_functional import pad_sequence_to_length
 
 
 class AgentWorkflowEngine:
