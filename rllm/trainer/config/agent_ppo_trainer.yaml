@@ -22,7 +22,7 @@ rllm:
     name: miniwobagent
     max_steps: 20
     trajectory_timeout: null
-    # overlong_filter: False # TODO: refactor as compact_filtering
+    overlong_filter: False
     agent_args: {}
     engine_args: {}
   env:

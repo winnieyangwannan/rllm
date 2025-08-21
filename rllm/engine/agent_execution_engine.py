@@ -137,14 +137,16 @@ class AgentExecutionEngine:
             NotImplementedError: If the engine type is not supported
         """
 
-        sampling_params = deepcopy(self.sampling_params).update(kwargs)
+        sampling_params = self.sampling_params.copy()
+        sampling_params.update(kwargs)
 
         if self.engine_name == "openai":
-            output = await self.rollout_engine.get_model_response(prompt, application_id, **sampling_params)
+            output = await self.rollout_engine.get_model_response(prompt, application_id=application_id, **sampling_params)
             return output.text
         elif self.engine_name == "verl":
-            validate = kwargs.get("meta_info", {}).get("validate", False)
-            output = await self.rollout_engine.get_model_response(prompt, application_id, validate=validate, **sampling_params)
+            meta_data = sampling_params.pop("meta_info", {})
+            validate = meta_data.get("validate", False)
+            output = await self.rollout_engine.get_model_response(prompt, application_id=application_id, validate=validate, **sampling_params)
             return output.text
         else:
             raise NotImplementedError(f"Engine type '{self.engine_name}' not supported")

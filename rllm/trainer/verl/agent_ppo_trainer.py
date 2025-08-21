@@ -55,7 +55,7 @@ class AgentPPOTrainer(RayPPOTrainer):
         assert self.config.actor_rollout_ref.hybrid_engine, "Only hybrid engine is supported"
         assert self.config.actor_rollout_ref.rollout.mode == "async", "Only async rollout mode is supported"
 
-        if self.config.rllm.agent.stepwise_advantage.enable:
+        if self.config.rllm.stepwise_advantage.enable:
             print("Using step-level advantage, max_prompt_length and max_response_length will be applied step-wise")
         else:
             print("Using trajectory-level advantage, max_prompt_length and max_response_length will be applied episode-wise")
@@ -76,8 +76,8 @@ class AgentPPOTrainer(RayPPOTrainer):
             agent_args=self.agent_args,
             env_class=self.env_class,
             env_args=self.env_args,
-            enforce_max_prompt_length=self.config.rllm.agent.stepwise_advantage.enable,
-            trajectory_timeout=self.config.rllm.rllm.agent.trajectory_timeout,
+            enforce_max_prompt_length=self.config.rllm.stepwise_advantage.enable,
+            trajectory_timeout=self.config.rllm.agent.trajectory_timeout,
             overlong_filter=self.config.rllm.agent.get("overlong_filter", False),
             **self.config.rllm.agent.get("engine_args", {}),
         )
@@ -167,7 +167,7 @@ class AgentPPOTrainer(RayPPOTrainer):
                 with marked_timer("step", timing_raw):
                     self.init_envs_and_agents(batch)
 
-                    if self.config.rllm.agent.stepwise_advantage.enable:
+                    if self.config.rllm.stepwise_advantage.enable:
                         final_gen_batch_output = self.generate_agent_steps(timing_raw=timing_raw, meta_info=batch.meta_info, uids=batch.non_tensor_batch["uid"])
                         repeat_counts = final_gen_batch_output.meta_info["repeat_counts"]
                         # need to repeat to make shape match
@@ -227,7 +227,7 @@ class AgentPPOTrainer(RayPPOTrainer):
                         if self.config.rllm.rejection_sample.enable:
                             # log the actual complete training rewards before rejection sampling
                             token_level_rewards = None  # for metrics calculation
-                            if self.config.rllm.agent.stepwise_advantage.enable:
+                            if self.config.rllm.stepwise_advantage.enable:
                                 is_pad_step = batch.non_tensor_batch["is_pad_step"]
                                 non_pad_step_indices = np.where(is_pad_step == False)[0]
                                 non_pad_steps = batch.select_idxs(non_pad_step_indices)
@@ -249,7 +249,7 @@ class AgentPPOTrainer(RayPPOTrainer):
                             # Filter batch to keep only valid samples
                             batch = batch[valid_mask]
 
-                            if self.config.rllm.agent.stepwise_advantage.enable and self.config.rllm.rllm.stepwise_advantage.mode == "broadcast":
+                            if self.config.rllm.stepwise_advantage.enable and self.config.rllm.stepwise_advantage.mode == "broadcast":
                                 # batch now only contains steps with valid uids
                                 # filter out padding steps
                                 is_pad_step = batch.non_tensor_batch["is_pad_step"]
@@ -325,15 +325,15 @@ class AgentPPOTrainer(RayPPOTrainer):
 
                         batch.batch["token_level_rewards"] = batch.batch["token_level_scores"]
 
-                        if self.config.rllm.agent.stepwise_advantage.enable:
-                            if self.config.rllm.rllm.stepwise_advantage.mode == "per_step":
+                        if self.config.rllm.stepwise_advantage.enable:
+                            if self.config.rllm.stepwise_advantage.mode == "per_step":
                                 batch.batch["token_level_rewards"] = batch.batch["mc_returns"]
                                 batch.non_tensor_batch["uid"] = batch.non_tensor_batch["step_ids"]
 
                                 is_pad_step = batch.non_tensor_batch["is_pad_step"]
                                 non_pad_step_indices = np.where(is_pad_step == False)[0]
                                 batch = batch.select_idxs(non_pad_step_indices)  # This batch only has non_pad steps
-                            elif self.config.rllm.rllm.stepwise_advantage.mode == "broadcast":
+                            elif self.config.rllm.stepwise_advantage.mode == "broadcast":
                                 # In case of step-wise advantage broadcast, we would split out the final steps, then merge again
                                 is_last_step = batch.non_tensor_batch["is_last_step"]
                                 last_step_indices = np.where(is_last_step == True)[0]
@@ -341,7 +341,7 @@ class AgentPPOTrainer(RayPPOTrainer):
                                 other_step_batch = batch.select_idxs(other_step_indices)
                                 batch = batch.select_idxs(last_step_indices)  # This batch only has last steps
                             else:
-                                raise ValueError(f"Stepwise advantage mode {self.config.rllm.rllm.stepwise_advantage.mode} not supported")
+                                raise ValueError(f"Stepwise advantage mode {self.config.rllm.stepwise_advantage.mode} not supported")
 
                         # compute advantages, executed on the driver process
                         batch = compute_advantage(
@@ -354,12 +354,16 @@ class AgentPPOTrainer(RayPPOTrainer):
                             config=self.config.algorithm,
                         )
 
-                        if self.config.rllm.agent.stepwise_advantage.enable and self.config.rllm.rllm.stepwise_advantage.mode == "broadcast":
+                        if self.config.rllm.stepwise_advantage.enable and self.config.rllm.stepwise_advantage.mode == "broadcast":
                             # remove the padded last steps
                             # Merging the separated out steps using the advantage from last steps
                             self._stepwise_advantage_broadcast(batch, other_step_batch=other_step_batch)
                             # batch = batch.merge(other_step_batch)
                             batch = DataProto.concat([batch, other_step_batch])
+
+                    if self.config.rllm.mask_truncated_samples:
+                        mask = batch.batch["attention_mask"][:, -1] == 1
+                        batch = batch[~mask]
 
                     batch = self._pad_dataproto_to_world_size(batch=batch)
                     # balance the number of valid tokens on each dp rank.
@@ -431,7 +435,7 @@ class AgentPPOTrainer(RayPPOTrainer):
             }
             self.init_envs_and_agents(test_batch)
 
-            if self.config.rllm.agent.stepwise_advantage.enable:
+            if self.config.rllm.stepwise_advantage.enable:
                 test_output_gen_batch = self.generate_agent_steps(meta_info=test_batch.meta_info, uids=test_batch.non_tensor_batch["uid"])
                 # for validation, we only need the last step
                 is_last_step = test_output_gen_batch.non_tensor_batch["is_last_step"]
