@@ -1,6 +1,12 @@
+import logging
+from datetime import datetime
+
+import requests
 import torch
 
 from .utils import PARSER_TEST_MESSAGES
+
+logger = logging.getLogger(__name__)
 
 
 class ChatTemplateParser:
@@ -66,20 +72,23 @@ class ChatTemplateParser:
         if isinstance(tokenizer.name_or_path, str):
             model_name = tokenizer.name_or_path.lower()
             tokenizer_cls = tokenizer.__class__.__name__.lower()
-            print(f"model_name: {model_name}, tokenizer_cls: {tokenizer_cls}")
+            logger.info(f"model_name: {model_name}, tokenizer_cls: {tokenizer_cls}")
             if any(x in model_name for x in ("deepseek", "deepscaler", "deepcoder")) and "llama" in tokenizer_cls:
-                print(f"Using DeepseekQwenChatTemplateParser for {tokenizer.name_or_path}")
+                logger.info(f"Using DeepseekQwenChatTemplateParser for {tokenizer.name_or_path}")
                 return DeepseekQwenChatTemplateParser(tokenizer)
             elif "qwen" in model_name or "r2e" in model_name or "deepswe" in model_name or "qwen" in tokenizer_cls:
-                print(f"Using QwenChatTemplateParser for {tokenizer.name_or_path}")
+                logger.info(f"Using QwenChatTemplateParser for {tokenizer.name_or_path}")
                 return QwenChatTemplateParser(tokenizer, disable_thinking=disable_thinking)
             elif "llama" in model_name:
-                print(f"Using LlamaChatTemplateParser for {tokenizer.name_or_path}")
+                logger.info(f"Using LlamaChatTemplateParser for {tokenizer.name_or_path}")
                 return LlamaChatTemplateParser(tokenizer)
+            elif "harmony" in model_name or "gpt-oss" in model_name:
+                logger.info(f"Using HarmonyChatTemplateParser for {tokenizer.name_or_path}")
+                return HarmonyChatTemplateParser(tokenizer)
 
         # Default to the standard parser if no specific match
         parser = ChatTemplateParser(tokenizer)
-        print(f"No custom parser found. Using default ChatTemplateParser for {tokenizer.name_or_path}")
+        logger.info(f"No custom parser found. Using default ChatTemplateParser for {tokenizer.name_or_path}")
         assert parser.verify_equivalence(PARSER_TEST_MESSAGES), "Parser failed equivalence check"
         return parser
 
@@ -261,3 +270,168 @@ class LlamaChatTemplateParser(ChatTemplateParser):
 
     def parse_tool(self, message):
         return self.user_token + self.tool_response_start_token + message["content"] + self.tool_response_end_token + self.eot_token
+
+
+class HarmonyChatTemplateParser(ChatTemplateParser):
+    """Parser for OpenAI Harmony format used by gpt-oss models.
+
+    The Harmony format supports 5 roles: system, developer, user, assistant, tool
+    Assistant messages can have channels: final, analysis, commentary
+    Tool calls use recipients and constraints for structured interactions.
+    """
+
+    def __init__(self, tokenizer, default_channel="final", reasoning_effort="high"):
+        super().__init__(tokenizer)
+        self.start_token = "<|start|>"
+        self.end_token = "<|end|>"
+        self.message_token = "<|message|>"
+        self.channel_token = "<|channel|>"
+        self.constrain_token = "<|constrain|>"
+        self.call_token = "<|call|>"
+        self.default_channel = default_channel
+        self.reasoning_effort = reasoning_effort
+        assert self.reasoning_effort in ["low", "medium", "high"], f"Invalid reasoning effort: {self.reasoning_effort}"
+
+        self._cached_date = self._get_current_date()
+
+    def _get_current_date(self):
+        """Get current date dynamically from API or fallback to system date."""
+        try:
+            # Try to get date from worldtimeapi.org
+            response = requests.get("http://worldtimeapi.org/api/timezone/Etc/UTC", timeout=2)
+            if response.status_code == 200:
+                data = response.json()
+                date_str = data["datetime"][:10]  # Extract YYYY-MM-DD
+                return date_str
+        except Exception:
+            pass
+
+        try:
+            # Fallback to timeapi.io
+            response = requests.get("http://timeapi.io/api/Time/current/zone?timeZone=UTC", timeout=2)
+            if response.status_code == 200:
+                data = response.json()
+                date_str = data.get("date", "")
+                # Handle different date formats
+                try:
+                    # Try MM/DD/YYYY format
+                    if "/" in date_str:
+                        date_obj = datetime.strptime(date_str, "%m/%d/%Y")
+                        return date_obj.strftime("%Y-%m-%d")
+                    # Try YYYY-MM-DD format
+                    elif "-" in date_str and len(date_str) == 10:
+                        datetime.strptime(date_str, "%Y-%m-%d")  # Validate format
+                        return date_str
+                except ValueError:
+                    pass
+        except Exception:
+            pass
+
+        try:
+            # Try another simple API
+            response = requests.get("http://date.jsontest.com/", timeout=2)
+            if response.status_code == 200:
+                data = response.json()
+                date_str = data.get("date", "")
+                # Usually returns MM-DD-YYYY format
+                if "-" in date_str:
+                    try:
+                        date_obj = datetime.strptime(date_str, "%m-%d-%Y")
+                        return date_obj.strftime("%Y-%m-%d")
+                    except ValueError:
+                        pass
+        except Exception:
+            pass
+
+        # Final fallback to system date
+        return datetime.now().strftime("%Y-%m-%d")
+
+    def _get_default_system_message(self):
+        """Get the default system message with cached current date."""
+        current_date = self._cached_date
+        return f"""You are ChatGPT, a large language model trained by OpenAI.
+Knowledge cutoff: 2024-06
+Current date: {current_date}
+
+Reasoning: {self.reasoning_effort}
+
+# Valid channels: analysis, commentary, final. Channel must be included for every message."""
+
+    def parse(self, messages, add_generation_prompt=False, is_first_msg=False, **kwargs) -> str:
+        result = ""
+
+        # Always add default system message first when it's the first message
+        if is_first_msg:
+            result += self._format_message("system", self._get_default_system_message())
+            result += self._format_message("developer", "")
+
+        for message in messages:
+            if message["role"] == "system":
+                result += self.parse_system(message)
+            elif message["role"] == "developer":
+                result += self.parse_developer(message)
+            elif message["role"] == "user":
+                result += self.parse_user(message)
+            elif message["role"] == "assistant":
+                result += self.parse_assistant(message)
+            elif message["role"] == "tool":
+                result += self.parse_tool(message)
+            else:
+                raise NotImplementedError(f"Unsupported message role: {message['role']}")
+
+        if add_generation_prompt:
+            result += self.generation_prompt
+        return result
+
+    def _format_message(self, role, content, channel=None, recipient=None, constraint=None, is_call=False):
+        """Helper method to format messages according to Harmony format."""
+        result = self.start_token + role
+
+        if recipient:
+            result += f" to={recipient}"
+
+        if channel:
+            result += self.channel_token + channel
+
+        if constraint:
+            result += f" {self.constrain_token}{constraint}"
+
+        result += self.message_token + content
+
+        if is_call:
+            result += self.call_token
+        else:
+            result += self.end_token
+
+        return result
+
+    def parse_system(self, message):
+        return self._format_message("system", message["content"])
+
+    def parse_developer(self, message):
+        return self._format_message("developer", message["content"])
+
+    def parse_user(self, message):
+        return self._format_message("user", message["content"])
+
+    def parse_assistant(self, message):
+        # Extract harmony-specific metadata from message
+        channel = message.get("channel", self.default_channel)
+        recipient = message.get("recipient")
+        constraint = message.get("constraint")
+        is_call = message.get("is_call", False)
+
+        return self._format_message("assistant", message["content"], channel=channel, recipient=recipient, constraint=constraint, is_call=is_call)
+
+    def parse_tool(self, message):
+        # Tool messages format: <|start|>{tool_name} to=assistant<|channel|>commentary<|message|>{content}<|end|>
+        tool_name = message.get("name", "tool")
+        channel = message.get("channel", "commentary")
+        recipient = message.get("recipient", "assistant")
+
+        return self._format_message(tool_name, message["content"], channel=channel, recipient=recipient)
+
+    @property
+    def generation_prompt(self):
+        """Generate the prompt to start assistant generation."""
+        return f"{self.start_token}assistant{self.channel_token}{self.default_channel}{self.message_token}"
