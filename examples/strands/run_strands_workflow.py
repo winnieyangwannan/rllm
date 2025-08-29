@@ -29,7 +29,7 @@ os.environ.setdefault("OTEL_PYTHON_LOG_LEVEL", "ERROR")
 logging.getLogger("opentelemetry").setLevel(logging.ERROR)
 
 
-from rllm.engine.rollout_engine import RolloutEngine
+from rllm.engine import OpenAIEngine
 from rllm.engine.agent_workflow_engine import AgentWorkflowEngine
 from rllm.workflows.strands_workflow import StrandsWorkflow
 from rllm.integrations.strands_session import make_session_factory
@@ -57,11 +57,12 @@ async def main() -> None:
     else:
         raise ValueError("API key required")
 
-    rollout = RolloutEngine(
-        engine_name="openai",
+    rollout = OpenAIEngine(
+        model=model_id,
         tokenizer=tokenizer,
-        openai_kwargs=openai_kwargs,
-        sampling_params={"model": model_id},
+        base_url=openai_kwargs.get("base_url"),
+        api_key=openai_kwargs.get("api_key"),
+        sampling_params={},
     )
 
     # Optional browser tool (graceful fallback if runtime not installed)

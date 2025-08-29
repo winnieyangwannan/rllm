@@ -6,8 +6,7 @@ import numpy as np
 import openai
 from transformers import AutoTokenizer
 
-from rllm.parser.chat_template.parser import ChatTemplateParser
-from rllm.router.router import Router
+from rllm.parser.chat_template_parser import ChatTemplateParser
 
 
 class RolloutEngine:

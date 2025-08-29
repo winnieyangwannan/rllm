@@ -9,7 +9,7 @@ from strands.types.streaming import StreamEvent
 from strands.types.tools import ToolSpec
 
 from rllm.agents.agent import Step, Trajectory
-from rllm.engine import ModelOutput, RolloutEngine
+from rllm.engine.rollout import ModelOutput, RolloutEngine
 
 T = TypeVar("T", bound=BaseModel)
 
@@ -24,7 +24,19 @@ class RLLMModel(Model):
             rollout_engine: The rLLM RolloutEngine instance to use for inference
         """
         self.rollout_engine = rollout_engine
-        self.kwargs = kwargs
+        # Minimal config to satisfy strands Model interface
+        model_id = kwargs.pop("model_id", None)
+        self._config: dict[str, Any] = {"model_id": model_id, "params": dict(kwargs)}
+
+    def update_config(self, **model_config: Any) -> None:
+        if "model_id" in model_config:
+            self._config["model_id"] = model_config.pop("model_id")
+        params = self._config.get("params") or {}
+        params.update(model_config)
+        self._config["params"] = params
+
+    def get_config(self) -> dict[str, Any]:
+        return {"model_id": self._config.get("model_id"), "params": dict(self._config.get("params") or {})}
 
     async def structured_output(self, output_model: type[T], prompt: Messages, system_prompt: str | None = None, **kwargs: Any) -> AsyncGenerator[dict[str, T | Any], None]:
         """Get structured output from the model.
@@ -92,22 +104,58 @@ class RLLMModel(Model):
         # Convert Strands messages to chat completion format
         chat_messages = self._convert_messages_to_chat_format(messages, system_prompt)
 
-        # TODO: Handle tool_specs - for now we'll log a warning if they're provided
+        # Minimal tool bridge: convert tool_specs to OpenAI tools schema if present
+        tools_param = None
         if tool_specs:
-            import logging
-
-            logger = logging.getLogger(__name__)
-            logger.warning("Tool specs are not yet supported with RLLMModel")
+            # Best-effort conversion: ToolSpec(name, description, input_schema)
+            tools_param = []
+            for spec in tool_specs:
+                try:
+                    name = getattr(spec, "name", None) or getattr(spec, "tool_name", None) or "tool"
+                    description = getattr(spec, "description", "")
+                    # Try to fetch JSON Schema for arguments
+                    params = getattr(spec, "input_schema", None) or getattr(spec, "parameters", None)
+                    if params is None and hasattr(spec, "to_openai_tool"):
+                        # Some SDKs provide conversion helpers
+                        maybe = spec.to_openai_tool()
+                        if isinstance(maybe, dict):
+                            tools_param.append(maybe)
+                            continue
+                    tool_def = {
+                        "type": "function",
+                        "function": {
+                            "name": name,
+                            "description": description,
+                            "parameters": params if isinstance(params, dict) else {"type": "object", "properties": {}, "additionalProperties": True},
+                        },
+                    }
+                    tools_param.append(tool_def)
+                except Exception:
+                    # Skip invalid specs gracefully
+                    continue
 
         # Yield message start
         yield {"messageStart": {"role": "assistant"}}
         yield {"contentBlockStart": {"start": {}}}
 
-        # Get response from rollout engine
-        model_output: ModelOutput = await self.rollout_engine.get_model_response(chat_messages, **kwargs)
+        # Get response from rollout engine, passing tools when available
+        call_kwargs = dict(kwargs)
+        if tools_param:
+            call_kwargs["tools"] = tools_param
+        model_output: ModelOutput = await self.rollout_engine.get_model_response(chat_messages, **call_kwargs)
 
         # Extract text from ModelOutput
         response_text = model_output.text
+
+        # Emit any tool calls first as ToolUse-like events for Strands
+        if getattr(model_output, "tool_calls", None):
+            for tc in model_output.tool_calls or []:
+                try:
+                    fname = tc.get("function", {}).get("name") if isinstance(tc, dict) else getattr(tc, "function", {}).get("name", None)
+                    fargs = tc.get("function", {}).get("arguments") if isinstance(tc, dict) else getattr(tc, "function", {}).get("arguments", None)
+                    yield {"toolUse": {"name": fname or "tool", "input": fargs or {}, "toolUseId": tc.get("id") if isinstance(tc, dict) else getattr(tc, "id", None)}}
+                except Exception:
+                    continue
 
         # Simulate streaming by yielding the response in chunks
         # In a real streaming implementation, you'd want to modify RolloutEngine to support streaming
