@@ -3,7 +3,7 @@ import os
 
 from rllm.engine.agent_workflow_engine import AgentWorkflowEngine
 from rllm.engine.rollout.openai_engine import OpenAIEngine
-from erminus_workflow import TerminalTerminusWorkflow
+from terminus_workflow import TerminalTerminusWorkflow
 from prepare_terminal_data import load_terminal_bench_dataset
 
 
