@@ -38,7 +38,7 @@ async def run_strands_agent(rollout_engine):
     # Reset trajectory for new task
     task = os.getenv(
         "STRANDS_TASK",
-        "who won the 2025 Wimbledon Tennis Tournament?",
+        "who won the 2025 US Tennis Open?",
     )
     agent.reset_trajectory(task=task)
 
@@ -47,23 +47,23 @@ async def run_strands_agent(rollout_engine):
     # Run the agent
     result = agent(task)
     
-    # Display the result
-    if hasattr(result, 'message'):
-        if isinstance(result.message, dict):
-            content = result.message.get('content', [])
-        elif hasattr(result.message, 'content'):
-            content = result.message.content
-        else:
-            content = []
+    # # Display the result
+    # if hasattr(result, 'message'):
+    #     if isinstance(result.message, dict):
+    #         content = result.message.get('content', [])
+    #     elif hasattr(result.message, 'content'):
+    #         content = result.message.content
+    #     else:
+    #         content = []
         
-        # Extract text content
-        if isinstance(content, list):
-            for event in content:
-                if isinstance(event, dict) and 'text' in event:
-                    print(f"🤖 Response: {event['text']}")
-                    break
+    #     # Extract text content
+    #     if isinstance(content, list):
+    #         for event in content:
+    #             if isinstance(event, dict) and 'text' in event:
+    #                 print(f"🤖 Response: {event['text']}")
+    #                 break
     
-    print(f"✅ Final result: {repr(result)}")
+    print(f"\n✅ Final result: {repr(result)}")
 
 
 async def main():
