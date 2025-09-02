@@ -1,3 +1,4 @@
+import json
 from collections.abc import AsyncGenerator, AsyncIterable
 from typing import Any, TypeVar
 
@@ -64,6 +65,7 @@ class RLLMModel(Model):
         # Get response from rollout engine
         response_text = (await self.rollout_engine.get_model_response(messages, **kwargs)).text
 
+        print(f"response_text: {response_text}")
         try:
             # Try to parse the response as JSON and convert to the output model
             import json
@@ -90,7 +92,7 @@ class RLLMModel(Model):
         system_prompt: str | None = None,
         **kwargs: Any,
     ) -> AsyncIterable[StreamEvent]:
-        """Stream conversation with the model using RolloutEngine.
+        """Stream conversation with the model using RolloutEngine with tool execution loop.
 
         Args:
             messages: List of message objects to be processed by the model.
@@ -101,85 +103,284 @@ class RLLMModel(Model):
         Yields:
             Formatted message chunks from the model.
         """
+        print("___stream__ start")
+        
         # Convert Strands messages to chat completion format
         chat_messages = self._convert_messages_to_chat_format(messages, system_prompt)
-
-        # Minimal tool bridge: convert tool_specs to OpenAI tools schema if present
+        
+        # Prepare tools mapping for execution
+        tools_map = {}
         tools_param = None
-        if tool_specs:
-            # Best-effort conversion: ToolSpec(name, description, input_schema)
-            tools_param = []
-            for spec in tool_specs:
-                try:
-                    name = getattr(spec, "name", None) or getattr(spec, "tool_name", None) or "tool"
-                    description = getattr(spec, "description", "")
-                    # Try to fetch JSON Schema for arguments
-                    params = getattr(spec, "input_schema", None) or getattr(spec, "parameters", None)
-                    if params is None and hasattr(spec, "to_openai_tool"):
-                        # Some SDKs provide conversion helpers
-                        maybe = spec.to_openai_tool()
-                        if isinstance(maybe, dict):
-                            tools_param.append(maybe)
-                            continue
-                    tool_def = {
-                        "type": "function",
-                        "function": {
-                            "name": name,
-                            "description": description,
-                            "parameters": params if isinstance(params, dict) else {"type": "object", "properties": {}, "additionalProperties": True},
-                        },
-                    }
-                    tools_param.append(tool_def)
-                except Exception:
-                    # Skip invalid specs gracefully
-                    continue
+        
+        # Try to get tools from the agent if available
+        if hasattr(self, 'agent') and hasattr(self.agent, '_original_tools'):
+            print(f"[RLLMModel] Using original tools from agent: {[type(t) for t in self.agent._original_tools]}")
+            tools_map = self._build_tools_map(self.agent._original_tools)
+            tools_param = self._convert_tool_specs_to_openai_format(self.agent._original_tools)
+        elif tool_specs:
+            print(f"[RLLMModel] Using tool_specs parameter: {[type(t) for t in tool_specs]}")
+            tools_map = self._build_tools_map(tool_specs)
+            tools_param = self._convert_tool_specs_to_openai_format(tool_specs)
 
-        # Yield message start
+        # Tool execution loop
+        max_turns = 10  # Prevent infinite loops
+        turn_count = 0
+        
+        while turn_count < max_turns:
+            turn_count += 1
+            print(f"[RLLMModel] Turn {turn_count}")
+            
+            # Call rollout engine
+            call_kwargs = dict(kwargs)
+            if tools_param:
+                call_kwargs["tools"] = tools_param
+                
+            model_output: ModelOutput = await self.rollout_engine.get_model_response(chat_messages, **call_kwargs)
+            print(f"model_output: {model_output}")
+            
+            # Check if we have tool calls to execute
+            if getattr(model_output, "tool_calls", None):
+                print(f"[RLLMModel] Executing {len(model_output.tool_calls)} tool calls")
+                
+                # Yield message start for assistant
+                yield {"messageStart": {"role": "assistant"}}
+                
+                # Emit tool call events and execute tools
+                tool_results = []
+                for tc in model_output.tool_calls:
+                    # Extract tool call info
+                    tool_call_info = self._extract_tool_call_info(tc)
+                    
+                    # Yield tool call event
+                    yield {"toolCall": tool_call_info}
+                    
+                    # Execute the tool
+                    tool_result = await self._execute_tool(tool_call_info, tools_map)
+                    tool_results.append(tool_result)
+                
+                # Yield message stop with tool_calls reason
+                yield {"messageStop": {"stopReason": "tool_calls"}}
+                
+                # Add the assistant message with tool_calls first
+                assistant_message = {
+                    "role": "assistant",
+                    "content": None,
+                    "tool_calls": [
+                        {
+                            "id": tc["id"],
+                            "type": "function",
+                            "function": {
+                                "name": tc["name"],
+                                "arguments": json.dumps(tc["input"])
+                            }
+                        }
+                        for tc in [tool_call_info]  # We're processing one at a time
+                    ]
+                }
+                chat_messages.append(assistant_message)
+                
+                # Then add tool results
+                chat_messages.extend(tool_results)
+                
+                # Continue the loop to get the final response
+                continue
+            else:
+                # No tool calls, this is the final response
+                print("[RLLMModel] Final response received")
+                
+                # Yield message start
+                yield {"messageStart": {"role": "assistant"}}
+                
+                # Yield content
+                response_text = model_output.text or ""
+                yield {"contentBlockStart": {"start": {}}}
+                
+                # Stream the response text
+                chunk_size = 50
+                for i in range(0, len(response_text), chunk_size):
+                    chunk = response_text[i : i + chunk_size]
+                    if chunk:
+                        yield {"contentBlockDelta": {"delta": {"text": chunk}}}
+                
+                yield {"contentBlockStop": {}}
+                
+                # Determine stop reason
+                stop_reason = getattr(model_output, "finish_reason", "end_turn")
+                yield {"messageStop": {"stopReason": stop_reason}}
+                
+                print("___stream__ end")
+                return  # Exit the loop
+                
+        # If we reach here, we hit the max turns limit
+        print(f"[RLLMModel] Reached max turns ({max_turns})")
         yield {"messageStart": {"role": "assistant"}}
         yield {"contentBlockStart": {"start": {}}}
+        yield {"contentBlockDelta": {"delta": {"text": "I apologize, but I've reached the maximum number of tool execution turns. Please try again."}}}
+        yield {"contentBlockStop": {}}
+        yield {"messageStop": {"stopReason": "max_turns"}}
+        print("___stream__ end")
 
-        # Get response from rollout engine, passing tools when available
-        call_kwargs = dict(kwargs)
-        if tools_param:
-            call_kwargs["tools"] = tools_param
-        model_output: ModelOutput = await self.rollout_engine.get_model_response(chat_messages, **call_kwargs)
+    def _build_tools_map(self, tool_specs: list[ToolSpec]) -> dict:
+        """Build a mapping from tool names to callable tools."""
+        tools_map = {}
+        for spec in tool_specs:
+            try:
+                # Get tool name
+                name = None
+                
+                # Handle DecoratedFunctionTool objects (from strands_tools)
+                if hasattr(spec, "tool_name"):
+                    name = spec.tool_name
+                elif hasattr(spec, "name"):
+                    name = spec.name
+                elif isinstance(spec, dict):
+                    name = spec.get("name") or (spec.get("function") or {}).get("name")
+                elif callable(spec):
+                    # For plain functions, try to get name from function object
+                    if hasattr(spec, "__name__"):
+                        name = spec.__name__
+                    elif hasattr(spec, "__qualname__"):
+                        name = spec.__qualname__.split('.')[-1]
+                
+                if not name:
+                    print(f"[RLLMModel] Warning: Could not determine name for tool {spec}")
+                    continue
+                
+                # Get the callable tool
+                if callable(spec):
+                    # The spec itself is callable
+                    tools_map[name] = spec
+                elif hasattr(spec, "function") and callable(spec.function):
+                    # The spec has a callable function attribute
+                    tools_map[name] = spec.function
+                else:
+                    print(f"[RLLMModel] Warning: Tool {name} is not callable")
+                    continue
+                
+            except Exception as e:
+                print(f"[RLLMModel] Failed to map tool {spec}: {e}")
+                continue
+        
+        return tools_map
 
-        # Extract text from ModelOutput
-        response_text = model_output.text
+    def _convert_tool_specs_to_openai_format(self, tool_specs: list[ToolSpec]) -> list[dict]:
+        """Convert tool specs to OpenAI tools format."""
+        tools_param = []
+        
+        for spec in tool_specs:
+            try:
+                # Handle DecoratedFunctionTool objects (from strands_tools)
+                if hasattr(spec, "tool_spec"):
+                    tool_spec = spec.tool_spec
+                    if isinstance(tool_spec, dict):
+                        name = tool_spec.get("name")
+                        input_schema = tool_spec.get("inputSchema", {})
+                        if isinstance(input_schema, dict) and "json" in input_schema:
+                            params = input_schema["json"]
+                            if name and isinstance(params, dict):
+                                tools_param.append({
+                                    "type": "function",
+                                    "function": {"name": name, "parameters": params},
+                                })
+                                continue
+                
+                # Prefer SDK helper if available (object specs)
+                if hasattr(spec, "to_openai_tool"):
+                    maybe = spec.to_openai_tool()
+                    if isinstance(maybe, dict):
+                        tools_param.append(maybe)
+                        continue
 
-        # Emit any tool calls first as ToolUse-like events for Strands
-        if getattr(model_output, "tool_calls", None):
-            for tc in model_output.tool_calls or []:
-                try:
-                    fname = tc.get("function", {}).get("name") if isinstance(tc, dict) else getattr(tc, "function", {}).get("name", None)
-                    fargs = tc.get("function", {}).get("arguments") if isinstance(tc, dict) else getattr(tc, "function", {}).get("arguments", None)
-                    yield {"toolUse": {"name": fname or "tool", "input": fargs or {}, "toolUseId": tc.get("id") if isinstance(tc, dict) else getattr(tc, "id", None)}}
-                except Exception:
+                # Dict-shaped specs (common with strands-agents-tools)
+                if isinstance(spec, dict):
+                    # If already OpenAI-shaped, pass through
+                    if spec.get("type") == "function" and isinstance(spec.get("function"), dict):
+                        tools_param.append(spec)
+                        continue
+                    # Otherwise, synthesize OpenAI tool from common fields
+                    name = spec.get("name") or (spec.get("function") or {}).get("name")
+                    params = (
+                        spec.get("parameters")
+                        or spec.get("input_schema")
+                        or spec.get("schema")
+                        or ((spec.get("inputSchema") or {}).get("json") if isinstance(spec.get("inputSchema"), dict) else None)
+                    )
+                    if name and isinstance(params, dict):
+                        tools_param.append({
+                            "type": "function",
+                            "function": {"name": name, "parameters": params},
+                        })
                     continue
 
-        # Simulate streaming by yielding the response in chunks
-        # In a real streaming implementation, you'd want to modify RolloutEngine to support streaming
-        chunk_size = 50  # Adjust as needed
-        for i in range(0, len(response_text), chunk_size):
-            chunk = response_text[i : i + chunk_size]
-            yield {"contentBlockDelta": {"delta": {"text": chunk}}}
+                # Object specs without helper: attempt attribute-based extraction
+                name = getattr(spec, "name", None)
+                params = getattr(spec, "input_schema", None) or getattr(spec, "parameters", None)
+                if name and isinstance(params, dict):
+                    tools_param.append({
+                        "type": "function",
+                        "function": {"name": name, "parameters": params},
+                    })
+            except Exception as e:
+                print(f"[RLLMModel] Warning: Failed to convert tool spec {spec}: {e}")
+                continue
+                
+        return tools_param
 
-        # Yield message end
-        yield {"contentBlockStop": {}}
-        yield {"messageStop": {"stopReason": model_output.finish_reason or "end_turn"}}
+    def _extract_tool_call_info(self, tool_call) -> dict:
+        """Extract tool call information from ModelOutput tool call."""
+        try:
+            func = tool_call.get("function", {}) if isinstance(tool_call, dict) else getattr(tool_call, "function", {})
+            fname = func.get("name") if isinstance(func, dict) else getattr(func, "name", None)
+            fargs_raw = func.get("arguments") if isinstance(func, dict) else getattr(func, "arguments", None)
+            
+            # Parse arguments if they're JSON strings
+            fargs = {}
+            if isinstance(fargs_raw, str):
+                import json as _json
+                try:
+                    fargs = _json.loads(fargs_raw) if fargs_raw.strip() else {}
+                except Exception:
+                    fargs = {"_raw": fargs_raw}
+            elif isinstance(fargs_raw, dict):
+                fargs = fargs_raw
+                
+            tool_id = tool_call.get("id") if isinstance(tool_call, dict) else getattr(tool_call, "id", None)
+            
+            return {"id": tool_id, "name": fname or "tool", "input": fargs}
+        except Exception:
+            return {"id": "unknown", "name": "unknown", "input": {}}
 
-        # Add usage metadata from ModelOutput
-        yield {
-            "metadata": {
-                "usage": {
-                    "inputTokens": model_output.prompt_tokens,
-                    "outputTokens": model_output.completion_tokens,
-                    "totalTokens": model_output.prompt_tokens + model_output.completion_tokens,
-                },
-                "metrics": {
-                    "latencyMs": 0,
-                },
-            }
+    async def _execute_tool(self, tool_call_info: dict, tools_map: dict) -> dict:
+        """Execute a tool call and return the result as a chat message."""
+        tool_name = tool_call_info["name"]
+        tool_input = tool_call_info["input"]
+        tool_id = tool_call_info["id"]
+        
+        try:
+            # Find the tool
+            if tool_name not in tools_map:
+                result = f"Error: Tool '{tool_name}' not found"
+            else:
+                tool = tools_map[tool_name]
+                print(f"[RLLMModel] Executing tool {tool_name} with input: {tool_input}")
+                
+                # Execute the tool
+                if callable(tool):
+                    result = tool(**tool_input)
+                else:
+                    result = f"Error: Tool '{tool_name}' is not callable"
+                    
+                print(f"[RLLMModel] Tool {tool_name} result: {result}")
+                
+        except Exception as e:
+            result = f"Error executing tool '{tool_name}': {str(e)}"
+            print(f"[RLLMModel] Tool execution error: {result}")
+        
+        # Return as OpenAI tool message format
+        return {
+            "role": "tool",
+            "tool_call_id": tool_id,
+            "content": str(result)
         }
 
     def _convert_messages_to_chat_format(self, messages: Messages, system_prompt: str | None = None) -> list[dict[str, str]]:
@@ -233,7 +434,14 @@ class StrandsAgent(Agent):
             **kwargs: Additional arguments to pass to the base Agent class
         """
 
+        # Save tools before passing to base class
+        self._original_tools = kwargs.get('tools', [])
+        
         super().__init__(model=model, **kwargs)
+        
+        # Set agent reference in the model so it can access tools
+        model.agent = self
+        
         self._trajectory = Trajectory()
         self._current_step = None
 
@@ -282,15 +490,8 @@ class StrandsAgent(Agent):
             self._trajectory.reward += reward
             self._current_step = None
 
-    def __call__(self, prompt: str | list[ContentBlock], **kwargs) -> Any:
-        """Enhanced call method that tracks trajectory."""
-        # Start a new step with the user prompt as observation
-        self._start_new_step(observation=prompt)
-
-        # Call the original Strands Agent logic
-        result = super().__call__(prompt, **kwargs)
-
-        # Extract relevant information from the result
+    def _finish_current_step_from_result(self, result: Any):
+        """Finish the current step by extracting info from AgentResult."""
         model_response = ""
         action = None
 
@@ -303,45 +504,51 @@ class StrandsAgent(Agent):
             elif hasattr(result.message, "content"):
                 model_response = str(result.message.content)
 
-            # The action could be the final message or result itself
             action = result.message if hasattr(result, "message") else result
 
-        # Determine if this step is done (could be based on stop_reason or other criteria)
+        # Determine if this step is done
         done = hasattr(result, "stop_reason") and result.stop_reason in ["end_turn", "stop_sequence"]
 
-        # Finish the current step
         self._finish_current_step(model_response=model_response, action=action, done=done)
+
+    def __call__(self, prompt: str | list[ContentBlock], **kwargs) -> Any:
+        """Enhanced call method that tracks trajectory."""
+        # Start a new step with the user prompt as observation
+        self._start_new_step(observation=prompt)
+
+        print("___call__: ", prompt)
+        # Let the original Strands Agent handle everything (including tool execution)
+        result = super().__call__(prompt, **kwargs)
+        print("___call__ result: ", repr(result))
+
+        # Finish the current step based on the result
+        self._finish_current_step_from_result(result)
 
         return result
 
     async def invoke_async(self, prompt: str | list[ContentBlock], **kwargs) -> Any:
-        """Enhanced async invoke method that tracks trajectory."""
+        """Async invoke method with trajectory tracking."""
         # Start a new step with the user prompt as observation
         self._start_new_step(observation=prompt)
 
-        # Call the original Strands Agent async logic
-        result = await super().invoke_async(prompt, **kwargs)
-
-        # Extract relevant information from the result (same logic as __call__)
-        model_response = ""
-        action = None
-
-        if hasattr(result, "message") and result.message:
-            if hasattr(result.message, "content") and isinstance(result.message.content, list):
-                for content_block in result.message.content:
-                    if isinstance(content_block, dict) and "text" in content_block:
-                        model_response += content_block["text"]
-            elif hasattr(result.message, "content"):
-                model_response = str(result.message.content)
-
-            action = result.message if hasattr(result, "message") else result
-
-        done = hasattr(result, "stop_reason") and result.stop_reason in ["end_turn", "stop_sequence"]
-
-        # Finish the current step
-        self._finish_current_step(model_response=model_response, action=action, done=done)
-
+        print("___invoke_async__ start")
+        
+        # Let the original Strands Agent handle everything
+        result = None
+        async for event in super().stream_async(prompt, **kwargs):
+            print(f"___invoke_async__ event: {event}")
+            if "result" in event:
+                result = event["result"]
+                break
+        
+        print(f"___invoke_async__ final result: {repr(result)}")
+        
+        # Finish the current step based on the result
+        if result:
+            self._finish_current_step_from_result(result)
+            
         return result
+
 
     def get_current_state(self) -> Step | None:
         """Get the current step state."""

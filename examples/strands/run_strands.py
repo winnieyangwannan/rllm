@@ -1,13 +1,14 @@
 import asyncio
 import os
-
 from dotenv import load_dotenv, find_dotenv
+
 from transformers import AutoTokenizer
-
-from rllm.engine.rollout.openai_engine import OpenAIEngine
+from rllm.engine.rollout import OpenAIEngine
 from rllm.integrations.strands import RLLMModel, StrandsAgent
+from strands_tools.calculator import calculator
+from gsearch_tool_wrapped import google_search
 
-os.environ.setdefault("OTEL_SDK_DISABLED", "true")   # disable OTEL SDK
+os.environ.setdefault("OTEL_SDK_DISABLED", "true")  # disable OTEL SDK
 
 
 async def run_strands_agent(rollout_engine):
@@ -16,18 +17,47 @@ async def run_strands_agent(rollout_engine):
     # Create RLLMModel
     model = RLLMModel(rollout_engine=rollout_engine, model_id="Qwen/Qwen3-0.6B")
 
-    # Create StrandsAgent with trajectory tracking
-    agent = StrandsAgent(model=model)
+    # Prepare minimal tool set
+    tools = [calculator, google_search]
+
+    # Simple system prompt
+    system_prompt = os.getenv(
+        "SYSTEM_PROMPT",
+        "You are a helpful agent. Use tools when beneficial, and keep answers concise. Use the google_search tool to search for current information.",
+    )
+
+    # Create StrandsAgent with trajectory tracking and tools
+    agent = StrandsAgent(model=model, tools=tools, system_prompt=system_prompt)
 
     # Reset trajectory for new task
-    task = "Explain the concept of machine learning in simple terms"
+    task = os.getenv(
+        "STRANDS_TASK",
+        "who won the 2025 Wimbledon Tennis Tournament?",
+    )
     agent.reset_trajectory(task=task)
 
     print(f"📝 Task: {task}")
 
     # Run the agent
-    result = agent("Explain the concept of machine learning in simple terms, using an analogy that a child could understand.")
-    print(result)
+    result = agent(task)
+    
+    # Display the result
+    if hasattr(result, 'message'):
+        if isinstance(result.message, dict):
+            content = result.message.get('content', [])
+        elif hasattr(result.message, 'content'):
+            content = result.message.content
+        else:
+            content = []
+        
+        # Extract text content
+        if isinstance(content, list):
+            for event in content:
+                if isinstance(event, dict) and 'text' in event:
+                    print(f"🤖 Response: {event['text']}")
+                    break
+    
+    print(f"✅ Final result: {repr(result)}")
 
 
 async def main():
@@ -35,7 +65,6 @@ async def main():
 
     # Tokenizer/model
     model_name = os.getenv("TOKENIZER_MODEL", "Qwen/Qwen3-0.6B")
-    # Tokenizer is optional; omit it to force chat.completions endpoint for chat models
     tokenizer = AutoTokenizer.from_pretrained(model_name)
 
     # Provider selection (Together or OpenAI-compatible)
@@ -47,7 +76,7 @@ async def main():
         api_key = together_api_key
         model_id = os.getenv("TOGETHER_AI_MODEL_NAME", "Qwen/Qwen2.5-7B-Instruct-Turbo")
     elif openai_api_key:
-        base_url = os.getenv("OPENAI_BASE_URL")  # optional proxy/base
+        base_url = os.getenv("OPENAI_BASE_URL")
         api_key = openai_api_key
         model_id = os.getenv("MODEL_NAME", "gpt-4o")
     else:

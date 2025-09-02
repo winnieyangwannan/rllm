@@ -1,0 +1,5 @@
+---
+description: always use conda acvtiate rllm befor any python call in this project
+globs:
+alwaysApply: true
+---
