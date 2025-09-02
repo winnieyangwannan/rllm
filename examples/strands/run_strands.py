@@ -1,5 +1,6 @@
 import asyncio
 import os
+import logging
 from dotenv import load_dotenv, find_dotenv
 
 from transformers import AutoTokenizer
@@ -8,7 +9,12 @@ from rllm.integrations.strands import RLLMModel, StrandsAgent
 from strands_tools.calculator import calculator
 from gsearch_tool_wrapped import google_search
 
-os.environ.setdefault("OTEL_SDK_DISABLED", "true")  # disable OTEL SDK
+# Disable OpenTelemetry SDK
+os.environ.setdefault("OTEL_SDK_DISABLED", "true")
+
+# Disable OpenTelemetry error logs
+logging.getLogger("opentelemetry").setLevel(logging.CRITICAL)
+logging.getLogger("strands.telemetry").setLevel(logging.CRITICAL)
 
 
 async def run_strands_agent(rollout_engine):

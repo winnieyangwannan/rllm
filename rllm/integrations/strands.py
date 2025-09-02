@@ -103,8 +103,6 @@ class RLLMModel(Model):
         Yields:
             Formatted message chunks from the model.
         """
-        print("___stream__ start")
-        
         # Convert Strands messages to chat completion format
         chat_messages = self._convert_messages_to_chat_format(messages, system_prompt)
         
@@ -114,11 +112,9 @@ class RLLMModel(Model):
         
         # Try to get tools from the agent if available
         if hasattr(self, 'agent') and hasattr(self.agent, '_original_tools'):
-            print(f"[RLLMModel] Using original tools from agent: {[type(t) for t in self.agent._original_tools]}")
             tools_map = self._build_tools_map(self.agent._original_tools)
             tools_param = self._convert_tool_specs_to_openai_format(self.agent._original_tools)
         elif tool_specs:
-            print(f"[RLLMModel] Using tool_specs parameter: {[type(t) for t in tool_specs]}")
             tools_map = self._build_tools_map(tool_specs)
             tools_param = self._convert_tool_specs_to_openai_format(tool_specs)
 
@@ -128,7 +124,6 @@ class RLLMModel(Model):
         
         while turn_count < max_turns:
             turn_count += 1
-            print(f"[RLLMModel] Turn {turn_count}")
             
             # Call rollout engine
             call_kwargs = dict(kwargs)
@@ -136,11 +131,9 @@ class RLLMModel(Model):
                 call_kwargs["tools"] = tools_param
                 
             model_output: ModelOutput = await self.rollout_engine.get_model_response(chat_messages, **call_kwargs)
-            print(f"model_output: {model_output}")
             
             # Check if we have tool calls to execute
             if getattr(model_output, "tool_calls", None):
-                print(f"[RLLMModel] Executing {len(model_output.tool_calls)} tool calls")
                 
                 # Yield message start for assistant
                 yield {"messageStart": {"role": "assistant"}}
@@ -186,8 +179,6 @@ class RLLMModel(Model):
                 continue
             else:
                 # No tool calls, this is the final response
-                print("[RLLMModel] Final response received")
-                
                 # Yield message start
                 yield {"messageStart": {"role": "assistant"}}
                 
@@ -208,17 +199,14 @@ class RLLMModel(Model):
                 stop_reason = getattr(model_output, "finish_reason", "end_turn")
                 yield {"messageStop": {"stopReason": stop_reason}}
                 
-                print("___stream__ end")
                 return  # Exit the loop
                 
         # If we reach here, we hit the max turns limit
-        print(f"[RLLMModel] Reached max turns ({max_turns})")
         yield {"messageStart": {"role": "assistant"}}
         yield {"contentBlockStart": {"start": {}}}
         yield {"contentBlockDelta": {"delta": {"text": "I apologize, but I've reached the maximum number of tool execution turns. Please try again."}}}
         yield {"contentBlockStop": {}}
         yield {"messageStop": {"stopReason": "max_turns"}}
-        print("___stream__ end")
 
     def _build_tools_map(self, tool_specs: list[ToolSpec]) -> dict:
         """Build a mapping from tool names to callable tools."""
@@ -243,7 +231,6 @@ class RLLMModel(Model):
                         name = spec.__qualname__.split('.')[-1]
                 
                 if not name:
-                    print(f"[RLLMModel] Warning: Could not determine name for tool {spec}")
                     continue
                 
                 # Get the callable tool
@@ -254,11 +241,9 @@ class RLLMModel(Model):
                     # The spec has a callable function attribute
                     tools_map[name] = spec.function
                 else:
-                    print(f"[RLLMModel] Warning: Tool {name} is not callable")
                     continue
                 
             except Exception as e:
-                print(f"[RLLMModel] Failed to map tool {spec}: {e}")
                 continue
         
         return tools_map
@@ -362,19 +347,15 @@ class RLLMModel(Model):
                 result = f"Error: Tool '{tool_name}' not found"
             else:
                 tool = tools_map[tool_name]
-                print(f"[RLLMModel] Executing tool {tool_name} with input: {tool_input}")
                 
                 # Execute the tool
                 if callable(tool):
                     result = tool(**tool_input)
                 else:
                     result = f"Error: Tool '{tool_name}' is not callable"
-                    
-                print(f"[RLLMModel] Tool {tool_name} result: {result}")
                 
         except Exception as e:
             result = f"Error executing tool '{tool_name}': {str(e)}"
-            print(f"[RLLMModel] Tool execution error: {result}")
         
         # Return as OpenAI tool message format
         return {
@@ -516,10 +497,8 @@ class StrandsAgent(Agent):
         # Start a new step with the user prompt as observation
         self._start_new_step(observation=prompt)
 
-        print("___call__: ", prompt)
         # Let the original Strands Agent handle everything (including tool execution)
         result = super().__call__(prompt, **kwargs)
-        print("___call__ result: ", repr(result))
 
         # Finish the current step based on the result
         self._finish_current_step_from_result(result)
@@ -531,17 +510,12 @@ class StrandsAgent(Agent):
         # Start a new step with the user prompt as observation
         self._start_new_step(observation=prompt)
 
-        print("___invoke_async__ start")
-        
         # Let the original Strands Agent handle everything
         result = None
         async for event in super().stream_async(prompt, **kwargs):
-            print(f"___invoke_async__ event: {event}")
             if "result" in event:
                 result = event["result"]
                 break
-        
-        print(f"___invoke_async__ final result: {repr(result)}")
         
         # Finish the current step based on the result
         if result:
