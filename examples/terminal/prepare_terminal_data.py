@@ -1,22 +1,21 @@
 from __future__ import annotations
 
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Any
 
 import yaml
-
 from terminal_bench.dataset.dataset import Dataset
 
 
 def load_terminal_bench_dataset(
     dataset_name: str,
     dataset_version: str = "head",
-    task_ids: Optional[List[str]] = None,
-    n_tasks: Optional[int] = None,
-    local_registry_path: Optional[Path] = None,
-    registry_url: Optional[str] = None,
-    exclude_task_ids: Optional[List[str]] = None,
-) -> List[Dict[str, Any]]:
+    task_ids: list[str] | None = None,
+    n_tasks: int | None = None,
+    local_registry_path: Path | None = None,
+    registry_url: str | None = None,
+    exclude_task_ids: list[str] | None = None,
+) -> list[dict[str, Any]]:
     """Load Terminal-Bench dataset and convert to minimal rLLM task dicts.
 
     Args:
@@ -41,7 +40,7 @@ def load_terminal_bench_dataset(
         registry_url=registry_url,
     )
 
-    tasks: List[Dict[str, Any]] = []
+    tasks: list[dict[str, Any]] = []
     for task_path in dataset:
         task_config = load_task_config(task_path)
 
@@ -55,7 +54,7 @@ def load_terminal_bench_dataset(
     return tasks
 
 
-def load_task_config(task_path: Path) -> Dict[str, Any]:
+def load_task_config(task_path: Path) -> dict[str, Any]:
     """Load and validate task configuration from task.yaml file.
 
     Args:
@@ -69,15 +68,12 @@ def load_task_config(task_path: Path) -> Dict[str, Any]:
     if not task_yaml_path.exists():
         raise FileNotFoundError(f"task.yaml not found at {task_yaml_path}")
 
-    with open(task_yaml_path, "r") as f:
+    with open(task_yaml_path) as f:
         config = yaml.safe_load(f)
 
     required_fields = ["instruction"]
     for field in required_fields:
         if field not in config:
-            raise ValueError(
-                f"Missing required field '{field}' in {task_yaml_path}"
-            )
+            raise ValueError(f"Missing required field '{field}' in {task_yaml_path}")
 
     return config
-

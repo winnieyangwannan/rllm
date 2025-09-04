@@ -1,10 +1,10 @@
 from __future__ import annotations
 
-import time
 import json
-from typing import Any, Tuple
-from tenacity import retry, retry_if_not_exception_type, stop_after_attempt
+import time
+from typing import Any
 
+from tenacity import retry, retry_if_not_exception_type, stop_after_attempt
 from terminal_bench.agents.terminus_1 import (
     Command,
     CommandBatchResponse,
@@ -17,8 +17,8 @@ from terminal_bench.llms.base_llm import (
 )
 from terminal_bench.terminal.tmux_session import TmuxSession
 
-from rllm.engine.rollout.rollout_engine import ModelOutput, RolloutEngine
 from rllm.agents.agent import Step, Trajectory
+from rllm.engine.rollout.rollout_engine import ModelOutput, RolloutEngine
 from rllm.workflows.workflow import TerminationReason
 
 
@@ -63,9 +63,7 @@ class RLLMModel(Terminus):
             terminal_state=terminal_state,
         )
 
-    def execute_commands(
-        self, commands: list[Command], session: TmuxSession
-    ) -> Tuple[bool, str]:
+    def execute_commands(self, commands: list[Command], session: TmuxSession) -> tuple[bool, str]:
         """Execute a batch of commands in the tmux session and capture output."""
         return self._execute_commands(commands, session)
 
@@ -80,9 +78,7 @@ class RLLMModel(Terminus):
 
     @retry(
         stop=stop_after_attempt(3),
-        retry=retry_if_not_exception_type(
-            (ContextLengthExceededError, OutputLengthExceededError)
-        ),
+        retry=retry_if_not_exception_type((ContextLengthExceededError, OutputLengthExceededError)),
     )
     async def handle_llm_interaction_with_engine(
         self,
@@ -92,9 +88,7 @@ class RLLMModel(Terminus):
         """Call the rollout engine, update message history, and parse JSON output."""
         _, engine_response_format = self._format_prompt_for_schema(prompt, response_format)
         messages = self._messages + [{"role": "user", "content": prompt}]
-        output: ModelOutput = await self._engine.get_model_response(
-            messages, response_format=engine_response_format
-        )
+        output: ModelOutput = await self._engine.get_model_response(messages, response_format=engine_response_format)
 
         assistant_text = output.text or ""
 
@@ -118,13 +112,9 @@ class RLLMModel(Terminus):
             return CommandBatchResponse.model_validate_json(assistant_text)
         except (json.JSONDecodeError, Exception) as e:
             # Wrap parse errors into TB's ParseError
-            raise ParseError(f"Failed to parse LLM response: {e}")
+            raise ParseError(f"Failed to parse LLM response: {e}") from e
 
-    async def run_agent_loop_with_engine(
-        self,
-        initial_prompt: str,
-        session: TmuxSession
-    ) -> Tuple[Trajectory, TerminationReason]:
+    async def run_agent_loop_with_engine(self, initial_prompt: str, session: TmuxSession) -> tuple[Trajectory, TerminationReason]:
         """Run the TB control loop and build a trajectory with termination reason."""
         # Reset per-run state
         self._messages = []
@@ -136,14 +126,10 @@ class RLLMModel(Terminus):
             if time.time() > deadline:
                 return self._trajectory, TerminationReason.TIMEOUT
 
-            parsed_response = await self.handle_llm_interaction_with_engine(
-                prompt=prompt, response_format=CommandBatchResponse
-            )
+            parsed_response = await self.handle_llm_interaction_with_engine(prompt=prompt, response_format=CommandBatchResponse)
             self._record_asciinema_marker(parsed_response.model_dump_json(), session)
 
-            timeout_occurred, terminal_output = self._execute_commands(
-                parsed_response.commands, session
-            )
+            timeout_occurred, terminal_output = self._execute_commands(parsed_response.commands, session)
 
             # Last two messages are the user prompt and assistant reply
             step_messages = self._messages[-2:]
@@ -169,5 +155,3 @@ class RLLMModel(Terminus):
     def get_trajectory(self) -> Trajectory:
         """Return the accumulated trajectory from the most recent run."""
         return self._trajectory
-
-

@@ -1,15 +1,14 @@
 from pathlib import Path
 
-from rllm.agents.agent import Episode
-from rllm.workflows.workflow import TerminationEvent, TerminationReason, Workflow
-
-from terminal_bench.terminal.terminal import Terminal
-from terminal_bench.terminal.docker_compose_manager import DockerComposeManager
-from terminal_bench.parsers.parser_factory import ParserFactory
-from terminal_bench.parsers.base_parser import UnitTestStatus
 from terminal_bench.handlers.trial_handler import TrialHandler
+from terminal_bench.parsers.base_parser import UnitTestStatus
+from terminal_bench.parsers.parser_factory import ParserFactory
+from terminal_bench.terminal.docker_compose_manager import DockerComposeManager
+from terminal_bench.terminal.terminal import Terminal
 
+from rllm.agents.agent import Episode
 from rllm.integrations.terminal_terminus_1 import RLLMModel
+from rllm.workflows.workflow import TerminationEvent, TerminationReason, Workflow
 
 
 class TerminalTerminusWorkflow(Workflow):
@@ -53,12 +52,7 @@ class TerminalTerminusWorkflow(Workflow):
         finally:
             await self.run_in_executor(self._close_env)
 
-        episode = Episode(
-            id=uid,
-            task=task,
-            is_correct=bool(reward > 0),
-            trajectories=[("terminus", trajectory)]
-        )
+        episode = Episode(id=uid, task=task, is_correct=bool(reward > 0), trajectories=[("terminus", trajectory)])
         episode.termination_reason = termination_reason
         return episode
 
@@ -99,9 +93,7 @@ class TerminalTerminusWorkflow(Workflow):
             cleanup=self.env_args.get("cleanup", True),
         )
         self.terminal.start()
-        self.session = self.terminal.create_session(
-            "agent", is_active_stream=False, as_configured_user=True
-        )
+        self.session = self.terminal.create_session("agent", is_active_stream=False, as_configured_user=True)
 
         self.terminus = RLLMModel(
             rollout_engine=self.rollout_engine,
@@ -111,9 +103,7 @@ class TerminalTerminusWorkflow(Workflow):
             api_base=self.env_args.get("api_base"),
         )
 
-        initial_prompt = self.terminus.build_initial_prompt(
-            instruction=instruction, terminal_state=self.session.capture_pane()
-        )
+        initial_prompt = self.terminus.build_initial_prompt(instruction=instruction, terminal_state=self.session.capture_pane())
 
         observation = {"prompt": initial_prompt, "type": "initial"}
         info = {
@@ -143,14 +133,10 @@ class TerminalTerminusWorkflow(Workflow):
             test_session = self.session
         else:
             print(2)
-            test_session = self.terminal.create_session(
-                "tests", is_active_stream=False, as_configured_user=False
-            )
+            test_session = self.terminal.create_session("tests", is_active_stream=False, as_configured_user=False)
 
         # Execute tests
-        test_script_path = str(
-            DockerComposeManager.CONTAINER_TEST_DIR / "run-tests.sh"
-        )
+        test_script_path = str(DockerComposeManager.CONTAINER_TEST_DIR / "run-tests.sh")
         try:
             test_session.send_keys(
                 [f"bash {test_script_path}", "Enter"],
@@ -159,10 +145,8 @@ class TerminalTerminusWorkflow(Workflow):
             )
             test_output = test_session.capture_pane(capture_entire=True)
             parser_results = self.parser.parse(test_output)
-         
-            all_passed = parser_results and all(
-                status == UnitTestStatus.PASSED for status in parser_results.values()
-            )
+
+            all_passed = parser_results and all(status == UnitTestStatus.PASSED for status in parser_results.values())
         except Exception:
             all_passed = False
 
@@ -172,5 +156,3 @@ class TerminalTerminusWorkflow(Workflow):
         """Stop/cleanup terminal containers if present."""
         if self.terminal:
             self.terminal.stop()
-
-
