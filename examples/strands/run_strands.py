@@ -1,13 +1,17 @@
 import asyncio
 import os
 import logging
+import json
+from datetime import datetime
 from dotenv import load_dotenv, find_dotenv
 
 from transformers import AutoTokenizer
 from rllm.engine.rollout import OpenAIEngine
+from rllm.engine.agent_workflow_engine import AgentWorkflowEngine
 from rllm.integrations.strands import RLLMModel, StrandsAgent
 from strands_tools import calculator, http_request, file_read, python_repl
 from strands_tools.browser import LocalChromiumBrowser
+from strands_workflow import StrandsWorkflow
 
 from gsearch_tool_wrapped import google_search
 
@@ -19,8 +23,87 @@ logging.getLogger("opentelemetry").setLevel(logging.CRITICAL)
 logging.getLogger("strands.telemetry").setLevel(logging.CRITICAL)
 
 
-async def run_strands_agent(rollout_engine):
-    """Example using StrandsAgent with trajectory tracking."""
+def save_episode_to_json(episode, output_dir="./strands_outputs"):
+    """Save the episode to a JSON file with timestamp."""
+    os.makedirs(output_dir, exist_ok=True)
+    
+    # Get trajectory data from episode
+    trajectory = episode.trajectories[0][1] if episode.trajectories else None
+    if not trajectory:
+        print("❌ No trajectory found in episode")
+        return None
+    
+    # Convert trajectory to dict format
+    trajectory_data = {
+        "task": trajectory.task,
+        "reward": trajectory.reward,
+        "steps": [],
+        "tool_calls_summary": [],
+        "metadata": {
+            "timestamp": datetime.now().isoformat(),
+            "total_steps": len(trajectory.steps),
+            "total_tool_calls": 0,
+            "agent_type": "StrandsAgent",
+            "episode_id": episode.id
+        }
+    }
+    
+    # Convert each step to dict and count tool calls
+    tool_call_count = 0
+    for i, step in enumerate(trajectory.steps):
+        step_data = {
+            "step_index": i,
+            "observation": step.observation,
+            "model_response": step.model_response,
+            "action": step.action,
+            "reward": step.reward,
+            "done": step.done,
+            "chat_completions": step.chat_completions
+        }
+        
+        # Add tool call specific information
+        if step.action and isinstance(step.action, dict) and step.action.get("type") == "tool_call":
+            step_data["step_type"] = "tool_call"
+            step_data["tool_name"] = step.action.get("tool_name")
+            step_data["tool_args"] = step.action.get("tool_args")
+            step_data["tool_result"] = step.action.get("tool_result")
+            tool_call_count += 1
+        else:
+            step_data["step_type"] = "conversation"
+        
+        trajectory_data["steps"].append(step_data)
+    
+    # Update tool call count
+    trajectory_data["metadata"]["total_tool_calls"] = tool_call_count
+    trajectory_data["tool_calls_summary"] = [
+        {
+            "tool_name": step.action.get("tool_name"),
+            "tool_args": step.action.get("tool_args"),
+            "tool_result": step.action.get("tool_result")
+        }
+        for step in trajectory.steps
+        if step.action and isinstance(step.action, dict) and step.action.get("type") == "tool_call"
+    ]
+    
+    # Generate filename with timestamp
+    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+    filename = f"strands_trajectory_{timestamp}.json"
+    filepath = os.path.join(output_dir, filename)
+    
+    # Save to JSON file
+    with open(filepath, "w", encoding="utf-8") as f:
+        json.dump(trajectory_data, f, indent=2, ensure_ascii=False)
+    
+    print(f"📁 Trajectory saved to: {filepath}")
+    
+    # Print concise summary
+    print(f"📊 Summary: {len(trajectory.steps)} steps, {tool_call_count} tool calls, reward: {trajectory.reward}")
+    
+    return filepath
+
+
+async def run_strands_workflow(rollout_engine):
+    """Example using StrandsWorkflow with AgentWorkflowEngine."""
 
     # Create RLLMModel
     model = RLLMModel(rollout_engine=rollout_engine, model_id="Qwen/Qwen3-0.6B")
@@ -35,13 +118,12 @@ async def run_strands_agent(rollout_engine):
         browser_tool = None
 
     # Prepare tool set with all available tools
-    # Include all available tools - let strands handle the tool specifications
     tools = [
         calculator.calculator,  # Modern @tool decorator format
         http_request,           # Native strands format with TOOL_SPEC
         file_read,             # Native strands format with TOOL_SPEC  
         python_repl,           # Native strands format with TOOL_SPEC
-        google_search          # Custom tool
+        # google_search          # Custom tool
     ]
     # Disable browser tool for now
     # if browser_tool:
@@ -50,41 +132,62 @@ async def run_strands_agent(rollout_engine):
     # System prompt with all available tools
     system_prompt = os.getenv(
         "SYSTEM_PROMPT",
-        "You are a helpful agent with access to multiple tools. Use tools when beneficial and keep answers concise. Available tools: calculator for math calculations, http_request for API calls, file_read for reading files, python_repl for code execution, and google_search for current information. Prefer google_search first for information queries.",
+        "You are a helpful agent with access to multiple tools. Use tools when beneficial and keep answers concise. Available tools: calculator for math calculations and google_search for current information. Prefer google_search first for information queries, use http_request for direct internet access.",
     )
 
-    # Create StrandsAgent with trajectory tracking and tools
-    agent = StrandsAgent(model=model, tools=tools, system_prompt=system_prompt)
+    # Create AgentWorkflowEngine
+    workflow_engine = AgentWorkflowEngine(
+        workflow_cls=StrandsWorkflow,
+        workflow_args={
+            "agent_cls": StrandsAgent,
+            "agent_args": {
+                "model": model,
+                "tools": tools,
+                "system_prompt": system_prompt
+            }
+        },
+        rollout_engine=rollout_engine,
+        n_parallel_tasks=1  # Single task for now
+    )
 
-    # Reset trajectory for new task
+    # Initialize the workflow pool
+    await workflow_engine.initialize_pool()
+
+    # Prepare task
     task = os.getenv(
         "STRANDS_TASK",
-        "who won the 2025 US Tennis Open?",
+        "A paper about AI regulation that was originally submitted to arXiv.org in June 2022 shows a figure with three axes, where each axis has a label word at both ends. Which of these words is used to describe a type of society in a Physics and Society article submitted to arXiv.org on August 11, 2016?",
     )
-    agent.reset_trajectory(task=task)
+    
+    task_dict = {"task": task}
+    task_id = "strands_task_001"
 
     print(f"📝 Task: {task}")
+    print(f"🔧 Available tools: {[tool.__name__ if hasattr(tool, '__name__') else str(tool) for tool in tools]}")
+    print("\n" + "="*80)
+    print("🚀 Starting workflow execution...")
+    print("="*80)
 
-    # Run the agent
-    result = agent(task)
+    # Execute the workflow
+    episodes = await workflow_engine.execute_tasks([task_dict], [task_id])
     
-    # # Display the result
-    # if hasattr(result, 'message'):
-    #     if isinstance(result.message, dict):
-    #         content = result.message.get('content', [])
-    #     elif hasattr(result.message, 'content'):
-    #         content = result.message.content
-    #     else:
-    #         content = []
-        
-    #     # Extract text content
-    #     if isinstance(content, list):
-    #         for event in content:
-    #             if isinstance(event, dict) and 'text' in event:
-    #                 print(f"🤖 Response: {event['text']}")
-    #                 break
+    if not episodes:
+        print("❌ No episodes returned from workflow")
+        return
     
-    print(f"\n✅ Final result: {repr(result)}")
+    episode = episodes[0]
+    
+    print("\n" + "="*80)
+    print("✅ Workflow execution completed!")
+    print("="*80)
+    
+    # Save episode to JSON file
+    trajectory_file = save_episode_to_json(episode)
+    
+    # Display concise episode summary
+    print(f"\n✅ Episode {episode.id} completed")
+    for agent_name, trajectory in episode.trajectories:
+        print(f"📊 {agent_name}: {len(trajectory.steps)} steps, reward: {trajectory.reward}")
 
 
 async def main():
@@ -117,7 +220,7 @@ async def main():
         sampling_params={"temperature": 0.7, "top_p": 0.95, "max_tokens": 512},
     )
 
-    await run_strands_agent(rollout_engine)
+    await run_strands_workflow(rollout_engine)
 
 
 if __name__ == "__main__":

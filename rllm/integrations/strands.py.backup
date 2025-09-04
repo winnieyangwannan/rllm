@@ -357,13 +357,6 @@ class RLLMModel(Model):
         except Exception as e:
             result = f"Error executing tool '{tool_name}': {str(e)}"
         
-        # Notify the agent about the tool call if available
-        if hasattr(self, 'agent') and hasattr(self.agent, '_add_tool_call_step'):
-            try:
-                self.agent._add_tool_call_step(tool_name, tool_input, result)
-            except Exception as e:
-                print(f"Warning: Failed to notify agent about tool call: {e}")
-        
         # Return as OpenAI tool message format
         return {
             "role": "tool",
@@ -481,17 +474,29 @@ class StrandsAgent(Agent):
             self._trajectory.steps.append(self._current_step)
             self._trajectory.reward += reward
             
-            # Print minimal step completion info
-            if action and isinstance(action, dict) and action.get("type") == "tool_call":
-                print(f"✅ Step {len(self._trajectory.steps)}: Tool call completed")
-            else:
-                print(f"✅ Step {len(self._trajectory.steps)}: Conversation completed")
+            # Print step completion details
+            print(f"✅ Step {len(self._trajectory.steps)} completed!")
+            if action:
+                if isinstance(action, dict) and action.get("type") == "tool_call":
+                    print(f"   🔧 Tool call: {action.get('tool_name', 'unknown')}")
+                    print(f"   📝 Args: {str(action.get('tool_args', ''))[:100]}{'...' if len(str(action.get('tool_args', ''))) > 100 else ''}")
+                else:
+                    print(f"   💬 Action: {str(action)[:100]}{'...' if len(str(action)) > 100 else ''}")
+            if model_response:
+                print(f"   🤖 Response: {str(model_response)[:100]}{'...' if len(str(model_response)) > 100 else ''}")
+            print(f"   🎯 Reward: {reward}")
+            print(f"   🏁 Done: {done}")
+            print("-" * 60)
             
             self._current_step = None
 
     def _add_tool_call_step(self, tool_name: str, tool_args: Any, tool_result: Any = None):
         """Add a specific step for tool calls to capture intermediate actions."""
-        # Silently record tool call step without verbose logging
+        print(f"\n🔧 Tool call detected: {tool_name}")
+        print(f"   📝 Arguments: {str(tool_args)[:100]}{'...' if len(str(tool_args)) > 100 else ''}")
+        if tool_result:
+            print(f"   📊 Result: {str(tool_result)[:100]}{'...' if len(str(tool_result)) > 100 else ''}")
+        
         tool_step = Step(
             chat_completions=self.chat_completions.copy(),
             observation=f"Tool call: {tool_name}",
@@ -506,6 +511,8 @@ class StrandsAgent(Agent):
         )
         self._trajectory.steps.append(tool_step)
         self._tool_call_steps.append(tool_step)
+        print(f"✅ Tool call step recorded!")
+        print("-" * 60)
 
     def _finish_current_step_from_result(self, result: Any):
         """Finish the current step by extracting info from AgentResult."""
