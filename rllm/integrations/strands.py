@@ -140,9 +140,11 @@ class RLLMModel(Model):
                 
                 # Emit tool call events and execute tools
                 tool_results = []
+                tool_calls_info = []
                 for tc in model_output.tool_calls:
                     # Extract tool call info
                     tool_call_info = self._extract_tool_call_info(tc)
+                    tool_calls_info.append(tool_call_info)
                     
                     # Yield tool call event
                     yield {"toolCall": tool_call_info}
@@ -160,14 +162,14 @@ class RLLMModel(Model):
                     "content": None,
                     "tool_calls": [
                         {
-                            "id": tc["id"],
+                            "id": tc_info["id"],
                             "type": "function",
                             "function": {
-                                "name": tc["name"],
-                                "arguments": json.dumps(tc["input"])
+                                "name": tc_info["name"],
+                                "arguments": json.dumps(tc_info["input"])
                             }
                         }
-                        for tc in [tool_call_info]  # We're processing one at a time
+                        for tc_info in tool_calls_info
                     ]
                 }
                 chat_messages.append(assistant_message)
@@ -215,33 +217,49 @@ class RLLMModel(Model):
             try:
                 # Get tool name
                 name = None
+                callable_tool = None
                 
                 # Handle DecoratedFunctionTool objects (from strands_tools)
                 if hasattr(spec, "tool_name"):
                     name = spec.tool_name
+                    callable_tool = spec
                 elif hasattr(spec, "name"):
                     name = spec.name
+                    callable_tool = spec
                 elif isinstance(spec, dict):
                     name = spec.get("name") or (spec.get("function") or {}).get("name")
+                    callable_tool = spec
                 elif callable(spec):
                     # For plain functions, try to get name from function object
                     if hasattr(spec, "__name__"):
                         name = spec.__name__
                     elif hasattr(spec, "__qualname__"):
                         name = spec.__qualname__.split('.')[-1]
+                    callable_tool = spec
+                elif hasattr(spec, "TOOL_SPEC"):
+                    # Handle strands_tools modules with TOOL_SPEC
+                    tool_spec = spec.TOOL_SPEC
+                    if isinstance(tool_spec, dict):
+                        name = tool_spec.get("name")
+                        # Get the function from the module
+                        if hasattr(spec, name):
+                            callable_tool = getattr(spec, name)
+                elif hasattr(spec, "__name__"):
+                    # Handle strands_tools modules with functions that have tool_spec
+                    module_name = spec.__name__.split('.')[-1]
+                    if hasattr(spec, module_name):
+                        func = getattr(spec, module_name)
+                        if hasattr(func, "tool_spec"):
+                            tool_spec = func.tool_spec
+                            if isinstance(tool_spec, dict):
+                                name = tool_spec.get("name")
+                                callable_tool = func
                 
-                if not name:
+                if not name or not callable_tool:
                     continue
                 
-                # Get the callable tool
-                if callable(spec):
-                    # The spec itself is callable
-                    tools_map[name] = spec
-                elif hasattr(spec, "function") and callable(spec.function):
-                    # The spec has a callable function attribute
-                    tools_map[name] = spec.function
-                else:
-                    continue
+                # Add to tools map
+                tools_map[name] = callable_tool
                 
             except Exception as e:
                 continue
@@ -268,6 +286,41 @@ class RLLMModel(Model):
                                     "function": {"name": name, "parameters": params},
                                 })
                                 continue
+                
+                # Handle strands_tools modules with TOOL_SPEC (uppercase)
+                if hasattr(spec, "TOOL_SPEC"):
+                    tool_spec = spec.TOOL_SPEC
+                    if isinstance(tool_spec, dict):
+                        name = tool_spec.get("name")
+                        input_schema = tool_spec.get("inputSchema", {})
+                        if isinstance(input_schema, dict) and "json" in input_schema:
+                            params = input_schema["json"]
+                            if name and isinstance(params, dict):
+                                tools_param.append({
+                                    "type": "function",
+                                    "function": {"name": name, "parameters": params},
+                                })
+                                continue
+                
+                # Handle strands_tools modules with functions that have tool_spec
+                if hasattr(spec, "__name__"):
+                    # Try to get the function with the same name as the module
+                    module_name = spec.__name__.split('.')[-1]  # Get just the last part
+                    if hasattr(spec, module_name):
+                        func = getattr(spec, module_name)
+                        if hasattr(func, "tool_spec"):
+                            tool_spec = func.tool_spec
+                            if isinstance(tool_spec, dict):
+                                name = tool_spec.get("name")
+                                input_schema = tool_spec.get("inputSchema", {})
+                                if isinstance(input_schema, dict) and "json" in input_schema:
+                                    params = input_schema["json"]
+                                    if name and isinstance(params, dict):
+                                        tools_param.append({
+                                            "type": "function",
+                                            "function": {"name": name, "parameters": params},
+                                        })
+                                        continue
                 
                 # Prefer SDK helper if available (object specs)
                 if hasattr(spec, "to_openai_tool"):
@@ -350,7 +403,28 @@ class RLLMModel(Model):
                 
                 # Execute the tool
                 if callable(tool):
-                    result = tool(**tool_input)
+                    # Check if this is a strands_tools function that expects a ToolUse object
+                    import inspect
+                    sig = inspect.signature(tool)
+                    if len(sig.parameters) > 0:
+                        first_param = list(sig.parameters.keys())[0]
+                        first_param_type = sig.parameters[first_param].annotation
+                        
+                        # If the first parameter is ToolUse, create a ToolUse object
+                        if 'ToolUse' in str(first_param_type):
+                            from strands.types.tools import ToolUse
+                            tool_use = ToolUse(
+                                name=tool_name,
+                                input=tool_input,
+                                toolUseId=tool_id
+                            )
+                            result = tool(tool_use)
+                        else:
+                            # Regular function call
+                            result = tool(**tool_input)
+                    else:
+                        # No parameters, call directly
+                        result = tool()
                 else:
                     result = f"Error: Tool '{tool_name}' is not callable"
                 

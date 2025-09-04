@@ -121,8 +121,8 @@ async def run_strands_workflow(rollout_engine):
     tools = [
         calculator.calculator,  # Modern @tool decorator format
         http_request,           # Native strands format with TOOL_SPEC
-        file_read,             # Native strands format with TOOL_SPEC  
-        python_repl,           # Native strands format with TOOL_SPEC
+        # file_read,             # Native strands format with TOOL_SPEC  
+        # python_repl,           # Native strands format with TOOL_SPEC
         # google_search          # Custom tool
     ]
     # Disable browser tool for now
@@ -132,7 +132,7 @@ async def run_strands_workflow(rollout_engine):
     # System prompt with all available tools
     system_prompt = os.getenv(
         "SYSTEM_PROMPT",
-        "You are a helpful agent with access to multiple tools. Use tools when beneficial and keep answers concise. Available tools: calculator for math calculations and google_search for current information. Prefer google_search first for information queries, use http_request for direct internet access.",
+        "You are a helpful agent with access to multiple tools. Use tools when beneficial and keep answers concise. ",
     )
 
     # Create AgentWorkflowEngine
@@ -156,7 +156,8 @@ async def run_strands_workflow(rollout_engine):
     # Prepare task
     task = os.getenv(
         "STRANDS_TASK",
-        "A paper about AI regulation that was originally submitted to arXiv.org in June 2022 shows a figure with three axes, where each axis has a label word at both ends. Which of these words is used to describe a type of society in a Physics and Society article submitted to arXiv.org on August 11, 2016?",
+        # "A paper about AI regulation that was originally submitted to arXiv.org in June 2022 shows a figure with three axes, where each axis has a label word at both ends. Which of these words is used to describe a type of society in a Physics and Society article submitted to arXiv.org on August 11, 2016? Use http_request to get the information.",
+        "What is 303 * 12314 - 123412 * 2? Use calculator to solve this.",
     )
     
     task_dict = {"task": task}
