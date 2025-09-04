@@ -6,7 +6,9 @@ from dotenv import load_dotenv, find_dotenv
 from transformers import AutoTokenizer
 from rllm.engine.rollout import OpenAIEngine
 from rllm.integrations.strands import RLLMModel, StrandsAgent
-from strands_tools.calculator import calculator
+from strands_tools import calculator, http_request, file_read, python_repl
+from strands_tools.browser import LocalChromiumBrowser
+
 from gsearch_tool_wrapped import google_search
 
 # Disable OpenTelemetry SDK
@@ -23,13 +25,32 @@ async def run_strands_agent(rollout_engine):
     # Create RLLMModel
     model = RLLMModel(rollout_engine=rollout_engine, model_id="Qwen/Qwen3-0.6B")
 
-    # Prepare minimal tool set
-    tools = [calculator, google_search]
+    # Initialize browser tool (graceful fallback if runtime not installed)
+    try:
+        browser = LocalChromiumBrowser()
+        browser_tool = browser.browser
+    except Exception as e:
+        logging.warning(f"Browser disabled: {e}")
+        browser = None
+        browser_tool = None
 
-    # Simple system prompt
+    # Prepare tool set with all available tools
+    # Include all available tools - let strands handle the tool specifications
+    tools = [
+        calculator.calculator,  # Modern @tool decorator format
+        http_request,           # Native strands format with TOOL_SPEC
+        file_read,             # Native strands format with TOOL_SPEC  
+        python_repl,           # Native strands format with TOOL_SPEC
+        google_search          # Custom tool
+    ]
+    # Disable browser tool for now
+    # if browser_tool:
+    #     tools.append(browser_tool)
+
+    # System prompt with all available tools
     system_prompt = os.getenv(
         "SYSTEM_PROMPT",
-        "You are a helpful agent. Use tools when beneficial, and keep answers concise. Use the google_search tool to search for current information.",
+        "You are a helpful agent with access to multiple tools. Use tools when beneficial and keep answers concise. Available tools: calculator for math calculations, http_request for API calls, file_read for reading files, python_repl for code execution, and google_search for current information. Prefer google_search first for information queries.",
     )
 
     # Create StrandsAgent with trajectory tracking and tools
