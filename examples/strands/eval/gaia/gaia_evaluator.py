@@ -13,6 +13,7 @@ import pandas as pd
 
 from rllm.integrations.strands import StrandsAgent, RLLMModel
 from rllm.engine.rollout import OpenAIEngine
+from strands.handlers.callback_handler import null_callback_handler
 
 
 @dataclass
@@ -84,11 +85,39 @@ class GaiaEvaluator:
         self.agent = StrandsAgent(
             model=self.model,
             tools=tools,
-            system_prompt=system_prompt or default_system_prompt
+            system_prompt=system_prompt or default_system_prompt,
+            callback_handler=null_callback_handler  # Disable verbose tool printing
         )
         
         self.results: List[EvaluationResult] = []
         self.tool_usage_stats: Dict[str, int] = {}
+        
+        # Store initialization parameters for creating fresh agents if needed
+        self._rollout_engine = rollout_engine
+        self._tools = tools
+        self._system_prompt = system_prompt or default_system_prompt
+        
+    def _create_fresh_agent(self) -> 'StrandsAgent':
+        """Create a completely fresh agent instance for maximum isolation.
+        
+        This is the most thorough way to ensure no state pollution between tasks.
+        Use this if you experience any cross-task contamination issues.
+        """
+        # Create new model instance
+        fresh_model = RLLMModel(
+            rollout_engine=self._rollout_engine, 
+            model_id="gaia-evaluator-fresh"
+        )
+        
+        # Create new agent instance
+        fresh_agent = StrandsAgent(
+            model=fresh_model,
+            tools=self._tools,
+            system_prompt=self._system_prompt,
+            callback_handler=null_callback_handler
+        )
+        
+        return fresh_agent
         
     def load_gaia_dataset(self, dataset_path: str) -> List[GaiaSample]:
         """Load Gaia dataset from JSON file.
@@ -132,8 +161,14 @@ class GaiaEvaluator:
         start_time = time.time()
         
         try:
-            # Reset agent trajectory for new task
+            # Create fresh agent for each task (most thorough and effective)
+            # This ensures zero state pollution between tasks
+            self.agent = self._create_fresh_agent()
             self.agent.reset_trajectory(task=sample.question)
+            
+            # Option 1: Reset existing agent (fallback approach)
+            # Uncomment the line below if you prefer to reuse the same agent instance
+            # self.agent.reset_trajectory(task=sample.question)
             
             # Run the agent
             result = self.agent(sample.question)

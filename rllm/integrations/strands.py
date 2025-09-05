@@ -378,10 +378,33 @@ class StrandsAgent(Agent):
         self._pending_tool_calls = []
         
         # Clear agent's message history to ensure clean start
+        # This is critical to prevent context leakage between evaluation samples
         if hasattr(self, 'messages'):
             self.messages.clear()
         if hasattr(self, '_messages'):
             self._messages.clear()
+        
+        # Reset agent state (following strands best practices)
+        if hasattr(self, 'state'):
+            from strands.agent.state import AgentState
+            self.state = AgentState()
+        
+        # Reset conversation manager state
+        if hasattr(self, 'conversation_manager'):
+            if hasattr(self.conversation_manager, 'removed_message_count'):
+                self.conversation_manager.removed_message_count = 0
+            if hasattr(self.conversation_manager, '_summary_message'):
+                self.conversation_manager._summary_message = None
+                
+        # Reset session manager if present
+        if hasattr(self, 'session_manager') and self.session_manager:
+            # For session managers, we typically want to keep the connection
+            # but clear session-specific data if needed
+            pass
+            
+        # Reset the model's agent reference to break circular references
+        if hasattr(self, 'model') and hasattr(self.model, 'agent'):
+            self.model.agent = self
     
     def _record_tool_call_info(self, tool_call_info: dict):
         """Record tool call information for trajectory tracking.
