@@ -92,7 +92,7 @@ class RLLMModel(Model):
         system_prompt: str | None = None,
         **kwargs: Any,
     ) -> AsyncIterable[StreamEvent]:
-        """Stream conversation with the model using RolloutEngine with tool execution loop.
+        """Stream conversation with the model using RolloutEngine.
 
         Args:
             messages: List of message objects to be processed by the model.
@@ -101,178 +101,70 @@ class RLLMModel(Model):
             **kwargs: Additional keyword arguments.
 
         Yields:
-            Formatted message chunks from the model.
+            Standard StreamEvents that will be processed by the Agent's event loop.
         """
         # Convert Strands messages to chat completion format
         chat_messages = self._convert_messages_to_chat_format(messages, system_prompt)
         
-        # Prepare tools mapping for execution
-        tools_map = {}
-        tools_param = None
-        
-        # Try to get tools from the agent if available
-        if hasattr(self, 'agent') and hasattr(self.agent, '_original_tools'):
-            tools_map = self._build_tools_map(self.agent._original_tools)
-            tools_param = self._convert_tool_specs_to_openai_format(self.agent._original_tools)
-        elif tool_specs:
-            tools_map = self._build_tools_map(tool_specs)
+        # Convert tool specs to OpenAI format for the model
+        if tool_specs:
             tools_param = self._convert_tool_specs_to_openai_format(tool_specs)
-
-        # Tool execution loop
-        max_turns = 10  # Prevent infinite loops
-        turn_count = 0
+            kwargs["tools"] = tools_param
         
-        while turn_count < max_turns:
-            turn_count += 1
-            
-            # Call rollout engine
-            call_kwargs = dict(kwargs)
-            if tools_param:
-                call_kwargs["tools"] = tools_param
+        # Call rollout engine
+        model_output: ModelOutput = await self.rollout_engine.get_model_response(chat_messages, **kwargs)
+        
+        # Generate standard StreamEvents
+        yield {"messageStart": {"role": "assistant"}}
+        
+        # Check if we have tool calls
+        if getattr(model_output, "tool_calls", None):
+            # Generate content blocks for each tool use
+            for tc in model_output.tool_calls:
+                tool_call_info = self._extract_tool_call_info(tc)
                 
-            model_output: ModelOutput = await self.rollout_engine.get_model_response(chat_messages, **call_kwargs)
-            
-            # Check if we have tool calls to execute
-            if getattr(model_output, "tool_calls", None):
+                # Notify the Agent to record tool call information (for trajectory tracking)
+                if hasattr(self, 'agent') and hasattr(self.agent, '_record_tool_call_info'):
+                    self.agent._record_tool_call_info(tool_call_info)
                 
-                # Yield message start for assistant
-                yield {"messageStart": {"role": "assistant"}}
+                # Generate toolUse content block (Strands streaming format)
+                yield {"contentBlockStart": {"start": {"toolUse": {
+                    "toolUseId": tool_call_info["id"],
+                    "name": tool_call_info["name"]
+                }}}}
                 
-                # Emit tool call events and execute tools
-                tool_results = []
-                tool_calls_info = []
-                for tc in model_output.tool_calls:
-                    # Extract tool call info
-                    tool_call_info = self._extract_tool_call_info(tc)
-                    tool_calls_info.append(tool_call_info)
-                    
-                    # Yield tool call event
-                    yield {"toolCall": tool_call_info}
-                    
-                    # Execute the tool
-                    tool_result = await self._execute_tool(tool_call_info, tools_map)
-                    tool_results.append(tool_result)
-                
-                # Yield message stop with tool_calls reason
-                yield {"messageStop": {"stopReason": "tool_calls"}}
-                
-                # Add the assistant message with tool_calls first
-                assistant_message = {
-                    "role": "assistant",
-                    "content": None,
-                    "tool_calls": [
-                        {
-                            "id": tc_info["id"],
-                            "type": "function",
-                            "function": {
-                                "name": tc_info["name"],
-                                "arguments": json.dumps(tc_info["input"])
-                            }
+                # Stream the tool input as JSON string
+                input_str = json.dumps(tool_call_info["input"])
+                yield {"contentBlockDelta": {
+                    "delta": {
+                        "toolUse": {
+                            "input": input_str
                         }
-                        for tc_info in tool_calls_info
-                    ]
-                }
-                chat_messages.append(assistant_message)
-                
-                # Then add tool results
-                chat_messages.extend(tool_results)
-                
-                # Continue the loop to get the final response
-                continue
-            else:
-                # No tool calls, this is the final response
-                # Yield message start
-                yield {"messageStart": {"role": "assistant"}}
-                
-                # Yield content
-                response_text = model_output.text or ""
-                yield {"contentBlockStart": {"start": {}}}
-                
-                # Stream the response text
-                chunk_size = 50
-                for i in range(0, len(response_text), chunk_size):
-                    chunk = response_text[i : i + chunk_size]
-                    if chunk:
-                        yield {"contentBlockDelta": {"delta": {"text": chunk}}}
+                    }
+                }}
                 
                 yield {"contentBlockStop": {}}
-                
-                # Determine stop reason
-                stop_reason = getattr(model_output, "finish_reason", "end_turn")
-                yield {"messageStop": {"stopReason": stop_reason}}
-                
-                return  # Exit the loop
-                
-        # If we reach here, we hit the max turns limit
-        yield {"messageStart": {"role": "assistant"}}
-        yield {"contentBlockStart": {"start": {}}}
-        yield {"contentBlockDelta": {"delta": {"text": "I apologize, but I've reached the maximum number of tool execution turns. Please try again."}}}
-        yield {"contentBlockStop": {}}
-        yield {"messageStop": {"stopReason": "max_turns"}}
+            
+            yield {"messageStop": {"stopReason": "tool_use"}}
+        else:
+            # Generate text content events
+            response_text = model_output.text or ""
+            yield {"contentBlockStart": {"start": {}}}
+            yield {"contentBlockDelta": {"delta": {"text": response_text}}}
+            yield {"contentBlockStop": {}}
+            
+            # Determine stop reason
+            stop_reason = getattr(model_output, "finish_reason", "end_turn")
+            yield {"messageStop": {"stopReason": stop_reason}}
 
-    def _build_tools_map(self, tool_specs: list[ToolSpec]) -> dict:
-        """Build a mapping from tool names to callable tools."""
-        tools_map = {}
-        for spec in tool_specs:
-            try:
-                # Get tool name
-                name = None
-                callable_tool = None
-                
-                # Handle DecoratedFunctionTool objects (from strands_tools)
-                if hasattr(spec, "tool_name"):
-                    name = spec.tool_name
-                    callable_tool = spec
-                elif hasattr(spec, "name"):
-                    name = spec.name
-                    callable_tool = spec
-                elif isinstance(spec, dict):
-                    name = spec.get("name") or (spec.get("function") or {}).get("name")
-                    callable_tool = spec
-                elif callable(spec):
-                    # For plain functions, try to get name from function object
-                    if hasattr(spec, "__name__"):
-                        name = spec.__name__
-                    elif hasattr(spec, "__qualname__"):
-                        name = spec.__qualname__.split('.')[-1]
-                    callable_tool = spec
-                elif hasattr(spec, "TOOL_SPEC"):
-                    # Handle strands_tools modules with TOOL_SPEC
-                    tool_spec = spec.TOOL_SPEC
-                    if isinstance(tool_spec, dict):
-                        name = tool_spec.get("name")
-                        # Get the function from the module
-                        if hasattr(spec, name):
-                            callable_tool = getattr(spec, name)
-                elif hasattr(spec, "__name__"):
-                    # Handle strands_tools modules with functions that have tool_spec
-                    module_name = spec.__name__.split('.')[-1]
-                    if hasattr(spec, module_name):
-                        func = getattr(spec, module_name)
-                        if hasattr(func, "tool_spec"):
-                            tool_spec = func.tool_spec
-                            if isinstance(tool_spec, dict):
-                                name = tool_spec.get("name")
-                                callable_tool = func
-                
-                if not name or not callable_tool:
-                    continue
-                
-                # Add to tools map
-                tools_map[name] = callable_tool
-                
-            except Exception as e:
-                continue
-        
-        return tools_map
 
     def _convert_tool_specs_to_openai_format(self, tool_specs: list[ToolSpec]) -> list[dict]:
-        """Convert tool specs to OpenAI tools format."""
+        """Convert tool specs to OpenAI tools format for model use."""
         tools_param = []
         
         for spec in tool_specs:
             try:
-                # Handle DecoratedFunctionTool objects (from strands_tools)
+                # Handle decorated function tools (like calculator.calculator)
                 if hasattr(spec, "tool_spec"):
                     tool_spec = spec.tool_spec
                     if isinstance(tool_spec, dict):
@@ -302,55 +194,42 @@ class RLLMModel(Model):
                                 })
                                 continue
                 
-                # Handle strands_tools modules with functions that have tool_spec
-                if hasattr(spec, "__name__"):
-                    # Try to get the function with the same name as the module
-                    module_name = spec.__name__.split('.')[-1]  # Get just the last part
-                    if hasattr(spec, module_name):
-                        func = getattr(spec, module_name)
-                        if hasattr(func, "tool_spec"):
-                            tool_spec = func.tool_spec
-                            if isinstance(tool_spec, dict):
-                                name = tool_spec.get("name")
-                                input_schema = tool_spec.get("inputSchema", {})
-                                if isinstance(input_schema, dict) and "json" in input_schema:
-                                    params = input_schema["json"]
-                                    if name and isinstance(params, dict):
-                                        tools_param.append({
-                                            "type": "function",
-                                            "function": {"name": name, "parameters": params},
-                                        })
-                                        continue
-                
-                # Prefer SDK helper if available (object specs)
+                # Prefer SDK helper if available
                 if hasattr(spec, "to_openai_tool"):
                     maybe = spec.to_openai_tool()
                     if isinstance(maybe, dict):
                         tools_param.append(maybe)
                         continue
-
-                # Dict-shaped specs (common with strands-agents-tools)
+                
+                # Dict-shaped specs
                 if isinstance(spec, dict):
-                    # If already OpenAI-shaped, pass through
                     if spec.get("type") == "function" and isinstance(spec.get("function"), dict):
                         tools_param.append(spec)
                         continue
-                    # Otherwise, synthesize OpenAI tool from common fields
-                    name = spec.get("name") or (spec.get("function") or {}).get("name")
-                    params = (
-                        spec.get("parameters")
-                        or spec.get("input_schema")
-                        or spec.get("schema")
-                        or ((spec.get("inputSchema") or {}).get("json") if isinstance(spec.get("inputSchema"), dict) else None)
-                    )
+                    
+                    # Extract name and parameters from common fields
+                    name = spec.get("name")
+                    params = None
+                    
+                    # Try multiple parameter extraction patterns
+                    if "parameters" in spec:
+                        params = spec["parameters"]
+                    elif "input_schema" in spec:
+                        params = spec["input_schema"]
+                    elif "inputSchema" in spec and isinstance(spec["inputSchema"], dict):
+                        # Handle nested inputSchema.json pattern
+                        input_schema = spec["inputSchema"]
+                        if "json" in input_schema:
+                            params = input_schema["json"]
+                    
                     if name and isinstance(params, dict):
                         tools_param.append({
                             "type": "function",
                             "function": {"name": name, "parameters": params},
                         })
                     continue
-
-                # Object specs without helper: attempt attribute-based extraction
+                
+                # Object specs: attempt attribute-based extraction
                 name = getattr(spec, "name", None)
                 params = getattr(spec, "input_schema", None) or getattr(spec, "parameters", None)
                 if name and isinstance(params, dict):
@@ -358,10 +237,10 @@ class RLLMModel(Model):
                         "type": "function",
                         "function": {"name": name, "parameters": params},
                     })
+                    
             except Exception as e:
                 print(f"[RLLMModel] Warning: Failed to convert tool spec {spec}: {e}")
                 continue
-                
         return tools_param
 
     def _extract_tool_call_info(self, tool_call) -> dict:
@@ -388,62 +267,6 @@ class RLLMModel(Model):
         except Exception:
             return {"id": "unknown", "name": "unknown", "input": {}}
 
-    async def _execute_tool(self, tool_call_info: dict, tools_map: dict) -> dict:
-        """Execute a tool call and return the result as a chat message."""
-        tool_name = tool_call_info["name"]
-        tool_input = tool_call_info["input"]
-        tool_id = tool_call_info["id"]
-        
-        try:
-            # Find the tool
-            if tool_name not in tools_map:
-                result = f"Error: Tool '{tool_name}' not found"
-            else:
-                tool = tools_map[tool_name]
-                
-                # Execute the tool
-                if callable(tool):
-                    # Check if this is a strands_tools function that expects a ToolUse object
-                    import inspect
-                    sig = inspect.signature(tool)
-                    if len(sig.parameters) > 0:
-                        first_param = list(sig.parameters.keys())[0]
-                        first_param_type = sig.parameters[first_param].annotation
-                        
-                        # If the first parameter is ToolUse, create a ToolUse object
-                        if 'ToolUse' in str(first_param_type):
-                            from strands.types.tools import ToolUse
-                            tool_use = ToolUse(
-                                name=tool_name,
-                                input=tool_input,
-                                toolUseId=tool_id
-                            )
-                            result = tool(tool_use)
-                        else:
-                            # Regular function call
-                            result = tool(**tool_input)
-                    else:
-                        # No parameters, call directly
-                        result = tool()
-                else:
-                    result = f"Error: Tool '{tool_name}' is not callable"
-                
-        except Exception as e:
-            result = f"Error executing tool '{tool_name}': {str(e)}"
-        
-        # Notify the agent about the tool call if available
-        if hasattr(self, 'agent') and hasattr(self.agent, '_add_tool_call_step'):
-            try:
-                self.agent._add_tool_call_step(tool_name, tool_input, result)
-            except Exception as e:
-                print(f"Warning: Failed to notify agent about tool call: {e}")
-        
-        # Return as OpenAI tool message format
-        return {
-            "role": "tool",
-            "tool_call_id": tool_id,
-            "content": str(result)
-        }
 
     def _convert_messages_to_chat_format(self, messages: Messages, system_prompt: str | None = None) -> list[dict[str, str]]:
         """Convert Strands messages to chat completion format.
@@ -493,20 +316,17 @@ class StrandsAgent(Agent):
         """Initialize StrandsAgent with trajectory tracking.
 
         Args:
+            model: RLLMModel instance to use
             **kwargs: Additional arguments to pass to the base Agent class
         """
-
-        # Save tools before passing to base class
-        self._original_tools = kwargs.get('tools', [])
-        
         super().__init__(model=model, **kwargs)
         
-        # Set agent reference in the model so it can access tools
+        # Set agent reference in the model for tool info passing
         model.agent = self
         
         self._trajectory = Trajectory()
         self._current_step = None
-        self._tool_call_steps = []  # Track individual tool call steps
+        self._pending_tool_calls = []  # Track tool calls for current step
 
     @property
     def trajectory(self) -> Trajectory:
@@ -522,20 +342,48 @@ class StrandsAgent(Agent):
             if isinstance(message.get("content"), list):
                 # Handle multi-content messages
                 text_content = ""
+                has_tool_use = False
+                
                 for content_block in message["content"]:
-                    if isinstance(content_block, dict) and "text" in content_block:
-                        text_content += content_block["text"]
-                completions.append({"role": message["role"], "content": text_content})
+                    if isinstance(content_block, dict):
+                        if "text" in content_block:
+                            text_content += content_block["text"]
+                        elif "toolUse" in content_block:
+                            # Represent tool use in chat completion format
+                            tool_use = content_block["toolUse"]
+                            text_content += f"[Using tool: {tool_use.get('name', 'unknown')}]"
+                            has_tool_use = True
+                        elif "toolResult" in content_block:
+                            # Represent tool result in chat completion format
+                            tool_result = content_block["toolResult"]
+                            if tool_result.get('content'):
+                                for result_item in tool_result['content']:
+                                    if isinstance(result_item, dict) and 'text' in result_item:
+                                        text_content += result_item['text']
+                
+                # Only add message if it has meaningful content
+                if text_content.strip():
+                    completions.append({"role": message["role"], "content": text_content})
             else:
                 # Handle simple string content
-                completions.append({"role": message["role"], "content": str(message.get("content", ""))})
+                content = str(message.get("content", ""))
+                if content.strip():  # Only add non-empty content
+                    completions.append({"role": message["role"], "content": content})
         return completions
 
     def reset_trajectory(self, task: Any = None):
         """Reset the trajectory for a new episode."""
         self._trajectory = Trajectory(task=task)
         self._current_step = None
-        self._tool_call_steps = []
+        self._pending_tool_calls = []
+    
+    def _record_tool_call_info(self, tool_call_info: dict):
+        """Record tool call information for trajectory tracking.
+        
+        This method is called by RLLMModel to pass tool call information
+        without executing the tools (execution is handled by Strands event loop).
+        """
+        self._pending_tool_calls.append(tool_call_info)
 
     def _start_new_step(self, observation: Any = None):
         """Start a new step in the trajectory."""
@@ -547,39 +395,30 @@ class StrandsAgent(Agent):
         """Finish the current step and add it to the trajectory."""
         if self._current_step is not None:
             self._current_step.model_response = model_response
-            self._current_step.action = action
             self._current_step.reward = reward
             self._current_step.done = done
             self._current_step.chat_completions = self.chat_completions.copy()
+            
+            # 🔧 Check if there are tool calls, if so set as tool_calls type
+            if self._pending_tool_calls:
+                # Set action as tool_calls format
+                self._current_step.action = {
+                    "type": "tool_calls",
+                    "tool_calls": self._pending_tool_calls.copy(),
+                    "final_response": action  # Preserve original action info
+                }
+                # Clear tool calls cache
+                self._pending_tool_calls.clear()
+                print(f"✅ Step {len(self._trajectory.steps) + 1}: Tool calls completed")
+            else:
+                self._current_step.action = action
+                print(f"✅ Step {len(self._trajectory.steps) + 1}: Completed")
 
             self._trajectory.steps.append(self._current_step)
             self._trajectory.reward += reward
             
-            # Print minimal step completion info
-            if action and isinstance(action, dict) and action.get("type") == "tool_call":
-                print(f"✅ Step {len(self._trajectory.steps)}: Tool call completed")
-            else:
-                print(f"✅ Step {len(self._trajectory.steps)}: Conversation completed")
-            
             self._current_step = None
 
-    def _add_tool_call_step(self, tool_name: str, tool_args: Any, tool_result: Any = None):
-        """Add a specific step for tool calls to capture intermediate actions."""
-        # Silently record tool call step without verbose logging
-        tool_step = Step(
-            chat_completions=self.chat_completions.copy(),
-            observation=f"Tool call: {tool_name}",
-            action={
-                "type": "tool_call",
-                "tool_name": tool_name,
-                "tool_args": tool_args,
-                "tool_result": tool_result
-            },
-            reward=0.0,
-            done=False
-        )
-        self._trajectory.steps.append(tool_step)
-        self._tool_call_steps.append(tool_step)
 
     def _finish_current_step_from_result(self, result: Any):
         """Finish the current step by extracting info from AgentResult."""
@@ -658,14 +497,6 @@ class StrandsAgent(Agent):
 
     def get_tool_call_summary(self) -> list[dict]:
         """Get a summary of all tool calls made during the trajectory."""
-        tool_calls = []
-        for step in self._trajectory.steps:
-            if step.action and isinstance(step.action, dict) and step.action.get("type") == "tool_call":
-                tool_calls.append({
-                    "step_index": len(tool_calls),
-                    "tool_name": step.action.get("tool_name"),
-                    "tool_args": step.action.get("tool_args"),
-                    "tool_result": step.action.get("tool_result"),
-                    "observation": step.observation
-                })
-        return tool_calls
+        # Tool calls will now be tracked by the standard Strands event loop
+        # This method can be enhanced to extract tool information from messages
+        return []

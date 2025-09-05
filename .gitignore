@@ -197,3 +197,4 @@ rllm/registry/
 .cursor/rules/*
 examples/strands_outputs/*
 strands_outputs/*
+CLAUDE.md

@@ -62,12 +62,21 @@ def save_episode_to_json(episode, output_dir="./strands_outputs"):
         }
         
         # Add tool call specific information
-        if step.action and isinstance(step.action, dict) and step.action.get("type") == "tool_call":
-            step_data["step_type"] = "tool_call"
-            step_data["tool_name"] = step.action.get("tool_name")
-            step_data["tool_args"] = step.action.get("tool_args")
-            step_data["tool_result"] = step.action.get("tool_result")
-            tool_call_count += 1
+        if step.action and isinstance(step.action, dict):
+            # 🔄 Support new tool_calls format (hybrid approach)
+            if step.action.get("type") == "tool_calls":
+                step_data["step_type"] = "tool_calls"
+                step_data["tool_calls"] = step.action.get("tool_calls", [])
+                tool_call_count += len(step.action.get("tool_calls", []))
+            # 🔙 Support legacy tool_call format (backup compatibility)
+            elif step.action.get("type") == "tool_call":
+                step_data["step_type"] = "tool_call"
+                step_data["tool_name"] = step.action.get("tool_name")
+                step_data["tool_args"] = step.action.get("tool_args")
+                step_data["tool_result"] = step.action.get("tool_result")
+                tool_call_count += 1
+            else:
+                step_data["step_type"] = "conversation"
         else:
             step_data["step_type"] = "conversation"
         
@@ -75,15 +84,27 @@ def save_episode_to_json(episode, output_dir="./strands_outputs"):
     
     # Update tool call count
     trajectory_data["metadata"]["total_tool_calls"] = tool_call_count
-    trajectory_data["tool_calls_summary"] = [
-        {
-            "tool_name": step.action.get("tool_name"),
-            "tool_args": step.action.get("tool_args"),
-            "tool_result": step.action.get("tool_result")
-        }
-        for step in trajectory.steps
-        if step.action and isinstance(step.action, dict) and step.action.get("type") == "tool_call"
-    ]
+    
+    # Generate tool calls summary from both formats
+    tool_calls_summary = []
+    for step in trajectory.steps:
+        if step.action and isinstance(step.action, dict):
+            # 🔄 Support new tool_calls format
+            if step.action.get("type") == "tool_calls":
+                for tool_call in step.action.get("tool_calls", []):
+                    tool_calls_summary.append({
+                        "tool_name": tool_call.get("name"),
+                        "tool_args": tool_call.get("input"),
+                        "tool_id": tool_call.get("id")
+                    })
+            # Support legacy tool_call format (backward compatibility)
+            elif step.action.get("type") == "tool_call":
+                tool_calls_summary.append({
+                    "tool_name": step.action.get("tool_name"),
+                    "tool_args": step.action.get("tool_args"),
+                    "tool_result": step.action.get("tool_result")
+                })
+    trajectory_data["tool_calls_summary"] = tool_calls_summary
     
     # Generate filename with timestamp
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
@@ -120,14 +141,14 @@ async def run_strands_workflow(rollout_engine):
     # Prepare tool set with all available tools
     tools = [
         calculator.calculator,  # Modern @tool decorator format
-        http_request,           # Native strands format with TOOL_SPEC
-        # file_read,             # Native strands format with TOOL_SPEC  
+        # http_request,           # Native strands format with TOOL_SPEC
+        file_read,             # Native strands format with TOOL_SPEC  
         # python_repl,           # Native strands format with TOOL_SPEC
-        # google_search          # Custom tool
+        google_search          # Custom tool
     ]
     # Disable browser tool for now
-    # if browser_tool:
-    #     tools.append(browser_tool)
+    if browser_tool:
+        tools.append(browser_tool)
 
     # System prompt with all available tools
     system_prompt = os.getenv(
@@ -156,8 +177,8 @@ async def run_strands_workflow(rollout_engine):
     # Prepare task
     task = os.getenv(
         "STRANDS_TASK",
-        # "A paper about AI regulation that was originally submitted to arXiv.org in June 2022 shows a figure with three axes, where each axis has a label word at both ends. Which of these words is used to describe a type of society in a Physics and Society article submitted to arXiv.org on August 11, 2016? Use http_request to get the information.",
-        "What is 303 * 12314 - 123412 * 2? Use calculator to solve this.",
+        "A paper about AI regulation that was originally submitted to arXiv.org in June 2022 shows a figure with three axes, where each axis has a label word at both ends. Which of these words is used to describe a type of society in a Physics and Society article submitted to arXiv.org on August 11, 2016?",
+        # "What is 303 * 12314 - 123412 * 21234 + 128934 / 2910? Use calculator to solve this.",
     )
     
     task_dict = {"task": task}
