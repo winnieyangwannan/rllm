@@ -65,7 +65,7 @@ def setup_rollout_engine():
     return rollout_engine
 
 
-def run_gaia_evaluation(args):
+async def run_gaia_evaluation(args):
     """Run the Gaia evaluation."""
     print("🚀 Starting Gaia Dataset Evaluation")
     print("=" * 50)
@@ -122,7 +122,7 @@ At the end of your reasoning, output the final answer **ONLY ONCE**. Do not incl
     
     # Run evaluation
     print(f"📊 Evaluating dataset: {args.dataset_path}")
-    results = evaluator.evaluate_dataset(args.dataset_path)
+    results = await evaluator.evaluate_dataset(args.dataset_path)
     
     # Generate and save results
     print("💾 Saving evaluation results...")
@@ -181,7 +181,7 @@ async def main():
     args = parser.parse_args()
     
     # Run evaluation
-    run_gaia_evaluation(args)
+    await run_gaia_evaluation(args)
 
 
 if __name__ == "__main__":

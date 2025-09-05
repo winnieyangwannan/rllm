@@ -13,7 +13,14 @@ import pandas as pd
 
 from rllm.integrations.strands import StrandsAgent, RLLMModel
 from rllm.engine.rollout import OpenAIEngine
+from rllm.engine.agent_workflow_engine import AgentWorkflowEngine
 from strands.handlers.callback_handler import null_callback_handler
+import sys
+import os
+from concurrent.futures import ThreadPoolExecutor
+# Add parent directory to path to import strands_workflow
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), '../..'))
+from strands_workflow import StrandsWorkflow
 
 
 @dataclass
@@ -70,7 +77,7 @@ class GaiaEvaluator:
         # Create output directory
         os.makedirs(output_dir, exist_ok=True)
         
-        # Initialize model and agent
+        # Initialize model
         self.model = RLLMModel(
             rollout_engine=rollout_engine, 
             model_id="gaia-evaluator"
@@ -82,17 +89,21 @@ class GaiaEvaluator:
             "Provide clear, accurate answers based on the information you gather."
         )
         
-        self.agent = StrandsAgent(
-            model=self.model,
-            tools=tools,
-            system_prompt=system_prompt or default_system_prompt,
-            callback_handler=null_callback_handler  # Disable verbose tool printing
-        )
+        # Following terminus_workflow.py pattern: store base parameters for workflow creation
+        # We create fresh model instances per task to ensure zero contamination
+        self.base_workflow_args = {
+            "agent_cls": StrandsAgent,
+            "base_agent_args": {
+                "tools": tools,
+                "system_prompt": system_prompt or default_system_prompt,
+                "callback_handler": null_callback_handler
+            }
+        }
         
         self.results: List[EvaluationResult] = []
         self.tool_usage_stats: Dict[str, int] = {}
         
-        # Store initialization parameters for creating fresh agents if needed
+        # Store parameters for reference
         self._rollout_engine = rollout_engine
         self._tools = tools
         self._system_prompt = system_prompt or default_system_prompt
@@ -149,8 +160,8 @@ class GaiaEvaluator:
         print(f"Loaded {len(samples)} samples from {dataset_path}")
         return samples
     
-    def evaluate_single_sample(self, sample: GaiaSample) -> EvaluationResult:
-        """Evaluate a single Gaia sample.
+    async def evaluate_single_sample(self, sample: GaiaSample) -> EvaluationResult:
+        """Evaluate a single Gaia sample using AgentWorkflowEngine.
         
         Args:
             sample: The GaiaSample to evaluate
@@ -161,20 +172,45 @@ class GaiaEvaluator:
         start_time = time.time()
         
         try:
-            # Create fresh agent for each task (most thorough and effective)
-            # This ensures zero state pollution between tasks
-            self.agent = self._create_fresh_agent()
-            self.agent.reset_trajectory(task=sample.question)
+            # Create fresh workflow for each task (GAIA-specific approach for zero contamination)
+            # This ensures complete isolation between evaluation samples
+            task_dict = {"task": sample.question}
+            task_id = f"gaia_task_{sample.task_id}"
             
-            # Option 1: Reset existing agent (fallback approach)
-            # Uncomment the line below if you prefer to reuse the same agent instance
-            # self.agent.reset_trajectory(task=sample.question)
+            # Following terminus_workflow.py pattern: create fresh workflow with fresh model
+            # This ensures complete zero contamination for GAIA evaluation
+            fresh_model = RLLMModel(
+                rollout_engine=self._rollout_engine, 
+                model_id=f"gaia-evaluator-{sample.task_id}"
+            )
             
-            # Run the agent
-            result = self.agent(sample.question)
+            workflow_args = {
+                "agent_cls": self.base_workflow_args["agent_cls"],
+                "agent_args": {
+                    "model": fresh_model,
+                    **self.base_workflow_args["base_agent_args"]
+                }
+            }
             
-            # Extract model response
-            model_response = self._extract_response(result)
+            fresh_workflow = StrandsWorkflow(
+                rollout_engine=self._rollout_engine,
+                executor=ThreadPoolExecutor(max_workers=1),
+                **workflow_args
+            )
+            
+            # Execute task with fresh workflow
+            episode = await fresh_workflow.run_with_termination_handling(task_dict, task_id)
+            
+            if not episode:
+                raise Exception("No episode returned from workflow")
+            
+            # Extract trajectory data from episode (same as run_strands.py save_episode_to_json)
+            trajectory = episode.trajectories[0][1] if episode.trajectories else None
+            if not trajectory:
+                raise Exception("No trajectory found in episode")
+            
+            # Extract model response from trajectory steps
+            model_response = self._extract_response_from_trajectory(trajectory)
             
             # Calculate metrics
             is_correct, f1_score, exact_match = self._calculate_metrics(
@@ -182,7 +218,7 @@ class GaiaEvaluator:
             )
             
             # Get tool usage from trajectory
-            tool_usage = self._extract_tool_usage()
+            tool_usage = self._extract_tool_usage_from_trajectory(trajectory)
             
             execution_time = time.time() - start_time
             
@@ -213,7 +249,7 @@ class GaiaEvaluator:
                 error_message=str(e)
             )
     
-    def evaluate_dataset(self, dataset_path: str) -> List[EvaluationResult]:
+    async def evaluate_dataset(self, dataset_path: str) -> List[EvaluationResult]:
         """Evaluate the entire Gaia dataset.
         
         Args:
@@ -234,7 +270,7 @@ class GaiaEvaluator:
             print(f"✅ Ground Truth: {sample.answer}")
             print()  # Clean separator
             
-            result = self.evaluate_single_sample(sample)
+            result = await self.evaluate_single_sample(sample)
             results.append(result)
             
             # Print model response and evaluation result
@@ -256,6 +292,64 @@ class GaiaEvaluator:
         
         self.results = results
         return results
+    
+    def _extract_response_from_trajectory(self, trajectory) -> str:
+        """Extract final text response from trajectory steps."""
+        if not trajectory.steps:
+            return ""
+        
+        # Look through all steps to find the final model response
+        final_response = ""
+        
+        for step in trajectory.steps:
+            # Check step.model_response first
+            if step.model_response and step.model_response.strip():
+                if not (step.model_response.startswith('[Tool:') or 
+                       step.model_response.startswith('[Using tool:')):
+                    final_response = step.model_response
+            
+            # Check step.action['final_response'] (where actual response is stored)
+            if (step.action and isinstance(step.action, dict) and 
+                'final_response' in step.action):
+                final_resp = step.action['final_response']
+                
+                if isinstance(final_resp, dict) and 'content' in final_resp:
+                    # Extract text from content array
+                    content = final_resp['content']
+                    if isinstance(content, list):
+                        text_parts = []
+                        for item in content:
+                            if isinstance(item, dict) and 'text' in item:
+                                text = item['text']
+                                # Skip tool call representations
+                                if not (text.startswith('[Tool:') or text.startswith('[Using tool:')):
+                                    text_parts.append(text)
+                        if text_parts:
+                            final_response = ' '.join(text_parts)
+                elif isinstance(final_resp, str):
+                    final_response = final_resp
+        
+        return final_response
+    
+    def _extract_tool_usage_from_trajectory(self, trajectory) -> Dict[str, int]:
+        """Extract tool usage statistics from trajectory steps."""
+        tool_usage = {}
+        
+        for step in trajectory.steps:
+            if hasattr(step, 'action') and step.action and isinstance(step.action, dict):
+                # Handle new tool_calls format (hybrid architecture)
+                if step.action.get("type") == "tool_calls":
+                    for tool_call in step.action.get("tool_calls", []):
+                        tool_name = tool_call.get("name")
+                        if tool_name:
+                            tool_usage[tool_name] = tool_usage.get(tool_name, 0) + 1
+                # Handle legacy tool_call format (backward compatibility)
+                elif step.action.get("type") == "tool_call":
+                    tool_name = step.action.get("tool_name")
+                    if tool_name:
+                        tool_usage[tool_name] = tool_usage.get(tool_name, 0) + 1
+        
+        return tool_usage
     
     def _extract_response(self, result: Any) -> str:
         """Extract text response from agent result."""

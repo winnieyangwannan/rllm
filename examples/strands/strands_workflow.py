@@ -16,16 +16,14 @@ class StrandsWorkflow(Workflow):
     ):
         super().__init__(**kwargs)
         
-        # Initialize mutable defaults
-        agent_args = dict(agent_args) if agent_args is not None else {}
-        
-        # Create and register the agent
-        self.agent = agent_cls(**agent_args)
-        self.register_agent(self.agent)
+        # Store agent creation parameters instead of creating the agent
+        self.agent_cls = agent_cls
+        self.agent_args = dict(agent_args) if agent_args is not None else {}
         
         # Initialize uid and task attributes
         self.uid = None
         self.task = None
+        self.agent = None  # Will be created fresh for each task
     
     async def run(self, task: dict, uid: str, **kwargs) -> Episode | None:
         """Execute the Strands workflow."""
@@ -34,8 +32,26 @@ class StrandsWorkflow(Workflow):
         self.uid = uid
         self.task = task
         
-        # Reset agent trajectory for new task
+        # CRITICAL: Clear ALL workflow state before creating new agent
+        # This ensures no contamination between tasks when workflow is reused
+        if hasattr(self, '_agent_registry'):
+            self._agent_registry.clear()
+        if hasattr(self, '_completed_trajectories'):
+            self._completed_trajectories.clear()
+        # Clear any other potential state
+        if hasattr(self, 'agents'):
+            self.agents.clear()
+        if hasattr(self, '_agents'):
+            self._agents.clear()
+        
+        # Create fresh agent for each task (ensures zero contamination)
         task_text = task.get("task", "No task specified")
+        self.agent = self.agent_cls(**self.agent_args)
+        
+        # Register the fresh agent
+        self.register_agent(self.agent)
+        
+        # Set initial trajectory task (fresh agent, so no reset needed)
         self.agent.reset_trajectory(task=task_text)
         
         # Run the agent with the task
