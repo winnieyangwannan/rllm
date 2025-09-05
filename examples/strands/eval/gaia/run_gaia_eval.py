@@ -1,7 +1,4 @@
-"""Main script for running Gaia dataset evaluation using StrandsAgent.
-
-This script evaluates the Gaia dataset using the existing Strands + RLLM integration.
-"""
+"""Gaia dataset evaluation using StrandsAgent and AgentWorkflowEngine."""
 
 import asyncio
 import os
@@ -32,10 +29,8 @@ logging.getLogger("strands.telemetry").setLevel(logging.CRITICAL)
 
 
 def setup_rollout_engine():
-    """Setup the rollout engine based on environment variables."""
     load_dotenv(find_dotenv())
     
-    # Provider selection (Together or OpenAI-compatible)
     together_api_key = os.getenv("TOGETHER_AI_API_KEY")
     openai_api_key = os.getenv("OPENAI_API_KEY")
 
@@ -50,41 +45,28 @@ def setup_rollout_engine():
     else:
         raise ValueError("API key required (TOGETHER_AI_API_KEY or OPENAI_API_KEY)")
 
-    # Suppress tokenizer warning for cleaner output
     import warnings
     warnings.filterwarnings("ignore", message="No tokenizer provided")
     
-    rollout_engine = OpenAIEngine(
+    return OpenAIEngine(
         model=model_id,
         tokenizer=None,
         base_url=base_url,
         api_key=api_key,
         sampling_params={"temperature": 0.7, "top_p": 0.95, "max_tokens": 2048},
     )
-    
-    return rollout_engine
 
 
 async def run_gaia_evaluation(args):
-    """Run the Gaia evaluation."""
     print("🚀 Starting Gaia Dataset Evaluation")
     print("=" * 50)
     
-    # Setup rollout engine
     print("📡 Setting up rollout engine...")
     rollout_engine = setup_rollout_engine()
     
-    # Prepare tools with all available capabilities
-    tools = [
-        calculator,           # Custom calculator tool
-        http_request,         # Native strands format with TOOL_SPEC
-        file_read,           # Native strands format with TOOL_SPEC  
-        python_repl,         # Native strands format with TOOL_SPEC
-        google_search        # Custom search tool
-    ]
+    tools = [calculator, http_request, file_read, python_repl, google_search]
     print(f"🔧 Loaded {len(tools)} tools: {[tool.__name__ if hasattr(tool, '__name__') else str(tool) for tool in tools]}")
     
-    # Custom system prompt for Gaia tasks with all available tools
     system_prompt = (
 """You are an expert agent solving web-based tasks from the Gaia dataset. 
 These tasks often require searching for current information, analyzing data, 
@@ -103,7 +85,6 @@ At the end of your reasoning, output the final answer **ONLY ONCE**. Do not incl
 """    
 )
     
-    # Initialize evaluator
     print("🎯 Initializing Gaia evaluator...")
     evaluator = GaiaEvaluator(
         rollout_engine=rollout_engine,
@@ -113,22 +94,18 @@ At the end of your reasoning, output the final answer **ONLY ONCE**. Do not incl
         output_dir=args.output_dir
     )
     
-    # Check if dataset exists
     if not os.path.exists(args.dataset_path):
         print(f"❌ Dataset not found at: {args.dataset_path}")
         print("💡 Please run the download script first:")
         print("   python scripts/data/download_gaia.py")
         return
     
-    # Run evaluation
     print(f"📊 Evaluating dataset: {args.dataset_path}")
     results = await evaluator.evaluate_dataset(args.dataset_path)
     
-    # Generate and save results
     print("💾 Saving evaluation results...")
     json_path, csv_path = evaluator.save_results(args.output_filename)
     
-    # Print summary
     report = evaluator.generate_report()
     summary = report["summary"]
     
@@ -154,33 +131,13 @@ At the end of your reasoning, output the final answer **ONLY ONCE**. Do not incl
 
 
 async def main():
-    """Main async function."""
     parser = argparse.ArgumentParser(description="Run Gaia dataset evaluation using StrandsAgent")
-    parser.add_argument(
-        "--dataset_path", 
-        default="../../../../rllm/data/train/web/gaia.json",
-        help="Path to the Gaia dataset JSON file"
-    )
-    parser.add_argument(
-        "--max_samples", 
-        type=int, 
-        default=None,
-        help="Maximum number of samples to evaluate (default: all)"
-    )
-    parser.add_argument(
-        "--output_dir", 
-        default="outputs/gaia_eval",
-        help="Directory to save evaluation results"
-    )
-    parser.add_argument(
-        "--output_filename", 
-        default=None,
-        help="Base filename for output files (default: auto-generated)"
-    )
+    parser.add_argument("--dataset_path", default="../../../../rllm/data/train/web/gaia.json", help="Path to the Gaia dataset JSON file")
+    parser.add_argument("--max_samples", type=int, default=None, help="Maximum number of samples to evaluate (default: all)")
+    parser.add_argument("--output_dir", default="outputs/gaia_eval", help="Directory to save evaluation results")
+    parser.add_argument("--output_filename", default=None, help="Base filename for output files (default: auto-generated)")
     
     args = parser.parse_args()
-    
-    # Run evaluation
     await run_gaia_evaluation(args)
 
 

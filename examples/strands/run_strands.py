@@ -141,9 +141,9 @@ async def run_strands_workflow(rollout_engine):
     # Prepare tool set with all available tools
     tools = [
         calculator.calculator,  # Modern @tool decorator format
-        # http_request,           # Native strands format with TOOL_SPEC
+        http_request,           # Native strands format with TOOL_SPEC
         file_read,             # Native strands format with TOOL_SPEC  
-        # python_repl,           # Native strands format with TOOL_SPEC
+        python_repl,           # Native strands format with TOOL_SPEC
         google_search          # Custom tool
     ]
     # Disable browser tool for now
@@ -151,12 +151,26 @@ async def run_strands_workflow(rollout_engine):
         tools.append(browser_tool)
 
     # System prompt with all available tools
-    system_prompt = os.getenv(
-        "SYSTEM_PROMPT",
-        "You are a helpful agent with access to multiple tools. Use tools when beneficial and keep answers concise. ",
-    )
+    system_prompt = (
+        """You are an expert agent solving web-based tasks from the Gaia dataset. 
+        These tasks often require searching for current information, analyzing data, 
+        and providing accurate answers. Use the available tools when needed:
+        - calculator: for mathematical calculations
+        - http_request: for API calls and web requests
+        - file_read: for reading and analyzing files
+        - python_repl: for executing Python code
+        - google_search: for current information and web searches
 
-    # Create AgentWorkflowEngine
+        Think step by step and use tools as needed. 
+        Explain your reasoning in the middle steps if it helps you decide.
+
+        IMPORTANT:
+        At the end of your reasoning, output the final answer **ONLY ONCE**. Do not include any explanation with the Final Answer.
+        """    
+    )
+            
+
+    # Create high-performance AgentWorkflowEngine with proper reset
     workflow_engine = AgentWorkflowEngine(
         workflow_cls=StrandsWorkflow,
         workflow_args={
@@ -168,7 +182,7 @@ async def run_strands_workflow(rollout_engine):
             }
         },
         rollout_engine=rollout_engine,
-        n_parallel_tasks=1  # Single task for now
+        n_parallel_tasks=8  # Enable parallel processing!
     )
 
     # Initialize the workflow pool
@@ -190,7 +204,7 @@ async def run_strands_workflow(rollout_engine):
     print("🚀 Starting workflow execution...")
     print("="*80)
 
-    # Execute the workflow
+    # Execute with high-performance pooling
     episodes = await workflow_engine.execute_tasks([task_dict], [task_id])
     
     if not episodes:

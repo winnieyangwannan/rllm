@@ -23,7 +23,6 @@ def google_search(query: str) -> str:
     Returns:
         Search results as a formatted string.
     """
-    print(f"🔍 Searching Google for: {query}")
     try:
         # Check if environment variables are set
         if not os.getenv("GOOGLE_SEARCH_SECRET_KEY") or not os.getenv("GOOGLE_SEARCH_ENGINE_ID"):

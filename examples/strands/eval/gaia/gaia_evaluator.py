@@ -60,28 +60,10 @@ class GaiaEvaluator:
         max_samples: Optional[int] = None,
         output_dir: str = "outputs/gaia_eval"
     ):
-        """Initialize the Gaia evaluator.
-        
-        Args:
-            rollout_engine: The rollout engine for model inference
-            tools: List of tools to provide to the agent
-            system_prompt: System prompt for the agent
-            max_samples: Maximum number of samples to evaluate (None for all)
-            output_dir: Directory to save evaluation results
-        """
         self.rollout_engine = rollout_engine
-        self.tools = tools
         self.max_samples = max_samples
         self.output_dir = output_dir
-        
-        # Create output directory
         os.makedirs(output_dir, exist_ok=True)
-        
-        # Initialize model
-        self.model = RLLMModel(
-            rollout_engine=rollout_engine, 
-            model_id="gaia-evaluator"
-        )
         
         default_system_prompt = (
             "You are a helpful agent solving web-based tasks. "
@@ -89,8 +71,6 @@ class GaiaEvaluator:
             "Provide clear, accurate answers based on the information you gather."
         )
         
-        # Following terminus_workflow.py pattern: store base parameters for workflow creation
-        # We create fresh model instances per task to ensure zero contamination
         self.base_workflow_args = {
             "agent_cls": StrandsAgent,
             "base_agent_args": {
@@ -102,33 +82,7 @@ class GaiaEvaluator:
         
         self.results: List[EvaluationResult] = []
         self.tool_usage_stats: Dict[str, int] = {}
-        
-        # Store parameters for reference
         self._rollout_engine = rollout_engine
-        self._tools = tools
-        self._system_prompt = system_prompt or default_system_prompt
-        
-    def _create_fresh_agent(self) -> 'StrandsAgent':
-        """Create a completely fresh agent instance for maximum isolation.
-        
-        This is the most thorough way to ensure no state pollution between tasks.
-        Use this if you experience any cross-task contamination issues.
-        """
-        # Create new model instance
-        fresh_model = RLLMModel(
-            rollout_engine=self._rollout_engine, 
-            model_id="gaia-evaluator-fresh"
-        )
-        
-        # Create new agent instance
-        fresh_agent = StrandsAgent(
-            model=fresh_model,
-            tools=self._tools,
-            system_prompt=self._system_prompt,
-            callback_handler=null_callback_handler
-        )
-        
-        return fresh_agent
         
     def load_gaia_dataset(self, dataset_path: str) -> List[GaiaSample]:
         """Load Gaia dataset from JSON file.
@@ -161,24 +115,13 @@ class GaiaEvaluator:
         return samples
     
     async def evaluate_single_sample(self, sample: GaiaSample) -> EvaluationResult:
-        """Evaluate a single Gaia sample using AgentWorkflowEngine.
-        
-        Args:
-            sample: The GaiaSample to evaluate
-            
-        Returns:
-            EvaluationResult with evaluation metrics
-        """
         start_time = time.time()
         
         try:
-            # Create fresh workflow for each task (GAIA-specific approach for zero contamination)
-            # This ensures complete isolation between evaluation samples
             task_dict = {"task": sample.question}
             task_id = f"gaia_task_{sample.task_id}"
             
-            # Following terminus_workflow.py pattern: create fresh workflow with fresh model
-            # This ensures complete zero contamination for GAIA evaluation
+            # Create fresh workflow with fresh model for zero contamination
             fresh_model = RLLMModel(
                 rollout_engine=self._rollout_engine, 
                 model_id=f"gaia-evaluator-{sample.task_id}"
@@ -198,29 +141,15 @@ class GaiaEvaluator:
                 **workflow_args
             )
             
-            # Execute task with fresh workflow
             episode = await fresh_workflow.run_with_termination_handling(task_dict, task_id)
             
-            if not episode:
-                raise Exception("No episode returned from workflow")
+            if not episode or not episode.trajectories:
+                raise Exception("No episode or trajectory returned")
             
-            # Extract trajectory data from episode (same as run_strands.py save_episode_to_json)
-            trajectory = episode.trajectories[0][1] if episode.trajectories else None
-            if not trajectory:
-                raise Exception("No trajectory found in episode")
-            
-            # Extract model response from trajectory steps
+            trajectory = episode.trajectories[0][1]
             model_response = self._extract_response_from_trajectory(trajectory)
-            
-            # Calculate metrics
-            is_correct, f1_score, exact_match = self._calculate_metrics(
-                model_response, sample.answer
-            )
-            
-            # Get tool usage from trajectory
+            is_correct, f1_score, exact_match = self._calculate_metrics(model_response, sample.answer)
             tool_usage = self._extract_tool_usage_from_trajectory(trajectory)
-            
-            execution_time = time.time() - start_time
             
             return EvaluationResult(
                 task_id=sample.task_id,
@@ -231,11 +160,10 @@ class GaiaEvaluator:
                 f1_score=f1_score,
                 exact_match=exact_match,
                 tool_usage=tool_usage,
-                execution_time=execution_time
+                execution_time=time.time() - start_time
             )
             
         except Exception as e:
-            execution_time = time.time() - start_time
             return EvaluationResult(
                 task_id=sample.task_id,
                 question=sample.question,
@@ -245,7 +173,7 @@ class GaiaEvaluator:
                 f1_score=0.0,
                 exact_match=False,
                 tool_usage={},
-                execution_time=execution_time,
+                execution_time=time.time() - start_time,
                 error_message=str(e)
             )
     
@@ -294,34 +222,27 @@ class GaiaEvaluator:
         return results
     
     def _extract_response_from_trajectory(self, trajectory) -> str:
-        """Extract final text response from trajectory steps."""
         if not trajectory.steps:
             return ""
         
-        # Look through all steps to find the final model response
         final_response = ""
-        
         for step in trajectory.steps:
-            # Check step.model_response first
             if step.model_response and step.model_response.strip():
                 if not (step.model_response.startswith('[Tool:') or 
                        step.model_response.startswith('[Using tool:')):
                     final_response = step.model_response
             
-            # Check step.action['final_response'] (where actual response is stored)
             if (step.action and isinstance(step.action, dict) and 
                 'final_response' in step.action):
                 final_resp = step.action['final_response']
                 
                 if isinstance(final_resp, dict) and 'content' in final_resp:
-                    # Extract text from content array
                     content = final_resp['content']
                     if isinstance(content, list):
                         text_parts = []
                         for item in content:
                             if isinstance(item, dict) and 'text' in item:
                                 text = item['text']
-                                # Skip tool call representations
                                 if not (text.startswith('[Tool:') or text.startswith('[Using tool:')):
                                     text_parts.append(text)
                         if text_parts:
@@ -332,70 +253,26 @@ class GaiaEvaluator:
         return final_response
     
     def _extract_tool_usage_from_trajectory(self, trajectory) -> Dict[str, int]:
-        """Extract tool usage statistics from trajectory steps."""
         tool_usage = {}
-        
         for step in trajectory.steps:
             if hasattr(step, 'action') and step.action and isinstance(step.action, dict):
-                # Handle new tool_calls format (hybrid architecture)
                 if step.action.get("type") == "tool_calls":
                     for tool_call in step.action.get("tool_calls", []):
                         tool_name = tool_call.get("name")
                         if tool_name:
                             tool_usage[tool_name] = tool_usage.get(tool_name, 0) + 1
-                # Handle legacy tool_call format (backward compatibility)
                 elif step.action.get("type") == "tool_call":
                     tool_name = step.action.get("tool_name")
                     if tool_name:
                         tool_usage[tool_name] = tool_usage.get(tool_name, 0) + 1
-        
         return tool_usage
     
-    def _extract_response(self, result: Any) -> str:
-        """Extract text response from agent result."""
-        # Try to get the final text response from agent's chat_completions
-        if hasattr(self.agent, 'chat_completions'):
-            chat_completions = self.agent.chat_completions
-            if chat_completions:
-                # Get the last assistant message
-                for msg in reversed(chat_completions):
-                    if msg.get('role') == 'assistant' and msg.get('content', '').strip():
-                        content = msg.get('content', '')
-                        # Skip messages that only contain tool usage representations
-                        if not content.startswith('[Tool:') and not content.startswith('[Using tool:'):
-                            return content
-        
-        # Fallback to original extraction method
-        if hasattr(result, 'message'):
-            if isinstance(result.message, dict):
-                content = result.message.get('content', [])
-            elif hasattr(result.message, 'content'):
-                content = result.message.content
-            else:
-                content = []
-            
-            # Extract text content
-            if isinstance(content, list):
-                text_parts = []
-                for event in content:
-                    if isinstance(event, dict) and 'text' in event:
-                        text_parts.append(event['text'])
-                return ' '.join(text_parts)
-            else:
-                return str(content)
-        
-        return str(result)
-    
     def _calculate_metrics(self, model_response: str, ground_truth: str) -> Tuple[bool, float, bool]:
-        """Calculate evaluation metrics."""
-        # Simple exact match
         exact_match = model_response.strip().lower() == ground_truth.strip().lower()
         
-        # Simple F1 score calculation (can be enhanced)
         if exact_match:
             f1_score = 1.0
         else:
-            # Basic F1 calculation - can be improved with more sophisticated text similarity
             model_words = set(model_response.lower().split())
             gt_words = set(ground_truth.lower().split())
             
@@ -411,35 +288,8 @@ class GaiaEvaluator:
                 else:
                     f1_score = 2 * (precision * recall) / (precision + recall)
         
-        # Consider correct if F1 > 0.5 or exact match
         is_correct = exact_match or f1_score > 0.5
-        
         return is_correct, f1_score, exact_match
-    
-    def _extract_tool_usage(self) -> Dict[str, int]:
-        """Extract tool usage statistics from agent trajectory."""
-        tool_usage = {}
-        
-        if hasattr(self.agent, 'trajectory') and self.agent.trajectory:
-            for step in self.agent.trajectory.steps:
-                if hasattr(step, 'action') and step.action and isinstance(step.action, dict):
-                    # Handle new tool_calls format (hybrid architecture)
-                    if step.action.get("type") == "tool_calls":
-                        for tool_call in step.action.get("tool_calls", []):
-                            tool_name = tool_call.get("name")
-                            if tool_name:
-                                tool_usage[tool_name] = tool_usage.get(tool_name, 0) + 1
-                    # Handle legacy tool_call format (backward compatibility)
-                    elif step.action.get("type") == "tool_call":
-                        tool_name = step.action.get("tool_name")
-                        if tool_name:
-                            tool_usage[tool_name] = tool_usage.get(tool_name, 0) + 1
-                    # Handle object-based action (fallback)
-                    elif hasattr(step.action, 'tool_name'):
-                        tool_name = step.action.tool_name
-                        tool_usage[tool_name] = tool_usage.get(tool_name, 0) + 1
-        
-        return tool_usage
     
     def generate_report(self) -> Dict[str, Any]:
         """Generate comprehensive evaluation report."""

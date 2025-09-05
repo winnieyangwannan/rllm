@@ -90,7 +90,7 @@ trajectory = agent.trajectory  # Complete RL trajectory data
 ### Running Examples
 
 ```bash
-# Simple example
+# Simple example with inferencing/training episodes with tool_call too
 python run_strands.py
 
 # Complex research task with multiple tools
