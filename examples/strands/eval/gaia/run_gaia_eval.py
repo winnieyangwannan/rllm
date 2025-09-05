@@ -1,24 +1,23 @@
 """Gaia dataset evaluation using StrandsAgent and AgentWorkflowEngine."""
 
-import asyncio
-import os
-import logging
 import argparse
-from dotenv import load_dotenv, find_dotenv
-
-from transformers import AutoTokenizer
-from rllm.engine.rollout import OpenAIEngine
-import sys
+import asyncio
+import logging
 import os
+import sys
+
+from dotenv import find_dotenv, load_dotenv
+
+from rllm.engine.rollout import OpenAIEngine
+
 # Add parent directory to path to import tools
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..'))
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 from calculator_tool import calculator
+from gaia_evaluator import GaiaEvaluator
 from gsearch_tool_wrapped import google_search
 
 # Import strands_tools for additional capabilities
-from strands_tools import http_request, file_read, python_repl
-
-from gaia_evaluator import GaiaEvaluator
+from strands_tools import file_read, http_request, python_repl
 
 # Disable OpenTelemetry SDK
 os.environ.setdefault("OTEL_SDK_DISABLED", "true")
@@ -30,7 +29,7 @@ logging.getLogger("strands.telemetry").setLevel(logging.CRITICAL)
 
 def setup_rollout_engine():
     load_dotenv(find_dotenv())
-    
+
     together_api_key = os.getenv("TOGETHER_AI_API_KEY")
     openai_api_key = os.getenv("OPENAI_API_KEY")
 
@@ -46,8 +45,9 @@ def setup_rollout_engine():
         raise ValueError("API key required (TOGETHER_AI_API_KEY or OPENAI_API_KEY)")
 
     import warnings
+
     warnings.filterwarnings("ignore", message="No tokenizer provided")
-    
+
     return OpenAIEngine(
         model=model_id,
         tokenizer=None,
@@ -60,15 +60,14 @@ def setup_rollout_engine():
 async def run_gaia_evaluation(args):
     print("🚀 Starting Gaia Dataset Evaluation")
     print("=" * 50)
-    
+
     print("📡 Setting up rollout engine...")
     rollout_engine = setup_rollout_engine()
-    
+
     tools = [calculator, http_request, file_read, python_repl, google_search]
     print(f"🔧 Loaded {len(tools)} tools: {[tool.__name__ if hasattr(tool, '__name__') else str(tool) for tool in tools]}")
-    
-    system_prompt = (
-"""You are an expert agent solving web-based tasks from the Gaia dataset. 
+
+    system_prompt = """You are an expert agent solving web-based tasks from the Gaia dataset. 
 These tasks often require searching for current information, analyzing data, 
 and providing accurate answers. Use the available tools when needed:
 - calculator: for mathematical calculations
@@ -82,33 +81,26 @@ Explain your reasoning in the middle steps if it helps you decide.
 
 IMPORTANT:
 At the end of your reasoning, output the final answer **ONLY ONCE**. Do not include any explanation with the Final Answer.
-"""    
-)
-    
+"""
+
     print("🎯 Initializing Gaia evaluator...")
-    evaluator = GaiaEvaluator(
-        rollout_engine=rollout_engine,
-        tools=tools,
-        system_prompt=system_prompt,
-        max_samples=args.max_samples,
-        output_dir=args.output_dir
-    )
-    
+    evaluator = GaiaEvaluator(rollout_engine=rollout_engine, tools=tools, system_prompt=system_prompt, max_samples=args.max_samples, output_dir=args.output_dir)
+
     if not os.path.exists(args.dataset_path):
         print(f"❌ Dataset not found at: {args.dataset_path}")
         print("💡 Please run the download script first:")
         print("   python scripts/data/download_gaia.py")
         return
-    
+
     print(f"📊 Evaluating dataset: {args.dataset_path}")
-    results = await evaluator.evaluate_dataset(args.dataset_path)
-    
+    await evaluator.evaluate_dataset(args.dataset_path)
+
     print("💾 Saving evaluation results...")
     json_path, csv_path = evaluator.save_results(args.output_filename)
-    
+
     report = evaluator.generate_report()
     summary = report["summary"]
-    
+
     print("\n" + "=" * 50)
     print("📈 EVALUATION SUMMARY")
     print("=" * 50)
@@ -119,14 +111,14 @@ At the end of your reasoning, output the final answer **ONLY ONCE**. Do not incl
     print(f"Average F1 score: {summary['average_f1_score']:.3f}")
     print(f"Average execution time: {summary['average_execution_time']:.2f}s")
     print(f"Tool usage: {report['tool_usage']}")
-    
-    if report['error_count'] > 0:
+
+    if report["error_count"] > 0:
         print(f"⚠️  Errors encountered: {report['error_count']}")
-    
-    print(f"\n📁 Results saved to:")
+
+    print("\n📁 Results saved to:")
     print(f"   JSON: {json_path}")
     print(f"   CSV: {csv_path}")
-    
+
     print("\n✅ Gaia evaluation completed!")
 
 
@@ -136,7 +128,7 @@ async def main():
     parser.add_argument("--max_samples", type=int, default=None, help="Maximum number of samples to evaluate (default: all)")
     parser.add_argument("--output_dir", default="outputs/gaia_eval", help="Directory to save evaluation results")
     parser.add_argument("--output_filename", default=None, help="Base filename for output files (default: auto-generated)")
-    
+
     args = parser.parse_args()
     await run_gaia_evaluation(args)
 

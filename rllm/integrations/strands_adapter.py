@@ -1,6 +1,7 @@
 from __future__ import annotations
 
-from typing import Any, AsyncIterator, Dict
+from collections.abc import AsyncIterator
+from typing import Any
 
 
 class StrandsSession:
@@ -12,7 +13,7 @@ class StrandsSession:
         self.agent = agent
         self.model_provider = model_provider
 
-    async def step(self, user_msg: str) -> AsyncIterator[Dict[str, Any]]:
+    async def step(self, user_msg: str) -> AsyncIterator[dict[str, Any]]:
         async for event in self.agent.stream(user_msg, model=self.model_provider):
             yield event
 

@@ -105,46 +105,37 @@ class RLLMModel(Model):
         """
         # Convert Strands messages to chat completion format
         chat_messages = self._convert_messages_to_chat_format(messages, system_prompt)
-        
+
         # Convert tool specs to OpenAI format for the model
         if tool_specs:
             tools_param = self._convert_tool_specs_to_openai_format(tool_specs)
             kwargs["tools"] = tools_param
-        
+
         # Call rollout engine
         model_output: ModelOutput = await self.rollout_engine.get_model_response(chat_messages, **kwargs)
-        
+
         # Generate standard StreamEvents
         yield {"messageStart": {"role": "assistant"}}
-        
+
         # Check if we have tool calls
         if getattr(model_output, "tool_calls", None):
             # Generate content blocks for each tool use
             for tc in model_output.tool_calls:
                 tool_call_info = self._extract_tool_call_info(tc)
-                
+
                 # Notify the Agent to record tool call information (for trajectory tracking)
-                if hasattr(self, 'agent') and hasattr(self.agent, '_record_tool_call_info'):
+                if hasattr(self, "agent") and hasattr(self.agent, "_record_tool_call_info"):
                     self.agent._record_tool_call_info(tool_call_info)
-                
+
                 # Generate toolUse content block (Strands streaming format)
-                yield {"contentBlockStart": {"start": {"toolUse": {
-                    "toolUseId": tool_call_info["id"],
-                    "name": tool_call_info["name"]
-                }}}}
-                
+                yield {"contentBlockStart": {"start": {"toolUse": {"toolUseId": tool_call_info["id"], "name": tool_call_info["name"]}}}}
+
                 # Stream the tool input as JSON string
                 input_str = json.dumps(tool_call_info["input"])
-                yield {"contentBlockDelta": {
-                    "delta": {
-                        "toolUse": {
-                            "input": input_str
-                        }
-                    }
-                }}
-                
+                yield {"contentBlockDelta": {"delta": {"toolUse": {"input": input_str}}}}
+
                 yield {"contentBlockStop": {}}
-            
+
             yield {"messageStop": {"stopReason": "tool_use"}}
         else:
             # Generate text content events
@@ -152,16 +143,15 @@ class RLLMModel(Model):
             yield {"contentBlockStart": {"start": {}}}
             yield {"contentBlockDelta": {"delta": {"text": response_text}}}
             yield {"contentBlockStop": {}}
-            
+
             # Determine stop reason
             stop_reason = getattr(model_output, "finish_reason", "end_turn")
             yield {"messageStop": {"stopReason": stop_reason}}
 
-
     def _convert_tool_specs_to_openai_format(self, tool_specs: list[ToolSpec]) -> list[dict]:
         """Convert tool specs to OpenAI tools format for model use."""
         tools_param = []
-        
+
         for spec in tool_specs:
             try:
                 # Handle decorated function tools (like calculator.calculator)
@@ -173,12 +163,14 @@ class RLLMModel(Model):
                         if isinstance(input_schema, dict) and "json" in input_schema:
                             params = input_schema["json"]
                             if name and isinstance(params, dict):
-                                tools_param.append({
-                                    "type": "function",
-                                    "function": {"name": name, "parameters": params},
-                                })
+                                tools_param.append(
+                                    {
+                                        "type": "function",
+                                        "function": {"name": name, "parameters": params},
+                                    }
+                                )
                                 continue
-                
+
                 # Handle strands_tools modules with TOOL_SPEC (uppercase)
                 if hasattr(spec, "TOOL_SPEC"):
                     tool_spec = spec.TOOL_SPEC
@@ -188,29 +180,31 @@ class RLLMModel(Model):
                         if isinstance(input_schema, dict) and "json" in input_schema:
                             params = input_schema["json"]
                             if name and isinstance(params, dict):
-                                tools_param.append({
-                                    "type": "function",
-                                    "function": {"name": name, "parameters": params},
-                                })
+                                tools_param.append(
+                                    {
+                                        "type": "function",
+                                        "function": {"name": name, "parameters": params},
+                                    }
+                                )
                                 continue
-                
+
                 # Prefer SDK helper if available
                 if hasattr(spec, "to_openai_tool"):
                     maybe = spec.to_openai_tool()
                     if isinstance(maybe, dict):
                         tools_param.append(maybe)
                         continue
-                
+
                 # Dict-shaped specs
                 if isinstance(spec, dict):
                     if spec.get("type") == "function" and isinstance(spec.get("function"), dict):
                         tools_param.append(spec)
                         continue
-                    
+
                     # Extract name and parameters from common fields
                     name = spec.get("name")
                     params = None
-                    
+
                     # Try multiple parameter extraction patterns
                     if "parameters" in spec:
                         params = spec["parameters"]
@@ -221,23 +215,27 @@ class RLLMModel(Model):
                         input_schema = spec["inputSchema"]
                         if "json" in input_schema:
                             params = input_schema["json"]
-                    
+
                     if name and isinstance(params, dict):
-                        tools_param.append({
-                            "type": "function",
-                            "function": {"name": name, "parameters": params},
-                        })
+                        tools_param.append(
+                            {
+                                "type": "function",
+                                "function": {"name": name, "parameters": params},
+                            }
+                        )
                     continue
-                
+
                 # Object specs: attempt attribute-based extraction
                 name = getattr(spec, "name", None)
                 params = getattr(spec, "input_schema", None) or getattr(spec, "parameters", None)
                 if name and isinstance(params, dict):
-                    tools_param.append({
-                        "type": "function",
-                        "function": {"name": name, "parameters": params},
-                    })
-                    
+                    tools_param.append(
+                        {
+                            "type": "function",
+                            "function": {"name": name, "parameters": params},
+                        }
+                    )
+
             except Exception as e:
                 print(f"[RLLMModel] Warning: Failed to convert tool spec {spec}: {e}")
                 continue
@@ -249,24 +247,24 @@ class RLLMModel(Model):
             func = tool_call.get("function", {}) if isinstance(tool_call, dict) else getattr(tool_call, "function", {})
             fname = func.get("name") if isinstance(func, dict) else getattr(func, "name", None)
             fargs_raw = func.get("arguments") if isinstance(func, dict) else getattr(func, "arguments", None)
-            
+
             # Parse arguments if they're JSON strings
             fargs = {}
             if isinstance(fargs_raw, str):
                 import json as _json
+
                 try:
                     fargs = _json.loads(fargs_raw) if fargs_raw.strip() else {}
                 except Exception:
                     fargs = {"_raw": fargs_raw}
             elif isinstance(fargs_raw, dict):
                 fargs = fargs_raw
-                
+
             tool_id = tool_call.get("id") if isinstance(tool_call, dict) else getattr(tool_call, "id", None)
-            
+
             return {"id": tool_id, "name": fname or "tool", "input": fargs}
         except Exception:
             return {"id": "unknown", "name": "unknown", "input": {}}
-
 
     def _convert_messages_to_chat_format(self, messages: Messages, system_prompt: str | None = None) -> list[dict[str, str]]:
         """Convert Strands messages to chat completion format.
@@ -320,10 +318,10 @@ class StrandsAgent(Agent):
             **kwargs: Additional arguments to pass to the base Agent class
         """
         super().__init__(model=model, **kwargs)
-        
+
         # Set agent reference in the model for tool info passing
         model.agent = self
-        
+
         self._trajectory = Trajectory()
         self._current_step = None
         self._pending_tool_calls = []  # Track tool calls for current step
@@ -342,8 +340,7 @@ class StrandsAgent(Agent):
             if isinstance(message.get("content"), list):
                 # Handle multi-content messages
                 text_content = ""
-                has_tool_use = False
-                
+
                 for content_block in message["content"]:
                     if isinstance(content_block, dict):
                         if "text" in content_block:
@@ -352,15 +349,14 @@ class StrandsAgent(Agent):
                             # Represent tool use in chat completion format
                             tool_use = content_block["toolUse"]
                             text_content += f"[Using tool: {tool_use.get('name', 'unknown')}]"
-                            has_tool_use = True
                         elif "toolResult" in content_block:
                             # Represent tool result in chat completion format
                             tool_result = content_block["toolResult"]
-                            if tool_result.get('content'):
-                                for result_item in tool_result['content']:
-                                    if isinstance(result_item, dict) and 'text' in result_item:
-                                        text_content += result_item['text']
-                
+                            if tool_result.get("content"):
+                                for result_item in tool_result["content"]:
+                                    if isinstance(result_item, dict) and "text" in result_item:
+                                        text_content += result_item["text"]
+
                 # Only add message if it has meaningful content
                 if text_content.strip():
                     completions.append({"role": message["role"], "content": text_content})
@@ -377,22 +373,22 @@ class StrandsAgent(Agent):
         self._trajectory = Trajectory()
         self._current_step = None
         self._pending_tool_calls = []
-        
+
         # Clear message history to prevent contamination
-        if hasattr(self, 'messages'):
+        if hasattr(self, "messages"):
             self.messages.clear()
-        if hasattr(self, '_messages'):
+        if hasattr(self, "_messages"):
             self._messages.clear()
-    
+
     def reset_trajectory(self, task: Any = None):
         """Reset the trajectory for a new episode."""
         self._trajectory = Trajectory(task=task)
         self._current_step = None
         self._pending_tool_calls = []
-    
+
     def _record_tool_call_info(self, tool_call_info: dict):
         """Record tool call information for trajectory tracking.
-        
+
         This method is called by RLLMModel to pass tool call information
         without executing the tools (execution is handled by Strands event loop).
         """
@@ -411,14 +407,14 @@ class StrandsAgent(Agent):
             self._current_step.reward = reward
             self._current_step.done = done
             self._current_step.chat_completions = self.chat_completions.copy()
-            
+
             # 🔧 Check if there are tool calls, if so set as tool_calls type
             if self._pending_tool_calls:
                 # Set action as tool_calls format
                 self._current_step.action = {
                     "type": "tool_calls",
                     "tool_calls": self._pending_tool_calls.copy(),
-                    "final_response": action  # Preserve original action info
+                    "final_response": action,  # Preserve original action info
                 }
                 # Clear tool calls cache
                 self._pending_tool_calls.clear()
@@ -429,9 +425,8 @@ class StrandsAgent(Agent):
 
             self._trajectory.steps.append(self._current_step)
             self._trajectory.reward += reward
-            
-            self._current_step = None
 
+            self._current_step = None
 
     def _finish_current_step_from_result(self, result: Any):
         """Finish the current step by extracting info from AgentResult."""
@@ -478,13 +473,12 @@ class StrandsAgent(Agent):
             if "result" in event:
                 result = event["result"]
                 break
-        
+
         # Finish the current step based on the result
         if result:
             self._finish_current_step_from_result(result)
-            
-        return result
 
+        return result
 
     def get_current_state(self) -> Step | None:
         """Get the current step state."""

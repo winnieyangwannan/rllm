@@ -6,5 +6,3 @@ try:
 except Exception:
     # Allow import of package even if Router has extra deps during runtime
     Router = None  # type: ignore
-
-
