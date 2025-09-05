@@ -90,7 +90,7 @@ trajectory = agent.trajectory  # Complete RL trajectory data
 ### Running Examples
 
 ```bash
-# Simple calculator example
+# Simple example
 python run_strands.py
 
 # Complex research task with multiple tools
@@ -98,7 +98,8 @@ STRANDS_TASK="Research task..." python run_strands.py
 
 # Evaluation on GAIA benchmark
 cd eval/gaia && python run_gaia_eval.py
-```
+python run_gaia_eval.py --max_samples 2 # if you don't want to run the full dataset
+
 
 ## Implementation Details
 

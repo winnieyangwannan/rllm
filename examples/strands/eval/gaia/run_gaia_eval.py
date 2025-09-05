@@ -50,12 +50,16 @@ def setup_rollout_engine():
     else:
         raise ValueError("API key required (TOGETHER_AI_API_KEY or OPENAI_API_KEY)")
 
+    # Suppress tokenizer warning for cleaner output
+    import warnings
+    warnings.filterwarnings("ignore", message="No tokenizer provided")
+    
     rollout_engine = OpenAIEngine(
         model=model_id,
         tokenizer=None,
         base_url=base_url,
         api_key=api_key,
-        sampling_params={"temperature": 0.7, "top_p": 0.95, "max_tokens": 512},
+        sampling_params={"temperature": 0.7, "top_p": 0.95, "max_tokens": 2048},
     )
     
     return rollout_engine
@@ -82,17 +86,22 @@ def run_gaia_evaluation(args):
     
     # Custom system prompt for Gaia tasks with all available tools
     system_prompt = (
-        "You are an expert agent solving web-based tasks from the Gaia dataset. "
-        "These tasks often require searching for current information, analyzing data, "
-        "and providing accurate answers. Use the available tools when needed:\n"
-        "- calculator: for mathematical calculations\n"
-        "- http_request: for API calls and web requests\n"
-        "- file_read: for reading and analyzing files\n"
-        "- python_repl: for executing Python code\n"
-        "- google_search: for current information and web searches\n\n"
-        "Always provide clear, well-reasoned answers based on the information you find. "
-        "Prefer google_search first for information queries."
-    )
+"""You are an expert agent solving web-based tasks from the Gaia dataset. 
+These tasks often require searching for current information, analyzing data, 
+and providing accurate answers. Use the available tools when needed:
+- calculator: for mathematical calculations
+- http_request: for API calls and web requests
+- file_read: for reading and analyzing files
+- python_repl: for executing Python code
+- google_search: for current information and web searches
+
+Think step by step and use tools as needed. 
+Explain your reasoning in the middle steps if it helps you decide.
+
+IMPORTANT:
+At the end of your reasoning, output the final answer **ONLY ONCE**. Do not include any explanation with the Final Answer.
+"""    
+)
     
     # Initialize evaluator
     print("🎯 Initializing Gaia evaluator...")
@@ -149,7 +158,7 @@ async def main():
     parser = argparse.ArgumentParser(description="Run Gaia dataset evaluation using StrandsAgent")
     parser.add_argument(
         "--dataset_path", 
-        default="../../../rllm/data/train/web/gaia.json",
+        default="../../../../rllm/data/train/web/gaia.json",
         help="Path to the Gaia dataset JSON file"
     )
     parser.add_argument(

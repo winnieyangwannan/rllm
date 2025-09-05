@@ -376,6 +376,12 @@ class StrandsAgent(Agent):
         self._trajectory = Trajectory(task=task)
         self._current_step = None
         self._pending_tool_calls = []
+        
+        # Clear agent's message history to ensure clean start
+        if hasattr(self, 'messages'):
+            self.messages.clear()
+        if hasattr(self, '_messages'):
+            self._messages.clear()
     
     def _record_tool_call_info(self, tool_call_info: dict):
         """Record tool call information for trajectory tracking.
@@ -409,10 +415,10 @@ class StrandsAgent(Agent):
                 }
                 # Clear tool calls cache
                 self._pending_tool_calls.clear()
-                print(f"✅ Step {len(self._trajectory.steps) + 1}: Tool calls completed")
+                # print(f"✅ Step {len(self._trajectory.steps) + 1}: Tool calls completed")
             else:
                 self._current_step.action = action
-                print(f"✅ Step {len(self._trajectory.steps) + 1}: Completed")
+                # print(f"✅ Step {len(self._trajectory.steps) + 1}: Completed")
 
             self._trajectory.steps.append(self._current_step)
             self._trajectory.reward += reward

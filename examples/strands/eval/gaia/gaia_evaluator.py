@@ -197,18 +197,20 @@ class GaiaEvaluator:
             print(f"📝 Sample {i+1}/{len(samples)}: {sample.task_id}")
             print(f"❓ Question: {sample.question}")
             print(f"✅ Ground Truth: {sample.answer}")
+            print()  # Clean separator
             
             result = self.evaluate_single_sample(sample)
             results.append(result)
             
             # Print model response and evaluation result
             print(f"🤖 Model Response: {result.model_response}")
-            print(f"📊 Result: {'✅ Correct' if result.is_correct else '❌ Incorrect'}")
-            print(f"🎯 F1 Score: {result.f1_score:.3f}")
-            print(f"🎯 Exact Match: {'Yes' if result.exact_match else 'No'}")
-            print(f"⏱️  Execution Time: {result.execution_time:.2f}s")
+            print(f"📊 Result: {'✅ Correct' if result.is_correct else '❌ Incorrect'} | F1: {result.f1_score:.3f} | Exact Match: {'Yes' if result.exact_match else 'No'}")
+            print(f"⏱️  Time: {result.execution_time:.2f}s", end="")
             if result.tool_usage:
-                print(f"🔧 Tools Used: {result.tool_usage}")
+                tools_summary = ", ".join([f"{tool}({count})" for tool, count in result.tool_usage.items()])
+                print(f" | 🔧 Tools: {tools_summary}")
+            else:
+                print()
             if result.error_message:
                 print(f"⚠️  Error: {result.error_message}")
             print(f"{'='*60}")
@@ -222,6 +224,19 @@ class GaiaEvaluator:
     
     def _extract_response(self, result: Any) -> str:
         """Extract text response from agent result."""
+        # Try to get the final text response from agent's chat_completions
+        if hasattr(self.agent, 'chat_completions'):
+            chat_completions = self.agent.chat_completions
+            if chat_completions:
+                # Get the last assistant message
+                for msg in reversed(chat_completions):
+                    if msg.get('role') == 'assistant' and msg.get('content', '').strip():
+                        content = msg.get('content', '')
+                        # Skip messages that only contain tool usage representations
+                        if not content.startswith('[Tool:') and not content.startswith('[Using tool:'):
+                            return content
+        
+        # Fallback to original extraction method
         if hasattr(result, 'message'):
             if isinstance(result.message, dict):
                 content = result.message.get('content', [])
@@ -278,9 +293,20 @@ class GaiaEvaluator:
         
         if hasattr(self.agent, 'trajectory') and self.agent.trajectory:
             for step in self.agent.trajectory.steps:
-                if hasattr(step, 'action') and step.action:
-                    # Extract tool name from action if available
-                    if hasattr(step.action, 'tool_name'):
+                if hasattr(step, 'action') and step.action and isinstance(step.action, dict):
+                    # Handle new tool_calls format (hybrid architecture)
+                    if step.action.get("type") == "tool_calls":
+                        for tool_call in step.action.get("tool_calls", []):
+                            tool_name = tool_call.get("name")
+                            if tool_name:
+                                tool_usage[tool_name] = tool_usage.get(tool_name, 0) + 1
+                    # Handle legacy tool_call format (backward compatibility)
+                    elif step.action.get("type") == "tool_call":
+                        tool_name = step.action.get("tool_name")
+                        if tool_name:
+                            tool_usage[tool_name] = tool_usage.get(tool_name, 0) + 1
+                    # Handle object-based action (fallback)
+                    elif hasattr(step.action, 'tool_name'):
                         tool_name = step.action.tool_name
                         tool_usage[tool_name] = tool_usage.get(tool_name, 0) + 1
         
