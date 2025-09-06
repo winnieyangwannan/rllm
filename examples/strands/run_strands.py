@@ -111,7 +111,7 @@ async def run_strands_workflow(rollout_engine):
 
     # Prepare tool set with all available tools
     tools = [
-        calculator.calculator,  # Modern @tool decorator format
+        calculator,  # strands_tools calculator
         http_request,  # Native strands format with TOOL_SPEC
         file_read,  # Native strands format with TOOL_SPEC
         python_repl,  # Native strands format with TOOL_SPEC

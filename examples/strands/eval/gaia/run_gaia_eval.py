@@ -12,12 +12,11 @@ from rllm.engine.rollout import OpenAIEngine
 
 # Add parent directory to path to import tools
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
-from calculator_tool import calculator
 from gaia_evaluator import GaiaEvaluator
 from gsearch_tool_wrapped import google_search
 
 # Import strands_tools for additional capabilities
-from strands_tools import file_read, http_request, python_repl
+from strands_tools import calculator, file_read, http_request, python_repl
 
 # Disable OpenTelemetry SDK
 os.environ.setdefault("OTEL_SDK_DISABLED", "true")
