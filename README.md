@@ -10,7 +10,7 @@
 <br>
 
 <div align="center">
-
+  
 [![Documentation](https://img.shields.io/badge/Documentation-black?style=for-the-badge&logo=googledocs&logoColor=white)](https://rllm-project.readthedocs.io/en/latest)
 [![Discord](https://img.shields.io/badge/Discord-5865F2?style=for-the-badge&logo=discord&logoColor=white)](https://discord.gg/BDH46HT9en)
 [![Website](https://img.shields.io/badge/Site-%23000000.svg?style=for-the-badge&logo=semanticweb&logoColor=white)](https://www.agentica-project.com) 
@@ -77,8 +77,8 @@ docker exec -it rllm-container bash
 
 ## Awesome Project using rLLM 🔥
 
-* [Tongyi DeepResearch](https://github.com/Alibaba-NLP/DeepResearch): A New Era of Open-Source AI Researchers
-* [Terminal-Bench-RL](https://github.com/Danau5tin/terminal-bench-rl): Training Long-Horizon Terminal Agents with Reinforcement Learning
+* [Tongyi DeepResearch](https://github.com/Alibaba-NLP/DeepResearch): A New Era of Open-Source AI Researchers [![GitHub Repo stars](https://img.shields.io/github/stars/Alibaba-NLP/DeepResearch)](https://github.com/Alibaba-NLP/DeepResearch)
+* [Terminal-Bench-RL](https://github.com/Danau5tin/terminal-bench-rl): Training Long-Horizon Terminal Agents with Reinforcement Learning [![GitHub Repo stars](https://img.shields.io/github/stars/Danau5tin/terminal-bench-rl)](https://github.com/Danau5tin/terminal-bench-rl)
 
 ## Acknowledgements
 
