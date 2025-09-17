@@ -25,6 +25,8 @@ rLLM is an open-source framework for post-training language agents via reinforce
 
 ## Releases 📰
 
+<strong>[2025/09/16]</strong> rLLM [v0.2](https://github.com/rllm-org/rllm/tree/v0.2) is now in development and available in preview. It comes integrated with verl-0.5.0, featuring support for Megatron training. Stay tuned for more updates!
+
 <strong>[2025/07/01]</strong> We release [`DeepSWE-Preview`](https://pretty-radio-b75.notion.site/DeepSWE-Training-a-Fully-Open-sourced-State-of-the-Art[…]-by-Scaling-RL-22281902c1468193aabbe9a8c59bbe33?pvs=73), a 32B software engineering agent (SWE) trained with purely RL that achieves 59% on SWEBench-Verified with test-time scaling,(42.2% Pass@1), topping the SWEBench leaderboard for open-weight models.
 
 - 🍽️ An In-Depth Blog Post on our [SWE Agents and RL Training Recipes](https://pretty-radio-b75.notion.site/DeepSWE-Training-a-Fully-Open-sourced-State-of-the-Art[…]-by-Scaling-RL-22281902c1468193aabbe9a8c59bbe33?pvs=73)
