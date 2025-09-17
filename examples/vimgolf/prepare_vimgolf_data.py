@@ -1,6 +1,7 @@
-import os
-from datasets import Dataset
 import json
+import os
+
+from datasets import Dataset
 
 from rllm.data.dataset import DatasetRegistry
 
@@ -12,11 +13,11 @@ _DATASET_PATH = os.path.join(
 def prepare_vimgolf_data():
     """
     Prepare the vimgolf dataset for training.
-    
+
     Even if we use all the data for training, we will not exhaust the game, since we can ask the model to use fewer keystrokes.
     """
     datalist = []
-    with open(_DATASET_PATH, "r") as f:
+    with open(_DATASET_PATH) as f:
         for line in f:
             line_data = json.loads(line)
             input = line_data["input"]

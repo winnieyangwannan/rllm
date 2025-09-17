@@ -1,13 +1,16 @@
 """VimGolf agents and environments implementation."""
 
 import copy
-from typing import Any
 import json
+from typing import Any
+
+import vimgolf_gym
+import vimgolf_gym.dataclasses
+
 from rllm.agents.agent import Action, BaseAgent, Step, Trajectory
 from rllm.environments import SingleTurnEnvironment
 from rllm.rewards import RewardOutput
-import vimgolf_gym
-import vimgolf_gym.dataclasses
+
 
 class VimGolfSingleTurnAgent(BaseAgent):
     """
@@ -22,7 +25,9 @@ class VimGolfSingleTurnAgent(BaseAgent):
         self.messages = []
         self.accumulate_thinking = accumulate_thinking
 
-    def update_from_env(self, observation: Any, reward: float, done: bool, info: dict, **kwargs):
+    def update_from_env(
+        self, observation: Any, reward: float, done: bool, info: dict, **kwargs
+    ):
         """Process environment feedback and update internal state."""
 
         # Format observation based on whether it's the initial problem or subsequent feedback
@@ -72,30 +77,34 @@ class VimGolfSingleTurnAgent(BaseAgent):
 
     def get_current_state(self) -> Step:
         """Returns the current step/state of the agent."""
-        assert self._trajectory.steps, "Trajectory should not be empty when get_current_state is called."
+        assert (
+            self._trajectory.steps
+        ), "Trajectory should not be empty when get_current_state is called."
         return self._trajectory.steps[-1]
 
-def vimgolf_reward_function(task_info:dict, action:str) -> RewardOutput:
+
+def vimgolf_reward_function(task_info: dict, action: str) -> RewardOutput:
     task_data_str = task_info.get("ground_truth")
     task_data = json.loads(task_data_str)
 
     input = task_data["input"]
     target = task_data["target"]
-    challenge_id = task_data['id']
+    challenge_id = task_data["id"]
 
     solution = get_last_non_empty_line(action)
-    custom_challenge =  vimgolf_gym.dataclasses.VimGolfCustomChallenge(
-            input=input, output=target, solution=solution, name=challenge_id
-        )
+    custom_challenge = vimgolf_gym.dataclasses.VimGolfCustomChallenge(
+        input=input, output=target, solution=solution, name=challenge_id
+    )
     verified = run_vimgolf_local(custom_challenge)
     if verified:
         reward = 1.0
-        is_correct=True
+        is_correct = True
     else:
         reward = 0.0
-        is_correct=False
+        is_correct = False
     ret = RewardOutput(reward=reward, is_correct=is_correct, metadata={})
     return ret
+
 
 def run_vimgolf_local(custom_challenge: vimgolf_gym.dataclasses.VimGolfCustomChallenge):
     validated = False
@@ -108,7 +117,7 @@ def run_vimgolf_local(custom_challenge: vimgolf_gym.dataclasses.VimGolfCustomCha
     return validated
 
 
-def get_last_non_empty_line(content:str):
+def get_last_non_empty_line(content: str):
     lines = content.splitlines()
     lines = [it.strip() for it in lines if it.strip()]
     if lines:
@@ -116,7 +125,9 @@ def get_last_non_empty_line(content:str):
     else:
         return ""
 
+
 class VimGolfSingleTurnEnv(SingleTurnEnvironment):
     """Single turn environment for VimGolf."""
-    def __init__(self, task = None, reward_fn = None, **kwargs):
+
+    def __init__(self, task=None, reward_fn=None, **kwargs):
         super().__init__(task=task, reward_fn=vimgolf_reward_function, **kwargs)
