@@ -5,9 +5,7 @@ from datasets import Dataset
 
 from rllm.data.dataset import DatasetRegistry
 
-_DATASET_PATH = os.path.join(
-    os.path.dirname(__file__), "vimgolf_public_challenges.jsonl"
-)
+_DATASET_PATH = os.path.join(os.path.dirname(__file__), "vimgolf_public_challenges.jsonl")
 
 
 def prepare_vimgolf_data():
@@ -75,9 +73,7 @@ Please write your solution according to the rules and the example response:
             datalist.append(it)
 
     train_dataset = Dataset.from_list(datalist)
-    train_dataset = DatasetRegistry.register_dataset(
-        name="vimgolf-public-challenges", data=train_dataset, split="train"
-    )
+    train_dataset = DatasetRegistry.register_dataset(name="vimgolf-public-challenges", data=train_dataset, split="train")
 
 
 if __name__ == "__main__":

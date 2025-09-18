@@ -10,13 +10,9 @@ from rllm.utils import compute_pass_at_k
 
 def load_vimgolf_data():
     if DatasetRegistry.dataset_exists(name="vimgolf-public-challenges", split="train"):
-        test_dataset = DatasetRegistry.load_dataset(
-            name="vimgolf-public-challenges", split="train"
-        )
+        test_dataset = DatasetRegistry.load_dataset(name="vimgolf-public-challenges", split="train")
         return test_dataset.get_data()
-    raise ValueError(
-        "vimgolf-public-challenges dataset not found. Please run `python prepare_vimgolf_data.py` to create the dataset."
-    )
+    raise ValueError("vimgolf-public-challenges dataset not found. Please run `python prepare_vimgolf_data.py` to create the dataset.")
 
 
 if __name__ == "__main__":

@@ -11,9 +11,7 @@ from rllm.trainer.agent_trainer import AgentTrainer
     version_base=None,
 )
 def main(config):
-    dataset = DatasetRegistry.load_dataset(
-        name="vimgolf-public-challenges", split="train"
-    )
+    dataset = DatasetRegistry.load_dataset(name="vimgolf-public-challenges", split="train")
 
     trainer = AgentTrainer(
         agent_class=VimGolfSingleTurnAgent,

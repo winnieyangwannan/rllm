@@ -25,9 +25,7 @@ class VimGolfSingleTurnAgent(BaseAgent):
         self.messages = []
         self.accumulate_thinking = accumulate_thinking
 
-    def update_from_env(
-        self, observation: Any, reward: float, done: bool, info: dict, **kwargs
-    ):
+    def update_from_env(self, observation: Any, reward: float, done: bool, info: dict, **kwargs):
         """Process environment feedback and update internal state."""
 
         # Format observation based on whether it's the initial problem or subsequent feedback
@@ -77,9 +75,7 @@ class VimGolfSingleTurnAgent(BaseAgent):
 
     def get_current_state(self) -> Step:
         """Returns the current step/state of the agent."""
-        assert (
-            self._trajectory.steps
-        ), "Trajectory should not be empty when get_current_state is called."
+        assert self._trajectory.steps, "Trajectory should not be empty when get_current_state is called."
         return self._trajectory.steps[-1]
 
 
@@ -92,9 +88,7 @@ def vimgolf_reward_function(task_info: dict, action: str) -> RewardOutput:
     challenge_id = task_data["id"]
 
     solution = get_last_non_empty_line(action)
-    custom_challenge = vimgolf_gym.dataclasses.VimGolfCustomChallenge(
-        input=input, output=target, solution=solution, name=challenge_id
-    )
+    custom_challenge = vimgolf_gym.dataclasses.VimGolfCustomChallenge(input=input, output=target, solution=solution, name=challenge_id)
     verified = run_vimgolf_local(custom_challenge)
     if verified:
         reward = 1.0
