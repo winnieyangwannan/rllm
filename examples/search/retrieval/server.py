@@ -9,6 +9,7 @@ Usage:
 
 import argparse
 import json
+import time
 from pathlib import Path
 from typing import Any
 
@@ -92,6 +93,7 @@ def main():
 
     args = parser.parse_args()
 
+    start_time = time.time()
     # Initialize retriever
     global retriever
     try:
@@ -102,6 +104,7 @@ def main():
         return
 
     # Start server
+    print(f"Took {time.time() - start_time} seconds to start the server")
     print(f"Starting dense retrieval server on {args.host}:{args.port}")
     app.run(host=args.host, port=args.port, debug=args.debug)
 
