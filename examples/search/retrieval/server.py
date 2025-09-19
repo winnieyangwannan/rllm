@@ -33,9 +33,9 @@ class LocalRetriever:
         print(f"Loading data from {self.data_dir}")
 
         # Load corpus
-        corpus_file = self.data_dir / "corpus.json"
+        corpus_file = self.data_dir / "../wikipedia/wiki-18.jsonl"
         with open(corpus_file) as f:
-            self.corpus = json.load(f)
+            self.corpus = [json.loads(line) for line in f]
         print(f"Loaded corpus with {len(self.corpus)} documents")
 
         # Load dense index
