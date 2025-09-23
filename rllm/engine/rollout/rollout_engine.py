@@ -3,7 +3,6 @@ from dataclasses import dataclass
 
 @dataclass
 class ModelOutput:
-    content: str
     text: str
     tool_calls: list
     finish_reason: str

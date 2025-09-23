@@ -59,7 +59,7 @@ class VerlEngine(RolloutEngine):
         if self.tool_parser is not None:
             tool_calls = self.tool_parser.parse(response_text)
 
-        return ModelOutput(content=response_text, text=response_text, tool_calls=tool_calls, finish_reason=finish_reason, completion_tokens=len(response_ids), prompt_tokens=len(prompt_ids))
+        return ModelOutput(text=response_text, tool_calls=tool_calls, finish_reason=finish_reason, completion_tokens=len(response_ids), prompt_tokens=len(prompt_ids))
 
     def wake_up(self):
         self.rollout_manager.wake_up()
