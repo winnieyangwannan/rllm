@@ -64,7 +64,7 @@ class OpenAIEngine(RolloutEngine):
         while retries > 0:
             try:
                 response = await self.client.completions.create(model=self.model, prompt=prompt, timeout=3600, **sampling_params)
-                return ModelOutput(text=response.choices[0].text, tool_calls=[], finish_reason=response.choices[0].finish_reason, completion_tokens=response.usage.completion_tokens, prompt_tokens=response.usage.prompt_tokens)
+                return ModelOutput(content=response.choices[0].text, text=response.choices[0].text, tool_calls=[], finish_reason=response.choices[0].finish_reason, completion_tokens=response.usage.completion_tokens, prompt_tokens=response.usage.prompt_tokens)
             except openai.RateLimitError:
                 retries -= 1
                 if retries == 0:
