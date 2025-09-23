@@ -103,8 +103,6 @@ class Workflow(ABC):
             if isinstance(attr_value, BaseAgent) and hasattr(attr_value, "trajectory") and attr_value.trajectory not in completed_trajectory_objects and len(attr_value.trajectory.steps) > 0:
                 episode.trajectories.append((attr_name, attr_value.trajectory))
 
-        assert len(episode.trajectories) > 0, "No trajectories found in the workflow"
-
         # Deep copy all trajectories to prevent modifications to the original objects
         episode.trajectories = [(name, deepcopy(trajectory)) for name, trajectory in episode.trajectories]
 
