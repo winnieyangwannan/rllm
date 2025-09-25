@@ -157,7 +157,7 @@ class AgentWorkflowEngine:
                     for step_idx, step in enumerate(trajectory.steps):
                         chat_completions = step.chat_completions
 
-                        prompt = self.rollout_engine.chat_parser.parse(chat_completions[:-1], is_first_msg=True, add_generation_prompt=False)
+                        prompt = self.rollout_engine.chat_parser.parse(chat_completions[:-1], is_first_msg=True, add_generation_prompt=True)
                         prompt = torch.tensor(self.rollout_engine.tokenizer.encode(prompt, add_special_tokens=False), dtype=torch.long)
                         prompts.append(prompt)
 
