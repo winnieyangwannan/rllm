@@ -156,14 +156,11 @@ class AgentWorkflowEngine:
                 else:  # self.config.rllm.stepwise_advantage.enable is True
                     for step_idx, step in enumerate(trajectory.steps):
                         chat_completions = step.chat_completions
+                        prompt, response, mask = self.rollout_engine.chat_parser.tokenize_and_mask(chat_completions)
 
-                        prompt = self.rollout_engine.chat_parser.parse(chat_completions[:-1], is_first_msg=True, add_generation_prompt=True)
-                        prompt = torch.tensor(self.rollout_engine.tokenizer.encode(prompt, add_special_tokens=False), dtype=torch.long)
                         prompts.append(prompt)
-
-                        response = self.rollout_engine.chat_parser.parse(chat_completions[-1:], is_first_msg=False, add_generation_prompt=False)
-                        response = torch.tensor(self.rollout_engine.tokenizer.encode(response, add_special_tokens=False), dtype=torch.long)
                         responses.append(response)
+                        traj_mask.append(mask)
 
                         step_rewards.append(step.reward)
 
@@ -205,12 +202,10 @@ class AgentWorkflowEngine:
         input_ids = torch.concat([prompts_batch, response_batch], dim=1)
         attention_mask = torch.where(input_ids != self.rollout_engine.tokenizer.pad_token_id, 1, 0)
         position_ids = (torch.cumsum(attention_mask, dim=1) - 1) * attention_mask
-        if not traj_mask:  # i.e. self.config.rllm.stepwise_advantage.enable is True
-            traj_mask = torch.where(response_batch != self.rollout_engine.tokenizer.pad_token_id, 1, 0)
-        else:
-            traj_mask = torch.nn.utils.rnn.pad_sequence(traj_mask, batch_first=True, padding_value=0)
-            traj_mask = pad_sequence_to_length(traj_mask, max_response_length, 0, left_pad=False)
-            traj_mask = traj_mask[:, :max_response_length]  # truncate if necessary
+
+        traj_mask = torch.nn.utils.rnn.pad_sequence(traj_mask, batch_first=True, padding_value=0)
+        traj_mask = pad_sequence_to_length(traj_mask, max_response_length, 0, left_pad=False)
+        traj_mask = traj_mask[:, :max_response_length]  # truncate if necessary
 
         # Place all rewards to last response token of the last_step response
         traj_rewards_batch = torch.zeros_like(response_batch, dtype=torch.float32)

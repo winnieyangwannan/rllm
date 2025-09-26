@@ -12,7 +12,23 @@ logger = logging.getLogger(__name__)
 class ChatTemplateParser:
     def __init__(self, tokenizer):
         self.tokenizer = tokenizer
-        self.assistant_token = ""
+        self.generation_prompt_ids = self._get_generation_prompt_ids(tokenizer)
+
+        print("generation prompt:", tokenizer.decode(self.generation_prompt_ids, skip_special_tokens=False))
+
+    def _get_generation_prompt_ids(self, tokenizer):
+        """Return the generation prompt tokens (ids, tokens, decoded string)."""
+        messages = [{"role": "assistant", "content": ""}]
+
+        with_prompt = tokenizer.apply_chat_template(messages, add_generation_prompt=True, return_tensors="pt")
+        without_prompt = tokenizer.apply_chat_template(messages, add_generation_prompt=False, return_tensors="pt")
+
+        with_ids = with_prompt[0].tolist()
+        without_ids = without_prompt[0].tolist()
+
+        generation_prompt_ids = with_ids[len(without_ids) :]
+
+        return generation_prompt_ids
 
     def parse(self, messages, add_generation_prompt=False, is_first_msg=False, **kwargs) -> str:
         return self.tokenizer.apply_chat_template(messages, tokenize=False, add_generation_prompt=add_generation_prompt)
@@ -113,8 +129,11 @@ class ChatTemplateParser:
             response_ids.extend(ids)
 
             if messages[i]["role"] == "assistant":
-                # close enough
-                response_mask.extend([1] * len(ids))
+                # For assistant messages, response_mask should be 1 for all tokens except the generation prompt, which should be 0
+                assert ids[: len(self.generation_prompt_ids)] == self.generation_prompt_ids, "Generation prompt mismatch"
+                num_non_gen_prompt = len(ids) - len(self.generation_prompt_ids)
+                response_mask.extend([0] * len(self.generation_prompt_ids))
+                response_mask.extend([1] * num_non_gen_prompt)
             else:
                 response_mask.extend([0] * len(ids))
 
