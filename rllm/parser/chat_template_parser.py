@@ -108,13 +108,14 @@ class ChatTemplateParser:
         assert parser.verify_equivalence(PARSER_TEST_MESSAGES), "Parser failed equivalence check"
         return parser
 
-    def tokenize_and_mask(self, messages):
+    def tokenize_and_mask(self, messages, mask_last_assistant_only=False):
         prompt_ids = []
         response_ids = []
         response_mask = []
 
         try:
             first_assistant_idx = next(i for i, msg in enumerate(messages) if msg["role"] == "assistant")
+            last_assistant_idx = max(i for i, msg in enumerate(messages) if msg["role"] == "assistant")
         except StopIteration:
             raise ValueError("No assistant message found in chat_completions") from None
 
@@ -132,8 +133,12 @@ class ChatTemplateParser:
                 # For assistant messages, response_mask should be 1 for all tokens except the generation prompt, which should be 0
                 assert ids[: len(self.generation_prompt_ids)] == self.generation_prompt_ids, "Generation prompt mismatch"
                 num_non_gen_prompt = len(ids) - len(self.generation_prompt_ids)
-                response_mask.extend([0] * len(self.generation_prompt_ids))
-                response_mask.extend([1] * num_non_gen_prompt)
+
+                if mask_last_assistant_only and i != last_assistant_idx:
+                    response_mask.extend([0] * len(ids))
+                else:
+                    response_mask.extend([0] * len(self.generation_prompt_ids))
+                    response_mask.extend([1] * num_non_gen_prompt)
             else:
                 response_mask.extend([0] * len(ids))
 

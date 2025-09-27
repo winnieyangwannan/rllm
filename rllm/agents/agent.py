@@ -40,6 +40,21 @@ class Trajectory:
             "reward": float(self.reward),
         }
 
+    def is_cumulative(self) -> bool:
+        """
+        Returns True if for every step after the first, its chat_completions is an exact superset
+        of the previous step's chat_completions (i.e., the previous chat_completions is a prefix).
+        """
+        prev = None
+        for step in self.steps:
+            if prev is not None:
+                prev_cc = prev.chat_completions
+                curr_cc = step.chat_completions
+                if not (len(curr_cc) >= len(prev_cc) and curr_cc[: len(prev_cc)] == prev_cc):
+                    return False
+            prev = step
+        return True
+
 
 @dataclass
 class Episode:

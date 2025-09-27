@@ -142,21 +142,21 @@ class AgentWorkflowEngine:
                     print(f"Trajectory {trajectory_id} has no steps, skipping")
                     continue
 
-                if not self.config.rllm.stepwise_advantage.enable:  # either single step or accumulated context
+                if trajectory.is_cumulative():
                     chat_completions = trajectory.steps[-1].chat_completions
-                    prompt, response, mask = self.rollout_engine.chat_parser.tokenize_and_mask(chat_completions)
 
+                    prompt, response, mask = self.rollout_engine.chat_parser.tokenize_and_mask(chat_completions, mask_last_assistant_only=False)
                     prompts.append(prompt)
                     responses.append(response)
                     traj_mask.append(mask)
-
                     step_rewards.append(trajectory.reward)
                     step_ids.append(trajectory_id)
 
-                else:  # self.config.rllm.stepwise_advantage.enable is True
+                    n_steps = 1
+                else:
                     for step_idx, step in enumerate(trajectory.steps):
                         chat_completions = step.chat_completions
-                        prompt, response, mask = self.rollout_engine.chat_parser.tokenize_and_mask(chat_completions)
+                        prompt, response, mask = self.rollout_engine.chat_parser.tokenize_and_mask(chat_completions, mask_last_assistant_only=True)
 
                         prompts.append(prompt)
                         responses.append(response)
@@ -167,7 +167,8 @@ class AgentWorkflowEngine:
                         step_id = f"{trajectory_id}_step{step_idx}"  # unique step identifier e.g., 1234567890_solver_step0
                         step_ids.append(step_id)
 
-                n_steps = len(trajectory.steps) if self.config.rllm.stepwise_advantage.enable else 1
+                    n_steps = len(trajectory.steps)
+
                 trajectory_ids.extend([trajectory_id] * n_steps)
                 step_nums.extend([n_steps] * n_steps)
                 traj_rewards.extend([trajectory.reward] * n_steps)
