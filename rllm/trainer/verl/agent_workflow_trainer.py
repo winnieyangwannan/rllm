@@ -379,6 +379,16 @@ class AgentWorkflowPPOTrainer(RayPPOTrainer):
                         with marked_timer("save_checkpoint", timing_raw, color="green"):
                             self._save_checkpoint()
 
+                    # Visualize some sample trajectories
+                    if batch is not None and len(batch) > 0:
+                        # Randomly select a few samples to visualize
+                        batch_size = len(batch)
+                        num_samples = min(2, batch_size)  # Visualize up to 2 samples
+                        if num_samples > 0:
+                            sample_indices = np.random.choice(batch_size, size=num_samples, replace=False)
+                            for idx in sample_indices:
+                                self.visualize_trajectory_last_step(batch, sample_idx=idx, max_samples=1)
+
                 with marked_timer("stop_profile", timing_raw):
                     self._stop_profiling(do_profile)
 
@@ -673,24 +683,45 @@ class AgentWorkflowPPOTrainer(RayPPOTrainer):
             resp_mask = mask[i] if mask is not None else (resp_tokens != self.tokenizer.pad_token_id)
             rewards = token_level_scores[i] if token_level_scores is not None else None
 
-            # Walk tokens and colorize
+            # Build the response text with proper formatting
+            response_parts = []
+            reward_info = []
+
             for j, tok_id in enumerate(resp_tokens.tolist()):
                 if tok_id == self.tokenizer.pad_token_id:
                     continue
 
                 tok = self.tokenizer.decode([tok_id])
+                # Replace newlines and other whitespace to keep everything on one line
+                tok = tok.replace("\n", "\\n").replace("\r", "\\r").replace("\t", "\\t")
+
                 used = bool(resp_mask[j].item()) if hasattr(resp_mask[j], "item") else bool(resp_mask[j])
                 has_reward = False
+                r = 0.0
                 if rewards is not None:
                     # The engine places reward on the last valid response token
                     r = float(rewards[j].item()) if hasattr(rewards[j], "item") else float(rewards[j])
                     has_reward = abs(r) > 1e-9
 
                 if not used:
-                    colorful_print(tok, fg="black", end="")
+                    response_parts.append(("unused", tok))
                 elif has_reward:
-                    colorful_print(tok, bg="green", end="")  # reward token
-                    colorful_print(f" R:{r:.2f}", fg="magenta", end="")
+                    response_parts.append(("reward", tok))
+                    reward_info.append(f"R:{r:.2f}")
                 else:
-                    colorful_print(tok, fg="blue", end="")  # normal training token
-            print()
+                    response_parts.append(("normal", tok))
+
+            # Print the response in one go to avoid line breaks
+            for part_type, tok in response_parts:
+                if part_type == "unused":
+                    colorful_print(tok, fg="black", end="")
+                elif part_type == "reward":
+                    colorful_print(tok, bg="green", end="")
+                else:
+                    colorful_print(tok, fg="blue", end="")
+
+            # Print reward info on a separate line if any rewards exist
+            if reward_info:
+                colorful_print(f" [{', '.join(reward_info)}]", fg="magenta")
+            else:
+                print()  # Just add newline
