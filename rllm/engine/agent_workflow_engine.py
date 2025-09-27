@@ -1,4 +1,5 @@
 import asyncio
+import logging
 import uuid
 from collections import defaultdict
 from concurrent.futures import ThreadPoolExecutor
@@ -12,6 +13,8 @@ from rllm.engine.rollout.rollout_engine import RolloutEngine
 from rllm.workflows.workflow import TerminationReason, Workflow
 from verl import DataProto
 from verl.utils.torch_functional import pad_sequence_to_length
+
+logger = logging.getLogger(__name__)
 
 
 class AgentWorkflowEngine:
@@ -74,7 +77,7 @@ class AgentWorkflowEngine:
                         episode = await workflow.run_with_termination_handling(task=task, uid=uid, **kwargs)
                         return episode
                     except Exception as e:
-                        print(f"Rollout {uid} failed on attempt {retry_attempt}/{self.retry_limit}: {e}")
+                        logger.warning(f"Rollout {uid} failed on attempt {retry_attempt}/{self.retry_limit}: {e}")
                         if retry_attempt == self.retry_limit:
                             raise Exception(f"Rollout {uid} failed permanently.") from e
                         continue
@@ -129,7 +132,7 @@ class AgentWorkflowEngine:
                 # termination hits before an agent finishes it's first step
                 # (e.g., the initial prompt exceeds max_prompt_length or a timeout occurs)
                 # we delete the episode from the batch by setting repeat_counts to 0
-                print(f"Episode {episode.id} has no valid trajectories, dropping it from the batch")
+                logger.info(f"Episode {episode.id} has no valid trajectories, dropping it from the batch")
                 repeat_counts.append(0)  # deletes corresponding entry from the batch
                 continue
 
@@ -139,10 +142,13 @@ class AgentWorkflowEngine:
                 trajectory_id = f"{task_ids[i]}_{name}"  # unique trajectory identifier e.g., 1234567890_solver
 
                 if len(trajectory.steps) == 0:
-                    print(f"Trajectory {trajectory_id} has no steps, skipping")
+                    logger.info(f"Trajectory {trajectory_id} has no steps, skipping")
                     continue
 
-                if trajectory.is_cumulative():
+                if not self.config.rllm.stepwise_advantage.enable:
+                    if not trajectory.is_cumulative():
+                        logger.warning(f"Warning: Trajectory {trajectory_id} is not cumulative, but stepwise mode is not enabled. There could be a token mismatch during trajectory generation.")
+
                     chat_completions = trajectory.steps[-1].chat_completions
 
                     prompt, response, mask = self.rollout_engine.chat_parser.tokenize_and_mask(chat_completions, mask_last_assistant_only=False)
