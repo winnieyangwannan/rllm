@@ -645,7 +645,7 @@ class AgentWorkflowPPOTrainer(RayPPOTrainer):
         prompts = tensor_batch.batch["prompts"]
         responses = tensor_batch.batch["responses"]
         mask = tensor_batch.batch.get("response_mask")
-        token_level_scores = tensor_batch.batch.get("step_rewards" if self.config.algorithm.stepwise_advantage.enable and self.config.algorithm.stepwise_advantage.mode == "per_step" else "traj_rewards")
+        token_level_scores = tensor_batch.batch.get("step_rewards" if self.config.rllm.stepwise_advantage.enable and self.config.rllm.stepwise_advantage.mode == "per_step" else "traj_rewards")
 
         # Optional meta to print outcome
         is_correct = tensor_batch.non_tensor_batch.get("is_correct", None)
