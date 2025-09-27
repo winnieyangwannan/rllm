@@ -14,8 +14,6 @@ class ChatTemplateParser:
         self.tokenizer = tokenizer
         self.generation_prompt_ids = self._get_generation_prompt_ids(tokenizer)
 
-        print("generation prompt:", tokenizer.decode(self.generation_prompt_ids, skip_special_tokens=False))
-
     def _get_generation_prompt_ids(self, tokenizer):
         """Return the generation prompt tokens (ids, tokens, decoded string)."""
         messages = [{"role": "assistant", "content": ""}]
@@ -131,7 +129,9 @@ class ChatTemplateParser:
 
             if messages[i]["role"] == "assistant":
                 # For assistant messages, response_mask should be 1 for all tokens except the generation prompt, which should be 0
-                assert ids[: len(self.generation_prompt_ids)] == self.generation_prompt_ids, "Generation prompt mismatch"
+                if ids[: len(self.generation_prompt_ids)] != self.generation_prompt_ids:
+                    logger.warning(f"Generation prompt mismatch for message {i}\nexpected generation_prompt_ids: {self.generation_prompt_ids}\nactual_ids: {ids[: len(self.generation_prompt_ids)]}\nexpected generation_prompt: {self.tokenizer.decode(self.generation_prompt_ids, skip_special_tokens=False)}\nactual prompt: {self.tokenizer.decode(ids[: len(self.generation_prompt_ids)], skip_special_tokens=False)}")
+
                 num_non_gen_prompt = len(ids) - len(self.generation_prompt_ids)
 
                 if mask_last_assistant_only and i != last_assistant_idx:
