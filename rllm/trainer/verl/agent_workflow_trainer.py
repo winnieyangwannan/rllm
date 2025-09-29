@@ -260,6 +260,7 @@ class AgentWorkflowPPOTrainer(RayPPOTrainer):
                         # then we just pad the batch size to a multiple of world size
                         batch = self._pad_dataproto_to_world_size(batch=batch)
 
+                    # recompute old_log_probs
                     with marked_timer("old_log_prob", timing_raw, color="blue"):
                         old_log_prob = self.actor_rollout_wg.compute_log_prob(batch)
                         entropys = old_log_prob.batch["entropys"]
@@ -270,6 +271,30 @@ class AgentWorkflowPPOTrainer(RayPPOTrainer):
                         metrics.update(old_log_prob_metrics)
                         old_log_prob.batch.pop("entropys")
                         batch = batch.union(old_log_prob)
+
+                        if "rollout_log_probs" in batch.batch.keys():
+                            # TODO: we may want to add diff of probs too.
+                            rollout_old_log_probs = batch.batch["rollout_log_probs"]
+                            actor_old_log_probs = batch.batch["old_log_probs"]
+                            attention_mask = batch.batch["attention_mask"]
+                            responses = batch.batch["responses"]
+                            response_length = responses.size(1)
+                            response_mask = attention_mask[:, -response_length:]
+
+                            rollout_probs = torch.exp(rollout_old_log_probs)
+                            actor_probs = torch.exp(actor_old_log_probs)
+                            rollout_probs_diff = torch.abs(rollout_probs - actor_probs)
+                            rollout_probs_diff = torch.masked_select(rollout_probs_diff, response_mask.bool())
+                            rollout_probs_diff_max = torch.max(rollout_probs_diff)
+                            rollout_probs_diff_mean = torch.mean(rollout_probs_diff)
+                            rollout_probs_diff_std = torch.std(rollout_probs_diff)
+                            metrics.update(
+                                {
+                                    "training/rollout_probs_diff_max": rollout_probs_diff_max.detach().item(),
+                                    "training/rollout_probs_diff_mean": rollout_probs_diff_mean.detach().item(),
+                                    "training/rollout_probs_diff_std": rollout_probs_diff_std.detach().item(),
+                                }
+                            )
 
                     if self.use_reference_policy:
                         # compute reference log_prob

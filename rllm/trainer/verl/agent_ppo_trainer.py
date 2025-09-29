@@ -16,6 +16,7 @@ from omegaconf import OmegaConf
 from rllm.engine.agent_execution_engine import AsyncAgentExecutionEngine
 from verl import DataProto
 from verl.protocol import pad_dataproto_to_divisor
+from verl.trainer.ppo.core_algos import agg_loss
 from verl.trainer.ppo.ray_trainer import (
     RayPPOTrainer,
     RayWorkerGroup,
@@ -303,6 +304,42 @@ class AgentPPOTrainer(RayPPOTrainer):
                         with marked_timer("old_log_prob", timing_raw):
                             old_log_prob = self.actor_rollout_wg.compute_log_prob(batch)
                             batch = batch.union(old_log_prob)
+
+                        # recompute old_log_probs
+                        with marked_timer("old_log_prob", timing_raw, color="blue"):
+                            old_log_prob = self.actor_rollout_wg.compute_log_prob(batch)
+                            entropys = old_log_prob.batch["entropys"]
+                            response_masks = batch.batch["response_mask"]
+                            loss_agg_mode = self.config.actor_rollout_ref.actor.loss_agg_mode
+                            entropy_agg = agg_loss(loss_mat=entropys, loss_mask=response_masks, loss_agg_mode=loss_agg_mode)
+                            old_log_prob_metrics = {"actor/entropy": entropy_agg.detach().item()}
+                            metrics.update(old_log_prob_metrics)
+                            old_log_prob.batch.pop("entropys")
+                            batch = batch.union(old_log_prob)
+
+                            if "rollout_log_probs" in batch.batch.keys():
+                                # TODO: we may want to add diff of probs too.
+                                rollout_old_log_probs = batch.batch["rollout_log_probs"]
+                                actor_old_log_probs = batch.batch["old_log_probs"]
+                                attention_mask = batch.batch["attention_mask"]
+                                responses = batch.batch["responses"]
+                                response_length = responses.size(1)
+                                response_mask = attention_mask[:, -response_length:]
+
+                                rollout_probs = torch.exp(rollout_old_log_probs)
+                                actor_probs = torch.exp(actor_old_log_probs)
+                                rollout_probs_diff = torch.abs(rollout_probs - actor_probs)
+                                rollout_probs_diff = torch.masked_select(rollout_probs_diff, response_mask.bool())
+                                rollout_probs_diff_max = torch.max(rollout_probs_diff)
+                                rollout_probs_diff_mean = torch.mean(rollout_probs_diff)
+                                rollout_probs_diff_std = torch.std(rollout_probs_diff)
+                                metrics.update(
+                                    {
+                                        "training/rollout_probs_diff_max": rollout_probs_diff_max.detach().item(),
+                                        "training/rollout_probs_diff_mean": rollout_probs_diff_mean.detach().item(),
+                                        "training/rollout_probs_diff_std": rollout_probs_diff_std.detach().item(),
+                                    }
+                                )
 
                         if self.use_reference_policy:
                             # compute reference log_prob
