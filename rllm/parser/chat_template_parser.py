@@ -4,7 +4,7 @@ from datetime import datetime
 import requests
 import torch
 
-from .utils import PARSER_TEST_MESSAGES
+from .utils import PARSER_TEST_MESSAGES, fix_pad_token
 
 logger = logging.getLogger(__name__)
 
@@ -12,7 +12,11 @@ logger = logging.getLogger(__name__)
 class ChatTemplateParser:
     def __init__(self, tokenizer):
         self.tokenizer = tokenizer
+        self.assistant_token = ""
         self.generation_prompt_ids = self._get_generation_prompt_ids(tokenizer)
+
+        # Fix pad_token if it's the same as eos_token
+        fix_pad_token(self.tokenizer)
 
     def _get_generation_prompt_ids(self, tokenizer):
         """Return the generation prompt tokens (ids, tokens, decoded string)."""
@@ -152,6 +156,7 @@ class ChatTemplateParser:
 class DeepseekQwenChatTemplateParser(ChatTemplateParser):
     def __init__(self, tokenizer):
         super().__init__(tokenizer)
+
         self.bos_token = tokenizer.bos_token
         self.eos_token = tokenizer.eos_token
         self.system_token = ""
