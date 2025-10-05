@@ -3,6 +3,7 @@ from typing import Any
 
 from rllm.agents.agent import Action, BaseAgent, Step, Trajectory
 
+
 class MathAgent(BaseAgent):
     """
     A math agent that solves mathematical problems step by step, following the BaseAgent interface.
@@ -18,7 +19,7 @@ class MathAgent(BaseAgent):
 
     def update_from_env(self, observation: Any, reward: float, done: bool, info: dict, **kwargs):
         """Process environment feedback and update internal state."""
-        
+
         # Reward update for existing step (None OR empty dict)
         if observation is None or (isinstance(observation, dict) and observation == {}):
             if self.trajectory.steps:
