@@ -57,13 +57,12 @@ class AgentTrainer:
     def train(self):
         # Check if Ray is not initialized
         if not ray.is_initialized():
-            # # read off all the `ray_init` settings from the config
-            # if self.config is not None and hasattr(self.config, "ray_init"):
-            #     ray_init_settings = {k: v for k, v in self.config.ray_init.items() if v is not None}
-            # else:
-            #     ray_init_settings = {}
-            # ray.init(runtime_env=get_ppo_ray_runtime_env(), **ray_init_settings)
-            ray.init(runtime_env=get_ppo_ray_runtime_env())
+            # read off all the `ray_init` settings from the config
+            if self.config is not None and hasattr(self.config, "ray_init"):
+                ray_init_settings = {k: v for k, v in self.config.ray_init.items() if v is not None}
+            else:
+                ray_init_settings = {}
+            ray.init(runtime_env=get_ppo_ray_runtime_env(), **ray_init_settings)
 
         runner = TaskRunner.remote()
 
