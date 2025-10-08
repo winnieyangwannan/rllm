@@ -520,6 +520,11 @@ class AgentExecutionEngine:
         ordered_trajectories = [all_trajectories[i] for i in range(len(all_trajectories))]
         return ordered_trajectories
 
+    def shutdown(self):
+        if hasattr(self, "executor") and self.executor is not None:
+            self.executor.shutdown()
+            self.executor = None
+
 
 class AsyncAgentExecutionEngine(AgentExecutionEngine):
     def __init__(self, *args, **kwargs):
