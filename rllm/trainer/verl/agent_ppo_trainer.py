@@ -1002,3 +1002,8 @@ class AgentPPOTrainer(RayPPOTrainer):
             batch.non_tensor_batch["is_pad_step"][idx] = True
 
         return batch
+
+    def shutdown(self):
+        if hasattr(self, "agent_execution_engine") and self.agent_execution_engine is not None:
+            self.agent_execution_engine.shutdown()
+            self.agent_execution_engine = None

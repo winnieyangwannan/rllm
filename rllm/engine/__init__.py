@@ -4,7 +4,6 @@ This module contains the core execution infrastructure for agent trajectory roll
 """
 
 from .agent_execution_engine import AgentExecutionEngine, AsyncAgentExecutionEngine
-from .agent_workflow_engine import AgentWorkflowEngine
 from .rollout.openai_engine import OpenAIEngine
 from .rollout.rollout_engine import RolloutEngine
 
@@ -23,3 +22,11 @@ try:
     __all__.append("VerlEngine")
 except Exception:
     VerlEngine = None
+
+
+def __getattr__(name):
+    if name == "AgentWorkflowEngine":
+        from .agent_workflow_engine import AgentWorkflowEngine as _AgentWorkflowEngine
+
+        return _AgentWorkflowEngine
+    raise AttributeError(name)
