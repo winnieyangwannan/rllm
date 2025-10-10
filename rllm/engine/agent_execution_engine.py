@@ -102,6 +102,8 @@ class AgentExecutionEngine:
                 **rollout_engine_args,
                 api_retries=api_retries,
                 tokenizer=self.tokenizer,
+                max_prompt_length=self.max_prompt_length,
+                max_response_length=self.max_response_length,
                 disable_thinking=kwargs.get("disable_thinking", False),
             )
         elif self.engine_name == "verl":
@@ -140,12 +142,12 @@ class AgentExecutionEngine:
         sampling_params.update(kwargs)
 
         if self.engine_name == "openai":
-            output = await self.rollout_engine.get_model_response(prompt, application_id=application_id, **sampling_params)
+            output = await self.rollout_engine.get_model_response(prompt, application_id=application_id, enforce_max_prompt_length=False, **sampling_params)
             return output.text
         elif self.engine_name == "verl":
             meta_data = sampling_params.pop("meta_info", {})
             validate = meta_data.get("validate", False)
-            output = await self.rollout_engine.get_model_response(prompt, application_id=application_id, validate=validate, **sampling_params)
+            output = await self.rollout_engine.get_model_response(prompt, application_id=application_id, validate=validate, enforce_max_prompt_length=False, **sampling_params)
             return output.text
         else:
             raise NotImplementedError(f"Engine type '{self.engine_name}' not supported")
