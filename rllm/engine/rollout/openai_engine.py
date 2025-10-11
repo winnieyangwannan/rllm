@@ -34,6 +34,22 @@ class OpenAIEngine(RolloutEngine):
         self.client = openai.AsyncOpenAI(base_url=base_url, api_key=api_key)
         logging.getLogger("httpx").setLevel(logging.WARNING)
 
+    def _prepare_max_tokens_param(self, sampling_params: dict, prompt_length: int = None) -> dict:
+        """Prepare max tokens parameter for API call (supports O3's max_completion_tokens)."""
+        if "max_completion_tokens" in sampling_params:
+            return {"max_completion_tokens": sampling_params.pop("max_completion_tokens")}
+
+        max_tokens = sampling_params.pop("max_tokens", sampling_params.pop("max_new_tokens", self.max_response_length))
+
+        # Adjust for prompt length if provided (completion method needs this)
+        if prompt_length and self.max_model_length:
+            remaining = self.max_model_length - prompt_length
+            if remaining <= max_tokens:
+                max_tokens = remaining
+                print(f"Warning: Decreasing max_tokens to {max_tokens} to stay within max_model_length")
+
+        return {"max_tokens": max_tokens}
+
     async def chat_completion(self, messages: list[dict], **kwargs) -> ModelOutput:
         kwargs.pop("application_id", None)
         kwargs.pop("validate", None)
@@ -43,19 +59,22 @@ class OpenAIEngine(RolloutEngine):
         sampling_params = self.sampling_params.copy()
         sampling_params.update(kwargs)
 
-        max_tokens = sampling_params.pop("max_tokens", sampling_params.pop("max_new_tokens", self.max_response_length))
+        create_params = self._prepare_max_tokens_param(sampling_params)
 
         retries = self.api_retries
         while retries > 0:
             try:
-                response = await self.client.chat.completions.create(model=self.model, messages=messages, timeout=3600, max_tokens=max_tokens, **sampling_params)
+                response = await self.client.chat.completions.create(model=self.model, messages=messages, timeout=3600, **create_params, **sampling_params)
 
                 content = response.choices[0].message.content
                 reasoning = response.choices[0].message.reasoning if hasattr(response.choices[0].message, "reasoning") and isinstance(response.choices[0].message.reasoning, str) else ""
                 tool_calls = response.choices[0].message.tool_calls if hasattr(response.choices[0].message, "tool_calls") and isinstance(response.choices[0].message.tool_calls, list) else []
 
+                # Build text with reasoning if available, otherwise use content
                 if reasoning:
-                    text = f"{THOUGHT_DELIMITER_START}\n{reasoning}\n{THOUGHT_DELIMITER_END}\n\n{content}"  # best guess
+                    text = f"{THOUGHT_DELIMITER_START}\n{reasoning}\n{THOUGHT_DELIMITER_END}\n\n{content}"
+                else:
+                    text = content
 
                 prompt_length = response.usage.prompt_tokens
                 completion_length = response.usage.completion_tokens
@@ -102,16 +121,12 @@ class OpenAIEngine(RolloutEngine):
         if enforce_max_prompt_length and (prompt_length > self.max_prompt_length or prompt_length > self.max_model_length):
             raise TerminationEvent(TerminationReason.MAX_PROMPT_LENGTH_EXCEEDED)
 
-        max_tokens = sampling_params.pop("max_tokens", sampling_params.pop("max_new_tokens", self.max_response_length))
-        remaining_tokens = self.max_model_length - prompt_length
-        if remaining_tokens <= max_tokens:
-            max_tokens = remaining_tokens
-            print(f"Warning: Decreasing max_tokens to {max_tokens} to stay within max_model_length")
+        create_params = self._prepare_max_tokens_param(sampling_params, prompt_length)
 
         retries = self.api_retries
         while retries > 0:
             try:
-                response = await self.client.completions.create(model=self.model, prompt=prompt, timeout=3600, max_tokens=max_tokens, **sampling_params)
+                response = await self.client.completions.create(model=self.model, prompt=prompt, timeout=3600, **create_params, **sampling_params)
 
                 text = response.choices[0].text
                 completion_ids = self.tokenizer.encode(text, add_special_tokens=False)
