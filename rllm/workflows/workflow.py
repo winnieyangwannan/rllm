@@ -5,12 +5,11 @@ from concurrent.futures import ThreadPoolExecutor
 from copy import deepcopy
 from enum import Enum
 from functools import partial
-from typing import Any
 
 import numpy as np
 
 from rllm.agents.agent import BaseAgent, Episode, Trajectory
-from rllm.engine.rollout.rollout_engine import ModelOutput, RolloutEngine
+from rllm.engine.rollout.rollout_engine import RolloutEngine
 from rllm.environments.base.base_env import BaseEnv
 
 
@@ -21,6 +20,7 @@ class TerminationReason(Enum):
     MAX_TURNS_EXCEEDED = "max_turns_exceeded"
     TIMEOUT = "timeout"
     UNKNOWN = "unknown"
+    ERROR = "error"
 
 
 class TerminationEvent(Exception):
@@ -30,19 +30,14 @@ class TerminationEvent(Exception):
 
 
 class Workflow(ABC):
-    def __init__(self, rollout_engine: RolloutEngine, executor: ThreadPoolExecutor, max_prompt_length=4096, max_response_length=4096, accumulate_response_length=False, timeout=1e6, gamma=0.0, reward_bonus_coeff=0.0, **kwargs):
+    def __init__(self, rollout_engine: RolloutEngine, executor: ThreadPoolExecutor, timeout=1e6, gamma=0.0, reward_bonus_coeff=0.0, **kwargs):
         self.rollout_engine = rollout_engine
         self.executor = executor
-        self.max_prompt_length = max_prompt_length
-        self.max_response_length = max_response_length
-        self.accumulate_response_length = accumulate_response_length
         self.timeout = int(timeout)
         self.gamma = gamma
         self.reward_bonus_coeff = reward_bonus_coeff
 
-        self._agent_registry: dict[BaseAgent, dict[str, Any]] = {}
         self._completed_trajectories: list[tuple[str, Trajectory]] = []
-        self._termination_buffer: TerminationReason | None = None
 
     @abstractmethod
     async def run(self, task: dict, uid: str, **kwargs) -> Episode | None:
@@ -61,23 +56,21 @@ class Workflow(ABC):
             return self.postprocess_episode(self.collect_trajectories(), TerminationReason.TIMEOUT)
         except TerminationEvent as e:
             return self.postprocess_episode(self.collect_trajectories(), e.reason)
+        except Exception as e:
+            import traceback
 
-    def register_agent(self, agent: BaseAgent, rollout_engine: RolloutEngine | None = None) -> BaseAgent:
-        """Register an agent and its rollout engine"""
-        self._agent_registry[agent] = {
-            "rollout_engine": rollout_engine or self.rollout_engine,
-            "accumulated_response_length": 0,
-        }
-        return agent
+            error_details = {"error_message": str(e), "error_type": type(e).__name__, "traceback": traceback.format_exc()}
+            return self.postprocess_episode(self.collect_trajectories(), TerminationReason.ERROR, error=error_details)
 
-    def commit(self, name: str, agent: BaseAgent, reset: bool = False) -> None:
-        traj = agent.trajectory
+    def commit(self, name: str = "agent", agent: BaseAgent | None = None, trajectory: Trajectory | None = None, reset: bool = False) -> None:
+        assert agent is not None or trajectory is not None, "Either agent or trajectory must be provided to workflow.commit"
+        assert agent is None or trajectory is None, "Only one of agent or trajectory can be provided to workflow.commit"
+
+        traj = agent.trajectory if agent is not None else trajectory
         if traj.steps:
-            self._completed_trajectories.append((name, traj))
-        if reset:
-            if agent not in self._agent_registry:
-                self._agent_registry[agent] = {}
-            self._agent_registry[agent]["accumulated_response_length"] = 0
+            self._completed_trajectories.append((name, deepcopy(traj)))
+
+        if agent is not None and reset:
             agent.reset()
 
     def collect_trajectories(self) -> Episode:
@@ -89,22 +82,16 @@ class Workflow(ABC):
         episode.trajectories.extend(self._completed_trajectories)
 
         # Track which trajectory objects we already have in completed trajectories
+        # TODO: assign a unique id to each trajectory on initialization, use id for comparison
         completed_trajectory_objects = [trajectory for _, trajectory in self._completed_trajectories]
 
         # Add trajectories from agents that aren't already in completed trajectories
         for attr_name in dir(self):
-            # Skip private attributes and methods
             if attr_name.startswith("_"):
                 continue
-
             attr_value = getattr(self, attr_name)
-
-            # Check if attribute is a BaseAgent instance and trajectory not already in completed trajectories
             if isinstance(attr_value, BaseAgent) and hasattr(attr_value, "trajectory") and attr_value.trajectory not in completed_trajectory_objects and len(attr_value.trajectory.steps) > 0:
-                episode.trajectories.append((attr_name, attr_value.trajectory))
-
-        # Deep copy all trajectories to prevent modifications to the original objects
-        episode.trajectories = [(name, deepcopy(trajectory)) for name, trajectory in episode.trajectories]
+                episode.trajectories.append((attr_name, deepcopy(attr_value.trajectory)))
 
         return episode
 
@@ -154,7 +141,6 @@ class Workflow(ABC):
 
     def postprocess_episode(self, episode: Episode, termination_reason: TerminationReason = None, error: dict = None) -> Episode:
         """Collect and process the trajectories"""
-        assert episode is not None, "Remember to call collect_trajectories() before postprocessing the episode"
 
         # 1. assign a task id and task
         episode.id = self.uid
@@ -180,41 +166,41 @@ class Workflow(ABC):
         # by default, we report the acc of each agent using the traj reward
         self.collect_metrics(episode)
 
-        # 6. assign a termination reason
+        # 6. store error details if provided
+        if error is not None:
+            episode.info["error"] = error
+
+        # 7. assign a termination reason
         episode.termination_reason = termination_reason or TerminationReason.UNKNOWN
 
         return episode
 
-    def reset(self, task: dict | None = None, uid: str | None = None) -> tuple[Any, dict] | None:
-        """Reset all agents and environments for reuse"""
-
+    def reset(self, task: dict | None = None, uid: str | None = None) -> None:
         # set the uid and task
         self.uid = uid
         self.task = task
         self._completed_trajectories = []
-        self._termination_buffer = None
 
-        # reset the agents in the registry
-        for agent in self._agent_registry:
-            agent.reset()
-            agent.trajectory.task = task
-            self._agent_registry[agent]["accumulated_response_length"] = 0  # reset response length counter
+        # reset agents (look for class attributes that are BaseAgent subclasses)
+        for attr_name in dir(self):
+            if attr_name.startswith("_"):
+                continue
+            attr_value = getattr(self, attr_name)
+            if isinstance(attr_value, BaseAgent) and hasattr(attr_value, "reset"):
+                attr_value.reset()
+                attr_value.trajectory.task = task
 
-        # reset environments (look for class attributes that are BaseEnv subclasses
+        # reset environments (look for class attributes that are BaseEnv subclasses)
         for attr_name in dir(self):
             if attr_name.startswith("_"):
                 continue
             attr_value = getattr(self, attr_name)
             if isinstance(attr_value, BaseEnv) and hasattr(attr_value, "reset"):
-                return attr_value.reset(task=task)
-
-        print(f"No environments found to resetin {self.__class__.__name__}")
+                attr_value.reset(task=task)
 
     def is_multithread_safe(self) -> bool:
         """Check if the workflow is multithread safe"""
         for attr_name in dir(self):
-            if attr_name.startswith("_"):
-                continue
             attr_value = getattr(self, attr_name)
             if isinstance(attr_value, BaseEnv) and not attr_value.is_multithread_safe():
                 return False
@@ -223,60 +209,3 @@ class Workflow(ABC):
     async def run_in_executor(self, fn, *args, **kwargs):
         loop = asyncio.get_event_loop()
         return await loop.run_in_executor(self.executor, partial(fn, *args, **kwargs))
-
-    async def get_model_response(self, agent: BaseAgent, messages: list[dict] | None = None, **kwargs) -> str:
-        """Get the model response for the given messages"""
-
-        if agent not in self._agent_registry:
-            rollout_engine = self.rollout_engine
-        else:
-            rollout_engine = self._agent_registry[agent]["rollout_engine"]
-
-        messages = messages or agent.chat_completions
-
-        assert messages[-1]["role"] != "assistant", "Prefilling the assistant message is not supported"
-
-        # We check if the prompt length exceeds the max prompt length, and if so, we do not generate a response
-        if rollout_engine.tokenizer is not None and getattr(rollout_engine, "chat_parser", None) is not None:
-            prompt = rollout_engine.chat_parser.parse(messages, add_generation_prompt=True, is_first_msg=True)
-            prompt_length = len(rollout_engine.tokenizer.encode(prompt))
-            if prompt_length > self.max_prompt_length:
-                print(f"Prompt length {prompt_length} exceeds max prompt length {self.max_prompt_length} for rollout {self.uid}")
-                raise TerminationReason.MAX_PROMPT_LENGTH_EXCEEDED
-
-        # We deal with response length in one of two ways:
-        # 1. If accumulate_response_length==True, then we keep a running counter of the accumulated response length seperately for each agent in the workflow
-        #    (note: response = observations (except the first) + assistant generations) and generate up to max_tokens=self.max_response_length - self.accumulated_response_length.
-        # 2. If accumulate_response_length=False, then each response is generated with max_tokens=self.max_response_length.
-        if self.accumulate_response_length and rollout_engine.tokenizer is not None and getattr(rollout_engine, "chat_parser", None) is not None:
-            accumulated_response_length = self._agent_registry[agent]["accumulated_response_length"]
-
-            # count the number of tokens in the last observation (i.e., the messages since the last assistant message)
-            last_assistant_idx = next((i for i, m in reversed(list(enumerate(messages))) if m["role"] == "assistant"), None)
-            if last_assistant_idx is not None:  # must be the initial prompt
-                last_observation = messages[last_assistant_idx + 1 :]
-                observation_length = len(rollout_engine.tokenizer.encode(rollout_engine.chat_parser.parse(last_observation, add_generation_prompt=True, is_first_msg=False)))
-                accumulated_response_length += observation_length
-
-            max_tokens = self.max_response_length - accumulated_response_length
-            if max_tokens <= 0:
-                print(f"Rollout {self.uid} reached max response length")
-                raise TerminationReason.MAX_RESPONSE_LENGTH_EXCEEDED
-
-            self._agent_registry[agent]["accumulated_response_length"] = accumulated_response_length
-        else:
-            max_tokens = self.max_response_length
-
-        output: ModelOutput = await rollout_engine.get_model_response(messages, application_id=self.uid, max_tokens=max_tokens, **kwargs)
-
-        if output.finish_reason == "length" or output.completion_tokens >= max_tokens:
-            self._termination_buffer = TerminationReason.MAX_RESPONSE_LENGTH_EXCEEDED
-
-        if self.accumulate_response_length and rollout_engine.tokenizer is not None and getattr(rollout_engine, "chat_parser", None) is not None:
-            accumulated_response_length = self._agent_registry[agent]["accumulated_response_length"]
-            accumulated_response_length += output.completion_tokens
-            if accumulated_response_length >= self.max_response_length:
-                self._termination_buffer = TerminationReason.MAX_RESPONSE_LENGTH_EXCEEDED
-            self._agent_registry[agent]["accumulated_response_length"] = accumulated_response_length
-
-        return output

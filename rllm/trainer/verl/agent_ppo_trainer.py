@@ -81,6 +81,7 @@ class AgentPPOTrainer(RayPPOTrainer):
             enforce_max_prompt_length=self.config.rllm.stepwise_advantage.enable,
             trajectory_timeout=self.config.rllm.agent.trajectory_timeout,
             overlong_filter=self.config.rllm.agent.get("overlong_filter", False),
+            disable_thinking=self.config.rllm.disable_thinking,
             **self.config.rllm.agent.get("engine_args", {}),
         )
 

@@ -11,7 +11,7 @@ RLLM_DIR=$(python3 -c "import rllm; import os; print(os.path.dirname(os.path.dir
 
 MODEL_PATH=deepseek-ai/DeepSeek-R1-Distill-Qwen-1.5B
 
-python3 -m examples.simple_math.train_hendrycks_math \
+python3 -m examples.simple_math.workflow.single_turn_workflow.train_hendrycks_math \
     algorithm.adv_estimator=grpo \
     data.train_batch_size=8 \
     data.val_batch_size=512 \
@@ -53,7 +53,7 @@ python3 -m examples.simple_math.train_hendrycks_math \
     trainer.critic_warmup=0 \
     trainer.logger=['console','wandb'] \
     trainer.project_name='rllm-agent' \
-    trainer.experiment_name='simple-math' \
+    trainer.experiment_name='simple-math-single-turn-workflow' \
     trainer.val_before_train=True \
     trainer.n_gpus_per_node=8 \
     trainer.nnodes=1 \
@@ -62,5 +62,5 @@ python3 -m examples.simple_math.train_hendrycks_math \
     trainer.default_hdfs_dir=null \
     rllm.agent.max_steps=1 \
     rllm.stepwise_advantage.enable=False \
-    rllm.workflow.use_workflow=False \
+    rllm.workflow.use_workflow=True \
     trainer.total_epochs=100

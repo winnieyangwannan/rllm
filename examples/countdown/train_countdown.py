@@ -1,9 +1,9 @@
 import hydra
 
-from examples.solver_judge.solver_judge_flow import SolverJudgeWorkflow
 from rllm.data.dataset import DatasetRegistry
 from rllm.rewards.countdown_reward import countdown_reward_fn
 from rllm.trainer.agent_trainer import AgentTrainer
+from rllm.workflows.simple_workflow import SimpleWorkflow
 
 
 @hydra.main(config_path="pkg://rllm.trainer.config", config_name="agent_ppo_trainer", version_base=None)
@@ -12,9 +12,8 @@ def main(config):
     test_dataset = DatasetRegistry.load_dataset("countdown", "test")
 
     trainer = AgentTrainer(
-        workflow_class=SolverJudgeWorkflow,
+        workflow_class=SimpleWorkflow,
         workflow_args={
-            "n_solutions": 2,
             "reward_function": countdown_reward_fn,
         },
         config=config,
