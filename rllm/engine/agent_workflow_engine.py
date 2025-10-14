@@ -153,11 +153,6 @@ class AgentWorkflowEngine:
         termination_reasons = []
         metrics = []
 
-        import json
-
-        with open("episodes.json", "w") as f:
-            json.dump([episode.to_dict() for episode in episodes], f, indent=4)
-
         for i, episode in enumerate(episodes):
             total_steps = 0
 
