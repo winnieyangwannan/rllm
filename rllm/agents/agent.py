@@ -1,3 +1,4 @@
+import uuid
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
 from typing import Any, Union
@@ -68,6 +69,8 @@ class Action:
 
 @dataclass
 class Trajectory:
+    uid: str = field(default_factory=lambda: str(uuid.uuid4()))  # unique id to deduplicate on
+    name: str = "agent"
     task: Any = None
     steps: list[Step] = field(default_factory=list)
     reward: float = 0.0
@@ -75,6 +78,8 @@ class Trajectory:
 
     def to_dict(self):
         return {
+            "uid": self.uid,
+            "name": self.name,
             "task": self.task,
             "steps": [step.to_dict() for step in self.steps],
             "reward": float(self.reward),
@@ -85,6 +90,8 @@ class Trajectory:
     def from_dict(cls, data: dict) -> "Trajectory":
         """Create Trajectory from dictionary, properly deserializing Step objects."""
         return cls(
+            uid=data.get("uid", str(uuid.uuid4())),
+            name=data["name"],
             task=data["task"],
             steps=[Step.from_dict(step_data) for step_data in data.get("steps", [])],
             reward=data["reward"],
@@ -109,11 +116,11 @@ class Trajectory:
 
 @dataclass
 class Episode:
-    id: str = ""
+    id: str = ""  # rollout id e.g., task_id:rollout_idx
     task: Any = None
     termination_reason: "TerminationReason" = None  # noqa: F821
     is_correct: bool = False
-    trajectories: list[tuple[str, Trajectory]] = field(default_factory=list)  # [(agent_name, Trajectory), ...]
+    trajectories: list[Trajectory] = field(default_factory=list)
     metrics: dict = field(default_factory=dict)
     info: dict = field(default_factory=dict)
 
@@ -123,7 +130,7 @@ class Episode:
             "task": self.task,
             "termination_reason": self.termination_reason.value if self.termination_reason is not None else None,
             "is_correct": bool(self.is_correct),
-            "trajectories": [(agent_name, trajectory.to_dict()) for agent_name, trajectory in self.trajectories],
+            "trajectories": [trajectory.to_dict() for trajectory in self.trajectories],
             "metrics": self.metrics,
             "info": self.info,
         }
@@ -138,7 +145,7 @@ class Episode:
             task=data["task"],
             termination_reason=TerminationReason(data["termination_reason"]) if data.get("termination_reason") is not None else TerminationReason.UNKNOWN,
             is_correct=data["is_correct"],
-            trajectories=[(agent_name, Trajectory.from_dict(trajectory_data)) for agent_name, trajectory_data in data["trajectories"]],
+            trajectories=[Trajectory.from_dict(trajectory_data) for trajectory_data in data["trajectories"]],
             metrics=data.get("metrics", {}),
             info=data.get("info", {}),
         )

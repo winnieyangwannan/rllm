@@ -161,7 +161,7 @@ class AgentWorkflowEngine:
                 repeat_counts.append(0)
                 continue
 
-            if all(len(trajectory.steps) == 0 for name, trajectory in episode.trajectories):
+            if all(len(trajectory.steps) == 0 for trajectory in episode.trajectories):
                 # termination hits before an agent finishes it's first step
                 # (e.g., the initial prompt exceeds max_prompt_length or a timeout occurs)
                 # we delete the episode from the batch by setting repeat_counts to 0
@@ -169,9 +169,8 @@ class AgentWorkflowEngine:
                 repeat_counts.append(0)
                 continue
 
-            for name, trajectory in episode.trajectories:
-                # name: agent identifier, e.g., solver, critic, etc.
-
+            for trajectory in episode.trajectories:
+                name = trajectory.name
                 trajectory_id = f"{task_ids[i]}_{name}"  # unique trajectory identifier e.g., 1234567890_solver
 
                 if len(trajectory.steps) == 0:

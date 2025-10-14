@@ -294,9 +294,9 @@ class MultiTurnReactAgent:
                 response = await self.rollout_engine.get_model_response(**api_params)
 
                 # Track actual token consumption from API
-                if hasattr(response, "prompt_tokens") and hasattr(response, "completion_tokens"):
-                    self.total_prompt_tokens += response.prompt_tokens
-                    self.total_completion_tokens += response.completion_tokens
+                if hasattr(response, "prompt_length") and hasattr(response, "completion_length"):
+                    self.total_prompt_tokens += response.prompt_length
+                    self.total_completion_tokens += response.completion_length
 
                 # Return full ModelOutput (contains both text and tool_calls)
                 return response
@@ -466,14 +466,18 @@ class MultiTurnReactAgent:
 
                 for tool_call in response.tool_calls:
                     try:
-                        # Extract tool info from OpenAI format
-                        tool_id = tool_call.id if hasattr(tool_call, "id") else "unknown"
-                        function = tool_call.function if hasattr(tool_call, "function") else tool_call.get("function", {})
-                        tool_name = function.name if hasattr(function, "name") else function.get("name", "")
-                        arguments_str = function.arguments if hasattr(function, "arguments") else function.get("arguments", "{}")
+                        # Follow strands.py tolerant extraction of function/name/arguments
+                        try:
+                            function = tool_call.get("function", {}) if isinstance(tool_call, dict) else getattr(tool_call, "function", {})
+                        except Exception:
+                            function = tool_call
 
-                        # Parse arguments
-                        tool_args = json.loads(arguments_str) if isinstance(arguments_str, str) else arguments_str
+                        tool_id = tool_call.get("id") if isinstance(tool_call, dict) else getattr(tool_call, "id", "unknown")
+                        tool_name = function.get("name") if isinstance(function, dict) else getattr(function, "name", "")
+                        arguments_raw = function.get("arguments") if isinstance(function, dict) else getattr(function, "arguments", "{}")
+
+                        # Parse arguments if provided as JSON string
+                        tool_args = json.loads(arguments_raw) if isinstance(arguments_raw, str) else arguments_raw
 
                         # Print tool call with arguments (for consistency with ReAct format)
                         def truncate(text, max_len=100):
@@ -495,7 +499,7 @@ class MultiTurnReactAgent:
                                 "type": "function",
                                 "function": {
                                     "name": tool_name,
-                                    "arguments": arguments_str,
+                                    "arguments": arguments_raw,
                                 },
                             }
                         )

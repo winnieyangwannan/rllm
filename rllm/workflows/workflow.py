@@ -37,7 +37,7 @@ class Workflow(ABC):
         self.gamma = gamma
         self.reward_bonus_coeff = reward_bonus_coeff
 
-        self._completed_trajectories: list[tuple[str, Trajectory]] = []
+        self._completed_trajectories: list[Trajectory] = []
 
     @abstractmethod
     async def run(self, task: dict, uid: str, **kwargs) -> Episode | None:
@@ -62,13 +62,15 @@ class Workflow(ABC):
             error_details = {"error_message": str(e), "error_type": type(e).__name__, "traceback": traceback.format_exc()}
             return self.postprocess_episode(self.collect_trajectories(), TerminationReason.ERROR, error=error_details)
 
-    def commit(self, name: str = "agent", agent: BaseAgent | None = None, trajectory: Trajectory | None = None, reset: bool = False) -> None:
+    def commit(self, name: str | None = None, agent: BaseAgent | None = None, trajectory: Trajectory | None = None, reset: bool = False) -> None:
         assert agent is not None or trajectory is not None, "Either agent or trajectory must be provided to workflow.commit"
         assert agent is None or trajectory is None, "Only one of agent or trajectory can be provided to workflow.commit"
 
         traj = agent.trajectory if agent is not None else trajectory
+        if name:
+            traj.name = name
         if traj.steps:
-            self._completed_trajectories.append((name, deepcopy(traj)))
+            self._completed_trajectories.append(deepcopy(traj))
 
         if agent is not None and reset:
             agent.reset()
@@ -81,17 +83,16 @@ class Workflow(ABC):
         # Start with completed trajectories
         episode.trajectories.extend(self._completed_trajectories)
 
-        # Track which trajectory objects we already have in completed trajectories
-        # TODO: assign a unique id to each trajectory on initialization, use id for comparison
-        completed_trajectory_objects = [trajectory for _, trajectory in self._completed_trajectories]
+        # Track completed trajectory uids
+        completed_trajectory_uids = {trajectory.uid for trajectory in self._completed_trajectories}
 
         # Add trajectories from agents that aren't already in completed trajectories
         for attr_name in dir(self):
             if attr_name.startswith("_"):
                 continue
             attr_value = getattr(self, attr_name)
-            if isinstance(attr_value, BaseAgent) and hasattr(attr_value, "trajectory") and attr_value.trajectory not in completed_trajectory_objects and len(attr_value.trajectory.steps) > 0:
-                episode.trajectories.append((attr_name, deepcopy(attr_value.trajectory)))
+            if isinstance(attr_value, BaseAgent) and hasattr(attr_value, "trajectory") and getattr(attr_value.trajectory, "uid", None) not in completed_trajectory_uids and len(attr_value.trajectory.steps) > 0:
+                episode.trajectories.append(deepcopy(attr_value.trajectory))
 
         return episode
 
@@ -129,13 +130,14 @@ class Workflow(ABC):
         Default: True if the sum of the trajectory rewards is strictly positive.
         """
         total_reward = 0
-        for agent_name, trajectory in episode.trajectories:
+        for trajectory in episode.trajectories:
             total_reward += trajectory.reward
         episode.is_correct = total_reward > 0
 
     def collect_metrics(self, episode: Episode) -> None:
         metrics = defaultdict(list)
-        for name, traj in episode.trajectories:
+        for traj in episode.trajectories:
+            name = traj.name
             metrics[name].append(traj.reward)
         episode.metrics = {f"{k}_acc": float(np.mean(v)) for k, v in metrics.items()}
 
@@ -146,7 +148,7 @@ class Workflow(ABC):
         episode.id = self.uid
         episode.task = self.task
 
-        for agent_name, trajectory in episode.trajectories:
+        for trajectory in episode.trajectories:
             # depending on the terminaiton reason, there may be a trajectry with an additional step with empty chat_completions
             # i.e., if it's thrown between agent.update_from_env() and agent.update_from_model()
             if trajectory.steps and not trajectory.steps[-1].chat_completions:
