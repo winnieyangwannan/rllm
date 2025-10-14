@@ -14,22 +14,17 @@ logger = logging.getLogger(__name__)
 class ChatTemplateParser:
     def __init__(self, tokenizer):
         self.tokenizer = tokenizer
-        self.assistant_token = ""
-        self.generation_prompt_ids = self._get_generation_prompt_ids(tokenizer)
+        self.generation_prompt = self._get_generation_prompt(tokenizer)
 
-    def _get_generation_prompt_ids(self, tokenizer):
-        """Return the generation prompt tokens (ids, tokens, decoded string)."""
+    def _get_generation_prompt(self, tokenizer):
         messages = [{"role": "assistant", "content": ""}]
 
-        with_prompt = tokenizer.apply_chat_template(messages, add_generation_prompt=True, return_tensors="pt")
-        without_prompt = tokenizer.apply_chat_template(messages, add_generation_prompt=False, return_tensors="pt")
+        with_prompt = tokenizer.apply_chat_template(messages, add_generation_prompt=True, tokenize=False)
+        without_prompt = tokenizer.apply_chat_template(messages, add_generation_prompt=False, tokenize=False)
 
-        with_ids = with_prompt[0].tolist()
-        without_ids = without_prompt[0].tolist()
+        generation_prompt = with_prompt[len(without_prompt) :]
 
-        generation_prompt_ids = with_ids[len(without_ids) :]
-
-        return generation_prompt_ids
+        return generation_prompt
 
     def parse(self, messages, add_generation_prompt=False, is_first_msg=False, **kwargs) -> str:
         return self.tokenizer.apply_chat_template(messages, tokenize=False, add_generation_prompt=add_generation_prompt)
@@ -106,40 +101,50 @@ class ChatTemplateParser:
         assert parser.verify_equivalence(PARSER_TEST_MESSAGES), "Parser failed equivalence check"
         return parser
 
-    def tokenize_and_mask(self, messages, mask_last_assistant_only=False):
-        prompt_ids = []
+    def tokenize_and_mask(self, messages):
+        try:
+            last_assistant_idx = max(i for i, msg in enumerate(messages) if msg["role"] == "assistant")
+        except ValueError:
+            raise ValueError("No assistant message found in chat_completions") from None
+
+        prompt = self.parse(messages[:last_assistant_idx], is_first_msg=True, add_generation_prompt=True, accumulate_reasoning=False)
+        prompt_ids = self.tokenizer.encode(prompt, add_special_tokens=False)
+
+        response = self.parse([messages[last_assistant_idx]], is_first_msg=False, add_generation_prompt=False, accumulate_reasoning=True)
+        response = response[len(self.generation_prompt) :].rstrip("\n")  # handle qwen trailing newline from eot token
+        response_ids = self.tokenizer.encode(response, add_special_tokens=False)
+        response_mask = [1] * len(response_ids)
+
+        prompt_ids = torch.tensor(prompt_ids, dtype=torch.long)
+        response_ids = torch.tensor(response_ids, dtype=torch.long)
+        response_mask = torch.tensor(response_mask, dtype=torch.long)
+
+        return prompt_ids, response_ids, response_mask
+
+    def tokenize_and_mask_cumulative(self, messages):
         response_ids = []
         response_mask = []
 
         try:
             first_assistant_idx = next(i for i, msg in enumerate(messages) if msg["role"] == "assistant")
-            last_assistant_idx = max(i for i, msg in enumerate(messages) if msg["role"] == "assistant")
         except StopIteration:
             raise ValueError("No assistant message found in chat_completions") from None
 
-        for i in range(first_assistant_idx):
-            parsed_msg = self.parse([messages[i]], is_first_msg=(i == 0), add_generation_prompt=False)
-            ids = self.tokenizer.encode(parsed_msg, add_special_tokens=False)
-            prompt_ids.extend(ids)
+        prompt = self.parse(messages[:first_assistant_idx], is_first_msg=True, add_generation_prompt=True, accumulate_reasoning=False)
+        prompt_ids = self.tokenizer.encode(prompt, add_special_tokens=False)
 
         for i in range(first_assistant_idx, len(messages)):
-            parsed_msg = self.parse([messages[i]], is_first_msg=False, add_generation_prompt=False)
-            ids = self.tokenizer.encode(parsed_msg, add_special_tokens=False)
-            response_ids.extend(ids)
-
-            if messages[i]["role"] == "assistant":
-                # For assistant messages, response_mask should be 1 for all tokens except the generation prompt, which should be 0
-                if ids[: len(self.generation_prompt_ids)] != self.generation_prompt_ids:
-                    logger.warning(f"Generation prompt mismatch for message {i}\nexpected generation_prompt_ids: {self.generation_prompt_ids}\nactual_ids: {ids[: len(self.generation_prompt_ids)]}\nexpected generation_prompt: {self.tokenizer.decode(self.generation_prompt_ids, skip_special_tokens=False)}\nactual prompt: {self.tokenizer.decode(ids[: len(self.generation_prompt_ids)], skip_special_tokens=False)}")
-
-                num_non_gen_prompt = len(ids) - len(self.generation_prompt_ids)
-
-                if mask_last_assistant_only and i != last_assistant_idx:
-                    response_mask.extend([0] * len(ids))
-                else:
-                    response_mask.extend([0] * len(self.generation_prompt_ids))
-                    response_mask.extend([1] * num_non_gen_prompt)
+            is_asst = messages[i]["role"] == "assistant"
+            if is_asst:
+                response = self.parse([messages[i]], is_first_msg=False, add_generation_prompt=False, accumulate_reasoning=True)
+                response = response[len(self.generation_prompt) :]
+                ids = self.tokenizer.encode(response, add_special_tokens=False)
+                response_ids.extend(ids)
+                response_mask.extend([1] * len(ids))
             else:
+                response = self.parse([messages[i]], is_first_msg=False, add_generation_prompt=True, accumulate_reasoning=False)
+                ids = self.tokenizer.encode(response, add_special_tokens=False)
+                response_ids.extend(ids)
                 response_mask.extend([0] * len(ids))
 
         prompt_ids = torch.tensor(prompt_ids, dtype=torch.long)
@@ -226,9 +231,10 @@ class DeepseekQwenChatTemplateParser(ChatTemplateParser):
         reasoning = (message.get("reasoning", None) or "").strip()
         tool_calls = message.get("tool_calls", None) or []
 
-        if not reasoning and not tool_calls:
+        if not accumulate_reasoning:
             return self.assistant_token + content + self.eos_token
-
+        elif not reasoning:
+            return self.assistant_token + "<think>\n" + content + self.eos_token
         else:
             result = self.assistant_token
 

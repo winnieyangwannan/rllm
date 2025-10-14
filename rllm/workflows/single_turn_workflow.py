@@ -1,47 +1,55 @@
-from rllm.agents.agent import Action, Episode, Step, Trajectory
-from rllm.engine import RolloutEngine
-from rllm.rewards.reward_fn import RewardFunction
-from rllm.workflows.workflow import Workflow
+from typing import Any
+
+from rllm.agents.agent import Episode
+from rllm.engine.rollout.rollout_engine import ModelOutput
+from rllm.trainer.env_agent_mappings import AGENT_CLASS_MAPPING, ENV_CLASS_MAPPING
+from rllm.workflows.workflow import TerminationEvent, TerminationReason, Workflow
 
 
 class SingleTurnWorkflow(Workflow):
-    def __init__(self, rollout_engine: RolloutEngine, reward_function: RewardFunction = None, **kwargs):
-        super().__init__(rollout_engine, **kwargs)
+    def __init__(
+        self,
+        agent_cls,
+        env_cls,
+        agent_args=None,
+        env_args=None,
+        **kwargs,
+    ):
+        super().__init__(**kwargs)
 
-        self.reward_function = reward_function
+        agent_cls = AGENT_CLASS_MAPPING[agent_cls] if isinstance(agent_cls, str) else agent_cls
+        env_cls = ENV_CLASS_MAPPING[env_cls] if isinstance(env_cls, str) else env_cls
 
-    async def run(self, task: dict, uid: str, **kwargs) -> Episode:
-        """Execute the single agent workflow."""
-        # Reset components for new task
-        self.reset(task, uid)
+        # Initialize mutable defaults
+        agent_args = dict(agent_args) if agent_args is not None else {}
+        env_args = dict(env_args) if env_args is not None else {}
 
-        messages = task["messages"]
-        response = await self.rollout_engine.get_model_response(messages)
-        reward_result = self.reward_function(task, response)
+        self.agent = agent_cls(**agent_args)
+        self.env = env_cls(**env_args)
 
-        trajectory = Trajectory()
-        trajectory.steps.append(
-            Step(
-                model_response=response.text,
-                action=Action(response.text),
-                chat_completions=messages + [{"role": "assistant", "content": response.text}],
-                reward=reward_result.reward,
-            )
-        )
+    async def run(self, task: dict, uid: str, **kwargs) -> Episode | None:
+        """Execute a single-step workflow"""
 
-        is_correct = reward_result.is_correct
-        # Create episode with trajectories as list of tuples
-        episode = Episode(
-            id=uid,
-            task=task,
-            is_correct=is_correct,
-            trajectories=[("single_agent", trajectory)],
-            metrics={},
-        )
+        observation, info = await self.run_in_executor(self.reset, task=task, uid=uid)
 
-        return episode
+        self.agent.update_from_env(observation, 0, False, info)
 
-    def reset(self, task: dict, uid: str):
-        self.messages = []
-        self.task = task
-        self.uid = uid
+        output: ModelOutput = await self.rollout_engine.get_model_response(self.agent.chat_completions, application_id=uid, skip_special_tokens=True, **kwargs)
+        response = output.text
+
+        action = self.agent.update_from_model(response)
+
+        _, reward, done, info = await self.run_in_executor(self.env.step, action)
+        self.agent.update_from_env({}, reward, done, info)
+
+        if output.finish_reason == "length":
+            raise TerminationEvent(TerminationReason.MAX_RESPONSE_LENGTH_EXCEEDED)
+
+        if done:
+            raise TerminationEvent(TerminationReason.ENV_DONE)
+
+        raise TerminationEvent(TerminationReason.MAX_TURNS_EXCEEDED)
+
+    def reset(self, task: dict | None = None, uid: str | None = None) -> tuple[Any, dict]:
+        super().reset(task, uid)
+        return self.env.reset(task)

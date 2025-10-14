@@ -6,7 +6,7 @@ export VLLM_USE_V1=1
 export VLLM_ALLOW_LONG_MAX_MODEL_LEN=1
 export VLLM_ENGINE_ITERATION_TIMEOUT_S=100000000000
 export CUDA_VISIBLE_DEVICES=0,1,2,3,4,5,6,7
-python3 -m examples.solver_judge.train_solver_judge_flow \
+python3 -m examples.countdown.train_countdown \
     data.train_batch_size=64 \
     data.max_prompt_length=2048 \
     data.max_response_length=1024 \
@@ -33,7 +33,7 @@ python3 -m examples.solver_judge.train_solver_judge_flow \
     actor_rollout_ref.rollout.enforce_eager=False \
     actor_rollout_ref.rollout.temperature=0.6 \
     actor_rollout_ref.rollout.gpu_memory_utilization=0.8 \
-    actor_rollout_ref.rollout.n=4 \
+    actor_rollout_ref.rollout.n=8 \
     actor_rollout_ref.rollout.val_kwargs.n=1 \
     actor_rollout_ref.rollout.val_kwargs.temperature=0.6 \
     actor_rollout_ref.rollout.val_kwargs.top_p=0.95 \
@@ -46,12 +46,12 @@ python3 -m examples.solver_judge.train_solver_judge_flow \
     rllm.compact_filtering.mask_timeout=True \
     rllm.rejection_sample.enable=False \
     rllm.rejection_sample.multiplier=1.0 \
-    rllm.stepwise_advantage.enable=True \
+    rllm.stepwise_advantage.enable=False \
     rllm.stepwise_advantage.mode=per_step \
     trainer.critic_warmup=0 \
     trainer.logger=['console','wandb'] \
-    trainer.project_name='solver-judge-workflow' \
-    trainer.experiment_name='countdown-solver-judge' \
+    trainer.project_name='rllm-agent' \
+    trainer.experiment_name='countdown' \
     trainer.val_before_train=True \
     trainer.n_gpus_per_node=8 \
     trainer.nnodes=1 \

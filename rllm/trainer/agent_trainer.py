@@ -39,6 +39,17 @@ class AgentTrainer:
             agent_args: Optional arguments to pass to the agent class
             env_args: Optional arguments to pass to the environment class
         """
+
+        if workflow_class is not None and config.rllm.workflow.use_workflow:
+            if agent_class is not None:
+                raise ValueError("agent_class is not supported when using workflow, instead use workflow_args['agent_cls']")
+            if agent_args is not None:
+                raise ValueError("agent_args is not supported when using workflow, instead use workflow_args['agent_args']")
+            if env_class is not None:
+                raise ValueError("env_class is not supported when using workflow, instead use workflow_args['env_cls']")
+            if env_args is not None:
+                raise ValueError("env_args is not supported when using workflow, instead use workflow_args['env_args']")
+
         self.workflow_class = workflow_class
         self.workflow_args = workflow_args or {}
 

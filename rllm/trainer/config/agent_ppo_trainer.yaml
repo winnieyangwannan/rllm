@@ -32,12 +32,13 @@ rllm:
     use_workflow: False
     name: single_turn_workflow
     workflow_args:
-      max_prompt_length: ${data.max_prompt_length}
-      max_response_length: ${data.max_response_length}
+      agent_cls: null
+      agent_args: {}
+      env_cls: null
+      env_args: {}
       timeout: 1e6
       gamma: 0.0 # no discounting
       reward_bonus_coeff: 0.0 # no reward shaping
-      accumulate_response_length: null # defaults to not rllm.stepwise_advantage.enable
     n_parallel_tasks: 256
     retry_limit: 3
   disable_thinking: False
@@ -51,8 +52,11 @@ rllm:
     enable: False
     mask_max_prompt_length_exceeded: True
     mask_max_response_length_exceeded: True
+    mask_env_done: False
     mask_max_turns_exceeded: True
     mask_timeout: True
+    mask_unknown: False
+    mask_error: True
   rejection_sample:
     enable: False
     multiplier: 1

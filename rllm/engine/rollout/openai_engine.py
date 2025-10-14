@@ -164,6 +164,9 @@ class OpenAIEngine(RolloutEngine):
 
     async def get_model_response(self, messages: list[dict], **kwargs) -> ModelOutput:
         if self._use_chat_completions:
+            accumulate_reasoning = kwargs.pop("accumulate_reasoning", self.accumulate_reasoning)
+            if accumulate_reasoning:
+                raise ValueError("Accumulate reasoning is not supported for chat completions endpoint.")
             return await self.chat_completion(messages, **kwargs)
         else:
             tools = kwargs.pop("tools", self.tools)

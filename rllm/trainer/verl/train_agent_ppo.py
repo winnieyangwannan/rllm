@@ -160,7 +160,12 @@ class TaskRunner:
                 workflow_class = WORKFLOW_CLASS_MAPPING[config.rllm.workflow.name]
             workflow_args = workflow_args or {}
             if config.rllm.workflow.get("workflow_args") is not None:
-                workflow_args.update(config.rllm.workflow.get("workflow_args"))
+                for key, value in config.rllm.workflow.get("workflow_args").items():
+                    if value is not None:
+                        if key in workflow_args and isinstance(workflow_args[key], dict):
+                            workflow_args[key].update(value)
+                        else:
+                            workflow_args[key] = value
 
             trainer = AgentWorkflowPPOTrainer(
                 config=config,

@@ -7,13 +7,14 @@ from .agent_execution_engine import AgentExecutionEngine, AsyncAgentExecutionEng
 
 # Avoid importing rollout submodules eagerly to prevent circular imports with workflows
 # Import base class only (no side effects) and lazy-load specific engines via __getattr__
-from .rollout.rollout_engine import RolloutEngine
+from .rollout.rollout_engine import ModelOutput, RolloutEngine
 
 __all__ = [
     "AgentExecutionEngine",
     "AsyncAgentExecutionEngine",
     "AgentWorkflowEngine",
     "RolloutEngine",
+    "ModelOutput",
     "OpenAIEngine",
     "VerlEngine",
 ]

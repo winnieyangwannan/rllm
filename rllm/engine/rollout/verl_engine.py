@@ -16,7 +16,7 @@ class VerlEngine(RolloutEngine):
         self.rollout_manager = rollout_manager
         self.server_manager = AsyncLLMServerManager(config, rollout_manager.async_llm_servers)
         self.tokenizer = tokenizer
-        self.chat_parser = ChatTemplateParser.get_parser(tokenizer, disable_thinking=kwargs.get("disable_thinking", False))
+        self.chat_parser = ChatTemplateParser.get_parser(tokenizer, disable_thinking=config.rllm.disable_thinking)
 
         self.max_prompt_length = config.data.max_prompt_length
         self.max_response_length = config.data.max_response_length
