@@ -9,7 +9,6 @@ from pprint import pprint
 from queue import Queue
 from threading import Thread
 
-import click
 import numpy as np
 import torch
 from omegaconf import OmegaConf
@@ -727,70 +726,91 @@ class AgentPPOTrainer(RayPPOTrainer):
         traj_mask = tensor_batch.batch[mask_key]
         token_level_scores = tensor_batch.batch["token_level_scores"]
 
+        # Full attention mask (covers prompt + response); split it into prompt and response parts
+        full_attn_mask = tensor_batch.batch["attention_mask"]
+        prompt_len = prompts.shape[1]
+        resp_len = responses.shape[1]
+        prompt_attn_mask = full_attn_mask[:, :prompt_len]
+        response_attn_mask = full_attn_mask[:, -resp_len:]
+
         batch_size = prompts.shape[0]
         end_idx = min(sample_idx + max_samples, batch_size)
 
         for i in range(sample_idx, end_idx):
-            colorful_print(f"\n===== Sample {i} =====", fg="cyan", bold=True)
+            colorful_print("\n" + "=" * 60, fg="cyan", bold=True)
+            colorful_print(f"Sample {i}", fg="cyan", bold=True)
+
+            # Legend before the example
+            legend = " ".join(
+                [
+                    "\x1b[37mwhite=masked\x1b[0m",
+                    "\x1b[34mblue=unmasked\x1b[0m",
+                    "\x1b[42m green bg=reward>0 \x1b[0m",
+                    "\x1b[41m red bg=reward<=0 \x1b[0m",
+                ]
+            )
+            print(f"[{legend}]")
 
             # Detokenize prompt
             prompt_tokens = prompts[i]
-            prompt_mask = prompt_tokens != self.tokenizer.pad_token_id
-            valid_prompt_tokens = prompt_tokens[prompt_mask]
-            prompt_text = self.tokenizer.decode(valid_prompt_tokens)
+            prompt_valid_mask = prompt_attn_mask[i].bool()
+            # Build one-line colored prompt (prompt is always masked-from-loss => white)
+            prompt_parts = []
+            for tok_id, is_valid in zip(prompt_tokens.tolist(), prompt_valid_mask.tolist(), strict=False):
+                if not is_valid:
+                    continue
+                tok = self.tokenizer.decode([tok_id]).replace("\n", "\\n").replace("\r", "\\r").replace("\t", "\\t")
+                prompt_parts.append(f"\x1b[37m{tok}\x1b[0m")  # white
+            print("".join(prompt_parts))
 
-            colorful_print("Prompt:", fg="green", bold=True)
-            colorful_print(f"{prompt_text}\n", fg="green")
+            # Separator line between prompt and response for readability
+            print("----------------")
 
-            # Detokenize response with color highlighting for masked tokens
-            response_tokens = responses[i]
-            response_mask = traj_mask[i]
+            # Detokenize response with token-level highlighting
+            resp_tokens = responses[i]
+            resp_valid_mask = response_attn_mask[i].bool()
+            loss_mask = traj_mask[i]
+            rewards = token_level_scores[i]
 
-            # Get non-padding tokens
-            valid_indices = response_tokens != self.tokenizer.pad_token_id
-            valid_response_tokens = response_tokens[valid_indices]
-            valid_response_mask = response_mask[valid_indices]
+            # Pre-compute reward positions (typically only the last valid resp token has nonzero reward)
+            reward_idx = None
+            reward_value = 0.0
+            if rewards is not None:
+                # consider only valid response positions
+                for j, is_valid in enumerate(resp_valid_mask.tolist()):
+                    if not is_valid:
+                        continue
+                    val = float(rewards[j].item()) if hasattr(rewards[j], "item") else float(rewards[j])
+                    if abs(val) > 1e-9:
+                        reward_idx = j
+                        reward_value = val
 
-            # Then show token-by-token with masking
-            colorful_print("Response with masking:", fg="yellow", bold=True)
+            # Fallback: if no nonzero reward found, use the last valid response token
+            if reward_idx is None:
+                valid_indices = [idx for idx, v in enumerate(resp_valid_mask.tolist()) if v]
+                if valid_indices:
+                    reward_idx = valid_indices[-1]
+                    if rewards is not None:
+                        val = float(rewards[reward_idx].item()) if hasattr(rewards[reward_idx], "item") else float(rewards[reward_idx])
+                        reward_value = val
 
-            # Collect all styled text parts first, then print as complete lines
-            current_line_parts = []
+            # Colors: white for masked-from-loss; blue for contributes-to-loss; overlay background red/green if reward token
+            response_parts = []
+            for j, tok_id in enumerate(resp_tokens.tolist()):
+                if not bool(resp_valid_mask[j].item() if hasattr(resp_valid_mask[j], "item") else resp_valid_mask[j]):
+                    continue
+                tok = self.tokenizer.decode([tok_id]).replace("\n", "\\n").replace("\r", "\\r").replace("\t", "\\t")
 
-            for j, (token, mask) in enumerate(zip(valid_response_tokens, valid_response_mask, strict=False)):
-                token_text = self.tokenizer.decode(token)
+                contributes = bool(loss_mask[j].item()) if hasattr(loss_mask[j], "item") else bool(loss_mask[j])
+                fg = "\x1b[34m" if contributes else "\x1b[37m"  # blue if in loss, else white
 
-                # Check if this token has a reward
-                has_reward = token_level_scores[i, j] != 0
+                bg = ""
+                if reward_idx is not None and j == reward_idx:
+                    bg = "\x1b[42m" if reward_value > 0 else "\x1b[41m"  # green background for positive, red for negative/zero
 
-                # Apply different colors based on mask and rewards
-                if mask == 0:
-                    # Masked token (not used in training)
-                    current_line_parts.append(click.style(token_text, fg="red"))
-                elif has_reward:
-                    # Token with reward
-                    current_line_parts.append(click.style(token_text, bg="green"))
+                response_parts.append(f"{bg}{fg}{tok}\x1b[0m")
 
-                    reward_info = f" R:{token_level_scores[i, j].item():.2f}"
-                    current_line_parts.append(click.style(reward_info, fg="magenta"))
-                else:
-                    # Normal token used in training
-                    current_line_parts.append(click.style(token_text, fg="blue"))
-
-                # Check if we hit a newline character in the token
-                if "\n" in token_text:
-                    # Print the current line and start a new one
-                    print("".join(current_line_parts), flush=True)
-                    current_line_parts = []
-
-            # Print any remaining parts
-            if current_line_parts:
-                print("".join(current_line_parts), flush=True)
-
-            # Print reward summary
-            total_reward = token_level_scores[i].sum().item()
-            colorful_print("Rewards:", fg="green", bold=True)
-            print(f" Trajectory Reward={total_reward:.2f}")
+            print("".join(response_parts))
 
     def generate_agent_trajectories_async(self, timing_raw=None, meta_info=None, mode="Token"):
         """
