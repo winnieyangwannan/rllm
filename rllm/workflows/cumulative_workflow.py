@@ -6,7 +6,7 @@ from rllm.trainer.env_agent_mappings import AGENT_CLASS_MAPPING, ENV_CLASS_MAPPI
 from rllm.workflows.workflow import TerminationEvent, TerminationReason, Workflow
 
 
-class MultiTurnWorkflow(Workflow):
+class CumulativeWorkflow(Workflow):
     def __init__(
         self,
         agent_cls,
@@ -29,6 +29,8 @@ class MultiTurnWorkflow(Workflow):
         self.env = env_cls(**env_args)
         self.max_steps = max_steps
 
+        self.prompt_length = 0
+
     async def run(self, task: dict, uid: str, **kwargs) -> Episode | None:
         """Execute a multi-step workflow"""
 
@@ -36,8 +38,16 @@ class MultiTurnWorkflow(Workflow):
 
         self.agent.update_from_env(observation, 0, False, info)
 
-        for _ in range(1, self.max_steps + 1):
-            output: ModelOutput = await self.rollout_engine.get_model_response(self.agent.chat_completions, application_id=uid, **kwargs)
+        for i in range(1, self.max_steps + 1):
+            prompt = self.rollout_engine.chat_parser.parse(self.agent.chat_completions, add_generation_prompt=True, is_first_msg=True, accumulate_reasoning=True)
+            prompt_length = len(self.rollout_engine.tokenizer.encode(prompt, add_special_tokens=False))
+            if i == 1:
+                self.prompt_length = prompt_length
+            max_tokens = self.rollout_engine.max_response_length - (prompt_length - self.prompt_length)
+            if max_tokens <= 0:
+                raise TerminationEvent(TerminationReason.MAX_RESPONSE_LENGTH_EXCEEDED)
+
+            output: ModelOutput = await self.rollout_engine.get_model_response(self.agent.chat_completions, application_id=uid, accumulate_reasoning=True, enforce_max_prompt_length=False, max_tokens=max_tokens, **kwargs)
             response = output.text
 
             action = self.agent.update_from_model(response)
@@ -55,4 +65,5 @@ class MultiTurnWorkflow(Workflow):
 
     def reset(self, task: dict | None = None, uid: str | None = None) -> tuple[Any, dict]:
         super().reset(task, uid)
+        self.prompt_length = 0
         return self.env.reset(task)

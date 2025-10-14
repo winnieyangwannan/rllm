@@ -32,9 +32,9 @@ rllm:
     use_workflow: False
     name: single_turn_workflow
     workflow_args:
-      agent_cls: math_agent
+      agent_cls: null
       agent_args: {}
-      env_cls: single_turn_env
+      env_cls: null
       env_args: {}
       timeout: 1e6
       gamma: 0.0 # no discounting

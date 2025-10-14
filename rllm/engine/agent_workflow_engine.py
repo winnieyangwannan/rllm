@@ -153,6 +153,11 @@ class AgentWorkflowEngine:
         termination_reasons = []
         metrics = []
 
+        import json
+
+        with open("episodes.json", "w") as f:
+            json.dump([episode.to_dict() for episode in episodes], f, indent=4)
+
         for i, episode in enumerate(episodes):
             total_steps = 0
 
@@ -179,10 +184,17 @@ class AgentWorkflowEngine:
                     continue
 
                 if not self.config.rllm.stepwise_advantage.enable:
-                    if len(trajectory.steps) != 1:
-                        raise ValueError("Got len(trajectory.steps) != 1, but config.rllm.stepwise_advantage.enable is False. AgentWorkflowTrainer only support multi-step trajectories if stepwise advantage is enabled.")
+                    if len(trajectory.steps) > 1:
+                        if not trajectory.is_cumulative():
+                            logger.warning(f"Warning: Multi-step trajectory {trajectory_id} is not cumulative, but stepwise mode is not enabled. There could be a token mismatch during trajectory generation.")
 
-                    if isinstance(trajectory.steps[0].model_response, ModelOutput):
+                        chat_completions = trajectory.steps[-1].chat_completions
+                        prompt, response, mask = self.rollout_engine.chat_parser.tokenize_and_mask_cumulative(chat_completions)
+                        prompts.append(prompt)
+                        responses.append(response)
+                        traj_mask.append(mask)
+
+                    elif isinstance(trajectory.steps[0].model_response, ModelOutput):
                         step = trajectory.steps[0]
 
                         prompt_ids = torch.tensor(step.model_response.prompt_ids, dtype=torch.long)
