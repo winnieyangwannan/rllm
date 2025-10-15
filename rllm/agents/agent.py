@@ -1,6 +1,7 @@
+import uuid
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
-from typing import Any, Union
+from typing import Any
 
 
 @dataclass
@@ -10,7 +11,8 @@ class Step:
     observation: Any = None
     thought: str = ""
     action: Any = None
-    model_response: Union[str, "ModelOutput", None] = None  # noqa: F821
+    model_response: str = ""
+    model_output: "ModelOutput" = None  # noqa: F821
     info: dict = field(default_factory=dict)  # Store any additional info.
 
     # field below are filled by the engine
@@ -19,21 +21,13 @@ class Step:
     mc_return: float = 0.0
 
     def to_dict(self) -> dict:
-        from rllm.engine.rollout import ModelOutput
-
-        # Handle model_response which can be string or ModelOutput
-        model_response_dict = None
-        if isinstance(self.model_response, ModelOutput):
-            model_response_dict = self.model_response.to_dict()
-        else:
-            model_response_dict = self.model_response
-
         return {
             "chat_completions": self.chat_completions,
             "observation": self.observation,
             "thought": self.thought,
             "action": self.action,
-            "model_response": model_response_dict,
+            "model_response": self.model_response,
+            "model_output": self.model_output.to_dict() if self.model_output is not None else None,
             "info": self.info,
             "reward": self.reward,
             "done": self.done,
@@ -44,16 +38,13 @@ class Step:
     def from_dict(cls, data: dict) -> "Step":
         from rllm.engine.rollout import ModelOutput
 
-        model_response = data.get("model_response", "")
-        if isinstance(model_response, dict):
-            model_response = ModelOutput.from_dict(model_response)
-
         return cls(
             chat_completions=data["chat_completions"],
             observation=data["observation"],
             thought=data["thought"],
             action=data["action"],
-            model_response=model_response,
+            model_response=data["model_response"],
+            model_output=ModelOutput.from_dict(data["model_output"]) if data.get("model_output", None) is not None else None,
             info=data.get("info", {}),
             reward=data["reward"],
             done=data["done"],
@@ -68,6 +59,8 @@ class Action:
 
 @dataclass
 class Trajectory:
+    uid: str = field(default_factory=lambda: str(uuid.uuid4()))  # unique id to deduplicate on
+    name: str = "agent"
     task: Any = None
     steps: list[Step] = field(default_factory=list)
     reward: float = 0.0
@@ -75,6 +68,8 @@ class Trajectory:
 
     def to_dict(self):
         return {
+            "uid": self.uid,
+            "name": self.name,
             "task": self.task,
             "steps": [step.to_dict() for step in self.steps],
             "reward": float(self.reward),
@@ -85,6 +80,8 @@ class Trajectory:
     def from_dict(cls, data: dict) -> "Trajectory":
         """Create Trajectory from dictionary, properly deserializing Step objects."""
         return cls(
+            uid=data.get("uid", str(uuid.uuid4())),
+            name=data["name"],
             task=data["task"],
             steps=[Step.from_dict(step_data) for step_data in data.get("steps", [])],
             reward=data["reward"],
@@ -109,11 +106,11 @@ class Trajectory:
 
 @dataclass
 class Episode:
-    id: str = ""
+    id: str = ""  # rollout id e.g., task_id:rollout_idx
     task: Any = None
     termination_reason: "TerminationReason" = None  # noqa: F821
     is_correct: bool = False
-    trajectories: list[tuple[str, Trajectory]] = field(default_factory=list)  # [(agent_name, Trajectory), ...]
+    trajectories: list[Trajectory] = field(default_factory=list)
     metrics: dict = field(default_factory=dict)
     info: dict = field(default_factory=dict)
 
@@ -123,7 +120,7 @@ class Episode:
             "task": self.task,
             "termination_reason": self.termination_reason.value if self.termination_reason is not None else None,
             "is_correct": bool(self.is_correct),
-            "trajectories": [(agent_name, trajectory.to_dict()) for agent_name, trajectory in self.trajectories],
+            "trajectories": [trajectory.to_dict() for trajectory in self.trajectories],
             "metrics": self.metrics,
             "info": self.info,
         }
@@ -138,7 +135,7 @@ class Episode:
             task=data["task"],
             termination_reason=TerminationReason(data["termination_reason"]) if data.get("termination_reason") is not None else TerminationReason.UNKNOWN,
             is_correct=data["is_correct"],
-            trajectories=[(agent_name, Trajectory.from_dict(trajectory_data)) for agent_name, trajectory_data in data["trajectories"]],
+            trajectories=[Trajectory.from_dict(trajectory_data) for trajectory_data in data["trajectories"]],
             metrics=data.get("metrics", {}),
             info=data.get("info", {}),
         )

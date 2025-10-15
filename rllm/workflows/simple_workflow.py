@@ -55,11 +55,11 @@ class SimpleWorkflow(Workflow):
                 thought=output.reasoning,
                 action=action,
                 reward=reward_result.reward,
-                model_response=output,
+                model_output=output,
             )
         )
 
-        self.commit("agent", self.agent, reset=True)
+        self.commit(agent=self.agent, reset=True)
 
         if output.finish_reason == "length":
             raise TerminationEvent(TerminationReason.MAX_RESPONSE_LENGTH_EXCEEDED)

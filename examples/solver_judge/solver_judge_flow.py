@@ -39,18 +39,18 @@ class SolverJudgeWorkflow(Workflow):
             reward = self.reward_function(task, solution).reward
             rewards.append(reward)
 
-            traj = Trajectory()
+            traj = Trajectory(name="solver")
             traj.steps.append(
                 Step(
                     chat_completions=[{"role": "user", "content": f"{problem}. Output the final answer within <answer>...</answer>"}] + [{"role": "assistant", "content": output.content, "reasoning": output.reasoning}],
                     thought=output.reasoning,
                     action=solution,
                     reward=reward,
-                    model_response=output,
+                    model_output=output,
                 )
             )
 
-            self.commit(name="solver", trajectory=traj)
+            self.commit(trajectory=traj)
 
         # 2. select the best candidate solution
         judge_msgs = [{"role": "user", "content": self._create_judge_prompt(problem, solutions)}]
@@ -65,18 +65,18 @@ class SolverJudgeWorkflow(Workflow):
         else:
             reward = rewards[solution_index - 1]
 
-        traj = Trajectory()
+        traj = Trajectory(name="judge")
         traj.steps.append(
             Step(
                 chat_completions=judge_msgs + [{"role": "assistant", "content": output.content, "reasoning": output.reasoning}],
                 thought=output.reasoning,
                 action=solution_index,
                 reward=reward,
-                model_response=output,
+                model_output=output,
             )
         )
 
-        self.commit(name="judge", trajectory=traj)
+        self.commit(trajectory=traj)
 
         raise TerminationEvent(TerminationReason.ENV_DONE)
 
@@ -120,10 +120,10 @@ Output the index of your selected solution within <answer>...</answer> tags, e.g
             return -1
 
     def assign_episode_correctness(self, episode: Episode) -> None:
-        solver_rewards = [traj.steps[0].reward for name, traj in episode.trajectories if name == "solver"]
+        solver_rewards = [traj.steps[0].reward for traj in episode.trajectories if traj.name == "solver"]
 
         try:
-            judge_trajectory = next(traj for name, traj in episode.trajectories if name == "judge")
+            judge_trajectory = next(traj for traj in episode.trajectories if traj.name == "judge")
             judge_reward = judge_trajectory.steps[0].reward
         except StopIteration:
             raise ValueError("No judge trajectory found in episode") from None

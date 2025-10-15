@@ -22,7 +22,19 @@ logger = logging.getLogger(__name__)
 
 
 class AgentWorkflowEngine:
-    def __init__(self, workflow_cls: type[Workflow], workflow_args: dict, rollout_engine: RolloutEngine, config=None, n_parallel_tasks=128, retry_limit=3, raise_on_error: bool = True, **kwargs):
+    def __init__(self, workflow_cls: type[Workflow], workflow_args: dict, rollout_engine: RolloutEngine, config=None, n_parallel_tasks: int = 128, retry_limit: int = 3, raise_on_error: bool = True, **kwargs):
+        """Initialize the AgentWorkflowEngine.
+
+        Args:
+            workflow_cls: The workflow class to instantiate for each task.
+            workflow_args: Arguments to pass to workflow instances.
+            rollout_engine: Engine for model inference and rollout.
+            config: Optional configuration object for training.
+            n_parallel_tasks: Number of parallel workflow instances to maintain.
+            retry_limit: Maximum number of retry attempts for failed tasks.
+            raise_on_error: Whether to raise exceptions on permanent failures.
+            **kwargs: Additional keyword arguments.
+        """
         self.workflow_cls = workflow_cls
         self.workflow_args = workflow_args or {}
 
@@ -38,7 +50,12 @@ class AgentWorkflowEngine:
         self.workflow_queue = None
 
     async def initialize_pool(self):
-        """A coroutine to create and populate the workflow queue."""
+        """Initialize the workflow pool with parallel workflow instances.
+
+        Creates and populates the workflow queue with workflow instances
+        for parallel task processing. This method is idempotent and will
+        not recreate the pool if it already exists.
+        """
         if self.workflow_queue is not None:
             return
         self.workflow_queue = asyncio.Queue(maxsize=self.n_parallel_tasks)
@@ -48,7 +65,20 @@ class AgentWorkflowEngine:
             self.workflow_queue.put_nowait(workflow)
 
     async def process_task_with_retry(self, task: dict, task_id: str, rollout_idx: int, **kwargs) -> tuple[str, int, Episode]:
-        """Process a single task rollout with retry logic based on termination reasons"""
+        """Process a single task rollout with retry logic based on termination reasons.
+
+        Args:
+            task: Task dictionary containing the task specification.
+            task_id: Unique identifier for the task.
+            rollout_idx: Index of this rollout attempt for the task.
+            **kwargs: Additional arguments passed to the workflow.
+
+        Returns:
+            tuple[str, int, Episode]: Task ID, rollout index, and completed episode.
+
+        Raises:
+            Exception: If task fails permanently after retry_limit attempts and raise_on_error is True.
+        """
         workflow = await self.workflow_queue.get()
         try:
             for retry_attempt in range(1, self.retry_limit + 1):
@@ -78,14 +108,16 @@ class AgentWorkflowEngine:
         finally:
             await self.workflow_queue.put(workflow)
 
-    async def execute_tasks(self, tasks: list[dict], task_ids: list[str] | None = None, workflow_id: str | None = None, **kwargs) -> list[Episode]:
-        """
-        Run asynchronous workflow with retry logic.
+    async def execute_tasks(self, tasks: list[dict], task_ids: list[str] | None = None, **kwargs) -> list[Episode]:
+        """Run asynchronous workflow execution with retry logic for multiple tasks.
 
         Args:
-            tasks: List of tasks to process
-            task_ids: List of task ids (not unique if n_rollouts > 1)
-            workflow_id: Optional workflow identifier for grouping episodes in storage
+            tasks: List of task dictionaries to process.
+            task_ids: Optional list of task identifiers. If None, UUIDs are generated.
+            **kwargs: Additional arguments passed to individual task processing.
+
+        Returns:
+            list[Episode]: List of completed episodes from all tasks.
         """
         if self.workflow_queue is None:
             await self.initialize_pool()
@@ -122,18 +154,36 @@ class AgentWorkflowEngine:
             results.extend(task_states[task_id]["episodes"])
         return results
 
-    async def execute_tasks_verl(self, batch: "DataProto", workflow_id: str | None = None, **kwargs) -> "DataProto":
+    async def execute_tasks_verl(self, batch: "DataProto", **kwargs) -> "DataProto":
+        """Execute tasks from a Verl DataProto batch and return results.
+
+        Args:
+            batch: Verl DataProto containing tasks and metadata.
+            **kwargs: Additional arguments passed to execute_tasks.
+
+        Returns:
+            DataProto: Transformed results compatible with Verl training.
+        """
         self.rollout_engine.wake_up()
         if batch.meta_info.get("validate", False):
             self.rollout_engine.validate = True
         tasks = batch.non_tensor_batch["extra_info"].tolist()
         task_ids = batch.non_tensor_batch["task_ids"].tolist()
-        results = await self.execute_tasks(tasks, task_ids, workflow_id=workflow_id, **kwargs)  # list of Episodes
+        results = await self.execute_tasks(tasks, task_ids, **kwargs)  # list of Episodes
         self.rollout_engine.validate = False
         self.rollout_engine.sleep()
-        return self._transform_results_for_verl(results, task_ids)
+        return self.transform_results_for_verl(results, task_ids)
 
-    def _transform_results_for_verl(self, episodes: list[Episode], task_ids: np.ndarray) -> "DataProto":
+    def transform_results_for_verl(self, episodes: list[Episode], task_ids: np.ndarray) -> "DataProto":
+        """Transform episode results into Verl-compatible DataProto format.
+
+        Args:
+            episodes: List of completed episodes from workflow execution.
+            task_ids: Array of task identifiers corresponding to episodes.
+
+        Returns:
+            DataProto: Formatted data ready for Verl training pipeline.
+        """
         # Local import to keep verl optional
         from verl import DataProto
         from verl.utils.torch_functional import pad_sequence_to_length
@@ -161,7 +211,7 @@ class AgentWorkflowEngine:
                 repeat_counts.append(0)
                 continue
 
-            if all(len(trajectory.steps) == 0 for name, trajectory in episode.trajectories):
+            if all(len(trajectory.steps) == 0 for trajectory in episode.trajectories):
                 # termination hits before an agent finishes it's first step
                 # (e.g., the initial prompt exceeds max_prompt_length or a timeout occurs)
                 # we delete the episode from the batch by setting repeat_counts to 0
@@ -169,9 +219,8 @@ class AgentWorkflowEngine:
                 repeat_counts.append(0)
                 continue
 
-            for name, trajectory in episode.trajectories:
-                # name: agent identifier, e.g., solver, critic, etc.
-
+            for trajectory in episode.trajectories:
+                name = trajectory.name
                 trajectory_id = f"{task_ids[i]}_{name}"  # unique trajectory identifier e.g., 1234567890_solver
 
                 if len(trajectory.steps) == 0:
@@ -189,13 +238,13 @@ class AgentWorkflowEngine:
                         responses.append(response)
                         traj_mask.append(mask)
 
-                    elif isinstance(trajectory.steps[0].model_response, ModelOutput):
+                    elif isinstance(trajectory.steps[0].model_output, ModelOutput):
                         step = trajectory.steps[0]
 
-                        prompt_ids = torch.tensor(step.model_response.prompt_ids, dtype=torch.long)
+                        prompt_ids = torch.tensor(step.model_output.prompt_ids, dtype=torch.long)
                         prompts.append(prompt_ids)
 
-                        response_ids = torch.tensor(step.model_response.completion_ids, dtype=torch.long)
+                        response_ids = torch.tensor(step.model_output.completion_ids, dtype=torch.long)
                         responses.append(response_ids)
 
                         mask = torch.ones_like(response_ids, dtype=torch.long)
@@ -214,11 +263,11 @@ class AgentWorkflowEngine:
 
                 else:
                     for step_idx, step in enumerate(trajectory.steps):
-                        if isinstance(step.model_response, ModelOutput):
-                            prompt_ids = torch.tensor(step.model_response.prompt_ids, dtype=torch.long)
+                        if isinstance(step.model_output, ModelOutput):
+                            prompt_ids = torch.tensor(step.model_output.prompt_ids, dtype=torch.long)
                             prompts.append(prompt_ids)
 
-                            response_ids = torch.tensor(step.model_response.completion_ids, dtype=torch.long)
+                            response_ids = torch.tensor(step.model_output.completion_ids, dtype=torch.long)
                             responses.append(response_ids)
 
                             mask = torch.ones_like(response_ids, dtype=torch.long)
@@ -333,6 +382,7 @@ class AgentWorkflowEngine:
         )
 
     def shutdown(self):
+        """Shutdown the workflow engine and cleanup resources."""
         if hasattr(self, "executor") and self.executor is not None:
             self.executor.shutdown(wait=True)
             self.executor = None
