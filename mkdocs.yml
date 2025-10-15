@@ -5,7 +5,7 @@ docs_dir: docs
 theme:
   name: material
   logo: assets/rllm_logo_white.png  # use a white or transparent version if possible
-  favicon: assets/rllm_logo_white.png
+  favicon: assets/rllm_logo.png
   palette:
     - scheme: default
       primary: custom
@@ -81,9 +81,11 @@ nav:
         - AgentWorkflowEngine for Episode Rollout: core-concepts/workflow-engine.md
         - AgentTrainer for RL Training: core-concepts/training.md
         - RL Algorithms for Agents: core-concepts/rl-algos.md
-      - Examples: examples/index.md
-      - API Reference: api/index.md
-      - Contributing: contributing.md
+      - References:
+        - Examples: examples/index.md
+        - API Reference: api/index.md
+        - Contributing: contributing.md
+        - Blogs: https://rllm-project.com/blog.html
   - Getting Started:
       - Installation: getting-started/installation.md
       - Quick Start: getting-started/quick-start.md
@@ -128,3 +130,4 @@ nav:
           - Tool Parsers: api/parser/tool_parser.md
           - Chat Parsers: api/parser/chat_parser.md
   - Contributing: contributing.md
+  - Blogs: https://rllm-project.com/blog.html
