@@ -48,6 +48,7 @@ plugins:
             separate_signature: true
             show_symbol_type_heading: true
             show_symbol_type_toc: true
+            members_order: source
 
 watch:
   - ./rllm/
@@ -77,6 +78,7 @@ nav:
         - rLLM's Main Components: core-concepts/overview.md
         - Agent and Environment: core-concepts/agent_env.md
         - AgentExecutionEngine for Trajectory Rollout: core-concepts/execution-engine.md
+        - AgentWorkflowEngine for Episode Rollout: core-concepts/workflow-engine.md
         - AgentTrainer for RL Training: core-concepts/training.md
         - RL Algorithms for Agents: core-concepts/rl-algos.md
       - Examples: examples/index.md
@@ -89,6 +91,7 @@ nav:
       - rLLM's Main Components: core-concepts/overview.md
       - Agent and Environment: core-concepts/agent_env.md
       - AgentExecutionEngine for Trajectory Rollout: core-concepts/execution-engine.md
+      - AgentWorkflowEngine for Episode Rollout: core-concepts/workflow-engine.md
       - AgentTrainer for RL Training: core-concepts/training.md
       - RL Algorithms for Agents: core-concepts/rl-algos.md
   - Examples:
@@ -99,6 +102,7 @@ nav:
       - Search Agent: examples/search.md
       - FrozenLake Agent: examples/frozenlake.md
       - Math SFT: examples/sft.md
+      - Solver-Judge Workflow: examples/solver_judge.md
 
   - API Reference:
       - Overview: api/index.md
@@ -108,8 +112,11 @@ nav:
       - Environments:
           - Environment Base: api/environments/base.md
           - Environment Utils: api/environments/env_utils.md
+      - Workflow:
+          - Workflow Base: api/workflows/workflow.md
       - Engine:
           - Agent Execution Engine: api/engine/agent_execution_engine.md
+          - Agent Workflow Engine: api/engine/agent_workflow_engine.md
       - Trainer:
           - Agent Trainer: api/trainer/agent_trainer.md
       - Tools:
