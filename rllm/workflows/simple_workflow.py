@@ -55,7 +55,7 @@ class SimpleWorkflow(Workflow):
                 thought=output.reasoning,
                 action=action,
                 reward=reward_result.reward,
-                model_response=output,
+                model_output=output,
             )
         )
 

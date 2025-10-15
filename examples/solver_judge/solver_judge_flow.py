@@ -46,7 +46,7 @@ class SolverJudgeWorkflow(Workflow):
                     thought=output.reasoning,
                     action=solution,
                     reward=reward,
-                    model_response=output,
+                    model_output=output,
                 )
             )
 
@@ -72,7 +72,7 @@ class SolverJudgeWorkflow(Workflow):
                 thought=output.reasoning,
                 action=solution_index,
                 reward=reward,
-                model_response=output,
+                model_output=output,
             )
         )
 

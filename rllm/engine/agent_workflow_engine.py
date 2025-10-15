@@ -188,13 +188,13 @@ class AgentWorkflowEngine:
                         responses.append(response)
                         traj_mask.append(mask)
 
-                    elif isinstance(trajectory.steps[0].model_response, ModelOutput):
+                    elif isinstance(trajectory.steps[0].model_output, ModelOutput):
                         step = trajectory.steps[0]
 
-                        prompt_ids = torch.tensor(step.model_response.prompt_ids, dtype=torch.long)
+                        prompt_ids = torch.tensor(step.model_output.prompt_ids, dtype=torch.long)
                         prompts.append(prompt_ids)
 
-                        response_ids = torch.tensor(step.model_response.completion_ids, dtype=torch.long)
+                        response_ids = torch.tensor(step.model_output.completion_ids, dtype=torch.long)
                         responses.append(response_ids)
 
                         mask = torch.ones_like(response_ids, dtype=torch.long)
@@ -213,11 +213,11 @@ class AgentWorkflowEngine:
 
                 else:
                     for step_idx, step in enumerate(trajectory.steps):
-                        if isinstance(step.model_response, ModelOutput):
-                            prompt_ids = torch.tensor(step.model_response.prompt_ids, dtype=torch.long)
+                        if isinstance(step.model_output, ModelOutput):
+                            prompt_ids = torch.tensor(step.model_output.prompt_ids, dtype=torch.long)
                             prompts.append(prompt_ids)
 
-                            response_ids = torch.tensor(step.model_response.completion_ids, dtype=torch.long)
+                            response_ids = torch.tensor(step.model_output.completion_ids, dtype=torch.long)
                             responses.append(response_ids)
 
                             mask = torch.ones_like(response_ids, dtype=torch.long)

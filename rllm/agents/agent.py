@@ -1,7 +1,7 @@
 import uuid
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
-from typing import Any, Union
+from typing import Any
 
 
 @dataclass
@@ -11,7 +11,8 @@ class Step:
     observation: Any = None
     thought: str = ""
     action: Any = None
-    model_response: Union[str, "ModelOutput", None] = None  # noqa: F821
+    model_response: str = ""
+    model_output: "ModelOutput" = None  # noqa: F821
     info: dict = field(default_factory=dict)  # Store any additional info.
 
     # field below are filled by the engine
@@ -20,21 +21,13 @@ class Step:
     mc_return: float = 0.0
 
     def to_dict(self) -> dict:
-        from rllm.engine.rollout import ModelOutput
-
-        # Handle model_response which can be string or ModelOutput
-        model_response_dict = None
-        if isinstance(self.model_response, ModelOutput):
-            model_response_dict = self.model_response.to_dict()
-        else:
-            model_response_dict = self.model_response
-
         return {
             "chat_completions": self.chat_completions,
             "observation": self.observation,
             "thought": self.thought,
             "action": self.action,
-            "model_response": model_response_dict,
+            "model_response": self.model_response,
+            "model_output": self.model_output.to_dict() if self.model_output is not None else None,
             "info": self.info,
             "reward": self.reward,
             "done": self.done,
@@ -45,16 +38,13 @@ class Step:
     def from_dict(cls, data: dict) -> "Step":
         from rllm.engine.rollout import ModelOutput
 
-        model_response = data.get("model_response", "")
-        if isinstance(model_response, dict):
-            model_response = ModelOutput.from_dict(model_response)
-
         return cls(
             chat_completions=data["chat_completions"],
             observation=data["observation"],
             thought=data["thought"],
             action=data["action"],
-            model_response=model_response,
+            model_response=data["model_response"],
+            model_output=ModelOutput.from_dict(data["model_output"]) if data.get("model_output", None) is not None else None,
             info=data.get("info", {}),
             reward=data["reward"],
             done=data["done"],
