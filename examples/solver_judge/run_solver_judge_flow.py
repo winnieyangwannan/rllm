@@ -98,7 +98,7 @@ if __name__ == "__main__":
         tokenizer=tokenizer,
         max_prompt_length=2048,
         max_response_length=1024,
-        base_url="http://localhost:8000/v1",
+        base_url="http://localhost:30000/v1",
         api_key="None",
         sampling_params={"temperature": 0.6, "top_p": 0.95},
     )
