@@ -25,7 +25,7 @@ rLLM is an open-source framework for post-training language agents via reinforce
 
 ## Releases 📰
 
-<strong>[2025/09/16]</strong> rLLM [v0.2](https://github.com/rllm-org/rllm/tree/v0.2) is now in development and available in preview. It comes integrated with verl-0.5.0, featuring support for Megatron training. Stay tuned for more updates!
+<strong>[2025/10/15]</strong> rLLM [v0.2](https://github.com/rllm-org/rllm/tree/v0.2) is now officially released! It comes integrated with verl-0.5.0, featuring support for Megatron training.
 
 <strong>[2025/07/01]</strong> We release [`DeepSWE-Preview`](https://pretty-radio-b75.notion.site/DeepSWE-Training-a-Fully-Open-sourced-State-of-the-Art[…]-by-Scaling-RL-22281902c1468193aabbe9a8c59bbe33?pvs=73), a 32B software engineering agent (SWE) trained with purely RL that achieves 59% on SWEBench-Verified with test-time scaling,(42.2% Pass@1), topping the SWEBench leaderboard for open-weight models.
 
@@ -45,19 +45,22 @@ rLLM is an open-source framework for post-training language agents via reinforce
 ### Installation
 
 ```bash
-# Clone the repository
+# Clone the repository and switch to v0.2
 git clone --recurse-submodules https://github.com/rllm-org/rllm.git
 cd rllm
 
-# create a conda environment
-conda create -n rllm python=3.10 (use python=3.11 for MacOS)
+# Make sure submodules match v0.2
+git submodule update --init --recursive
+
+# Create a conda environment
+conda create -n rllm python=3.11 -y
 conda activate rllm
 
-# Install all dependencies
-pip install -e ./verl
-pip install -e .
+# Install verl
+bash scripts/install_verl.sh
 
-**Note:** On macOS, GPU features (flash-attn, deepspeed, vllm) are automatically excluded for compatibility. For GPU support on macOS, you can install with: `pip install -e .[gpu]`.
+# Install rllm
+pip install -e .
 ```
 
 ### Installation with Docker 🐳
@@ -86,7 +89,7 @@ docker exec -it rllm-container bash
 
 ## Acknowledgements
 
-- Our training experiments are powered by our heavily modified fork of [verl](https://github.com/volcengine/verl), an open-source RLHF library.
+- Our training experiments are powered by [verl](https://github.com/volcengine/verl), an open-source RLHF library.
 - Our models are trained on top of [`DeepSeek-R1-Distill-Qwen-1.5B`](https://huggingface.co/deepseek-ai/DeepSeek-R1-Distill-Qwen-1.5B), [`DeepSeek-R1-Distill-Qwen-14B`](https://huggingface.co/deepseek-ai/DeepSeek-R1-Distill-Qwen-14B), and [`Qwen3-32B`](https://huggingface.co/Qwen/Qwen3-32b).
 - Our work is done as part of [Berkeley Sky Computing Lab](https://skycomputing.berkeley.edu/), [Berkeley AI Research](https://bair.berkeley.edu/), and a successful collaboration with Together AI.
 
