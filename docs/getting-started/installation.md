@@ -14,19 +14,15 @@ Before installing rLLM, ensure you have the following:
 rLLM uses [verl](https://github.com/volcengine/verl) as its training backend. Follow these steps to install rLLM and verl:
 
 ```bash
-# Clone the repository and switch to v0.2
+# Clone the repository
 git clone --recurse-submodules https://github.com/rllm-org/rllm.git
 cd rllm
-git switch v0.2
-
-# Make sure submodules match v0.2
-git submodule update --init --recursive
 
 # Create a conda environment
 conda create -n rllm python=3.10 -y
 conda activate rllm
 
-# Install verl (version pinned by v0.2 branch)
+# Install verl
 bash scripts/install_verl.sh
 
 # Install rLLM
