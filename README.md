@@ -78,6 +78,7 @@ docker exec -it rllm-container bash
 * [Tongyi DeepResearch](https://github.com/Alibaba-NLP/DeepResearch): A New Era of Open-Source AI Researchers [![GitHub Repo stars](https://img.shields.io/github/stars/Alibaba-NLP/DeepResearch)](https://github.com/Alibaba-NLP/DeepResearch)
 * [Terminal-Bench-RL](https://github.com/Danau5tin/terminal-bench-rl): Training Long-Horizon Terminal Agents with Reinforcement Learning [![GitHub Repo stars](https://img.shields.io/github/stars/Danau5tin/terminal-bench-rl)](https://github.com/Danau5tin/terminal-bench-rl)
 * [Cogito, Ergo Ludo](https://www.arxiv.org/abs/2509.25052): An Agent that Learns to Play by Reasoning and Planning
+* [PettingLLMs](https://pettingllms-ai.github.io/): Using On-Policy Reinforcement Learning for Stronger Multi-Agent System [![GitHub Repo stars](https://img.shields.io/github/stars/pettingllms-ai/PettingLLMs)](https://github.com/pettingllms-ai/PettingLLMs)
 
 
 
