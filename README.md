@@ -10,7 +10,7 @@
 <br>
 
 <div align="center">
-
+  
 [![Documentation](https://img.shields.io/badge/Documentation-black?style=for-the-badge&logo=googledocs&logoColor=white)](https://rllm-project.readthedocs.io/en/latest)
 [![Discord](https://img.shields.io/badge/Discord-5865F2?style=for-the-badge&logo=discord&logoColor=white)](https://discord.gg/BDH46HT9en)
 [![Website](https://img.shields.io/badge/Site-%23000000.svg?style=for-the-badge&logo=semanticweb&logoColor=white)](https://www.agentica-project.com) 
@@ -24,6 +24,8 @@
 rLLM is an open-source framework for post-training language agents via reinforcement learning. With rLLM, you can easily build your custom agents and environments, train them with reinforcement learning, and deploy them for real-world workloads.
 
 ## Releases 📰
+
+<strong>[2025/10/15]</strong> rLLM [v0.2](https://github.com/rllm-org/rllm/tree/v0.2) is now officially released! It comes integrated with verl-0.5.0, featuring support for Megatron training.
 
 <strong>[2025/07/01]</strong> We release [`DeepSWE-Preview`](https://pretty-radio-b75.notion.site/DeepSWE-Training-a-Fully-Open-sourced-State-of-the-Art[…]-by-Scaling-RL-22281902c1468193aabbe9a8c59bbe33?pvs=73), a 32B software engineering agent (SWE) trained with purely RL that achieves 59% on SWEBench-Verified with test-time scaling,(42.2% Pass@1), topping the SWEBench leaderboard for open-weight models.
 
@@ -46,16 +48,15 @@ rLLM is an open-source framework for post-training language agents via reinforce
 # Clone the repository and switch to v0.2
 git clone --recurse-submodules https://github.com/rllm-org/rllm.git
 cd rllm
-git switch v0.2
 
 # Make sure submodules match v0.2
 git submodule update --init --recursive
 
 # Create a conda environment
-conda create -n rllm python=3.10 -y
+conda create -n rllm python=3.11 -y
 conda activate rllm
 
-# Install verl (version pinned by v0.2 branch)
+# Install verl
 bash scripts/install_verl.sh
 
 # Install rllm
@@ -79,11 +80,19 @@ docker start rllm-container
 docker exec -it rllm-container bash
 ```
 
+## Awesome Projects using rLLM 🔥
+
+* [Tongyi DeepResearch](https://github.com/Alibaba-NLP/DeepResearch): A New Era of Open-Source AI Researchers [![GitHub Repo stars](https://img.shields.io/github/stars/Alibaba-NLP/DeepResearch)](https://github.com/Alibaba-NLP/DeepResearch)
+* [Terminal-Bench-RL](https://github.com/Danau5tin/terminal-bench-rl): Training Long-Horizon Terminal Agents with Reinforcement Learning [![GitHub Repo stars](https://img.shields.io/github/stars/Danau5tin/terminal-bench-rl)](https://github.com/Danau5tin/terminal-bench-rl)
+* [Cogito, Ergo Ludo](https://www.arxiv.org/abs/2509.25052): An Agent that Learns to Play by Reasoning and Planning
+
+
 ## Acknowledgements
 
 - Our training experiments are powered by [verl](https://github.com/volcengine/verl), an open-source RLHF library.
 - Our models are trained on top of [`DeepSeek-R1-Distill-Qwen-1.5B`](https://huggingface.co/deepseek-ai/DeepSeek-R1-Distill-Qwen-1.5B), [`DeepSeek-R1-Distill-Qwen-14B`](https://huggingface.co/deepseek-ai/DeepSeek-R1-Distill-Qwen-14B), and [`Qwen3-32B`](https://huggingface.co/Qwen/Qwen3-32b).
 - Our work is done as part of [Berkeley Sky Computing Lab](https://skycomputing.berkeley.edu/), [Berkeley AI Research](https://bair.berkeley.edu/), and a successful collaboration with Together AI.
+
 
 ## Citation
 
