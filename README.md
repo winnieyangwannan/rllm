@@ -13,7 +13,7 @@
   
 [![Documentation](https://img.shields.io/badge/Documentation-black?style=for-the-badge&logo=googledocs&logoColor=white)](https://rllm-project.readthedocs.io/en/latest)
 [![Discord](https://img.shields.io/badge/Discord-5865F2?style=for-the-badge&logo=discord&logoColor=white)](https://discord.gg/BDH46HT9en)
-[![Website](https://img.shields.io/badge/Site-%23000000.svg?style=for-the-badge&logo=semanticweb&logoColor=white)](https://www.agentica-project.com) 
+[![Website](https://img.shields.io/badge/Site-%23000000.svg?style=for-the-badge&logo=semanticweb&logoColor=white)](https://www.rllm-project.com) 
 [![Blog](https://img.shields.io/badge/Blog-007AFF?style=for-the-badge)](https://pretty-radio-b75.notion.site/rLLM-A-Framework-for-Post-Training-Language-Agents-21b81902c146819db63cd98a54ba5f31)
 [![Hugging Face Collection](https://img.shields.io/badge/Agentica-fcd022?style=for-the-badge&logo=huggingface&logoColor=000&labelColor)](https://huggingface.co/agentica-org)
 
@@ -25,16 +25,9 @@ rLLM is an open-source framework for post-training language agents via reinforce
 
 ## Releases 📰
 
-<strong>[2025/10/15]</strong> rLLM [v0.2](https://github.com/rllm-org/rllm/tree/v0.2) is now officially released! It comes integrated with verl-0.5.0, featuring support for Megatron training.
+<strong>[2025/10/16]</strong> rLLM [v0.2](https://github.com/rllm-org/rllm/tree/v0.2) is now officially released! We introduce `AgentWorkflowEngine` for training over arbitrary agentic programs. It also comes integrated with the official `verl-0.5.0`, featuring support for Megatron training. Check out this [blog post](https://rllm-project.com/post.html?post=rllm_v0.2.md) for more.
 
 <strong>[2025/07/01]</strong> We release [`DeepSWE-Preview`](https://pretty-radio-b75.notion.site/DeepSWE-Training-a-Fully-Open-sourced-State-of-the-Art[…]-by-Scaling-RL-22281902c1468193aabbe9a8c59bbe33?pvs=73), a 32B software engineering agent (SWE) trained with purely RL that achieves 59% on SWEBench-Verified with test-time scaling,(42.2% Pass@1), topping the SWEBench leaderboard for open-weight models.
-
-- 🍽️ An In-Depth Blog Post on our [SWE Agents and RL Training Recipes](https://pretty-radio-b75.notion.site/DeepSWE-Training-a-Fully-Open-sourced-State-of-the-Art[…]-by-Scaling-RL-22281902c1468193aabbe9a8c59bbe33?pvs=73)
-- 🤗 HF Model [`DeepSWE-Preview`](https://huggingface.co/agentica-org/DeepSWE-Preview)
-- 🤗 HF Dataset [`R2E-Gym-Subset`](https://huggingface.co/datasets/R2E-Gym/R2E-Gym-Subset)
-- 📄 [Training Scripts](https://github.com/rllm-org/rllm/tree/main/examples/swe)
-- 📈 [Wandb Training Logs](https://wandb.ai/mluo/deepswe)—All training runs and ablations.
-- 🔎 [Evaluation Logs](https://drive.google.com/file/d/10LIwpJeaFuiX6Y-qEG2a4a335PEuQJeS/view?usp=sharing)—16 passes over SWE-Bench-Verified.
 
 <strong>[2025/04/08]</strong> We release [`DeepCoder-14B-Preview`](https://pretty-radio-b75.notion.site/DeepCoder-A-Fully-Open-Source-14B-Coder-at-O3-mini-Level-1cf81902c14680b3bee5eb349a512a51), a 14B coding model that achieves an impressive **60.6%** Pass@1 accuracy on LiveCodeBench (+8% improvement), matching the performance of `o3-mini-2025-01-031 (Low)` and `o1-2024-12-17`. 
 
@@ -79,17 +72,17 @@ docker exec -it rllm-container bash
 
 ## Awesome Projects using rLLM 🔥
 
+* [DeepScaleR](https://pretty-radio-b75.notion.site/DeepScaleR-Surpassing-O1-Preview-with-a-1-5B-Model-by-Scaling-RL-19681902c1468005bed8ca303013a4e2): Surpassing O1-Preview with a 1.5B Model by Scaling RL
+* [DeepCoder](https://pretty-radio-b75.notion.site/DeepCoder-A-Fully-Open-Source-14B-Coder-at-O3-mini-Level-1cf81902c14680b3bee5eb349a512a51): A Fully Open-Source 14B Coder at O3-mini Level
+* [DeepSWE](https://pretty-radio-b75.notion.site/DeepSWE-Training-a-Fully-Open-sourced-State-of-the-Art[%E2%80%A6]-by-Scaling-RL-22281902c1468193aabbe9a8c59bbe33): Training a Fully Open-sourced, State-of-the-Art Coding Agent by Scaling RL
 * [Tongyi DeepResearch](https://github.com/Alibaba-NLP/DeepResearch): A New Era of Open-Source AI Researchers [![GitHub Repo stars](https://img.shields.io/github/stars/Alibaba-NLP/DeepResearch)](https://github.com/Alibaba-NLP/DeepResearch)
 * [Terminal-Bench-RL](https://github.com/Danau5tin/terminal-bench-rl): Training Long-Horizon Terminal Agents with Reinforcement Learning [![GitHub Repo stars](https://img.shields.io/github/stars/Danau5tin/terminal-bench-rl)](https://github.com/Danau5tin/terminal-bench-rl)
 * [Cogito, Ergo Ludo](https://www.arxiv.org/abs/2509.25052): An Agent that Learns to Play by Reasoning and Planning
 
 
+
 ## Acknowledgements
-
-- Our training experiments are powered by [verl](https://github.com/volcengine/verl), an open-source RLHF library.
-- Our models are trained on top of [`DeepSeek-R1-Distill-Qwen-1.5B`](https://huggingface.co/deepseek-ai/DeepSeek-R1-Distill-Qwen-1.5B), [`DeepSeek-R1-Distill-Qwen-14B`](https://huggingface.co/deepseek-ai/DeepSeek-R1-Distill-Qwen-14B), and [`Qwen3-32B`](https://huggingface.co/Qwen/Qwen3-32b).
-- Our work is done as part of [Berkeley Sky Computing Lab](https://skycomputing.berkeley.edu/), [Berkeley AI Research](https://bair.berkeley.edu/), and a successful collaboration with Together AI.
-
+Our work is done as part of [Berkeley Sky Computing Lab](https://skycomputing.berkeley.edu/). The rLLM team is generously supported by grants from [Laude Institute](https://www.laude.org/), [AWS](https://aws.amazon.com/), [Hyperbolic](https://www.hyperbolic.ai/) and [Fireworks AI](https://fireworks.ai/). We pay special thanks to [Together AI](https://www.together.ai/) for the research partnership and compute support. 
 
 ## Citation
 
@@ -106,8 +99,7 @@ Citing rLLM:
 }
 ```
 
-Citing DeepSWE:
-
+Citing our prior work DeepScaleR, DeepCoder, and DeepSWE.
 ```bibtex
 @misc{deepswe2025,
   title={DeepSWE: Training a State-of-the-Art Coding Agent from Scratch by Scaling RL},
@@ -119,7 +111,6 @@ Citing DeepSWE:
 ```
 
 Citing DeepCoder:
-
 ```bibtex
 @misc{deepcoder2025,
   title={DeepCoder: A Fully Open-Source 14B Coder at O3-mini Level},
