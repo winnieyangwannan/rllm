@@ -3,82 +3,70 @@ import re
 
 from rllm.agents.agent import Episode, Step, Trajectory
 from rllm.engine import ModelOutput, RolloutEngine
-from rllm.rewards.countdown_reward import countdown_reward_fn
 from rllm.rewards.reward_fn import RewardFunction
-from rllm.workflows.workflow import TerminationEvent, TerminationReason, Workflow
+from rllm.workflows.workflow import Workflow
 
 
-class SolverJudgeWorkflow(Workflow):
-    def __init__(self, rollout_engine: RolloutEngine, n_solutions: int = 2, reward_function: RewardFunction = None, **kwargs):
-        super().__init__(rollout_engine, **kwargs)
+class Solver:
+    def __init__(self, rollout_engine: RolloutEngine, **kwargs):
+        self.rollout_engine = rollout_engine
 
-        self.n_solutions = n_solutions
-        self.reward_function = reward_function or countdown_reward_fn
-
-    async def run(self, task: dict, uid: str, **kwargs) -> Episode:
-        self.reset(task, uid)
-
-        problem = task["question"]
-
-        # 1. generate candidate solutions in parallel
-        async def generate_solution() -> ModelOutput:
-            messages = [{"role": "user", "content": f"{problem}. Output the final answer within <answer>...</answer>"}]
-            output: ModelOutput = await self.rollout_engine.get_model_response(messages)
-            return output
-
-        tasks = [asyncio.create_task(generate_solution()) for _ in range(self.n_solutions)]
-
-        solutions = []
-        rewards = []
-        for completed_task in asyncio.as_completed(tasks):
-            output = await completed_task
-
-            solution = self._parse_solver_response(output.content)
-            solutions.append(solution)
-
-            reward = self.reward_function(task, solution).reward
-            rewards.append(reward)
-
-            traj = Trajectory(name="solver")
-            traj.steps.append(
+    async def generate_solution(self, problem: str) -> Trajectory:
+        messages = [{"role": "user", "content": f"{problem}. Output the final answer within <answer>...</answer>"}]
+        output: ModelOutput = await self.rollout_engine.get_model_response(messages)
+        return Trajectory(
+            name="solver",
+            steps=[
                 Step(
-                    chat_completions=[{"role": "user", "content": f"{problem}. Output the final answer within <answer>...</answer>"}] + [{"role": "assistant", "content": output.content, "reasoning": output.reasoning}],
+                    chat_completions=messages + [{"role": "assistant", "content": output.content, "reasoning": output.reasoning}],
                     thought=output.reasoning,
-                    action=solution,
-                    reward=reward,
+                    action=self._parse_solver_response(output.content),
                     model_output=output,
                 )
-            )
-
-            self.commit(trajectory=traj)
-
-        # 2. select the best candidate solution
-        judge_msgs = [{"role": "user", "content": self._create_judge_prompt(problem, solutions)}]
-        output: ModelOutput = await self.rollout_engine.get_model_response(judge_msgs)
-
-        solution_index = self._parse_judge_response(output.content)
-
-        if solution_index < 0 or solution_index > self.n_solutions:  # invalid answer
-            reward = 0.0
-        elif solution_index == 0:  # no correct solution found
-            reward = 1.0 if all(reward == 0.0 for reward in rewards) else 0.0
-        else:
-            reward = rewards[solution_index - 1]
-
-        traj = Trajectory(name="judge")
-        traj.steps.append(
-            Step(
-                chat_completions=judge_msgs + [{"role": "assistant", "content": output.content, "reasoning": output.reasoning}],
-                thought=output.reasoning,
-                action=solution_index,
-                reward=reward,
-                model_output=output,
-            )
+            ],
         )
 
-        self.commit(trajectory=traj)
+    async def generate_solutions(self, problem: str, n_solutions: int = 2) -> list[Trajectory]:
+        tasks = [asyncio.create_task(self.generate_solution(problem)) for _ in range(n_solutions)]
+        return await asyncio.gather(*tasks)
 
-        raise TerminationEvent(TerminationReason.ENV_DONE)
+    def _parse_solver_response(self, response: str) -> str:
+        answer_match = re.search(r"<answer>(.*?)</answer>", response, re.IGNORECASE | re.DOTALL)
+        if answer_match:
+            return f"<answer>{answer_match.group(1).strip()}</answer>"
+        else:
+            return "No solution found"
+
+
+class Judge:
+    def __init__(self, rollout_engine: RolloutEngine, **kwargs):
+        self.rollout_engine = rollout_engine
+
+    async def judge_solutions(self, problem: str, solutions: list[str]) -> Trajectory:
+        messages = [{"role": "user", "content": self._create_judge_prompt(problem, solutions)}]
+        output: ModelOutput = await self.rollout_engine.get_model_response(messages)
+        return Trajectory(
+            name="judge",
+            steps=[
+                Step(
+                    chat_completions=messages + [{"role": "assistant", "content": output.content, "reasoning": output.reasoning}],
+                    thought=output.reasoning,
+                    action=self._parse_judge_response(output.content, solutions),
+                    model_output=output,
+                )
+            ],
+        )
+
+    def _parse_judge_response(self, response: str, solutions: list[str]) -> str:
+        answer_match = re.search(r"<answer>(.*?)</answer>", response, re.IGNORECASE | re.DOTALL)
+        if answer_match:
+            answer_text = answer_match.group(1).strip()
+            try:
+                solution_index = int(answer_text)
+                return solutions[solution_index - 1]
+            except (ValueError, IndexError):
+                return ""
+        return ""
 
     def _create_judge_prompt(self, problem: str, solutions: list[str]) -> str:
         """Create a prompt for the judge to evaluate solutions."""
@@ -97,38 +85,51 @@ A correct solution must satisfy the following criteria:
 3. Only basic arithmetic operations (+, -, *, /) are used.
 4. The calculation results in the target number.
 5. The final answer is clearly marked within <answer>...</answer> tags.
-Output the index of your selected solution within <answer>...</answer> tags, e.g., <answer>1</answer> for the first solution, <answer>2</answer> for the second solution, etc. If multiple solutions are correct, output the index of the first correct solution. If no solution is correct, output 0."""
+Output the index of your selected solution within <answer>...</answer> tags, e.g., <answer>1</answer> for the first solution, <answer>2</answer> for the second solution, etc. If multiple solutions are correct, output the index of the first correct solution."""
         return prompt
 
-    def _parse_solver_response(self, response: str) -> str:
-        answer_match = re.search(r"<answer>(.*?)</answer>", response, re.IGNORECASE | re.DOTALL)
-        if answer_match:
-            return f"<answer>{answer_match.group(1).strip()}</answer>"
-        else:
-            return "No solution found"
 
-    def _parse_judge_response(self, response: str) -> int:
-        answer_match = re.search(r"<answer>(.*?)</answer>", response, re.IGNORECASE | re.DOTALL)
-        if answer_match:
-            answer_text = answer_match.group(1).strip()
-            try:
-                solution_index = int(answer_text)
-                return solution_index
-            except ValueError:
-                return -1
-        else:
-            return -1
+class SolverJudgeWorkflow(Workflow):
+    def __init__(self, rollout_engine: RolloutEngine, n_solutions: int = 2, reward_function: RewardFunction = None, **kwargs):
+        super().__init__(rollout_engine, **kwargs)
+        self.n_solutions = n_solutions
+        self.reward_function = reward_function
+        self.solver = Solver(rollout_engine)
+        self.judge = Judge(rollout_engine)
 
-    def assign_episode_correctness(self, episode: Episode) -> None:
-        solver_rewards = [traj.steps[0].reward for traj in episode.trajectories if traj.name == "solver"]
+    async def run(self, task: dict, uid: str, **kwargs) -> Episode:
+        self.reset(task, uid)
+        problem = task["question"]
 
-        try:
-            judge_trajectory = next(traj for traj in episode.trajectories if traj.name == "judge")
-            judge_reward = judge_trajectory.steps[0].reward
-        except StopIteration:
-            raise ValueError("No judge trajectory found in episode") from None
+        # Step 1: Solver generates multiple solutions in parallel
+        solver_trajectories = await self.solver.generate_solutions(problem, self.n_solutions)
 
-        if any(reward == 1.0 for reward in solver_rewards) and judge_reward == 1.0:
-            episode.is_correct = True
-        else:
-            episode.is_correct = False
+        # Assign rewards to solver trajectories
+        solutions = []
+        for traj in solver_trajectories:
+            solution = traj.steps[0].action
+            solutions.append(solution)
+            reward = self.reward_function(task, solution).reward
+            traj.steps[0].reward = reward
+
+        # Step 2: Judge selects the best solution
+        judge_trajectory = await self.judge.judge_solutions(problem, solutions)
+        selected_solution = judge_trajectory.steps[0].action
+
+        # Evaluate the selected solution
+        reward_result = self.reward_function(task, selected_solution)
+        judge_trajectory.steps[0].reward = reward_result.reward
+        is_correct = reward_result.is_correct
+
+        # Compute metrics
+        solver_acc = sum(traj.steps[0].reward for traj in solver_trajectories) / len(solver_trajectories)
+        judge_acc = int(is_correct)
+
+        # Step 3: Return episode with multiple trajectories
+        return Episode(
+            id=uid,
+            task=task,
+            trajectories=[*solver_trajectories, judge_trajectory],
+            is_correct=is_correct,
+            metrics={"solver_acc": solver_acc, "judge_acc": judge_acc},
+        )
