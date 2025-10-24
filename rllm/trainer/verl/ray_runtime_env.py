@@ -7,6 +7,7 @@ PPO_RAY_RUNTIME_ENV = {
         "VLLM_LOGGING_LEVEL": "WARN",
         "VLLM_ALLOW_RUNTIME_LORA_UPDATING": "true",
         "CUDA_DEVICE_MAX_CONNECTIONS": "1",
+        "VLLM_USE_V1": "1",
     },
     "worker_process_setup_hook": "rllm.patches.verl_patch_hook.setup",
 }
@@ -18,9 +19,11 @@ def get_ppo_ray_runtime_env():
     Avoid repeating env vars already set in the driver env.
     """
     env_vars = PPO_RAY_RUNTIME_ENV["env_vars"].copy()
-    for key in list(env_vars.keys()):
+
+    # we overwrite any env vars that are already set in the driver env
+    for key in env_vars.keys():
         if os.environ.get(key) is not None:
-            env_vars.pop(key, None)
+            env_vars[key] = os.environ[key]
 
     return {
         "env_vars": env_vars,
