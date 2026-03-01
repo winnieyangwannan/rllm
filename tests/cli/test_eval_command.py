@@ -76,7 +76,7 @@ def test_eval_base_url_requires_model(runner, tmp_rllm_home):
 
 def test_eval_with_proxy_mode(runner, tmp_rllm_home, mock_dataset):
     """Eval without --base-url should auto-start proxy from config."""
-    config = RllmConfig(provider="openai", api_key="sk-test", model="gpt-4o-mini")
+    config = RllmConfig(provider="openai", model="gpt-5-mini", api_keys={"openai": "sk-test"})
     mock_pm = MagicMock()
     mock_pm.get_proxy_url.return_value = "http://127.0.0.1:4000/v1"
     mock_pm.build_proxy_config.return_value = {"model_list": []}
