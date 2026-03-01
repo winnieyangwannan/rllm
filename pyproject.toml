@@ -39,6 +39,8 @@ dependencies = [
     # Integration with Eval Protocol
     "eval-protocol",
     # Utilities
+    "click>=8.0",
+    "simple-term-menu>=1.6",
     "hydra-core",
     "openai",
     "fastapi",
@@ -51,6 +53,9 @@ dependencies = [
     "wandb",
     "codetiming",  # for timing tracking
 ]
+
+[project.scripts]
+rllm = "rllm.experimental.cli.main:cli"
 
 [project.optional-dependencies]
 
@@ -174,7 +179,7 @@ where   = ["."]
 include = ["rllm", "rllm.*"]
 
 [tool.setuptools.package-data]
-rllm = ["trainer/config/*.yaml"]
+rllm = ["trainer/config/*.yaml", "registry/*.json"]
 
 [tool.mypy]
 plugins = ["pydantic.mypy"]
