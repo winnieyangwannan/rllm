@@ -8,7 +8,9 @@ import os
 
 from rllm.experimental.eval.bfcl_evaluator import BFCLEvaluator
 from rllm.experimental.eval.ifeval_evaluator import IFEvalEvaluator
+from rllm.experimental.eval.llm_equality_evaluator import LLMEqualityEvaluator
 from rllm.experimental.eval.llm_judge_evaluator import LLMJudgeEvaluator
+from rllm.experimental.eval.translation_evaluator import TranslationEvaluator
 from rllm.experimental.eval.types import (
     CodeEvaluator,
     CountdownEvaluator,
@@ -27,6 +29,8 @@ _EVALUATOR_REGISTRY: dict[str, type] = {
     "ifeval_reward_fn": IFEvalEvaluator,
     "bfcl_reward_fn": BFCLEvaluator,
     "llm_judge_reward_fn": LLMJudgeEvaluator,
+    "llm_equality_reward_fn": LLMEqualityEvaluator,
+    "translation_reward_fn": TranslationEvaluator,
 }
 
 

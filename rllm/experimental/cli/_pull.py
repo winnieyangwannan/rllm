@@ -67,10 +67,46 @@ def _remap_fields(row: dict, field_map: dict) -> dict:
     return new_row
 
 
+def _load_all_configs(source: str, split: str, hf_split: str | None = None) -> list[dict]:
+    """Load all HF configs for a dataset and merge into a single list.
+
+    Each row gets a 'language' column set to the config name (unless it
+    already has one).
+
+    Args:
+        source: HuggingFace dataset path.
+        split: The split to register under.
+        hf_split: Optional override for the actual HF split to load.
+
+    Returns:
+        Merged list of row dicts with 'language' column.
+    """
+    from datasets import get_dataset_config_names, load_dataset
+
+    configs = get_dataset_config_names(source)
+    logger.info(f"  Aggregating {len(configs)} language configs...")
+    all_rows: list[dict] = []
+
+    for config_name in configs:
+        try:
+            ds = load_dataset(source, name=config_name, split=hf_split or split)
+            for row in ds:
+                row_dict = dict(row)
+                if "language" not in row_dict:
+                    row_dict["language"] = config_name
+                all_rows.append(row_dict)
+        except Exception as e:
+            logger.warning(f"  Skipping config '{config_name}': {e}")
+
+    logger.info(f"  Loaded {len(all_rows)} total rows across all configs")
+    return all_rows
+
+
 def pull_dataset(name: str, catalog_entry: dict) -> None:
     """Download a dataset from HuggingFace and register it locally.
 
-    Supports optional field_map, hf_config, and transform for data normalization.
+    Supports optional field_map, hf_config, aggregate_configs, and
+    transform for data normalization.
 
     Args:
         name: Dataset name (e.g., 'gsm8k').
@@ -85,27 +121,50 @@ def pull_dataset(name: str, catalog_entry: dict) -> None:
     hf_config = catalog_entry.get("hf_config")
     field_map = catalog_entry.get("field_map")
     transform_path = catalog_entry.get("transform")
+    aggregate_configs = catalog_entry.get("aggregate_configs", False)
 
     # Load transform function if specified
     transform_fn = _load_transform(transform_path) if transform_path else None
 
     logger.info(f"Pulling dataset '{name}' from {source}...")
 
+    data_files = catalog_entry.get("data_files")
+    hf_split = catalog_entry.get("hf_split")
+
     for split in splits:
         try:
-            # Build load_dataset kwargs
-            load_kwargs: dict = {"path": source, "split": split}
-            if hf_config:
-                load_kwargs["name"] = hf_config
+            if aggregate_configs:
+                # Load all HF configs and merge into a single dataset
+                data_list = _load_all_configs(source, split, hf_split)
+            else:
+                # Build load_dataset kwargs
+                # hf_split overrides the split used in load_dataset() (e.g. when
+                # data_files forces the HuggingFace split to "train" but we want to
+                # register it under "test").
+                load_kwargs: dict = {"path": source, "split": hf_split or split}
+                if hf_config:
+                    load_kwargs["name"] = hf_config
+                if data_files:
+                    load_kwargs["data_files"] = data_files
 
-            hf_dataset = load_dataset(**load_kwargs)
+                hf_dataset = load_dataset(**load_kwargs)
+                data_list = None
 
             # Convert to list of dicts for transformation
-            if transform_fn or field_map:
+            if data_list is not None:
+                # Already a list (from aggregate_configs)
+                if transform_fn:
+                    data_list = [r for row in data_list if (r := transform_fn(row)) is not None]
+
+                if field_map:
+                    data_list = [_remap_fields(row, field_map) for row in data_list]
+
+                register_data = data_list
+            elif transform_fn or field_map:
                 data_list = [dict(row) for row in hf_dataset]
 
                 if transform_fn:
-                    data_list = [transform_fn(row) for row in data_list]
+                    data_list = [r for row in data_list if (r := transform_fn(row)) is not None]
 
                 if field_map:
                     data_list = [_remap_fields(row, field_map) for row in data_list]

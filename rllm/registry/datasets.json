@@ -1,0 +1,286 @@
+{
+  "version": 1,
+  "datasets": {
+    "gsm8k": {
+      "description": "Grade school math word problems (8.5K train, 1.3K test)",
+      "source": "openai/gsm8k",
+      "category": "math",
+      "splits": ["train", "test"],
+      "default_agent": "math",
+      "reward_fn": "math_reward_fn",
+      "eval_split": "test",
+      "hf_config": "main",
+      "transform": "rllm.data.transforms:gsm8k_transform"
+    },
+    "math500": {
+      "description": "MATH-500 competition math benchmark (500 test)",
+      "source": "HuggingFaceH4/MATH-500",
+      "category": "math",
+      "splits": ["test"],
+      "default_agent": "math",
+      "reward_fn": "math_reward_fn",
+      "eval_split": "test",
+      "transform": "rllm.data.transforms:math500_transform"
+    },
+    "countdown": {
+      "description": "Countdown arithmetic puzzle (1K train, 500 test)",
+      "source": "predibase/countdown",
+      "category": "math",
+      "splits": ["train", "test"],
+      "default_agent": "countdown",
+      "reward_fn": "countdown_reward_fn",
+      "eval_split": "test",
+      "transform": "rllm.data.transforms:countdown_transform"
+    },
+    "hotpotqa": {
+      "description": "Multi-hop question answering (7.4K validation)",
+      "source": "hotpotqa/hotpot_qa",
+      "category": "qa",
+      "splits": ["validation"],
+      "default_agent": "qa",
+      "reward_fn": "f1_reward_fn",
+      "eval_split": "validation",
+      "hf_config": "distractor",
+      "transform": "rllm.data.transforms:hotpotqa_transform"
+    },
+    "mmlu_pro": {
+      "description": "MMLU-Pro: Expert-level multiple choice with 10 options (12K test)",
+      "source": "TIGER-Lab/MMLU-Pro",
+      "category": "mcq",
+      "splits": ["test"],
+      "default_agent": "mcq",
+      "reward_fn": "mcq_reward_fn",
+      "eval_split": "test",
+      "transform": "rllm.data.transforms:mmlu_pro_transform"
+    },
+    "mmlu_redux": {
+      "description": "MMLU-Redux: Curated MMLU subset with error fixes (3K)",
+      "source": "edinburgh-dawg/mmlu-redux",
+      "category": "mcq",
+      "splits": ["test"],
+      "default_agent": "mcq",
+      "reward_fn": "mcq_reward_fn",
+      "eval_split": "test",
+      "transform": "rllm.data.transforms:mmlu_redux_transform"
+    },
+    "gpqa_diamond": {
+      "description": "GPQA Diamond: Expert-level graduate science QA (198 questions)",
+      "source": "Idavidrein/gpqa",
+      "category": "mcq",
+      "splits": ["train"],
+      "default_agent": "mcq",
+      "reward_fn": "mcq_reward_fn",
+      "eval_split": "train",
+      "hf_config": "gpqa_diamond",
+      "transform": "rllm.data.transforms:gpqa_diamond_transform"
+    },
+    "supergpqa": {
+      "description": "SuperGPQA: Large-scale graduate-level QA across 285 disciplines (26.5K)",
+      "source": "m-a-p/SuperGPQA",
+      "category": "mcq",
+      "splits": ["test"],
+      "default_agent": "mcq",
+      "reward_fn": "mcq_reward_fn",
+      "eval_split": "test",
+      "transform": "rllm.data.transforms:supergpqa_transform"
+    },
+    "ceval": {
+      "description": "C-Eval: Chinese evaluation benchmark across 52 disciplines (13.9K)",
+      "source": "ceval/ceval-exam",
+      "category": "mcq",
+      "splits": ["val"],
+      "default_agent": "mcq",
+      "reward_fn": "mcq_reward_fn",
+      "eval_split": "val",
+      "transform": "rllm.data.transforms:ceval_transform"
+    },
+    "mmmlu": {
+      "description": "MMMLU: Multilingual MMLU across 14 languages (15.9K/lang)",
+      "source": "openai/MMMLU",
+      "category": "mcq",
+      "splits": ["test"],
+      "default_agent": "mcq",
+      "reward_fn": "mcq_reward_fn",
+      "eval_split": "test",
+      "transform": "rllm.data.transforms:mmmlu_transform"
+    },
+    "hmmt": {
+      "description": "HMMT Feb 2025: Harvard-MIT Mathematics Tournament problems",
+      "source": "MathArena/hmmt_feb_2025",
+      "category": "math",
+      "splits": ["train"],
+      "default_agent": "math",
+      "reward_fn": "math_reward_fn",
+      "eval_split": "train",
+      "transform": "rllm.data.transforms:hmmt_transform"
+    },
+    "hmmt_nov": {
+      "description": "HMMT Nov 2025: Harvard-MIT Mathematics Tournament problems (30 problems)",
+      "source": "MathArena/hmmt_nov_2025",
+      "category": "math",
+      "splits": ["train"],
+      "default_agent": "math",
+      "reward_fn": "math_reward_fn",
+      "eval_split": "train",
+      "transform": "rllm.data.transforms:hmmt_transform"
+    },
+    "humaneval": {
+      "description": "HumanEval: Function-level code generation (164 problems)",
+      "source": "openai/openai_humaneval",
+      "category": "code",
+      "splits": ["test"],
+      "default_agent": "code",
+      "reward_fn": "code_reward_fn",
+      "eval_split": "test",
+      "transform": "rllm.data.transforms:humaneval_transform"
+    },
+    "mbpp": {
+      "description": "MBPP: Python programming benchmark (974 problems)",
+      "source": "google-research-datasets/mbpp",
+      "category": "code",
+      "splits": ["test"],
+      "default_agent": "code",
+      "reward_fn": "code_reward_fn",
+      "eval_split": "test",
+      "transform": "rllm.data.transforms:mbpp_transform"
+    },
+    "livecodebench": {
+      "description": "LiveCodeBench: Contamination-free competitive programming",
+      "source": "livecodebench/code_generation_lite",
+      "category": "code",
+      "splits": ["test"],
+      "default_agent": "code",
+      "reward_fn": "code_reward_fn",
+      "eval_split": "test",
+      "transform": "rllm.data.transforms:livecodebench_transform"
+    },
+    "ifeval": {
+      "description": "IFEval: Instruction following evaluation with verifiable constraints (541)",
+      "source": "google/IFEval",
+      "category": "instruction_following",
+      "splits": ["train"],
+      "default_agent": "ifeval",
+      "reward_fn": "ifeval_reward_fn",
+      "eval_split": "train",
+      "field_map": {
+        "prompt": "question"
+      }
+    },
+    "ifbench": {
+      "description": "IFBench: Out-of-distribution instruction following benchmark",
+      "source": "allenai/IFBench_test",
+      "category": "instruction_following",
+      "splits": ["test"],
+      "default_agent": "ifeval",
+      "reward_fn": "ifeval_reward_fn",
+      "eval_split": "test"
+    },
+    "longbench_v2": {
+      "description": "LongBench v2: Long-context understanding MCQ benchmark",
+      "source": "THUDM/LongBench-v2",
+      "category": "mcq",
+      "splits": ["test"],
+      "default_agent": "mcq",
+      "reward_fn": "mcq_reward_fn",
+      "eval_split": "test",
+      "hf_split": "train",
+      "transform": "rllm.data.transforms:longbench_v2_transform"
+    },
+    "bfcl": {
+      "description": "BFCL: Berkeley Function Calling Leaderboard (exec_simple subset)",
+      "source": "gorilla-llm/Berkeley-Function-Calling-Leaderboard",
+      "category": "agentic",
+      "splits": ["test"],
+      "default_agent": "bfcl",
+      "reward_fn": "bfcl_reward_fn",
+      "eval_split": "test",
+      "data_files": "BFCL_v3_exec_simple.json",
+      "hf_split": "train",
+      "transform": "rllm.data.transforms:bfcl_transform"
+    },
+    "multichallenge": {
+      "description": "MultiChallenge: Multi-turn conversation evaluation",
+      "source": "ekwinox117/multi-challenge",
+      "category": "agentic",
+      "splits": ["test"],
+      "default_agent": "multiturn",
+      "reward_fn": "llm_judge_reward_fn",
+      "eval_split": "test"
+    },
+    "aa_lcr": {
+      "description": "AA-LCR: Long-context reasoning over ~100K-token real-world documents (100 questions)",
+      "source": "ArtificialAnalysis/AA-LCR",
+      "category": "qa",
+      "splits": ["test"],
+      "default_agent": "qa",
+      "reward_fn": "llm_equality_reward_fn",
+      "eval_split": "test",
+      "transform": "rllm.data.transforms:aa_lcr_transform"
+    },
+    "hle": {
+      "description": "HLE: Humanity's Last Exam - expert-level questions across dozens of subjects (2,500 questions)",
+      "source": "cais/hle",
+      "category": "qa",
+      "splits": ["test"],
+      "default_agent": "reasoning",
+      "reward_fn": "llm_equality_reward_fn",
+      "eval_split": "test",
+      "transform": "rllm.data.transforms:hle_transform"
+    },
+    "mmlu_prox": {
+      "description": "MMLU-ProX: Multilingual MMLU-Pro across 29 languages (11.8K per language)",
+      "source": "li-lab/MMLU-ProX",
+      "category": "mcq",
+      "splits": ["test"],
+      "default_agent": "mcq",
+      "reward_fn": "mcq_reward_fn",
+      "eval_split": "test",
+      "aggregate_configs": true,
+      "transform": "rllm.data.transforms:mmlu_prox_transform"
+    },
+    "include": {
+      "description": "INCLUDE: Multilingual knowledge evaluation from local exams across 44 languages",
+      "source": "CohereLabs/include-base-44",
+      "category": "mcq",
+      "splits": ["test"],
+      "default_agent": "mcq",
+      "reward_fn": "mcq_reward_fn",
+      "eval_split": "test",
+      "aggregate_configs": true,
+      "transform": "rllm.data.transforms:include_transform"
+    },
+    "global_piqa": {
+      "description": "Global PIQA: Physical commonsense reasoning across 100+ languages",
+      "source": "mrlbenchmarks/global-piqa-nonparallel",
+      "category": "mcq",
+      "splits": ["test"],
+      "default_agent": "mcq",
+      "reward_fn": "mcq_reward_fn",
+      "eval_split": "test",
+      "aggregate_configs": true,
+      "transform": "rllm.data.transforms:global_piqa_transform"
+    },
+    "polymath": {
+      "description": "PolyMATH: Multilingual math reasoning across 18 languages and 4 difficulty levels",
+      "source": "Qwen/PolyMath",
+      "category": "math",
+      "splits": ["top", "high", "medium", "low"],
+      "default_agent": "math",
+      "reward_fn": "math_reward_fn",
+      "eval_split": "top",
+      "aggregate_configs": true,
+      "transform": "rllm.data.transforms:polymath_transform"
+    },
+    "wmt24pp": {
+      "description": "WMT24++: Machine translation benchmark across 55 languages (ChrF evaluation)",
+      "source": "google/wmt24pp",
+      "category": "translation",
+      "splits": ["train"],
+      "default_agent": "translation",
+      "reward_fn": "translation_reward_fn",
+      "eval_split": "train",
+      "aggregate_configs": true,
+      "transform": "rllm.data.transforms:wmt24pp_transform"
+    }
+  }
+}

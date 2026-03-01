@@ -12,6 +12,36 @@ from rllm.types import Episode, Step, Trajectory
 
 logger = logging.getLogger(__name__)
 
+
+_PYTHON_TO_JSON_SCHEMA_TYPE = {
+    "float": "number",
+    "dict": "object",
+    "tuple": "array",
+}
+
+
+def _clean_schema(obj):
+    """Recursively clean a BFCL function schema for OpenAI compatibility.
+
+    Fixes two issues in the BFCL dataset:
+    1. Irrelevant properties set to None (removes them).
+    2. Python type names (float, dict, tuple) instead of JSON Schema types.
+    """
+    if isinstance(obj, dict):
+        cleaned = {}
+        for k, v in obj.items():
+            if v is None:
+                continue
+            v = _clean_schema(v)
+            if k == "type" and isinstance(v, str):
+                v = _PYTHON_TO_JSON_SCHEMA_TYPE.get(v, v)
+            cleaned[k] = v
+        return cleaned
+    if isinstance(obj, list):
+        return [_clean_schema(item) for item in obj]
+    return obj
+
+
 BFCL_SYSTEM_PROMPT = """\
 You are a helpful assistant with access to functions/tools. When the user asks you \
 to perform a task, call the appropriate function with the correct arguments. \
@@ -50,12 +80,13 @@ class BFCLAgentFlow:
         # Build tools in OpenAI format
         tools = []
         for func in functions:
+            params = _clean_schema(func.get("parameters") or {})
             tool = {
                 "type": "function",
                 "function": {
                     "name": func.get("name", ""),
                     "description": func.get("description", ""),
-                    "parameters": func.get("parameters", {}),
+                    "parameters": params,
                 },
             }
             tools.append(tool)
