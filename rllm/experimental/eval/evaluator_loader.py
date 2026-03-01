@@ -6,11 +6,15 @@ import importlib
 import json
 import os
 
+from rllm.experimental.eval.bfcl_evaluator import BFCLEvaluator
+from rllm.experimental.eval.ifeval_evaluator import IFEvalEvaluator
+from rllm.experimental.eval.llm_judge_evaluator import LLMJudgeEvaluator
 from rllm.experimental.eval.types import (
     CodeEvaluator,
     CountdownEvaluator,
     Evaluator,
     F1Evaluator,
+    MCQEvaluator,
     MathEvaluator,
 )
 
@@ -19,6 +23,10 @@ _EVALUATOR_REGISTRY: dict[str, type] = {
     "countdown_reward_fn": CountdownEvaluator,
     "code_reward_fn": CodeEvaluator,
     "f1_reward_fn": F1Evaluator,
+    "mcq_reward_fn": MCQEvaluator,
+    "ifeval_reward_fn": IFEvalEvaluator,
+    "bfcl_reward_fn": BFCLEvaluator,
+    "llm_judge_reward_fn": LLMJudgeEvaluator,
 }
 
 

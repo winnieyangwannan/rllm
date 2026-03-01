@@ -67,8 +67,8 @@ class TestResolveEvaluatorFromCatalog:
         evaluator = resolve_evaluator_from_catalog("countdown")
         assert isinstance(evaluator, CountdownEvaluator)
 
-    def test_resolve_deepcoder(self):
-        evaluator = resolve_evaluator_from_catalog("deepcoder")
+    def test_resolve_humaneval(self):
+        evaluator = resolve_evaluator_from_catalog("humaneval")
         assert isinstance(evaluator, CodeEvaluator)
 
     def test_resolve_hotpotqa(self):

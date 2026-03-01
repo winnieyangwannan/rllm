@@ -246,6 +246,59 @@ class F1Evaluator:
         )
 
 
+class MCQEvaluator:
+    """Evaluator for multiple-choice question tasks.
+
+    Extracts the choice letter (A-J) from the model response and compares
+    against the ground_truth field.
+    """
+
+    def evaluate(self, task: dict, episode: Episode) -> EvalOutput:
+        import re
+
+        answer_text = _extract_agent_answer(episode)
+        model_letter = self._extract_choice_letter(answer_text)
+
+        gt = task.get("ground_truth", "")
+        expected_letter = str(gt).strip().upper()[:1] if gt else ""
+
+        is_correct = model_letter != "" and model_letter == expected_letter
+        reward = 1.0 if is_correct else 0.0
+        return EvalOutput(
+            reward=reward,
+            is_correct=is_correct,
+            signals=[Signal(name="accuracy", value=reward)],
+            metadata={"model_answer": model_letter, "expected": expected_letter},
+        )
+
+    @staticmethod
+    def _extract_choice_letter(text: str) -> str:
+        """Extract the choice letter (A-J) from model response."""
+        import re
+
+        text = text.strip()
+        if not text:
+            return ""
+        # Try exact single letter
+        if len(text) == 1 and text.upper() in "ABCDEFGHIJ":
+            return text.upper()
+        # Try pattern like "The answer is (B)" or "Answer: C"
+        match = re.search(
+            r"(?:answer\s*(?:is|:)\s*\(?([A-Ja-j])\)?)", text, re.IGNORECASE
+        )
+        if match:
+            return match.group(1).upper()
+        # Try pattern like "**B**" or "(B)"
+        match = re.search(r"(?:\*\*([A-J])\*\*|\(([A-J])\))", text)
+        if match:
+            return (match.group(1) or match.group(2)).upper()
+        # Fallback: first standalone capital letter A-J
+        match = re.search(r"\b([A-J])\b", text)
+        if match:
+            return match.group(1)
+        return ""
+
+
 class CompoundEvaluator:
     """Runs multiple evaluators and merges their signals.
 
