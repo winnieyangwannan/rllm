@@ -1,0 +1,200 @@
+"""Eval CLI command.
+
+``rllm eval <benchmark> --agent <name> [--evaluator <name>] [--base-url <url>] [--model <name>]``
+
+When ``--base-url`` is omitted, a LiteLLM proxy is auto-started using the
+configuration from ``rllm setup`` (stored in ``~/.rllm/config.json``).
+"""
+
+from __future__ import annotations
+
+import asyncio
+
+import click
+from rich.console import Console
+from rich.panel import Panel
+from rich.status import Status
+from rich.table import Table
+from rich.theme import Theme
+
+from rllm.data import DatasetRegistry
+from rllm.experimental.cli._pull import load_dataset_catalog, pull_dataset
+from rllm.experimental.eval.agent_loader import load_agent
+from rllm.experimental.eval.evaluator_loader import load_evaluator, resolve_evaluator_from_catalog
+from rllm.experimental.eval.runner import EvalRunner
+
+theme = Theme({"label": "dim", "success": "bold green", "error": "bold red", "val": "bold", "key": "yellow"})
+console = Console(theme=theme)
+
+
+def _run_eval(benchmark: str, agent_name: str, evaluator_name: str | None, base_url: str, model: str, split: str, concurrency: int, max_examples: int | None, output_path: str | None):
+    """Core eval logic, extracted for clean proxy lifecycle management."""
+    # Load catalog for defaults
+    catalog = load_dataset_catalog()
+    catalog_entry = catalog.get("datasets", {}).get(benchmark)
+
+    # Resolve agent
+    if agent_name is None:
+        if catalog_entry and "default_agent" in catalog_entry:
+            agent_name = catalog_entry["default_agent"]
+        else:
+            console.print(f"  [error]No --agent specified and no default_agent in catalog for '{benchmark}'.[/]")
+            raise SystemExit(1)
+
+    # Resolve split
+    if split is None:
+        if catalog_entry:
+            split = catalog_entry.get("eval_split", "test")
+        else:
+            split = "test"
+
+    # Load agent (now returns AgentFlow)
+    try:
+        agent = load_agent(agent_name)
+    except (KeyError, ImportError, AttributeError, TypeError) as e:
+        console.print(f"  [error]Error loading agent '{agent_name}': {e}[/]")
+        raise SystemExit(1)
+
+    # Load evaluator
+    evaluator = None
+    evaluator_display = "N/A"
+    if evaluator_name is not None:
+        try:
+            evaluator = load_evaluator(evaluator_name)
+            evaluator_display = evaluator_name
+        except (KeyError, ImportError, AttributeError, TypeError) as e:
+            console.print(f"  [error]Error loading evaluator '{evaluator_name}': {e}[/]")
+            raise SystemExit(1)
+    else:
+        # Auto-resolve from catalog
+        evaluator = resolve_evaluator_from_catalog(benchmark)
+        if evaluator is not None:
+            reward_fn_name = catalog_entry.get("reward_fn", "") if catalog_entry else ""
+            evaluator_display = reward_fn_name or type(evaluator).__name__
+
+    if evaluator is None:
+        console.print(f"  [error]No evaluator found for '{benchmark}'. Specify --evaluator explicitly.[/]")
+        raise SystemExit(1)
+
+    # Load dataset — auto-pull if not available locally
+    dataset = DatasetRegistry.load_dataset(benchmark, split)
+    if dataset is None:
+        if catalog_entry:
+            with Status(f"[dim]Pulling {benchmark} from {catalog_entry['source']}...[/]", console=console):
+                pull_dataset(benchmark, catalog_entry)
+            dataset = DatasetRegistry.load_dataset(benchmark, split)
+
+    if dataset is None:
+        console.print(f"  [error]Could not load dataset '{benchmark}' split '{split}'.[/]")
+        raise SystemExit(1)
+
+    # Limit examples if requested
+    if max_examples is not None and max_examples < len(dataset):
+        dataset = dataset.select(range(max_examples))
+
+    # Resolve agent description
+    agent_desc = ""
+    if ":" not in agent_name:
+        from rllm.experimental.cli._pull import load_agent_catalog
+        agent_catalog = load_agent_catalog()
+        agent_entry = agent_catalog.get("agents", {}).get(agent_name, {})
+        agent_desc = agent_entry.get("description", "")
+
+    # Print eval header
+    table = Table(show_header=False, box=None, padding=(0, 2))
+    table.add_column(style="label", width=12)
+    table.add_column()
+    table.add_row("Benchmark", f"[val]{benchmark}[/]  [dim]({split}, {len(dataset)} examples)[/]")
+    table.add_row("Model", f"[val]{model}[/]")
+    agent_text = f"[val]{agent_name}[/]"
+    if agent_desc:
+        agent_text += f"  [dim]{agent_desc}[/]"
+    table.add_row("Agent", agent_text)
+    table.add_row("Evaluator", f"[dim]{evaluator_display}[/]")
+    console.print()
+    console.print(Panel(table, border_style="cyan", expand=False))
+    console.print()
+
+    # Run evaluation
+    runner = EvalRunner(base_url=base_url, model=model, concurrency=concurrency)
+    result = asyncio.run(runner.run(dataset, agent, evaluator, agent_name=agent_name))
+
+    # Print results
+    pct = f"{result.score * 100:.1f}%"
+    res_table = Table(show_header=False, box=None, padding=(0, 2))
+    res_table.add_column(style="label", width=12)
+    res_table.add_column()
+    score_style = "bold green" if result.score >= 0.5 else "bold yellow" if result.score >= 0.2 else "bold red"
+    res_table.add_row("Accuracy", f"[{score_style}]{pct}[/]  [dim]({result.correct}/{result.total})[/]")
+    error_style = "dim" if result.errors == 0 else "bold red"
+    res_table.add_row("Errors", f"[{error_style}]{result.errors}[/]")
+
+    # Display signal breakdown if any
+    if result.signal_averages:
+        for sig_name, sig_avg in result.signal_averages.items():
+            res_table.add_row(sig_name.title(), f"[dim]{sig_avg:.3f}[/]")
+
+    console.print(Panel(res_table, title="[bold]Results[/]", border_style="green" if result.score >= 0.5 else "yellow", expand=False))
+
+    # Save results
+    saved_path = result.save(output_path)
+    console.print(f"\n  [dim]Saved to {saved_path}[/]")
+    console.print()
+
+
+@click.command("eval")
+@click.argument("benchmark")
+@click.option("--agent", "agent_name", default=None, help="Agent scaffold: registry name or module:object path.")
+@click.option("--evaluator", "evaluator_name", default=None, help="Evaluator: registry name or module:class path.")
+@click.option("--base-url", default=None, help="OpenAI-compatible API endpoint URL. If omitted, a proxy is auto-started using 'rllm setup' config.")
+@click.option("--model", default=None, help="Model name to evaluate. Defaults to configured model from 'rllm setup'.")
+@click.option("--split", default=None, help="Dataset split (default: from catalog eval_split).")
+@click.option("--concurrency", default=64, type=int, help="Number of parallel requests.")
+@click.option("--max-examples", default=None, type=int, help="Limit number of examples (for dev/testing).")
+@click.option("--output", "output_path", default=None, help="Output file path for results JSON.")
+def eval_cmd(benchmark: str, agent_name: str | None, evaluator_name: str | None, base_url: str | None, model: str | None, split: str | None, concurrency: int, max_examples: int | None, output_path: str | None):
+    """Evaluate a model on a benchmark dataset."""
+    proxy_manager = None
+
+    if base_url is not None:
+        # Direct mode: user provided --base-url, require --model too
+        if model is None:
+            console.print("  [error]--model is required when --base-url is provided.[/]")
+            raise SystemExit(1)
+    else:
+        # Proxy mode: auto-start LiteLLM proxy from config
+        from rllm.experimental.eval.config import load_config
+        from rllm.experimental.eval.proxy import EvalProxyManager
+
+        config = load_config()
+        if not config.is_configured():
+            console.print()
+            console.print("  [error]No configuration found.[/] Run [bold]rllm setup[/] first to configure your provider and API key.")
+            console.print()
+            raise SystemExit(1)
+
+        # --model overrides configured model
+        if model is None:
+            model = config.model
+
+        proxy_manager = EvalProxyManager(
+            provider=config.provider,
+            model_name=model,
+            api_key=config.api_key,
+        )
+        with Status(f"[dim]Starting LiteLLM proxy for [bold]{config.provider}/{model}[/bold]...[/]", console=console):
+            try:
+                proxy_manager.start_proxy_subprocess(proxy_manager.build_proxy_config())
+            except (RuntimeError, TimeoutError) as e:
+                console.print(f"\n  [error]Failed to start LiteLLM proxy.[/]\n\n  {e}")
+                console.print("\n  [dim]Make sure litellm is installed:[/] [bold]pip install litellm\\[proxy][/]")
+                console.print()
+                raise SystemExit(1)
+        base_url = proxy_manager.get_proxy_url()
+        console.print(f"  [success]Proxy ready[/] at [dim]{base_url}[/]")
+
+    try:
+        _run_eval(benchmark, agent_name, evaluator_name, base_url, model, split, concurrency, max_examples, output_path)
+    finally:
+        if proxy_manager is not None:
+            proxy_manager.shutdown_proxy()

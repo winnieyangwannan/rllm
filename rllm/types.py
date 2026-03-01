@@ -40,6 +40,7 @@ class Trajectory(BaseModel):
     reward: float | None = None
     input: dict | None = None  # Function arguments (SDK usage)
     output: Any = None  # Function return value (SDK usage)
+    signals: dict[str, float] = Field(default_factory=dict)  # Evaluation signals
     metadata: dict | None = None
 
     @property
@@ -53,11 +54,12 @@ class Episode(BaseModel):
 
     model_config = ConfigDict(arbitrary_types_allowed=True, populate_by_name=True)
 
-    id: str = ""
+    id: str = Field(default_factory=lambda: str(uuid.uuid4()))
     task: Any = None
     termination_reason: Any | None = None
     is_correct: bool = False
     trajectories: list[Trajectory] = Field(default_factory=list)
+    artifacts: dict[str, Any] = Field(default_factory=dict)
     metrics: dict = Field(default_factory=dict)
     metadata: dict = Field(default_factory=dict)
 
