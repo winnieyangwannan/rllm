@@ -18,19 +18,19 @@ def agent():
 
 @agent.command(name="list")
 def list_agents():
-    """List registered agent scaffolds."""
-    catalog = load_agent_catalog()
-    agents = catalog.get("agents", {})
+    """List registered agent scaffolds (built-in and plugins)."""
+    from rllm.experimental.eval.agent_loader import list_agents as _list_agents
+
+    agents = _list_agents()
 
     if not agents:
         click.echo("No agents registered.")
         return
 
-    headers = ["Name", "Module", "Description"]
+    headers = ["Name", "Source", "Module", "Description"]
     rows = []
-    for name, info in sorted(agents.items()):
-        module_fn = f"{info.get('module', '')}.{info.get('function', '')}"
-        rows.append([name, module_fn, info.get("description", "")])
+    for a in agents:
+        rows.append([a["name"], a["source"], a["module"], a["description"]])
 
     click.echo(format_table(headers, rows))
 
@@ -43,7 +43,19 @@ def info(name: str):
     agents = agent_catalog.get("agents", {})
 
     if name not in agents:
-        available = ", ".join(sorted(agents.keys()))
+        # Check if it's a plugin agent
+        from rllm.experimental.eval.agent_loader import list_agents as _list_agents
+
+        plugin_agents = {a["name"]: a for a in _list_agents()}
+        if name in plugin_agents:
+            a = plugin_agents[name]
+            click.echo(f"\nAgent: {name}")
+            click.echo(f"  Source:       {a['source']}")
+            click.echo(f"  Module:       {a['module']}")
+            click.echo()
+            return
+
+        available = ", ".join(sorted({*agents.keys(), *plugin_agents.keys()}))
         click.echo(f"Error: Agent '{name}' not found. Available: {available}")
         raise SystemExit(1)
 

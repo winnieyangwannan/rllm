@@ -148,6 +148,27 @@ def inspect(name: str, split: str | None, num_rows: int):
 
 @dataset.command()
 @click.argument("name")
+@click.option("--file", "file_path", required=True, type=click.Path(exists=True), help="Path to data file (JSON, JSONL, CSV, or Parquet).")
+@click.option("--split", default="default", help="Split name (e.g., train, test). Default: 'default'.")
+@click.option("--category", default=None, help="Dataset category (e.g., math, qa, code).")
+@click.option("--description", default=None, help="Short description of the dataset.")
+def register(name: str, file_path: str, split: str, category: str | None, description: str | None):
+    """Register a local data file as a dataset."""
+    from rllm.data import Dataset, DatasetRegistry
+
+    ds = Dataset.load_data(file_path)
+    DatasetRegistry.register_dataset(
+        name,
+        ds.data,
+        split=split,
+        category=category,
+        description=description,
+    )
+    click.echo(f"Registered '{name}' split '{split}' ({len(ds)} examples).")
+
+
+@dataset.command()
+@click.argument("name")
 @click.option("--split", default=None, help="Remove only this split (default: remove all).")
 def remove(name: str, split: str | None):
     """Remove a local dataset."""

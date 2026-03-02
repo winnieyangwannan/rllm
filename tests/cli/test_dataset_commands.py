@@ -1,5 +1,6 @@
 """Tests for rllm dataset CLI commands."""
 
+import csv
 import json
 import os
 import tempfile
@@ -103,3 +104,79 @@ def test_dataset_register_inspect_remove(runner, tmp_rllm_home):
     # Confirm removal
     result = runner.invoke(cli, ["dataset", "list"])
     assert "lifecycle_ds" not in result.output
+
+
+class TestDatasetRegister:
+    """Tests for 'rllm dataset register' CLI command."""
+
+    def test_register_json(self, runner, tmp_rllm_home, tmp_path):
+        """Register a dataset from a JSON file."""
+        data = [{"q": "1+1", "a": "2"}, {"q": "2+2", "a": "4"}]
+        f = tmp_path / "data.json"
+        f.write_text(json.dumps(data))
+
+        result = runner.invoke(cli, ["dataset", "register", "my_ds", "--file", str(f)])
+        assert result.exit_code == 0
+        assert "Registered" in result.output
+        assert "2 examples" in result.output
+
+        # Should appear in list
+        result = runner.invoke(cli, ["dataset", "list"])
+        assert "my_ds" in result.output
+
+    def test_register_jsonl(self, runner, tmp_rllm_home, tmp_path):
+        """Register a dataset from a JSONL file."""
+        f = tmp_path / "data.jsonl"
+        lines = [json.dumps({"x": i}) for i in range(5)]
+        f.write_text("\n".join(lines))
+
+        result = runner.invoke(cli, ["dataset", "register", "jsonl_ds", "--file", str(f), "--split", "train"])
+        assert result.exit_code == 0
+        assert "5 examples" in result.output
+        assert "train" in result.output
+
+    def test_register_csv(self, runner, tmp_rllm_home, tmp_path):
+        """Register a dataset from a CSV file."""
+        f = tmp_path / "data.csv"
+        with open(f, "w", newline="") as csvfile:
+            writer = csv.DictWriter(csvfile, fieldnames=["question", "answer"])
+            writer.writeheader()
+            writer.writerow({"question": "hi", "answer": "hello"})
+            writer.writerow({"question": "bye", "answer": "goodbye"})
+        result = runner.invoke(cli, ["dataset", "register", "csv_ds", "--file", str(f)])
+        assert result.exit_code == 0
+        assert "2 examples" in result.output
+
+    def test_register_with_category_and_description(self, runner, tmp_rllm_home, tmp_path):
+        """Register with optional metadata."""
+        data = [{"q": "test"}]
+        f = tmp_path / "data.json"
+        f.write_text(json.dumps(data))
+
+        result = runner.invoke(cli, [
+            "dataset", "register", "meta_ds",
+            "--file", str(f),
+            "--category", "qa",
+            "--description", "A test dataset",
+        ])
+        assert result.exit_code == 0
+
+        # Verify metadata via info command
+        result = runner.invoke(cli, ["dataset", "info", "meta_ds"])
+        assert result.exit_code == 0
+
+    def test_register_missing_file(self, runner, tmp_rllm_home):
+        """Registering a non-existent file should fail."""
+        result = runner.invoke(cli, ["dataset", "register", "bad_ds", "--file", "/nonexistent/path.json"])
+        assert result.exit_code != 0
+
+    def test_register_inspect_roundtrip(self, runner, tmp_rllm_home, tmp_path):
+        """Registered dataset can be inspected."""
+        data = [{"query": "Best pizza?", "cuisine": "italian"}]
+        f = tmp_path / "data.json"
+        f.write_text(json.dumps(data))
+
+        runner.invoke(cli, ["dataset", "register", "rt_ds", "--file", str(f), "--split", "test"])
+        result = runner.invoke(cli, ["dataset", "inspect", "rt_ds", "--split", "test", "-n", "1"])
+        assert result.exit_code == 0
+        assert "Best pizza?" in result.output
