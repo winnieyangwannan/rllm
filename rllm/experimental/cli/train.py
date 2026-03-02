@@ -19,11 +19,7 @@ from rich.panel import Panel
 from rich.table import Table
 from rich.theme import Theme
 
-from rllm.data import DatasetRegistry
 from rllm.experimental.cli._pull import load_dataset_catalog, pull_dataset
-from rllm.experimental.eval.agent_loader import load_agent
-from rllm.experimental.eval.evaluator_loader import load_evaluator, resolve_evaluator_from_catalog
-from rllm.experimental.unified_trainer import AgentTrainer
 
 theme = Theme({"label": "dim", "success": "bold green", "error": "bold red", "val": "bold", "key": "yellow"})
 console = Console(theme=theme)
@@ -198,6 +194,11 @@ def _run_train(
     """Core training logic: resolve catalog, load data, build config, launch trainer."""
     from rich.status import Status
 
+    from rllm.data import DatasetRegistry
+    from rllm.experimental.eval.agent_loader import load_agent
+    from rllm.experimental.eval.evaluator_loader import load_evaluator, resolve_evaluator_from_catalog
+    from rllm.experimental.unified_trainer import AgentTrainer
+
     # ---- Load catalog ----
     catalog = load_dataset_catalog()
     catalog_entry = catalog.get("datasets", {}).get(benchmark)
@@ -315,6 +316,8 @@ def _run_train(
 def _load_or_pull_dataset(name: str, split: str, catalog: dict):
     """Load a dataset, auto-pulling from HuggingFace if not cached."""
     from rich.status import Status
+
+    from rllm.data import DatasetRegistry
 
     dataset = DatasetRegistry.load_dataset(name, split)
     if dataset is None:

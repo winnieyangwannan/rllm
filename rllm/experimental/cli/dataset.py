@@ -7,7 +7,6 @@ from __future__ import annotations
 
 import click
 
-from rllm.data import DatasetRegistry
 from rllm.experimental.cli._display import format_table
 from rllm.experimental.cli._pull import load_dataset_catalog, pull_dataset
 
@@ -21,6 +20,8 @@ def dataset():
 @click.option("--all", "show_all", is_flag=True, help="Show all available datasets from the catalog including undownloaded ones.")
 def list_datasets(show_all: bool):
     """List datasets."""
+    from rllm.data import DatasetRegistry
+
     catalog = load_dataset_catalog()
     catalog_datasets = catalog.get("datasets", {})
     local_names = set(DatasetRegistry.get_dataset_names())
@@ -72,6 +73,8 @@ def pull(name: str):
 @click.argument("name")
 def info(name: str):
     """Show dataset metadata and splits."""
+    from rllm.data import DatasetRegistry
+
     # Check local registry first
     ds_info = DatasetRegistry.get_dataset_info(name)
 
@@ -113,6 +116,8 @@ def info(name: str):
 @click.option("-n", "--num-rows", default=3, help="Number of example rows to show.")
 def inspect(name: str, split: str | None, num_rows: int):
     """Show sample data rows from a dataset."""
+    from rllm.data import DatasetRegistry
+
     catalog = load_dataset_catalog()
     catalog_entry = catalog.get("datasets", {}).get(name)
 
@@ -146,6 +151,8 @@ def inspect(name: str, split: str | None, num_rows: int):
 @click.option("--split", default=None, help="Remove only this split (default: remove all).")
 def remove(name: str, split: str | None):
     """Remove a local dataset."""
+    from rllm.data import DatasetRegistry
+
     if split:
         ok = DatasetRegistry.remove_dataset_split(name, split)
         if ok:

@@ -17,11 +17,7 @@ from rich.status import Status
 from rich.table import Table
 from rich.theme import Theme
 
-from rllm.data import DatasetRegistry
 from rllm.experimental.cli._pull import load_dataset_catalog, pull_dataset
-from rllm.experimental.eval.agent_loader import load_agent
-from rllm.experimental.eval.evaluator_loader import load_evaluator, resolve_evaluator_from_catalog
-from rllm.experimental.eval.runner import EvalRunner
 
 theme = Theme({"label": "dim", "success": "bold green", "error": "bold red", "val": "bold", "key": "yellow"})
 console = Console(theme=theme)
@@ -29,6 +25,11 @@ console = Console(theme=theme)
 
 def _run_eval(benchmark: str, agent_name: str, evaluator_name: str | None, base_url: str, model: str, split: str, concurrency: int, max_examples: int | None, output_path: str | None):
     """Core eval logic, extracted for clean proxy lifecycle management."""
+    from rllm.data import DatasetRegistry
+    from rllm.experimental.eval.agent_loader import load_agent
+    from rllm.experimental.eval.evaluator_loader import load_evaluator, resolve_evaluator_from_catalog
+    from rllm.experimental.eval.runner import EvalRunner
+
     # Load catalog for defaults
     catalog = load_dataset_catalog()
     catalog_entry = catalog.get("datasets", {}).get(benchmark)

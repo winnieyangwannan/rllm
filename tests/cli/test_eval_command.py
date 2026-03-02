@@ -99,8 +99,8 @@ def test_eval_base_url_skips_proxy(runner, tmp_rllm_home, mock_dataset):
     mock_agent = _MockAgentFlow()
 
     with patch("rllm.experimental.eval.proxy.EvalProxyManager") as mock_pm_cls, \
-         patch("rllm.experimental.cli.eval.load_agent", return_value=mock_agent), \
-         patch("rllm.experimental.cli.eval.resolve_evaluator_from_catalog", return_value=_MockEvaluator()):
+         patch("rllm.experimental.eval.agent_loader.load_agent", return_value=mock_agent), \
+         patch("rllm.experimental.eval.evaluator_loader.resolve_evaluator_from_catalog", return_value=_MockEvaluator()):
         result = runner.invoke(cli, [
             "eval", "test_math",
             "--agent", "math",
@@ -116,8 +116,8 @@ def test_eval_with_mock_agent(runner, tmp_rllm_home, mock_dataset):
     """Eval with a mock agent should produce results."""
     mock_agent = _MockAgentFlow()
 
-    with patch("rllm.experimental.cli.eval.load_agent", return_value=mock_agent), \
-         patch("rllm.experimental.cli.eval.resolve_evaluator_from_catalog", return_value=_MockEvaluator()):
+    with patch("rllm.experimental.eval.agent_loader.load_agent", return_value=mock_agent), \
+         patch("rllm.experimental.eval.evaluator_loader.resolve_evaluator_from_catalog", return_value=_MockEvaluator()):
         result = runner.invoke(cli, [
             "eval", "test_math",
             "--agent", "math",
@@ -135,8 +135,8 @@ def test_eval_with_max_examples(runner, tmp_rllm_home, mock_dataset):
     """Eval with --max-examples should limit evaluation."""
     mock_agent = _MockAgentFlow()
 
-    with patch("rllm.experimental.cli.eval.load_agent", return_value=mock_agent), \
-         patch("rllm.experimental.cli.eval.resolve_evaluator_from_catalog", return_value=_MockEvaluator()):
+    with patch("rllm.experimental.eval.agent_loader.load_agent", return_value=mock_agent), \
+         patch("rllm.experimental.eval.evaluator_loader.resolve_evaluator_from_catalog", return_value=_MockEvaluator()):
         result = runner.invoke(cli, [
             "eval", "test_math",
             "--agent", "math",
@@ -154,8 +154,8 @@ def test_eval_saves_results(runner, tmp_rllm_home, mock_dataset):
     """Eval should save results to a JSON file."""
     mock_agent = _MockAgentFlow()
 
-    with patch("rllm.experimental.cli.eval.load_agent", return_value=mock_agent), \
-         patch("rllm.experimental.cli.eval.resolve_evaluator_from_catalog", return_value=_MockEvaluator()):
+    with patch("rllm.experimental.eval.agent_loader.load_agent", return_value=mock_agent), \
+         patch("rllm.experimental.eval.evaluator_loader.resolve_evaluator_from_catalog", return_value=_MockEvaluator()):
         result = runner.invoke(cli, [
             "eval", "test_math",
             "--agent", "math",
@@ -171,8 +171,8 @@ def test_eval_with_explicit_evaluator(runner, tmp_rllm_home, mock_dataset):
     """Eval with --evaluator should use specified evaluator."""
     mock_agent = _MockAgentFlow()
 
-    with patch("rllm.experimental.cli.eval.load_agent", return_value=mock_agent), \
-         patch("rllm.experimental.cli.eval.load_evaluator", return_value=_MockEvaluator()) as mock_load_eval:
+    with patch("rllm.experimental.eval.agent_loader.load_agent", return_value=mock_agent), \
+         patch("rllm.experimental.eval.evaluator_loader.load_evaluator", return_value=_MockEvaluator()) as mock_load_eval:
         result = runner.invoke(cli, [
             "eval", "test_math",
             "--agent", "math",

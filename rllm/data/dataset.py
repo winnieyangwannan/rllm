@@ -3,15 +3,15 @@ import logging
 import os
 from typing import Any
 
-import pandas as pd
-import polars as pl
-import torch
-
 logger = logging.getLogger(__name__)
 
 
-class Dataset(torch.utils.data.Dataset):
-    """A class representing a dataset."""
+class Dataset:
+    """A class representing a dataset.
+
+    Implements the ``__len__``/``__getitem__`` protocol expected by
+    ``torch.utils.data.DataLoader`` without requiring torch at import time.
+    """
 
     def __init__(self, data: list[dict[str, Any]], name: str | None = None, split: str | None = None):
         """Initialize a Dataset.
@@ -21,7 +21,6 @@ class Dataset(torch.utils.data.Dataset):
             name: Optional name for the dataset
             split: Optional split name (e.g., 'train', 'test')
         """
-        super().__init__()
         self.data = data
         self.name = name
         self.split = split
@@ -153,8 +152,10 @@ class Dataset(torch.utils.data.Dataset):
                 for line in f:
                     data.append(json.loads(line))
         elif file_ext == ".csv":
+            import pandas as pd
             data = pd.read_csv(path).to_dict("records")
         elif file_ext == ".parquet":
+            import pandas as pd
             data = pd.read_parquet(path).to_dict("records")
         else:
             raise ValueError(f"Unsupported file format: {file_ext}")
@@ -219,6 +220,7 @@ class DatasetRegistry:
                 target = new_abs_path if os.path.exists(new_abs_path) else abs_path
                 if target and os.path.exists(target):
                     try:
+                        import polars as pl
                         num = len(pl.read_parquet(target))
                         split_info["num_examples"] = num
                         split_info["fields"] = list(pl.read_parquet(target).columns)
@@ -302,6 +304,8 @@ class DatasetRegistry:
         dataset_dir = os.path.join(cls._DATASET_DIR, name)
         os.makedirs(dataset_dir, exist_ok=True)
 
+        import pandas as pd
+
         # Convert HuggingFace dataset to list of dictionaries if needed
         if hasattr(data, "to_pandas") and callable(data.to_pandas):
             # This is likely a HuggingFace dataset
@@ -378,6 +382,7 @@ class DatasetRegistry:
             logger.warning(f"Dataset file not found: {dataset_path}")
             return None
 
+        import polars as pl
         data = pl.read_parquet(dataset_path).to_dicts()
 
         logger.info(f"Loaded dataset '{name}' split '{split}' with {len(data)} examples.")
