@@ -50,6 +50,21 @@
       "description": "Machine translation agent",
       "module": "rllm.experimental.agents.translation_agent",
       "function": "translation_agent"
+    },
+    "vlm_mcq": {
+      "description": "VLM multiple-choice question answering with images",
+      "module": "rllm.experimental.agents.vlm_agent",
+      "function": "vlm_mcq_agent"
+    },
+    "vlm_math": {
+      "description": "VLM math reasoning with images and boxed answer",
+      "module": "rllm.experimental.agents.vlm_agent",
+      "function": "vlm_math_agent"
+    },
+    "vlm_open": {
+      "description": "VLM open-ended question answering with images",
+      "module": "rllm.experimental.agents.vlm_agent",
+      "function": "vlm_open_agent"
     }
   }
 }

@@ -281,6 +281,105 @@
       "eval_split": "train",
       "aggregate_configs": true,
       "transform": "rllm.data.transforms:wmt24pp_transform"
+    },
+    "mmmu": {
+      "description": "MMMU: Massive Multi-discipline Multimodal Understanding (900 validation)",
+      "source": "MMMU/MMMU",
+      "category": "vlm",
+      "splits": ["validation"],
+      "default_agent": "vlm_mcq",
+      "reward_fn": "mcq_reward_fn",
+      "eval_split": "validation",
+      "aggregate_configs": true,
+      "transform": "rllm.data.transforms:mmmu_transform"
+    },
+    "mmmu_pro": {
+      "description": "MMMU-Pro: Harder multimodal understanding with 10 options (1,730 test)",
+      "source": "MMMU/MMMU_Pro",
+      "category": "vlm",
+      "splits": ["test"],
+      "default_agent": "vlm_mcq",
+      "reward_fn": "mcq_reward_fn",
+      "eval_split": "test",
+      "hf_config": "standard (10 options)",
+      "transform": "rllm.data.transforms:mmmu_pro_transform"
+    },
+    "mathvision": {
+      "description": "MathVision: Visual math reasoning benchmark (304 testmini)",
+      "source": "MathLLMs/MathVision",
+      "category": "vlm",
+      "splits": ["test"],
+      "default_agent": "vlm_math",
+      "reward_fn": "math_reward_fn",
+      "eval_split": "test",
+      "hf_split": "testmini",
+      "transform": "rllm.data.transforms:mathvision_transform"
+    },
+    "mathvista": {
+      "description": "MathVista: Visual math reasoning across diverse tasks (1,000 testmini)",
+      "source": "AI4Math/MathVista",
+      "category": "vlm",
+      "splits": ["test"],
+      "default_agent": "vlm_math",
+      "reward_fn": "math_reward_fn",
+      "eval_split": "test",
+      "hf_split": "testmini",
+      "transform": "rllm.data.transforms:mathvista_transform"
+    },
+    "dynamath": {
+      "description": "DynaMath: Dynamic visual math with 10 variants (501 x 10 = 5,010)",
+      "source": "DynaMath/DynaMath_Sample",
+      "category": "vlm",
+      "splits": ["test"],
+      "default_agent": "vlm_math",
+      "reward_fn": "math_reward_fn",
+      "eval_split": "test",
+      "hf_split": "sample_variant1",
+      "transform": "rllm.data.transforms:dynamath_transform"
+    },
+    "zerobench": {
+      "description": "ZEROBench: Zero-shot visual reasoning benchmark (100 questions)",
+      "source": "jonathan-roberts1/zerobench",
+      "category": "vlm",
+      "splits": ["test"],
+      "default_agent": "vlm_open",
+      "reward_fn": "llm_equality_reward_fn",
+      "eval_split": "test",
+      "hf_split": "zerobench",
+      "transform": "rllm.data.transforms:zerobench_transform"
+    },
+    "zerobench_sub": {
+      "description": "ZEROBench Subquestions: Decomposed visual reasoning (334 subquestions)",
+      "source": "jonathan-roberts1/zerobench",
+      "category": "vlm",
+      "splits": ["test"],
+      "default_agent": "vlm_open",
+      "reward_fn": "llm_equality_reward_fn",
+      "eval_split": "test",
+      "hf_split": "zerobench_subquestions",
+      "transform": "rllm.data.transforms:zerobench_sub_transform"
+    },
+    "vlmsareblind": {
+      "description": "VLMs Are Blind: Visual perception benchmark (8,020 valid)",
+      "source": "XAI/vlmsareblind",
+      "category": "vlm",
+      "splits": ["test"],
+      "default_agent": "vlm_open",
+      "reward_fn": "f1_reward_fn",
+      "eval_split": "test",
+      "hf_split": "valid",
+      "transform": "rllm.data.transforms:vlmsareblind_transform"
+    },
+    "babyvision": {
+      "description": "BabyVision: Early visual understanding MCQ and fill-blank (388 questions)",
+      "source": "UnipatAI/BabyVision",
+      "category": "vlm",
+      "splits": ["test"],
+      "default_agent": "vlm_open",
+      "reward_fn": "llm_equality_reward_fn",
+      "eval_split": "test",
+      "hf_split": "train",
+      "transform": "rllm.data.transforms:babyvision_transform"
     }
   }
 }

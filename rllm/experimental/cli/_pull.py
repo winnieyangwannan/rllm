@@ -2,12 +2,17 @@
 
 from __future__ import annotations
 
+import base64
 import importlib
 import json
 import logging
 import os
+from pathlib import Path
 
 logger = logging.getLogger(__name__)
+
+# Default root for rllm datasets (overridden by RLLM_HOME env var)
+_DATASETS_ROOT = os.path.join(os.environ.get("RLLM_HOME", os.path.expanduser("~/.rllm")), "datasets")
 
 
 def load_dataset_catalog() -> dict:
@@ -65,6 +70,82 @@ def _remap_fields(row: dict, field_map: dict) -> dict:
         if key not in field_map:
             new_row[key] = val
     return new_row
+
+
+def _is_pil_image(obj: object) -> bool:
+    """Check if an object is a PIL Image without importing PIL at module level."""
+    try:
+        from PIL import Image
+        return isinstance(obj, Image.Image)
+    except ImportError:
+        return False
+
+
+def _extract_and_save_images(data_list: list[dict], name: str, split: str) -> list[dict]:
+    """Scan rows for PIL Image columns, save to disk, and replace with relative paths.
+
+    Images are saved to ``{DATASETS_ROOT}/{name}/images/{split}_{idx}_{col}.png``.
+    The PIL objects are replaced with paths relative to ``{DATASETS_ROOT}/`` so
+    that agent flows can resolve them at runtime.
+
+    This is a no-op for datasets without PIL Image columns.
+
+    Args:
+        data_list: List of row dicts (potentially containing PIL Images).
+        name: Dataset name (used in the image directory).
+        split: Split name.
+
+    Returns:
+        The same list with PIL Image objects replaced by relative path strings.
+    """
+    if not data_list:
+        return data_list
+
+    # Detect image columns from the first row
+    first_row = data_list[0]
+    image_cols: list[str] = []
+    list_image_cols: list[str] = []
+
+    for col, val in first_row.items():
+        if _is_pil_image(val):
+            image_cols.append(col)
+        elif isinstance(val, list) and val and _is_pil_image(val[0]):
+            list_image_cols.append(col)
+
+    if not image_cols and not list_image_cols:
+        return data_list
+
+    # Create image directory
+    images_dir = os.path.join(_DATASETS_ROOT, name, "images")
+    os.makedirs(images_dir, exist_ok=True)
+
+    logger.info(f"  Extracting images for {name}/{split} (cols: {image_cols + list_image_cols})...")
+
+    for idx, row in enumerate(data_list):
+        for col in image_cols:
+            img = row.get(col)
+            if _is_pil_image(img):
+                fname = f"{split}_{idx}_{col}.png"
+                fpath = os.path.join(images_dir, fname)
+                img.save(fpath)
+                row[col] = os.path.join(name, "images", fname)
+            else:
+                row[col] = None
+
+        for col in list_image_cols:
+            imgs = row.get(col, [])
+            paths = []
+            if isinstance(imgs, list):
+                for j, img in enumerate(imgs):
+                    if _is_pil_image(img):
+                        fname = f"{split}_{idx}_{col}_{j}.png"
+                        fpath = os.path.join(images_dir, fname)
+                        img.save(fpath)
+                        paths.append(os.path.join(name, "images", fname))
+            row[col] = paths
+
+    logger.info(f"  Saved images to {images_dir}")
+    return data_list
 
 
 def _load_all_configs(source: str, split: str, hf_split: str | None = None) -> list[dict]:
@@ -159,6 +240,9 @@ def pull_dataset(name: str, catalog_entry: dict) -> None:
                 if field_map:
                     data_list = [_remap_fields(row, field_map) for row in data_list]
 
+                # Save any PIL Images to disk and replace with paths
+                data_list = _extract_and_save_images(data_list, name, split)
+
                 register_data = data_list
             elif transform_fn or field_map:
                 data_list = [dict(row) for row in hf_dataset]
@@ -169,9 +253,15 @@ def pull_dataset(name: str, catalog_entry: dict) -> None:
                 if field_map:
                     data_list = [_remap_fields(row, field_map) for row in data_list]
 
+                # Save any PIL Images to disk and replace with paths
+                data_list = _extract_and_save_images(data_list, name, split)
+
                 register_data = data_list
             else:
-                register_data = hf_dataset
+                # Even without transforms, check for images (raw HF dataset)
+                data_list = [dict(row) for row in hf_dataset]
+                data_list = _extract_and_save_images(data_list, name, split)
+                register_data = data_list
 
             DatasetRegistry.register_dataset(
                 name=name,

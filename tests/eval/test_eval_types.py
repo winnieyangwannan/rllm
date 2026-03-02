@@ -50,6 +50,12 @@ def test_builtin_agents_are_agent_flows():
         assert isinstance(agent, AgentFlow), f"{type(agent).__name__} is not an AgentFlow"
 
 
+def test_vlm_agents_are_agent_flows():
+    from rllm.experimental.agents import vlm_mcq_agent, vlm_math_agent, vlm_open_agent
+    for agent in [vlm_mcq_agent, vlm_math_agent, vlm_open_agent]:
+        assert isinstance(agent, AgentFlow), f"{type(agent).__name__} is not an AgentFlow"
+
+
 def test_builtin_evaluators_are_evaluators():
     for cls in [MathEvaluator, CountdownEvaluator, CodeEvaluator, F1Evaluator]:
         evaluator = cls()
