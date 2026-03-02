@@ -43,7 +43,7 @@ trainer:
   experiment_name: 'default'
   test_freq: 5
   save_freq: 20
-  val_before_train: true
+  val_before_train: false
   val_only: false
 
 # Algorithm Configuration

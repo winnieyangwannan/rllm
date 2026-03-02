@@ -278,6 +278,16 @@ class SdkWorkflowFactory:
         if self.sandbox_orchestrator is not None:
             args["sandbox_orchestrator"] = self.sandbox_orchestrator
             args["agent_config"] = self.agent_config
+
+        # Pass through Workflow base-class kwargs from config (timeout, gamma, etc.)
+        workflow_cfg = self.rllm_config.get("workflow", {})
+        workflow_init_args = workflow_cfg.get("workflow_args", {})
+        if workflow_init_args:
+            for key in ("timeout", "gamma", "reward_bonus_coeff"):
+                val = workflow_init_args.get(key)
+                if val is not None:
+                    args[key] = val
+
         return args
 
     async def flush_traces_hook(self) -> None:

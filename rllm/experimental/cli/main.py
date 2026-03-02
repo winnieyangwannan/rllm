@@ -11,6 +11,7 @@ from rllm.experimental.cli.agent import agent
 from rllm.experimental.cli.dataset import dataset
 from rllm.experimental.cli.eval import eval_cmd
 from rllm.experimental.cli.model_cmd import model, model_setup
+from rllm.experimental.cli.train import train_cmd
 
 
 @click.group()
@@ -21,6 +22,7 @@ def cli():
 
 cli.add_command(dataset)
 cli.add_command(eval_cmd, name="eval")
+cli.add_command(train_cmd, name="train")
 cli.add_command(agent)
 cli.add_command(model)
 
