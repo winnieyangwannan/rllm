@@ -8,6 +8,7 @@ This module provides utilities to:
 
 from __future__ import annotations
 
+import asyncio
 import atexit
 import logging
 import os
@@ -437,17 +438,15 @@ class VerlProxyManager(ProxyManager):
 
 
 class TinkerProxyManager(ProxyManager):
-    """Manages LiteLLM proxy configuration for Tinker rollout engines.
+    """Manages a lightweight TinkerProxy that calls TinkerEngine directly.
 
     Architecture::
 
-        SDK client -> LiteLLM proxy (metadata routing, TracingCallback)
-            -> TinkerBackendServer -> TinkerEngine
+        Agent → HTTP → TinkerProxy (single server) → TinkerEngine (in-process)
 
-    A lightweight ``TinkerBackendServer`` wraps the TinkerEngine as an
-    OpenAI-compatible endpoint.  The LiteLLM proxy routes to it using
-    ``hosted_vllm/`` prefix so ``provider_specific_fields`` (token IDs,
-    logprobs) pass through to the ``TracingCallback``.
+    Replaces the previous dual-hop setup (LiteLLM proxy → TinkerBackendServer)
+    with a single HTTP hop.  The TinkerProxy handles metadata-slug routing,
+    inference, and trace persistence in one process.
     """
 
     def __init__(
@@ -456,10 +455,9 @@ class TinkerProxyManager(ProxyManager):
         model_name: str,
         proxy_host: str = "127.0.0.1",
         proxy_port: int = 4000,
-        backend_host: str = "127.0.0.1",
-        backend_port: int = 8090,
         admin_token: str | None = None,
         proxy_access_log: bool = False,
+        **kwargs,
     ) -> None:
         if type(rollout_engine).__name__ != "TinkerEngine":
             raise TypeError(f"TinkerProxyManager only supports TinkerEngine, got {type(rollout_engine).__name__}")
@@ -473,64 +471,61 @@ class TinkerProxyManager(ProxyManager):
 
         self.model_name = model_name
         self.rollout_engine = rollout_engine
-        self.backend_host = backend_host
-        self.backend_port = backend_port
-        self._backend_server = None
+        self._server = None  # TinkerProxy instance
+        self._tracer = None  # SqliteTracer instance
 
-        # Start the backend server immediately
-        self._start_backend_server()
+    def start(self, db_path: str | None = None, project: str | None = None, sync_tracer: bool = False) -> None:
+        """Start the TinkerProxy server.
 
-        # Snapshot config for debugging
-        self._snapshot_config_to_file(self._generate_litellm_config())
+        Args:
+            db_path: Path to SQLite database file for trace storage.
+            project: Project name / namespace for the tracer.
+            sync_tracer: If True, await trace persistence before returning response.
+        """
+        from rllm.sdk.proxy.tinker_proxy import TinkerProxy
+        from rllm.sdk.tracers import SqliteTracer
 
-    def _start_backend_server(self) -> None:
-        from rllm.sdk.proxy.tinker_backend_server import TinkerBackendServer
-
-        self._backend_server = TinkerBackendServer(
+        self._tracer = SqliteTracer(db_path=db_path, namespace=project or "default")
+        self._server = TinkerProxy(
             rollout_engine=self.rollout_engine,
-            host=self.backend_host,
-            port=self.backend_port,
             model_name=self.model_name,
+            tracer=self._tracer,
+            host=self.proxy_host,
+            port=self.proxy_port,
+            sync_tracer=sync_tracer,
         )
-        self._backend_server.start()
-        logger.info("TinkerBackendServer started at %s", self._backend_server.url)
+        self._server.start()
+        logger.info("TinkerProxy started at %s", self._server.url)
 
-    def _generate_litellm_config(self) -> dict[str, Any]:
-        """Generate LiteLLM config pointing to the TinkerBackendServer."""
-        return {
-            "model_list": [
-                {
-                    "model_name": self.model_name,
-                    "litellm_params": {
-                        "model": f"hosted_vllm/{self.model_name}",
-                        "api_base": self._backend_server.base_url,
-                        "drop_params": True,
-                    },
-                    "model_info": {
-                        "id": "tinker-backend-0",
-                    },
-                }
-            ],
-            "litellm_settings": {
-                "drop_params": True,
-                "num_retries": 3,
-            },
-        }
+    async def flush_tracer(self, timeout: float = 60.0) -> bool:
+        """Flush tracer directly — no HTTP round-trip needed.
 
-    def build_proxy_config(self) -> dict[str, Any]:
-        """Return a fresh LiteLLM configuration."""
-        return self._generate_litellm_config()
+        Awaits the tracer's internal queue drain in a thread so this can
+        safely be called from a running event loop (unlike the synchronous
+        ``SqliteTracer.flush()`` which calls ``loop.run_until_complete``).
+        """
+        if self._tracer is None:
+            return True
+        try:
+            await asyncio.wait_for(
+                asyncio.to_thread(self._tracer._store_queue.join),
+                timeout=timeout,
+            )
+            return True
+        except asyncio.TimeoutError:
+            logger.warning("Tracer flush timed out after %.1fs", timeout)
+            return False
 
     def shutdown_proxy(self) -> None:
-        """Shutdown both LiteLLM proxy and backend server."""
-        # Stop LiteLLM proxy first
-        super().shutdown_proxy()
-        # Then stop backend server
-        if self._backend_server is not None:
-            self._backend_server.stop()
-            self._backend_server = None
-            logger.info("TinkerBackendServer stopped")
+        """Shutdown the TinkerProxy and tracer."""
+        if self._server is not None:
+            self._server.stop()
+            self._server = None
+        if self._tracer is not None:
+            self._tracer.close_sync()
+            self._tracer = None
+            logger.info("TinkerProxy stopped")
 
     def __repr__(self) -> str:
-        mode = "subprocess" if self._proxy_process else "external"
-        return f"TinkerProxyManager(model={self.model_name}, proxy={self.get_proxy_url()}, backend={self.backend_host}:{self.backend_port}, mode={mode})"
+        running = self._server is not None
+        return f"TinkerProxyManager(model={self.model_name}, proxy={self.get_proxy_url()}, running={running})"

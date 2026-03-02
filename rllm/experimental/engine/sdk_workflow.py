@@ -217,51 +217,29 @@ class SdkWorkflowFactory:
     def _setup_tinker_proxy(self) -> None:
         """Set up TinkerProxyManager for tinker backend.
 
-        Follows the same LiteLLM proxy pattern as ``_setup_verl_proxy()`` so
-        that traces are captured by the ``TracingCallback`` instead of being
-        stored directly by the inference server.
+        Uses a lightweight TinkerProxy that calls TinkerEngine directly —
+        single HTTP hop, no LiteLLM overhead.
         """
         from rllm.sdk.proxy.proxy_manager import TinkerProxyManager
 
         proxy_cfg = self._sdk_cfg.get("proxy", {})
         model_name = self.rllm_config.get("model_name", "default")
+        sync_tracer = proxy_cfg.get("sync_tracer", False)
 
         self.proxy_manager = TinkerProxyManager(
             rollout_engine=self.rollout_engine,
             model_name=model_name,
             proxy_host=proxy_cfg.get("host", "127.0.0.1"),
             proxy_port=proxy_cfg.get("port", 4000),
-            backend_host=proxy_cfg.get("backend_host", "127.0.0.1"),
-            backend_port=proxy_cfg.get("backend_port", 8090),
-            admin_token=proxy_cfg.get("admin_token", "my-shared-secret"),
-            proxy_access_log=False,
         )
 
-        config_payload = self.proxy_manager.build_proxy_config()
-
-        proxy_mode = proxy_cfg.get("mode", "subprocess")
-        sync_tracer = proxy_cfg.get("sync_tracer", False)
-
-        if proxy_mode == "subprocess":
-            db_path = self._sdk_cfg.get("store", {}).get("path", None)
-            project = self.rllm_config.trainer.get("project_name", "rllm-agent-sdk")
-            self.proxy_manager.start_proxy_subprocess(
-                config=config_payload,
-                db_path=db_path,
-                project=project,
-                sync_tracer=sync_tracer,
-                add_logprobs=True,
-                add_return_token_ids=True,
-                enable_result_store=self._sandbox_enabled,
-            )
-        elif proxy_mode == "external":
-            self.proxy_manager.reload_proxy_config(config=config_payload)
-        else:
-            raise ValueError(f"Unknown proxy mode: {proxy_mode}")
+        db_path = self._sdk_cfg.get("store", {}).get("path", None)
+        project = self.rllm_config.trainer.get("project_name", "rllm-agent-sdk")
+        self.proxy_manager.start(db_path=db_path, project=project, sync_tracer=sync_tracer)
 
         base_url = self.proxy_manager.get_proxy_url()
         os.environ["RLLM_SDK_BASE_URL"] = base_url
-        logger.info("TinkerProxyManager ready at %s", base_url)
+        logger.info("TinkerProxy ready at %s", base_url)
 
     # ----- public API -----
 
