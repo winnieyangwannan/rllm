@@ -903,6 +903,28 @@ def erqa_transform(row: dict) -> dict:
     }
 
 
+def geo3k_transform(row: dict) -> dict:
+    """Transform Geometry3K row to standard VLM math format.
+
+    Geometry3K has 'problem' (str), 'answer' (str), and 'images'
+    (list of PIL Images — one geometry diagram per problem).
+    """
+    raw_images = row.get("images", [])
+    if isinstance(raw_images, list):
+        images = [img for img in raw_images if img is not None]
+    elif raw_images is not None:
+        images = [raw_images]
+    else:
+        images = []
+
+    return {
+        "question": row.get("problem", ""),
+        "images": images,
+        "ground_truth": row.get("answer", ""),
+        "data_source": "geo3k",
+    }
+
+
 def bfcl_transform(row: dict) -> dict:
     """Transform BFCL exec row to standard function-calling format.
 

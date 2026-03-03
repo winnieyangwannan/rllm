@@ -470,6 +470,16 @@
       "reward_fn": "mcq_reward_fn",
       "eval_split": "test",
       "transform": "rllm.data.transforms:erqa_transform"
+    },
+    "geo3k": {
+      "description": "Geometry3K: Geometry problem solving with diagrams (2.4K train, 601 test)",
+      "source": "hiyouga/geometry3k",
+      "category": "vlm",
+      "splits": ["train", "test"],
+      "default_agent": "vlm_math",
+      "reward_fn": "math_reward_fn",
+      "eval_split": "test",
+      "transform": "rllm.data.transforms:geo3k_transform"
     }
   }
 }

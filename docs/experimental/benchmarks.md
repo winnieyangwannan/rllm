@@ -1,6 +1,6 @@
 # Supported Benchmarks
 
-rLLM ships with **44 benchmarks** across 9 categories, all accessible via `rllm eval <benchmark>`. Datasets are auto-pulled from HuggingFace on first use and cached locally under `~/.rllm/datasets/`.
+rLLM ships with **45 benchmarks** across 9 categories, all accessible via `rllm eval <benchmark>`. Datasets are auto-pulled from HuggingFace on first use and cached locally under `~/.rllm/datasets/`.
 
 ## Quick Reference
 
@@ -129,7 +129,7 @@ rllm dataset list                           # List all available benchmarks
 
 ---
 
-## Vision-Language (15 benchmarks)
+## Vision-Language (16 benchmarks)
 
 | Benchmark | CLI Name | Size | Description | Agent | Evaluator |
 |---|---|---|---|---|---|
@@ -148,6 +148,7 @@ rllm dataset list                           # List all available benchmarks
 | CC-OCR | `cc_ocr` | 7,058 test | Multi-scene OCR with 4 sub-tasks (base64 images) | `vlm_open` | `f1_reward_fn` |
 | CountBenchQA | `countbenchqa` | 491 test | Visual object counting QA | `vlm_open` | `f1_reward_fn` |
 | ERQA | `erqa` | 400 test | Entity recognition QA (multi-image) | `vlm_mcq` | `mcq_reward_fn` |
+| Geometry3K | `geo3k` | 2.4K train, 601 test | Geometry problem solving with diagrams | `vlm_math` | `math_reward_fn` |
 
 **Agents:**
 - `vlm_mcq` — formats image + options, expects single letter answer.
