@@ -1,6 +1,7 @@
 import json
 import logging
 import os
+import shutil
 from typing import Any
 
 logger = logging.getLogger(__name__)
@@ -121,7 +122,11 @@ class Dataset:
         if data_path is None:
             return None
 
-        verl_path = data_path.replace(".parquet", "_verl.parquet")
+        # .arrow files store the verl companion as _verl.parquet
+        if data_path.endswith(".arrow"):
+            verl_path = data_path[: -len(".arrow")] + "_verl.parquet"
+        else:
+            verl_path = data_path.replace(".parquet", "_verl.parquet")
         return verl_path if os.path.exists(verl_path) else None
 
     @classmethod
@@ -157,6 +162,8 @@ class Dataset:
         elif file_ext == ".parquet":
             import pandas as pd
             data = pd.read_parquet(path).to_dict("records")
+        elif file_ext == ".arrow":
+            data = DatasetRegistry._load_arrow_ipc(path)
         else:
             raise ValueError(f"Unsupported file format: {file_ext}")
 
@@ -284,6 +291,95 @@ class DatasetRegistry:
         return os.path.join(cls._DATASET_DIR, rel_path)
 
     @classmethod
+    def _has_binary_columns(cls, data_list: list[dict[str, Any]]) -> tuple[bool, list[str]]:
+        """Detect columns containing ``bytes`` or ``list[bytes]`` in the first row.
+
+        Returns:
+            Tuple of (has_binary, list_of_binary_column_names).
+        """
+        if not data_list:
+            return False, []
+
+        first = data_list[0]
+        bin_cols: list[str] = []
+        for col, val in first.items():
+            if isinstance(val, bytes):
+                bin_cols.append(col)
+            elif isinstance(val, list) and val and isinstance(val[0], bytes):
+                bin_cols.append(col)
+        return bool(bin_cols), bin_cols
+
+    @classmethod
+    def _save_arrow_ipc(cls, data_list: list[dict[str, Any]], path: str) -> None:
+        """Save data as an Arrow IPC (Feather v2) file.
+
+        PyArrow natively handles ``bytes`` and ``list<bytes>`` columns.
+
+        Args:
+            data_list: List of row dicts.
+            path: Absolute path to write the ``.arrow`` file.
+        """
+        import pyarrow as pa
+        import pyarrow.ipc as ipc
+
+        # Build column arrays from data_list
+        if not data_list:
+            table = pa.table({})
+        else:
+            columns: dict[str, list] = {k: [] for k in data_list[0]}
+            for row in data_list:
+                for k in columns:
+                    columns[k].append(row.get(k))
+            table = pa.table(columns)
+
+        with pa.OSFile(path, "wb") as f:
+            writer = ipc.new_file(f, table.schema)
+            writer.write_table(table)
+            writer.close()
+
+    @classmethod
+    def _load_arrow_ipc(cls, path: str) -> list[dict[str, Any]]:
+        """Load data from an Arrow IPC file.
+
+        Args:
+            path: Absolute path to the ``.arrow`` file.
+
+        Returns:
+            List of row dicts. Binary columns are returned as ``bytes``.
+        """
+        import pyarrow as pa
+        import pyarrow.ipc as ipc
+
+        with pa.OSFile(path, "rb") as f:
+            reader = ipc.open_file(f)
+            table = reader.read_all()
+
+        col_dict = {name: table.column(name).to_pylist() for name in table.column_names}
+        num_rows = table.num_rows
+        return [{col: col_dict[col][i] for col in col_dict} for i in range(num_rows)]
+
+    @classmethod
+    def _strip_binary_columns(cls, data_list: list[dict[str, Any]], bin_cols: list[str]) -> list[dict[str, Any]]:
+        """Return copies of rows with binary columns set to ``None``.
+
+        Used for verl postprocessing where image data isn't needed.
+        """
+        stripped = []
+        for row in data_list:
+            new_row = dict(row)
+            for col in bin_cols:
+                new_row[col] = None
+            stripped.append(new_row)
+        return stripped
+
+    @classmethod
+    def _verl_path_for(cls, dataset_path: str) -> str:
+        """Derive the verl companion parquet path from any dataset path."""
+        if dataset_path.endswith(".arrow"):
+            return dataset_path[: -len(".arrow")] + "_verl.parquet"
+        return dataset_path.replace(".parquet", "_verl.parquet")
+
+    @classmethod
     def register_dataset(cls, name: str, data: list[dict[str, Any]] | Any, split: str = "default", source: str = "", description: str = "", category: str = "") -> Dataset:
         """Register a dataset by saving it to disk and updating the registry.
 
@@ -314,18 +410,38 @@ class DatasetRegistry:
         else:
             # Assume it's already a list of dictionaries
             data_list = data
+
+        # Detect binary columns (image bytes)
+        has_binary, bin_cols = cls._has_binary_columns(data_list)
+
+        if has_binary:
+            # Save as Arrow IPC (handles binary columns natively)
+            rel_path = os.path.join(name, f"{split}.arrow")
+            dataset_path = os.path.join(cls._DATASET_DIR, rel_path)
+            cls._save_arrow_ipc(data_list, dataset_path)
+
+            # Strip binary columns for verl postprocessing (images not needed)
+            stripped = cls._strip_binary_columns(data_list, bin_cols)
+            verl_data = cls.apply_verl_postprocessing(stripped)
+            verl_dataset_path = cls._verl_path_for(dataset_path)
+            verl_data_df = pd.DataFrame(verl_data)
+            verl_data_df.to_parquet(verl_dataset_path)
+
+            fields = list(data_list[0].keys()) if data_list else []
+        else:
+            # Text-only: use parquet (existing path)
             data_df = pd.DataFrame(data_list)
+            rel_path = os.path.join(name, f"{split}.parquet")
+            dataset_path = os.path.join(cls._DATASET_DIR, rel_path)
+            data_df.to_parquet(dataset_path)
 
-        # Save original data
-        rel_path = os.path.join(name, f"{split}.parquet")
-        dataset_path = os.path.join(cls._DATASET_DIR, rel_path)
-        data_df.to_parquet(dataset_path)
+            # Apply Verl postprocessing and save
+            verl_data = cls.apply_verl_postprocessing(data_list)
+            verl_dataset_path = cls._verl_path_for(dataset_path)
+            verl_data_df = pd.DataFrame(verl_data)
+            verl_data_df.to_parquet(verl_dataset_path)
 
-        # Apply Verl postprocessing and save
-        verl_data = cls.apply_verl_postprocessing(data_list)
-        verl_dataset_path = dataset_path.replace(".parquet", "_verl.parquet")
-        verl_data_df = pd.DataFrame(verl_data)
-        verl_data_df.to_parquet(verl_dataset_path)
+            fields = list(data_df.columns)
 
         # Update registry (v2 format)
         registry = cls._load_registry()
@@ -344,7 +460,6 @@ class DatasetRegistry:
             entry["metadata"]["category"] = category
 
         # Record field names and count
-        fields = list(data_df.columns)
         entry["splits"][split] = {"path": rel_path, "num_examples": len(data_list), "fields": fields}
         cls._save_registry(registry)
 
@@ -382,8 +497,11 @@ class DatasetRegistry:
             logger.warning(f"Dataset file not found: {dataset_path}")
             return None
 
-        import polars as pl
-        data = pl.read_parquet(dataset_path).to_dicts()
+        if dataset_path.endswith(".arrow"):
+            data = cls._load_arrow_ipc(dataset_path)
+        else:
+            import polars as pl
+            data = pl.read_parquet(dataset_path).to_dicts()
 
         logger.info(f"Loaded dataset '{name}' split '{split}' with {len(data)} examples.")
 
@@ -474,17 +592,21 @@ class DatasetRegistry:
             os.remove(dataset_path)
 
         # Also remove the Verl-processed file if it exists
-        verl_path = dataset_path.replace(".parquet", "_verl.parquet")
+        verl_path = cls._verl_path_for(dataset_path)
         if os.path.exists(verl_path):
             os.remove(verl_path)
 
         # Remove split from registry
         del datasets[name]["splits"][split]
 
-        # If no splits left, remove the dataset entry
+        # If no splits left, remove the dataset entry and clean up
         if not datasets[name]["splits"]:
             del datasets[name]
             dataset_dir = os.path.join(cls._DATASET_DIR, name)
+            # Clean up legacy images directory
+            images_dir = os.path.join(dataset_dir, "images")
+            if os.path.isdir(images_dir):
+                shutil.rmtree(images_dir)
             if os.path.exists(dataset_dir) and not os.listdir(dataset_dir):
                 os.rmdir(dataset_dir)
 
@@ -514,12 +636,15 @@ class DatasetRegistry:
             path = cls._resolve_path(split_info["path"])
             if path and os.path.exists(path):
                 os.remove(path)
-            verl_path = path.replace(".parquet", "_verl.parquet")
+            verl_path = cls._verl_path_for(path)
             if os.path.exists(verl_path):
                 os.remove(verl_path)
 
-        # Remove dataset directory if it's empty
+        # Clean up legacy images directory and dataset directory
         dataset_dir = os.path.join(cls._DATASET_DIR, name)
+        images_dir = os.path.join(dataset_dir, "images")
+        if os.path.isdir(images_dir):
+            shutil.rmtree(images_dir)
         if os.path.exists(dataset_dir) and not os.listdir(dataset_dir):
             os.rmdir(dataset_dir)
 

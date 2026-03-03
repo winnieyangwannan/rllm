@@ -139,9 +139,15 @@ def inspect(name: str, split: str | None, num_rows: int):
         row = ds[i]
         click.echo(f"--- Example {i} ---")
         for key, value in row.items():
-            val_str = str(value)
-            if len(val_str) > 200:
-                val_str = val_str[:200] + "..."
+            if isinstance(value, bytes):
+                val_str = f"<{len(value)} bytes (image)>"
+            elif isinstance(value, list) and value and isinstance(value[0], bytes):
+                total = sum(len(b) for b in value if isinstance(b, bytes))
+                val_str = f"<{len(value)} images, {total} bytes total>"
+            else:
+                val_str = str(value)
+                if len(val_str) > 200:
+                    val_str = val_str[:200] + "..."
             click.echo(f"  {key}: {val_str}")
         click.echo()
 

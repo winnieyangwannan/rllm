@@ -1,4 +1,4 @@
-"""Tests for _pull.py: field_map, hf_config, and transform support."""
+"""Tests for _pull.py: field_map, hf_config, transform, and image handling."""
 
 from __future__ import annotations
 
@@ -6,7 +6,12 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from rllm.experimental.cli._pull import _load_transform, _remap_fields
+from rllm.experimental.cli._pull import (
+    _disable_image_decoding,
+    _flatten_image_dicts,
+    _load_transform,
+    _remap_fields,
+)
 
 
 class TestRemapFields:
@@ -126,3 +131,104 @@ class TestPullDatasetWithTransform:
         assert len(data[0]["choices"]) == 4
         assert "Right" in data[0]["choices"]
         assert data[0]["data_source"] == "gpqa_diamond"
+
+
+# ---------------------------------------------------------------------------
+# _disable_image_decoding
+# ---------------------------------------------------------------------------
+
+
+class TestDisableImageDecoding:
+    def test_casts_image_columns(self):
+        """Image feature columns should be cast with decode=False."""
+        from datasets import Image as HFImage
+
+        mock_ds = MagicMock()
+        mock_ds.features = {"img": HFImage(), "text": MagicMock()}
+        mock_ds.cast_column.return_value = mock_ds
+
+        result = _disable_image_decoding(mock_ds)
+
+        mock_ds.cast_column.assert_called_once()
+        call_args = mock_ds.cast_column.call_args
+        assert call_args[0][0] == "img"
+        assert isinstance(call_args[0][1], HFImage)
+        assert call_args[0][1].decode is False
+        assert result is mock_ds
+
+    def test_casts_sequence_image_columns(self):
+        """Sequence(Image()) columns should also be cast with decode=False."""
+        from datasets import Image as HFImage, Sequence
+
+        mock_ds = MagicMock()
+        mock_ds.features = {"images": Sequence(HFImage()), "text": MagicMock()}
+        mock_ds.cast_column.return_value = mock_ds
+
+        result = _disable_image_decoding(mock_ds)
+
+        mock_ds.cast_column.assert_called_once()
+        call_args = mock_ds.cast_column.call_args
+        assert call_args[0][0] == "images"
+        cast_feature = call_args[0][1]
+        assert isinstance(cast_feature, Sequence)
+        assert isinstance(cast_feature.feature, HFImage)
+        assert cast_feature.feature.decode is False
+        assert result is mock_ds
+
+    def test_no_image_columns_is_noop(self):
+        """Datasets without Image features should pass through unchanged."""
+        mock_ds = MagicMock()
+        mock_ds.features = {"text": MagicMock(), "label": MagicMock()}
+
+        result = _disable_image_decoding(mock_ds)
+
+        mock_ds.cast_column.assert_not_called()
+        assert result is mock_ds
+
+
+# ---------------------------------------------------------------------------
+# _flatten_image_dicts
+# ---------------------------------------------------------------------------
+
+
+class TestFlattenImageDicts:
+    def test_single_image_dict(self):
+        data = [
+            {"img": {"bytes": b"\x89PNG", "path": "a.png"}, "text": "hello"},
+            {"img": {"bytes": b"\xff\xd8\xff", "path": "b.jpg"}, "text": "world"},
+        ]
+        result = _flatten_image_dicts(data)
+        assert result[0]["img"] == b"\x89PNG"
+        assert result[1]["img"] == b"\xff\xd8\xff"
+        assert result[0]["text"] == "hello"
+
+    def test_list_of_image_dicts(self):
+        data = [
+            {
+                "images": [
+                    {"bytes": b"img1", "path": "1.png"},
+                    {"bytes": b"img2", "path": "2.png"},
+                ],
+                "text": "q",
+            },
+        ]
+        result = _flatten_image_dicts(data)
+        assert result[0]["images"] == [b"img1", b"img2"]
+        assert result[0]["text"] == "q"
+
+    def test_no_image_columns_noop(self):
+        data = [{"text": "hello", "label": 1}]
+        result = _flatten_image_dicts(data)
+        assert result == data
+
+    def test_empty_list_noop(self):
+        assert _flatten_image_dicts([]) == []
+
+    def test_none_image_value(self):
+        data = [
+            {"img": {"bytes": b"abc", "path": "a.png"}, "text": "ok"},
+            {"img": None, "text": "no image"},
+        ]
+        result = _flatten_image_dicts(data)
+        assert result[0]["img"] == b"abc"
+        assert result[1]["img"] is None

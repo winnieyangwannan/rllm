@@ -81,6 +81,83 @@ def _is_pil_image(obj: object) -> bool:
         return False
 
 
+def _disable_image_decoding(hf_dataset):
+    """Cast Image columns to decode=False so raw bytes are preserved.
+
+    After this, Image columns return ``{"bytes": b"...", "path": ...}`` dicts
+    instead of PIL objects, avoiding PIL decoding entirely.
+
+    Handles both top-level ``Image`` features and ``Sequence(Image())``
+    features (lists of images, e.g. zerobench's ``question_images_decoded``).
+
+    Args:
+        hf_dataset: A HuggingFace ``datasets.Dataset`` instance.
+
+    Returns:
+        The same dataset with Image columns cast to ``decode=False``.
+    """
+    from datasets import Image as HFImage, Sequence
+
+    for col_name, feature in hf_dataset.features.items():
+        if isinstance(feature, HFImage):
+            hf_dataset = hf_dataset.cast_column(col_name, HFImage(decode=False))
+        elif isinstance(feature, Sequence) and isinstance(feature.feature, HFImage):
+            hf_dataset = hf_dataset.cast_column(col_name, Sequence(HFImage(decode=False)))
+    return hf_dataset
+
+
+def _flatten_image_dicts(data_list: list[dict]) -> list[dict]:
+    """Extract raw bytes from HuggingFace image dicts.
+
+    After ``decode=False``, image values are ``{"bytes": b"...", "path": ...}``
+    dicts (or lists of them). This extracts just the ``bytes`` value:
+    ``{"bytes": b"..."}`` → ``b"..."`` and
+    ``[{"bytes": b"..."}, ...]`` → ``[b"...", ...]``.
+
+    Non-image columns are left untouched.
+
+    Args:
+        data_list: List of row dicts.
+
+    Returns:
+        The same list with image dicts replaced by raw bytes.
+    """
+    if not data_list:
+        return data_list
+
+    def _is_image_dict(val):
+        return isinstance(val, dict) and "bytes" in val
+
+    # Detect columns with image dicts from the first row
+    first_row = data_list[0]
+    single_cols: list[str] = []
+    list_cols: list[str] = []
+
+    for col, val in first_row.items():
+        if _is_image_dict(val):
+            single_cols.append(col)
+        elif isinstance(val, list) and val and _is_image_dict(val[0]):
+            list_cols.append(col)
+
+    if not single_cols and not list_cols:
+        return data_list
+
+    for row in data_list:
+        for col in single_cols:
+            val = row.get(col)
+            if _is_image_dict(val):
+                row[col] = val["bytes"]
+            else:
+                row[col] = None
+
+        for col in list_cols:
+            vals = row.get(col, [])
+            if isinstance(vals, list):
+                row[col] = [v["bytes"] if _is_image_dict(v) else None for v in vals]
+
+    return data_list
+
+
 def _extract_and_save_images(data_list: list[dict], name: str, split: str) -> list[dict]:
     """Scan rows for PIL Image columns, save to disk, and replace with relative paths.
 
@@ -89,6 +166,9 @@ def _extract_and_save_images(data_list: list[dict], name: str, split: str) -> li
     that agent flows can resolve them at runtime.
 
     This is a no-op for datasets without PIL Image columns.
+
+    .. note:: This is the legacy path kept for backward compatibility. New pulls
+       use ``_disable_image_decoding`` + ``_flatten_image_dicts`` instead.
 
     Args:
         data_list: List of row dicts (potentially containing PIL Images).
@@ -171,6 +251,7 @@ def _load_all_configs(source: str, split: str, hf_split: str | None = None) -> l
     for config_name in configs:
         try:
             ds = load_dataset(source, name=config_name, split=hf_split or split)
+            ds = _disable_image_decoding(ds)
             for row in ds:
                 row_dict = dict(row)
                 if "language" not in row_dict:
@@ -216,6 +297,7 @@ def pull_dataset(name: str, catalog_entry: dict) -> None:
         try:
             if aggregate_configs:
                 # Load all HF configs and merge into a single dataset
+                # (_load_all_configs already applies _disable_image_decoding)
                 data_list = _load_all_configs(source, split, hf_split)
             else:
                 # Build load_dataset kwargs
@@ -229,6 +311,7 @@ def pull_dataset(name: str, catalog_entry: dict) -> None:
                     load_kwargs["data_files"] = data_files
 
                 hf_dataset = load_dataset(**load_kwargs)
+                hf_dataset = _disable_image_decoding(hf_dataset)
                 data_list = None
 
             # Convert to list of dicts for transformation
@@ -240,8 +323,8 @@ def pull_dataset(name: str, catalog_entry: dict) -> None:
                 if field_map:
                     data_list = [_remap_fields(row, field_map) for row in data_list]
 
-                # Save any PIL Images to disk and replace with paths
-                data_list = _extract_and_save_images(data_list, name, split)
+                # Flatten image dicts to raw bytes
+                data_list = _flatten_image_dicts(data_list)
 
                 register_data = data_list
             elif transform_fn or field_map:
@@ -253,14 +336,14 @@ def pull_dataset(name: str, catalog_entry: dict) -> None:
                 if field_map:
                     data_list = [_remap_fields(row, field_map) for row in data_list]
 
-                # Save any PIL Images to disk and replace with paths
-                data_list = _extract_and_save_images(data_list, name, split)
+                # Flatten image dicts to raw bytes
+                data_list = _flatten_image_dicts(data_list)
 
                 register_data = data_list
             else:
-                # Even without transforms, check for images (raw HF dataset)
+                # Even without transforms, flatten any image dicts
                 data_list = [dict(row) for row in hf_dataset]
-                data_list = _extract_and_save_images(data_list, name, split)
+                data_list = _flatten_image_dicts(data_list)
                 register_data = data_list
 
             DatasetRegistry.register_dataset(

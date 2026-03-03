@@ -28,6 +28,24 @@ _DATASETS_ROOT = os.path.join(
 # ---------------------------------------------------------------------------
 
 
+def _detect_mime_type(data: bytes) -> str:
+    """Detect image MIME type from magic bytes.
+
+    Args:
+        data: Raw image bytes.
+
+    Returns:
+        MIME type string (e.g., ``image/png``).
+    """
+    if data[:4] == b"\x89PNG":
+        return "image/png"
+    if data[:3] == b"\xff\xd8\xff":
+        return "image/jpeg"
+    if len(data) >= 12 and data[:4] == b"RIFF" and data[8:12] == b"WEBP":
+        return "image/webp"
+    return "image/png"
+
+
 def _load_image_as_data_uri(rel_path: str) -> str:
     """Load an image file and return a base64 data URI.
 
@@ -39,31 +57,57 @@ def _load_image_as_data_uri(rel_path: str) -> str:
     """
     abs_path = os.path.join(_DATASETS_ROOT, rel_path)
     with open(abs_path, "rb") as f:
-        data = base64.b64encode(f.read()).decode("utf-8")
-    return f"data:image/png;base64,{data}"
+        raw = f.read()
+    mime = _detect_mime_type(raw)
+    encoded = base64.b64encode(raw).decode("utf-8")
+    return f"data:{mime};base64,{encoded}"
 
 
-def _build_vlm_content(text: str, image_paths: list[str]) -> list[dict]:
+def _image_to_data_uri(image_data) -> str:
+    """Convert image data (bytes or path string) to a base64 data URI.
+
+    Args:
+        image_data: Either raw ``bytes`` (new Arrow IPC path) or a ``str``
+            path relative to the datasets root (legacy path).
+
+    Returns:
+        A ``data:<mime>;base64,...`` URI string.
+
+    Raises:
+        TypeError: If *image_data* is neither ``bytes`` nor ``str``.
+    """
+    if isinstance(image_data, bytes):
+        mime = _detect_mime_type(image_data)
+        encoded = base64.b64encode(image_data).decode("utf-8")
+        return f"data:{mime};base64,{encoded}"
+    if isinstance(image_data, str):
+        return _load_image_as_data_uri(image_data)
+    raise TypeError(f"Expected bytes or str, got {type(image_data).__name__}")
+
+
+def _build_vlm_content(text: str, image_items: list) -> list[dict]:
     """Build OpenAI multimodal content blocks (image_url + text).
 
     Args:
         text: The text portion of the user message.
-        image_paths: List of image paths relative to the datasets root.
+        image_items: List of image data — each element is either raw ``bytes``
+            (new inline path) or a ``str`` path relative to the datasets root
+            (legacy path).
 
     Returns:
         A list of content block dicts for the OpenAI API.
     """
     content: list[dict] = []
 
-    for path in image_paths:
+    for img_data in image_items:
         try:
-            data_uri = _load_image_as_data_uri(path)
+            data_uri = _image_to_data_uri(img_data)
             content.append({
                 "type": "image_url",
                 "image_url": {"url": data_uri},
             })
         except Exception as e:
-            logger.warning("Failed to load image %s: %s", path, e)
+            logger.warning("Failed to load image %s: %s", img_data if isinstance(img_data, str) else f"<{len(img_data)} bytes>", e)
 
     content.append({"type": "text", "text": text})
     return content
