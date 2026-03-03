@@ -1,6 +1,6 @@
 # Supported Benchmarks
 
-rLLM ships with **45 benchmarks** across 9 categories, all accessible via `rllm eval <benchmark>`. Datasets are auto-pulled from HuggingFace on first use and cached locally under `~/.rllm/datasets/`.
+rLLM ships with **49 benchmarks** across 10 categories, all accessible via `rllm eval <benchmark>`. Datasets are auto-pulled from HuggingFace on first use and cached locally under `~/.rllm/datasets/`.
 
 ## Quick Reference
 
@@ -117,6 +117,27 @@ rllm dataset list                           # List all available benchmarks
 
 ---
 
+## Search (4 benchmarks)
+
+| Benchmark | CLI Name | Size | Description | Agent | Evaluator |
+|---|---|---|---|---|---|
+| BrowseComp | `browsecomp` | 830 test | Web browsing comprehension (encrypted, auto-decrypted) | `search` | `llm_equality_reward_fn` |
+| Seal-0 | `seal0` | 111 test | Search-augmented QA with freshness metadata | `search` | `llm_equality_reward_fn` |
+| WideSearch | `widesearch` | 200 test | Broad web search with structured table output | `search` | `widesearch_reward_fn` |
+| HLE + Search | `hle_search` | 2,500 test | Humanity's Last Exam with web search tools | `search` | `llm_equality_reward_fn` |
+
+**Agent:** `search` is a multi-turn tool-calling agent that uses web search (Serper or Brave) to find information and answers in `\boxed{}` format.
+
+**Evaluators:**
+- `llm_equality_reward_fn` — exact match → LLM semantic judge → F1 fallback (used for most search benchmarks).
+- `widesearch_reward_fn` — parses markdown table output and computes row-level F1 against gold structured spec.
+
+**Setup:** Requires a search API key. Set `SERPER_API_KEY` (recommended, $0.30/1K queries) or `BRAVE_API_KEY`. Override with `--search-backend serper|brave`.
+
+> **HLE + Search is gated.** Requires `HF_TOKEN` environment variable or `huggingface-cli login` to access.
+
+---
+
 ## Translation (1 benchmark)
 
 | Benchmark | CLI Name | Size | Description | Agent | Evaluator |
@@ -163,7 +184,7 @@ All VLM agents embed images as base64 in OpenAI-compatible multimodal content bl
 
 ## Agents Summary
 
-13 built-in agents are available, each implementing the `AgentFlow` protocol:
+14 built-in agents are available, each implementing the `AgentFlow` protocol:
 
 | Agent | Description |
 |---|---|
@@ -177,6 +198,7 @@ All VLM agents embed images as base64 in OpenAI-compatible multimodal content bl
 | `multiturn` | Multi-turn conversation replay |
 | `reasoning` | Chain-of-thought → `ANSWER:` marker |
 | `translation` | Text translation → target language output |
+| `search` | Multi-turn web search tool calling → `\boxed{}` answer |
 | `vlm_mcq` | Multimodal MCQ with images |
 | `vlm_math` | Multimodal math with images |
 | `vlm_open` | Multimodal open-ended QA |
@@ -185,7 +207,7 @@ All VLM agents embed images as base64 in OpenAI-compatible multimodal content bl
 
 ## Evaluators Summary
 
-10 built-in evaluators score agent outputs:
+11 built-in evaluators score agent outputs:
 
 | Evaluator | Method |
 |---|---|
@@ -199,6 +221,7 @@ All VLM agents embed images as base64 in OpenAI-compatible multimodal content bl
 | `llm_judge_reward_fn` | LLM-as-judge with rubric |
 | `llm_equality_reward_fn` | Exact match → LLM judge → F1 fallback |
 | `translation_reward_fn` | ChrF character n-gram score |
+| `widesearch_reward_fn` | Structured table row-level F1 matching |
 
 ---
 

@@ -20,6 +20,7 @@ from rllm.experimental.eval.types import (
     MCQEvaluator,
     MathEvaluator,
 )
+from rllm.experimental.eval.widesearch_evaluator import WideSearchEvaluator
 
 _RLLM_HOME = os.environ.get("RLLM_HOME", os.path.expanduser("~/.rllm"))
 _USER_EVALUATORS_FILE = os.path.join(_RLLM_HOME, "evaluators.json")
@@ -119,6 +120,7 @@ _EVALUATOR_REGISTRY: dict[str, type] = {
     "llm_judge_reward_fn": LLMJudgeEvaluator,
     "llm_equality_reward_fn": LLMEqualityEvaluator,
     "translation_reward_fn": TranslationEvaluator,
+    "widesearch_reward_fn": WideSearchEvaluator,
 }
 
 

@@ -22,10 +22,11 @@ class EvalRunner:
     The runner writes evaluation results back onto each trajectory and the episode.
     """
 
-    def __init__(self, base_url: str, model: str, concurrency: int = 64):
+    def __init__(self, base_url: str, model: str, concurrency: int = 64, agent_metadata: dict | None = None):
         self.base_url = base_url
         self.model = model
         self.concurrency = concurrency
+        self.agent_metadata = agent_metadata or {}
 
     async def run(self, dataset, agent: AgentFlow, evaluator: Evaluator, agent_name: str = "") -> EvalResult:
         """Run evaluation on a dataset using the given agent and evaluator.
@@ -48,6 +49,7 @@ class EvalRunner:
                         base_url=self.base_url,
                         model=self.model,
                         session_uid=f"eval-{idx}",
+                        metadata=dict(self.agent_metadata),
                     )
 
                     # Stage 1: Run agent flow

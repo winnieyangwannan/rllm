@@ -480,6 +480,49 @@
       "reward_fn": "math_reward_fn",
       "eval_split": "test",
       "transform": "rllm.data.transforms:geo3k_transform"
+    },
+    "browsecomp": {
+      "description": "BrowseComp: Web browsing comprehension benchmark (200 test)",
+      "source": "Tevatron/browsecomp-plus",
+      "category": "search",
+      "splits": ["test"],
+      "default_agent": "search",
+      "reward_fn": "llm_equality_reward_fn",
+      "eval_split": "test",
+      "transform": "rllm.data.transforms:browsecomp_transform"
+    },
+    "seal0": {
+      "description": "Seal-0: Search-augmented QA benchmark with freshness metadata",
+      "source": "vtllms/sealqa",
+      "category": "search",
+      "splits": ["test"],
+      "default_agent": "search",
+      "reward_fn": "llm_equality_reward_fn",
+      "eval_split": "test",
+      "hf_config": "seal_0",
+      "transform": "rllm.data.transforms:seal0_transform"
+    },
+    "widesearch": {
+      "description": "WideSearch: Broad web search with structured table output (200)",
+      "source": "ByteDance-Seed/WideSearch",
+      "category": "search",
+      "splits": ["test"],
+      "default_agent": "search",
+      "reward_fn": "widesearch_reward_fn",
+      "eval_split": "test",
+      "hf_split": "full",
+      "transform": "rllm.data.transforms:widesearch_transform"
+    },
+    "hle_search": {
+      "description": "HLE + Search: Humanity's Last Exam with web search tools (gated — requires HF_TOKEN)",
+      "source": "cais/hle",
+      "category": "search",
+      "splits": ["test"],
+      "default_agent": "search",
+      "reward_fn": "llm_equality_reward_fn",
+      "eval_split": "test",
+      "gated": true,
+      "transform": "rllm.data.transforms:hle_transform"
     }
   }
 }

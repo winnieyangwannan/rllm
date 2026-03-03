@@ -23,7 +23,13 @@ theme = Theme({"label": "dim", "success": "bold green", "error": "bold red", "va
 console = Console(theme=theme)
 
 
-def _run_eval(benchmark: str, agent_name: str, evaluator_name: str | None, base_url: str, model: str, split: str, concurrency: int, max_examples: int | None, output_path: str | None):
+def _suggest_benchmarks(name: str, catalog_names: list[str], max_suggestions: int = 3) -> list[str]:
+    """Return catalog names similar to *name*, ordered by edit distance."""
+    from difflib import get_close_matches
+    return get_close_matches(name, catalog_names, n=max_suggestions, cutoff=0.5)
+
+
+def _run_eval(benchmark: str, agent_name: str, evaluator_name: str | None, base_url: str, model: str, split: str, concurrency: int, max_examples: int | None, output_path: str | None, agent_metadata: dict | None = None):
     """Core eval logic, extracted for clean proxy lifecycle management."""
     from rllm.data import DatasetRegistry
     from rllm.experimental.eval.agent_loader import load_agent
@@ -32,12 +38,21 @@ def _run_eval(benchmark: str, agent_name: str, evaluator_name: str | None, base_
 
     # Load catalog for defaults
     catalog = load_dataset_catalog()
-    catalog_entry = catalog.get("datasets", {}).get(benchmark)
+    all_datasets = catalog.get("datasets", {})
+    catalog_entry = all_datasets.get(benchmark)
 
     # Resolve agent
     if agent_name is None:
         if catalog_entry and "default_agent" in catalog_entry:
             agent_name = catalog_entry["default_agent"]
+        elif not catalog_entry:
+            msg = f"  [error]Benchmark '{benchmark}' not found.[/]"
+            suggestions = _suggest_benchmarks(benchmark, list(all_datasets.keys()))
+            if suggestions:
+                msg += f"\n\n  Did you mean: [bold]{', '.join(suggestions)}[/]?"
+            msg += "\n\n  Run [bold]rllm dataset list --all[/] to see available benchmarks."
+            console.print(msg)
+            raise SystemExit(1)
         else:
             console.print(f"  [error]No --agent specified and no default_agent in catalog for '{benchmark}'.[/]")
             raise SystemExit(1)
@@ -117,7 +132,7 @@ def _run_eval(benchmark: str, agent_name: str, evaluator_name: str | None, base_
     console.print()
 
     # Run evaluation
-    runner = EvalRunner(base_url=base_url, model=model, concurrency=concurrency)
+    runner = EvalRunner(base_url=base_url, model=model, concurrency=concurrency, agent_metadata=agent_metadata or {})
     result = asyncio.run(runner.run(dataset, agent, evaluator, agent_name=agent_name))
 
     # Print results
@@ -153,7 +168,8 @@ def _run_eval(benchmark: str, agent_name: str, evaluator_name: str | None, base_
 @click.option("--concurrency", default=64, type=int, help="Number of parallel requests.")
 @click.option("--max-examples", default=None, type=int, help="Limit number of examples (for dev/testing).")
 @click.option("--output", "output_path", default=None, help="Output file path for results JSON.")
-def eval_cmd(benchmark: str, agent_name: str | None, evaluator_name: str | None, base_url: str | None, model: str | None, split: str | None, concurrency: int, max_examples: int | None, output_path: str | None):
+@click.option("--search-backend", "search_backend", default=None, type=click.Choice(["serper", "brave"], case_sensitive=False), help="Search backend for the search agent (auto-detected from API keys if omitted).")
+def eval_cmd(benchmark: str, agent_name: str | None, evaluator_name: str | None, base_url: str | None, model: str | None, split: str | None, concurrency: int, max_examples: int | None, output_path: str | None, search_backend: str | None):
     """Evaluate a model on a benchmark dataset."""
     proxy_manager = None
 
@@ -194,8 +210,13 @@ def eval_cmd(benchmark: str, agent_name: str | None, evaluator_name: str | None,
         base_url = proxy_manager.get_proxy_url()
         console.print(f"  [success]Proxy ready[/] at [dim]{base_url}[/]")
 
+    # Build agent metadata from CLI options
+    agent_metadata = {}
+    if search_backend:
+        agent_metadata["search_backend"] = search_backend
+
     try:
-        _run_eval(benchmark, agent_name, evaluator_name, base_url, model, split, concurrency, max_examples, output_path)
+        _run_eval(benchmark, agent_name, evaluator_name, base_url, model, split, concurrency, max_examples, output_path, agent_metadata=agent_metadata)
     finally:
         if proxy_manager is not None:
             proxy_manager.shutdown_proxy()

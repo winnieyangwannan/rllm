@@ -65,6 +65,11 @@
       "description": "VLM open-ended question answering with images",
       "module": "rllm.experimental.agents.vlm_agent",
       "function": "vlm_open_agent"
+    },
+    "search": {
+      "description": "Multi-turn search agent with web search tool calling",
+      "module": "rllm.experimental.agents.search",
+      "function": "search_agent"
     }
   }
 }
