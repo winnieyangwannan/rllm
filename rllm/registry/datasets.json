@@ -126,6 +126,26 @@
       "eval_split": "train",
       "transform": "rllm.data.transforms:hmmt_transform"
     },
+    "aime_2025": {
+      "description": "AIME 2025: American Invitational Mathematics Examination (30 problems)",
+      "source": "MathArena/aime_2025",
+      "category": "math",
+      "splits": ["train"],
+      "default_agent": "math",
+      "reward_fn": "math_reward_fn",
+      "eval_split": "train",
+      "transform": "rllm.data.transforms:aime_transform"
+    },
+    "aime_2026": {
+      "description": "AIME 2026: American Invitational Mathematics Examination (30 problems)",
+      "source": "MathArena/aime_2026",
+      "category": "math",
+      "splits": ["train"],
+      "default_agent": "math",
+      "reward_fn": "math_reward_fn",
+      "eval_split": "train",
+      "transform": "rllm.data.transforms:aime_transform"
+    },
     "humaneval": {
       "description": "HumanEval: Function-level code generation (164 problems)",
       "source": "openai/openai_humaneval",

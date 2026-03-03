@@ -1,6 +1,6 @@
 # Supported Benchmarks
 
-rLLM ships with **42 benchmarks** across 9 categories, all accessible via `rllm eval <benchmark>`. Datasets are auto-pulled from HuggingFace on first use and cached locally under `~/.rllm/datasets/`.
+rLLM ships with **44 benchmarks** across 9 categories, all accessible via `rllm eval <benchmark>`. Datasets are auto-pulled from HuggingFace on first use and cached locally under `~/.rllm/datasets/`.
 
 ## Quick Reference
 
@@ -13,7 +13,7 @@ rllm dataset list                           # List all available benchmarks
 
 ---
 
-## Math (6 benchmarks)
+## Math (8 benchmarks)
 
 | Benchmark | CLI Name | Size | Description | Agent | Evaluator |
 |---|---|---|---|---|---|
@@ -23,6 +23,8 @@ rllm dataset list                           # List all available benchmarks
 | HMMT Feb 2025 | `hmmt` | train | Harvard-MIT Mathematics Tournament (February) | `math` | `math_reward_fn` |
 | HMMT Nov 2025 | `hmmt_nov` | 30 train | Harvard-MIT Mathematics Tournament (November) | `math` | `math_reward_fn` |
 | PolyMATH | `polymath` | 4 splits (top/high/medium/low) | Multilingual math reasoning across 18 languages | `math` | `math_reward_fn` |
+| AIME 2025 | `aime_2025` | 30 train | American Invitational Mathematics Examination 2025 | `math` | `math_reward_fn` |
+| AIME 2026 | `aime_2026` | 30 train | American Invitational Mathematics Examination 2026 | `math` | `math_reward_fn` |
 
 **Agent:** `math` prompts the model for step-by-step reasoning and a final `\boxed{}` answer. `countdown` uses `<answer>` tags.
 

@@ -223,6 +223,19 @@ def hmmt_transform(row: dict) -> dict:
     }
 
 
+def aime_transform(row: dict) -> dict:
+    """Transform AIME row to standard math format.
+
+    AIME has 'problem' and 'answer' (int) fields. The answer is always
+    an integer (0-999) per AIME competition rules.
+    """
+    return {
+        "question": row.get("problem", ""),
+        "ground_truth": str(row.get("answer", "")),
+        "data_source": "aime",
+    }
+
+
 # ---------------------------------------------------------------------------
 # Code transforms
 # ---------------------------------------------------------------------------
