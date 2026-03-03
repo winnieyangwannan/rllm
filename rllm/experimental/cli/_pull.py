@@ -357,5 +357,13 @@ def pull_dataset(name: str, catalog_entry: dict) -> None:
             num_examples = len(register_data)
             logger.info(f"  Registered {name}/{split} ({num_examples} examples)")
         except Exception as e:
-            logger.warning(f"  Failed to pull {name}/{split}: {e}")
+            # Provide a clearer message for gated datasets
+            err_str = str(e)
+            if "gated dataset" in err_str.lower() or "must be authenticated" in err_str.lower():
+                logger.warning(
+                    f"  Failed to pull {name}/{split}: This is a gated dataset. "
+                    f"Set the HF_TOKEN environment variable or run 'huggingface-cli login' to authenticate."
+                )
+            else:
+                logger.warning(f"  Failed to pull {name}/{split}: {e}")
             raise

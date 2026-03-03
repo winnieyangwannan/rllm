@@ -297,6 +297,39 @@ def livecodebench_transform(row: dict) -> dict:
 # ---------------------------------------------------------------------------
 
 
+def multichallenge_transform(row: dict) -> dict:
+    """Transform MultiChallenge row to multi-turn conversation format.
+
+    MultiChallenge has CONVERSATION (JSON string of turn list),
+    TARGET_QUESTION, and PASS_CRITERIA.
+    """
+    import ast
+    import json
+
+    conversation = row.get("CONVERSATION", "[]")
+    if isinstance(conversation, str):
+        try:
+            conversation = json.loads(conversation)
+        except (json.JSONDecodeError, TypeError):
+            try:
+                conversation = ast.literal_eval(conversation)
+            except (ValueError, SyntaxError):
+                conversation = []
+
+    turns = []
+    for turn in conversation:
+        if isinstance(turn, dict) and "role" in turn and "content" in turn:
+            turns.append({"role": turn["role"], "content": turn["content"]})
+
+    return {
+        "turns": turns,
+        "question": row.get("TARGET_QUESTION", ""),
+        "ground_truth": row.get("PASS_CRITERIA", ""),
+        "data_source": "multichallenge",
+        "axis": row.get("AXIS", ""),
+    }
+
+
 def _parse_python_function_call(call_str: str) -> dict | None:
     """Parse a Python-style function call string into {name, arguments} dict.
 

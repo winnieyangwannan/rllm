@@ -61,17 +61,17 @@
       "default_agent": "mcq",
       "reward_fn": "mcq_reward_fn",
       "eval_split": "test",
+      "aggregate_configs": true,
       "transform": "rllm.data.transforms:mmlu_redux_transform"
     },
     "gpqa_diamond": {
-      "description": "GPQA Diamond: Expert-level graduate science QA (198 questions)",
-      "source": "Idavidrein/gpqa",
+      "description": "GPQA: Expert-level graduate science QA (448 questions)",
+      "source": "ankner/gpqa",
       "category": "mcq",
       "splits": ["train"],
       "default_agent": "mcq",
       "reward_fn": "mcq_reward_fn",
       "eval_split": "train",
-      "hf_config": "gpqa_diamond",
       "transform": "rllm.data.transforms:gpqa_diamond_transform"
     },
     "supergpqa": {
@@ -82,6 +82,7 @@
       "default_agent": "mcq",
       "reward_fn": "mcq_reward_fn",
       "eval_split": "test",
+      "hf_split": "train",
       "transform": "rllm.data.transforms:supergpqa_transform"
     },
     "ceval": {
@@ -92,6 +93,7 @@
       "default_agent": "mcq",
       "reward_fn": "mcq_reward_fn",
       "eval_split": "val",
+      "aggregate_configs": true,
       "transform": "rllm.data.transforms:ceval_transform"
     },
     "mmmlu": {
@@ -146,7 +148,7 @@
     },
     "livecodebench": {
       "description": "LiveCodeBench: Contamination-free competitive programming",
-      "source": "livecodebench/code_generation_lite",
+      "source": "livecodebench/code_generation",
       "category": "code",
       "splits": ["test"],
       "default_agent": "code",
@@ -173,7 +175,11 @@
       "splits": ["test"],
       "default_agent": "ifeval",
       "reward_fn": "ifeval_reward_fn",
-      "eval_split": "test"
+      "eval_split": "test",
+      "hf_split": "train",
+      "field_map": {
+        "prompt": "question"
+      }
     },
     "longbench_v2": {
       "description": "LongBench v2: Long-context understanding MCQ benchmark",
@@ -200,12 +206,14 @@
     },
     "multichallenge": {
       "description": "MultiChallenge: Multi-turn conversation evaluation",
-      "source": "ekwinox117/multi-challenge",
+      "source": "nmayorga7/multichallenge",
       "category": "agentic",
       "splits": ["test"],
       "default_agent": "multiturn",
       "reward_fn": "llm_judge_reward_fn",
-      "eval_split": "test"
+      "eval_split": "test",
+      "hf_split": "train",
+      "transform": "rllm.data.transforms:multichallenge_transform"
     },
     "aa_lcr": {
       "description": "AA-LCR: Long-context reasoning over ~100K-token real-world documents (100 questions)",
@@ -218,13 +226,14 @@
       "transform": "rllm.data.transforms:aa_lcr_transform"
     },
     "hle": {
-      "description": "HLE: Humanity's Last Exam - expert-level questions across dozens of subjects (2,500 questions)",
+      "description": "HLE: Humanity's Last Exam - expert-level questions across dozens of subjects (2,500 questions, gated — requires HF_TOKEN)",
       "source": "cais/hle",
       "category": "qa",
       "splits": ["test"],
       "default_agent": "reasoning",
       "reward_fn": "llm_equality_reward_fn",
       "eval_split": "test",
+      "gated": true,
       "transform": "rllm.data.transforms:hle_transform"
     },
     "mmlu_prox": {
