@@ -389,6 +389,67 @@
       "eval_split": "test",
       "hf_split": "train",
       "transform": "rllm.data.transforms:babyvision_transform"
+    },
+    "ai2d": {
+      "description": "AI2D: Science diagram understanding MCQ (3,088 test)",
+      "source": "lmms-lab/ai2d",
+      "category": "vlm",
+      "splits": ["test"],
+      "default_agent": "vlm_mcq",
+      "reward_fn": "mcq_reward_fn",
+      "eval_split": "test",
+      "transform": "rllm.data.transforms:ai2d_transform"
+    },
+    "ocrbench": {
+      "description": "OCRBench: OCR and text recognition benchmark (1,000 test)",
+      "source": "echo840/OCRBench",
+      "category": "vlm",
+      "splits": ["test"],
+      "default_agent": "vlm_open",
+      "reward_fn": "f1_reward_fn",
+      "eval_split": "test",
+      "transform": "rllm.data.transforms:ocrbench_transform"
+    },
+    "charxiv": {
+      "description": "CharXiv: Chart understanding reasoning questions (1,000 validation)",
+      "source": "princeton-nlp/CharXiv",
+      "category": "vlm",
+      "splits": ["validation"],
+      "default_agent": "vlm_open",
+      "reward_fn": "llm_equality_reward_fn",
+      "eval_split": "validation",
+      "transform": "rllm.data.transforms:charxiv_transform"
+    },
+    "cc_ocr": {
+      "description": "CC-OCR: Multi-scene OCR benchmark with 4 sub-tasks (7,058 test)",
+      "source": "wulipc/CC-OCR",
+      "category": "vlm",
+      "splits": ["test"],
+      "default_agent": "vlm_open",
+      "reward_fn": "f1_reward_fn",
+      "eval_split": "test",
+      "aggregate_configs": true,
+      "transform": "rllm.data.transforms:cc_ocr_transform"
+    },
+    "countbenchqa": {
+      "description": "CountBenchQA: Visual object counting QA (491 test)",
+      "source": "vikhyatk/CountBenchQA",
+      "category": "vlm",
+      "splits": ["test"],
+      "default_agent": "vlm_open",
+      "reward_fn": "f1_reward_fn",
+      "eval_split": "test",
+      "transform": "rllm.data.transforms:countbenchqa_transform"
+    },
+    "erqa": {
+      "description": "ERQA: Entity recognition QA with multi-image support (400 test)",
+      "source": "FlagEval/ERQA",
+      "category": "vlm",
+      "splits": ["test"],
+      "default_agent": "vlm_mcq",
+      "reward_fn": "mcq_reward_fn",
+      "eval_split": "test",
+      "transform": "rllm.data.transforms:erqa_transform"
     }
   }
 }

@@ -7,12 +7,18 @@ from unittest.mock import MagicMock
 import pytest
 
 from rllm.data.transforms import (
+    ai2d_transform,
     babyvision_transform,
+    cc_ocr_transform,
+    charxiv_transform,
+    countbenchqa_transform,
     dynamath_transform,
+    erqa_transform,
     mathvision_transform,
     mathvista_transform,
     mmmu_pro_transform,
     mmmu_transform,
+    ocrbench_transform,
     vlmsareblind_transform,
     zerobench_sub_transform,
     zerobench_transform,
@@ -412,6 +418,292 @@ class TestBabyVisionTransform:
 
 
 # ---------------------------------------------------------------------------
+# AI2D
+# ---------------------------------------------------------------------------
+
+
+class TestAI2DTransform:
+    def test_basic_transform(self):
+        img = _mock_image()
+        row = {
+            "question": "What does the arrow point to?",
+            "image": img,
+            "options": ["Heart", "Lung", "Liver", "Kidney"],
+            "answer": "A",
+        }
+        result = ai2d_transform(row)
+        assert result["question"] == "What does the arrow point to?"
+        assert result["images"] == [img]
+        assert result["choices"] == ["Heart", "Lung", "Liver", "Kidney"]
+        assert result["ground_truth"] == "A"
+        assert result["data_source"] == "ai2d"
+
+    def test_no_image(self):
+        row = {
+            "question": "Q",
+            "options": ["A", "B"],
+            "answer": "B",
+        }
+        result = ai2d_transform(row)
+        assert result["images"] == []
+
+    def test_options_as_json_string(self):
+        img = _mock_image()
+        row = {
+            "question": "Q",
+            "image": img,
+            "options": '["X", "Y", "Z"]',
+            "answer": "C",
+        }
+        result = ai2d_transform(row)
+        assert result["choices"] == ["X", "Y", "Z"]
+
+    def test_empty_options(self):
+        row = {
+            "question": "Q",
+            "options": [],
+            "answer": "A",
+        }
+        result = ai2d_transform(row)
+        assert result["choices"] == []
+
+
+# ---------------------------------------------------------------------------
+# OCRBench
+# ---------------------------------------------------------------------------
+
+
+class TestOCRBenchTransform:
+    def test_basic_transform(self):
+        img = _mock_image()
+        row = {
+            "question": "What text is shown in the image?",
+            "image": img,
+            "answer": ["Hello World", "Hello, World"],
+        }
+        result = ocrbench_transform(row)
+        assert result["question"] == "What text is shown in the image?"
+        assert result["images"] == [img]
+        assert result["ground_truth"] == "Hello World | Hello, World"
+        assert result["data_source"] == "ocrbench"
+
+    def test_single_string_answer(self):
+        img = _mock_image()
+        row = {
+            "question": "Q",
+            "image": img,
+            "answer": "simple answer",
+        }
+        result = ocrbench_transform(row)
+        assert result["ground_truth"] == "simple answer"
+
+    def test_no_image(self):
+        row = {
+            "question": "Q",
+            "answer": ["A"],
+        }
+        result = ocrbench_transform(row)
+        assert result["images"] == []
+
+    def test_empty_answer_list(self):
+        img = _mock_image()
+        row = {
+            "question": "Q",
+            "image": img,
+            "answer": [],
+        }
+        result = ocrbench_transform(row)
+        assert result["ground_truth"] == ""
+
+
+# ---------------------------------------------------------------------------
+# CharXiv
+# ---------------------------------------------------------------------------
+
+
+class TestCharXivTransform:
+    def test_basic_transform(self):
+        img = _mock_image()
+        row = {
+            "image": img,
+            "reasoning_q": "What trend does the chart show?",
+            "reasoning_a": "An upward trend over time",
+        }
+        result = charxiv_transform(row)
+        assert result["question"] == "What trend does the chart show?"
+        assert result["images"] == [img]
+        assert result["ground_truth"] == "An upward trend over time"
+        assert result["data_source"] == "charxiv"
+
+    def test_no_image(self):
+        row = {
+            "reasoning_q": "Q",
+            "reasoning_a": "A",
+        }
+        result = charxiv_transform(row)
+        assert result["images"] == []
+
+    def test_missing_fields(self):
+        row = {}
+        result = charxiv_transform(row)
+        assert result["question"] == ""
+        assert result["ground_truth"] == ""
+        assert result["images"] == []
+
+
+# ---------------------------------------------------------------------------
+# CC-OCR
+# ---------------------------------------------------------------------------
+
+
+class TestCCOCRTransform:
+    def test_basic_transform(self):
+        import base64
+
+        img_bytes = b"fake png data"
+        img_b64 = base64.b64encode(img_bytes).decode()
+        row = {
+            "image": img_b64,
+            "question": "What text is in the document?",
+            "answer": "Invoice #1234",
+            "category": "doc_parsing",
+        }
+        result = cc_ocr_transform(row)
+        assert result["question"] == "What text is in the document?"
+        assert result["images"] == [img_bytes]
+        assert result["ground_truth"] == "Invoice #1234"
+        assert result["data_source"] == "cc_ocr"
+        assert result["category"] == "doc_parsing"
+
+    def test_empty_image_string(self):
+        row = {
+            "image": "",
+            "question": "Q",
+            "answer": "A",
+            "category": "kie",
+        }
+        result = cc_ocr_transform(row)
+        assert result["images"] == []
+
+    def test_no_image(self):
+        row = {
+            "question": "Q",
+            "answer": "A",
+        }
+        result = cc_ocr_transform(row)
+        assert result["images"] == []
+
+    def test_invalid_base64(self):
+        row = {
+            "image": "not-valid-base64!!!",
+            "question": "Q",
+            "answer": "A",
+        }
+        result = cc_ocr_transform(row)
+        # Invalid base64 should result in no images
+        assert result["images"] == []
+
+
+# ---------------------------------------------------------------------------
+# CountBenchQA
+# ---------------------------------------------------------------------------
+
+
+class TestCountBenchQATransform:
+    def test_basic_transform(self):
+        img = _mock_image()
+        row = {
+            "question": "How many dogs are in the image?",
+            "image": img,
+            "number": 3,
+        }
+        result = countbenchqa_transform(row)
+        assert result["question"] == "How many dogs are in the image?"
+        assert result["images"] == [img]
+        assert result["ground_truth"] == "3"
+        assert result["data_source"] == "countbenchqa"
+
+    def test_zero_count(self):
+        img = _mock_image()
+        row = {
+            "question": "Q",
+            "image": img,
+            "number": 0,
+        }
+        result = countbenchqa_transform(row)
+        assert result["ground_truth"] == "0"
+
+    def test_no_image(self):
+        row = {
+            "question": "Q",
+            "number": 5,
+        }
+        result = countbenchqa_transform(row)
+        assert result["images"] == []
+
+    def test_none_number(self):
+        img = _mock_image()
+        row = {
+            "question": "Q",
+            "image": img,
+            "number": None,
+        }
+        result = countbenchqa_transform(row)
+        assert result["ground_truth"] == ""
+
+
+# ---------------------------------------------------------------------------
+# ERQA
+# ---------------------------------------------------------------------------
+
+
+class TestERQATransform:
+    def test_basic_transform(self):
+        img1 = _mock_image()
+        img2 = _mock_image()
+        img3 = _mock_image()
+        row = {
+            "question": "What entity is shown across these images?",
+            "images": [img1, img2, img3],
+            "answer": "B",
+        }
+        result = erqa_transform(row)
+        assert result["question"] == "What entity is shown across these images?"
+        assert result["images"] == [img1, img2, img3]
+        assert result["ground_truth"] == "B"
+        assert result["data_source"] == "erqa"
+
+    def test_single_image(self):
+        img = _mock_image()
+        row = {
+            "question": "Q",
+            "images": [img],
+            "answer": "A",
+        }
+        result = erqa_transform(row)
+        assert result["images"] == [img]
+
+    def test_no_images(self):
+        row = {
+            "question": "Q",
+            "images": [],
+            "answer": "C",
+        }
+        result = erqa_transform(row)
+        assert result["images"] == []
+
+    def test_images_not_list(self):
+        img = _mock_image()
+        row = {
+            "question": "Q",
+            "images": img,
+            "answer": "D",
+        }
+        result = erqa_transform(row)
+        assert result["images"] == [img]
+
+
+# ---------------------------------------------------------------------------
 # Standard VLM output schema checks
 # ---------------------------------------------------------------------------
 
@@ -446,6 +738,24 @@ class TestVLMOutputSchema:
         }),
         (babyvision_transform, {
             "question": "Q", "ansType": "blank", "blankAns": "A",
+        }),
+        (ai2d_transform, {
+            "question": "Q", "options": ["A", "B"], "answer": "A",
+        }),
+        (ocrbench_transform, {
+            "question": "Q", "answer": ["text"],
+        }),
+        (charxiv_transform, {
+            "reasoning_q": "Q", "reasoning_a": "A",
+        }),
+        (cc_ocr_transform, {
+            "question": "Q", "answer": "A",
+        }),
+        (countbenchqa_transform, {
+            "question": "Q", "number": 5,
+        }),
+        (erqa_transform, {
+            "question": "Q", "images": [], "answer": "A",
         }),
     ])
     def test_has_required_fields(self, transform_fn, row):
