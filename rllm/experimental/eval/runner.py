@@ -15,6 +15,13 @@ from rllm.experimental.eval.types import AgentConfig, AgentFlow, Evaluator
 logger = logging.getLogger(__name__)
 
 
+def _is_sandboxed(agent) -> bool:
+    """Check if an agent is a SandboxedAgentFlow without importing at module level."""
+    from rllm.experimental.agents.sandboxed_agent import SandboxedAgentFlow
+
+    return isinstance(agent, SandboxedAgentFlow)
+
+
 class EvalRunner:
     """Orchestrates parallel evaluation using a two-stage pipeline.
 
@@ -43,10 +50,19 @@ class EvalRunner:
         Returns:
             EvalResult with per-example and aggregate metrics.
         """
-        semaphore = asyncio.Semaphore(self.concurrency)
+        concurrency = self.concurrency
+        if hasattr(agent, 'max_concurrent'):
+            concurrency = min(concurrency, agent.max_concurrent)
+        semaphore = asyncio.Semaphore(concurrency)
 
         async def eval_one(idx: int, task: dict) -> EvalItem:
             async with semaphore:
+                # Create per-task agent instance for sandboxed agents
+                task_agent = agent
+                is_sandboxed = _is_sandboxed(agent)
+                if is_sandboxed:
+                    task_agent = agent.create_instance()
+
                 try:
                     config = AgentConfig(
                         base_url=self.base_url,
@@ -55,12 +71,25 @@ class EvalRunner:
                         metadata=dict(self.agent_metadata),
                     )
 
+                    # Setup sandbox if needed
+                    if is_sandboxed:
+                        loop = asyncio.get_event_loop()
+                        await loop.run_in_executor(
+                            self._executor, task_agent.setup_sandbox, task, config
+                        )
+
                     # Stage 1: Run agent flow (supports both sync and async agents)
-                    if inspect.iscoroutinefunction(agent.run):
-                        episode = await agent.run(task, config)
+                    if inspect.iscoroutinefunction(task_agent.run):
+                        episode = await task_agent.run(task, config)
                     else:
                         loop = asyncio.get_event_loop()
-                        episode = await loop.run_in_executor(self._executor, agent.run, task, config)
+                        episode = await loop.run_in_executor(
+                            self._executor, task_agent.run, task, config
+                        )
+
+                    # Store sandbox reference in artifacts for evaluator access
+                    if is_sandboxed and task_agent.sandbox is not None:
+                        episode.artifacts["_sandbox"] = task_agent.sandbox
 
                     # Stage 2: Evaluate
                     eval_output = evaluator.evaluate(task, episode)
@@ -82,6 +111,18 @@ class EvalRunner:
                 except Exception as e:
                     logger.warning("Error evaluating example %d: %s", idx, e)
                     return EvalItem(idx=idx, reward=0.0, is_correct=False, error=str(e))
+                finally:
+                    # Guaranteed sandbox cleanup
+                    if is_sandboxed:
+                        try:
+                            loop = asyncio.get_event_loop()
+                            await loop.run_in_executor(
+                                self._executor, task_agent.teardown_sandbox
+                            )
+                        except Exception:
+                            logger.exception(
+                                "Sandbox teardown error for example %d", idx
+                            )
 
         task_coros = [eval_one(i, task) for i, task in enumerate(dataset)]
         items = await tqdm_asyncio.gather(*task_coros, desc="Evaluating")

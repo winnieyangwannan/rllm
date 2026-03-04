@@ -71,6 +71,16 @@ def _run_eval(benchmark: str, agent_name: str, evaluator_name: str | None, base_
         console.print(f"  [error]Error loading agent '{agent_name}': {e}[/]")
         raise SystemExit(1)
 
+    # Apply sandbox CLI overrides to agent
+    if agent_metadata:
+        from rllm.experimental.agents.sandboxed_agent import SandboxedAgentFlow
+
+        if isinstance(agent, SandboxedAgentFlow):
+            if "sandbox_backend" in agent_metadata:
+                agent.sandbox_backend = agent_metadata["sandbox_backend"]
+            if "sandbox_concurrency" in agent_metadata:
+                agent.max_concurrent = agent_metadata["sandbox_concurrency"]
+
     # Load evaluator
     evaluator = None
     evaluator_display = "N/A"
@@ -169,7 +179,9 @@ def _run_eval(benchmark: str, agent_name: str, evaluator_name: str | None, base_
 @click.option("--max-examples", default=None, type=int, help="Limit number of examples (for dev/testing).")
 @click.option("--output", "output_path", default=None, help="Output file path for results JSON.")
 @click.option("--search-backend", "search_backend", default=None, type=click.Choice(["serper", "brave"], case_sensitive=False), help="Search backend for the search agent (auto-detected from API keys if omitted).")
-def eval_cmd(benchmark: str, agent_name: str | None, evaluator_name: str | None, base_url: str | None, model: str | None, split: str | None, concurrency: int, max_examples: int | None, output_path: str | None, search_backend: str | None):
+@click.option("--sandbox-backend", "sandbox_backend", default=None, type=click.Choice(["docker", "local", "modal"], case_sensitive=False), help="Sandbox backend for sandboxed agents (auto-detected from agent if omitted).")
+@click.option("--sandbox-concurrency", "sandbox_concurrency", default=None, type=int, help="Override max concurrent sandboxes (default: agent's max_concurrent).")
+def eval_cmd(benchmark: str, agent_name: str | None, evaluator_name: str | None, base_url: str | None, model: str | None, split: str | None, concurrency: int, max_examples: int | None, output_path: str | None, search_backend: str | None, sandbox_backend: str | None, sandbox_concurrency: int | None):
     """Evaluate a model on a benchmark dataset."""
     proxy_manager = None
 
@@ -214,6 +226,10 @@ def eval_cmd(benchmark: str, agent_name: str | None, evaluator_name: str | None,
     agent_metadata = {}
     if search_backend:
         agent_metadata["search_backend"] = search_backend
+    if sandbox_backend:
+        agent_metadata["sandbox_backend"] = sandbox_backend
+    if sandbox_concurrency is not None:
+        agent_metadata["sandbox_concurrency"] = sandbox_concurrency
 
     try:
         _run_eval(benchmark, agent_name, evaluator_name, base_url, model, split, concurrency, max_examples, output_path, agent_metadata=agent_metadata)
