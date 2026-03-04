@@ -998,6 +998,31 @@ def widesearch_transform(row: dict) -> dict:
 # ---------------------------------------------------------------------------
 
 
+def swebench_transform(row: dict) -> dict:
+    """Transform SWE-bench Verified row to standard format.
+
+    Preserves all original fields needed by swebench harness (version,
+    created_at, environment_setup_commit) for Docker image building.
+    """
+    return {
+        "question": row.get("problem_statement", ""),
+        "ground_truth": row.get("instance_id", ""),
+        "instance_id": row.get("instance_id", ""),
+        "repo": row.get("repo", ""),
+        "base_commit": row.get("base_commit", ""),
+        "hints_text": row.get("hints_text", ""),
+        "patch": row.get("patch", ""),
+        "test_patch": row.get("test_patch", ""),
+        "problem_statement": row.get("problem_statement", ""),
+        "FAIL_TO_PASS": row.get("FAIL_TO_PASS", ""),
+        "PASS_TO_PASS": row.get("PASS_TO_PASS", ""),
+        "version": row.get("version", ""),
+        "created_at": row.get("created_at", ""),
+        "environment_setup_commit": row.get("environment_setup_commit", ""),
+        "data_source": "swebench",
+    }
+
+
 def bfcl_transform(row: dict) -> dict:
     """Transform BFCL exec row to standard function-calling format.
 

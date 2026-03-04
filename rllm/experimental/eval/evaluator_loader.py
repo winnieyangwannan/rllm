@@ -212,10 +212,14 @@ def resolve_evaluator_from_catalog(benchmark: str) -> Evaluator | None:
         return None
 
     evaluator_cls = _EVALUATOR_REGISTRY.get(reward_fn_name)
-    if evaluator_cls is None:
-        return None
+    if evaluator_cls is not None:
+        return evaluator_cls()
 
-    return evaluator_cls()
+    # Fall through to full loader (user registry, import paths, entry points)
+    try:
+        return load_evaluator(reward_fn_name)
+    except KeyError:
+        return None
 
 
 def list_evaluators() -> list[dict]:

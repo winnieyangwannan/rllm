@@ -523,6 +523,16 @@
       "eval_split": "test",
       "gated": true,
       "transform": "rllm.data.transforms:hle_transform"
+    },
+    "swebench_verified": {
+      "description": "SWE-bench Verified: 500 real-world GitHub issues for SWE agents",
+      "source": "princeton-nlp/SWE-bench_Verified",
+      "category": "code",
+      "splits": ["test"],
+      "default_agent": "swe",
+      "reward_fn": "swebench_reward_fn",
+      "eval_split": "test",
+      "transform": "rllm.data.transforms:swebench_transform"
     }
   }
 }

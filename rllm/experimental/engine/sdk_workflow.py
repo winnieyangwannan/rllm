@@ -400,8 +400,11 @@ class SdkWorkflow(Workflow):
 
     async def _run_local(self, task: dict, uid: str, rollout_start_time: float, **kwargs) -> Episode:
         """Execute the local agent function and build Episode from traces."""
-        # Build metadata expected by wrap_with_session_context
-        metadata: dict[str, Any] = {"session_name": uid, "task": task}
+        # Build metadata expected by wrap_with_session_context.
+        # Do NOT include ``task`` here — session metadata gets JSON-serialized
+        # into the proxy routing slug and binary data (e.g. VLM images) is not
+        # JSON-serializable.  The full task is passed separately as **task.
+        metadata: dict[str, Any] = {"session_name": uid}
 
         # Execute the agent function
         success, output, session_uid = await self._execute_agent(metadata, task, **kwargs)

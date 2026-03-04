@@ -1,7 +1,11 @@
 """SWE-bench agent: bash-only tool-calling agent in a sandboxed environment.
 
-Extends SandboxedAgentFlow so the EvalRunner manages the sandbox lifecycle,
-and uses ToolCallingMixin for the multi-turn tool loop.
+Extends SandboxedAgentFlow so the EvalRunner manages the sandbox lifecycle.
+Uses a custom agent loop inspired by mini-swe-agent for better performance:
+- Format error recovery (continues when LLM skips tool calls)
+- Smart head/tail output truncation
+- Environment variable setup for non-interactive execution
+- Submission detection via magic string
 
 Supports both Docker (default) and Modal sandbox backends:
 - Docker: builds per-instance images via swebench harness
@@ -10,6 +14,7 @@ Supports both Docker (default) and Modal sandbox backends:
 
 from __future__ import annotations
 
+import json
 import logging
 import tempfile
 import threading
@@ -24,16 +29,149 @@ from rllm.experimental.agents.sandboxed_agent import (
     _safe_exec,
     create_sandbox,
 )
-from rllm.experimental.agents.tool_calling import ToolCallingMixin
-from rllm.experimental.agents.tools.bash_tool import BashTool
-from rllm.types import Episode, Trajectory
+from rllm.sdk.sandbox.protocol import Sandbox
+from rllm.types import Episode, Step, Trajectory
 
-from .prompts import INSTANCE_PROMPT_TEMPLATE, SYSTEM_PROMPT
+from .prompts import BASH_TOOL, FORMAT_ERROR_MSG, INSTANCE_PROMPT, SYSTEM_PROMPT
 
 logger = logging.getLogger(__name__)
 
 # Serialize Docker image builds to avoid race conditions
 _image_build_lock = threading.Lock()
+
+# Output truncation: keep head + tail when output is too long
+OUTPUT_LIMIT = 10_000
+OUTPUT_HEAD = 5_000
+OUTPUT_TAIL = 5_000
+
+
+def _truncate_output(output: str) -> str:
+    """Smart truncation: keep first and last N chars for long outputs."""
+    if len(output) <= OUTPUT_LIMIT:
+        return output
+    total = len(output)
+    head = output[:OUTPUT_HEAD]
+    tail = output[-OUTPUT_TAIL:]
+    return (
+        f"{head}\n\n... [{total - OUTPUT_HEAD - OUTPUT_TAIL} characters truncated] ...\n\n{tail}"
+    )
+
+
+def _execute_tool(sandbox: Sandbox, command: str) -> str:
+    """Execute a bash command in the sandbox and return truncated output.
+
+    Wraps the command to:
+    1. Source conda so the testbed environment is active
+    2. Set non-interactive env vars (PAGER=cat, etc.)
+    3. Run from /testbed
+    """
+    wrapped = (
+        "source /opt/miniconda3/etc/profile.d/conda.sh && conda activate testbed && "
+        "export PAGER=cat GIT_PAGER=cat TERM=dumb NO_COLOR=1 PIP_PROGRESS_BAR=off && "
+        f"cd /testbed && {command}"
+    )
+    output = _safe_exec(sandbox, wrapped, timeout=120)
+    return _truncate_output(output)
+
+
+def _run_agent_loop(
+    client: openai.OpenAI,
+    model: str,
+    messages: list[dict],
+    sandbox: Sandbox,
+    max_turns: int = 40,
+    temperature: float = 0.0,
+) -> tuple[list[Step], list[dict], str | None]:
+    """Custom agent loop with format error recovery and submission detection.
+
+    Improvements over basic ToolCallingMixin:
+    - If the LLM responds without tool calls, send a format error message
+      and continue (up to 3 retries) instead of stopping.
+    - Detects SUBMIT_PATCH in command output to end the loop early.
+    - Smart head/tail truncation for long outputs.
+    - All commands run from /testbed.
+    """
+    tool_schemas = [BASH_TOOL]
+    steps: list[Step] = []
+    format_errors = 0
+    max_format_errors = 3
+    patch: str | None = None
+
+    for turn in range(max_turns):
+        try:
+            response = client.chat.completions.create(
+                model=model,
+                messages=messages,
+                tools=tool_schemas,
+                temperature=temperature,
+            )
+        except Exception:
+            logger.exception("LLM API call failed on turn %d", turn)
+            break
+
+        choice = response.choices[0]
+        msg = choice.message
+
+        # Append assistant message to conversation
+        messages.append(msg.model_dump(exclude_none=True))
+
+        # No tool calls — send format error and retry
+        if not msg.tool_calls:
+            content = msg.content or ""
+
+            # Check if the model is trying to submit via text
+            if "SUBMIT_PATCH" in content:
+                steps.append(Step(input=f"turn_{turn}", output=content, done=True))
+                return steps, messages, content
+
+            format_errors += 1
+            if format_errors >= max_format_errors:
+                logger.warning("Max format errors reached, ending loop")
+                steps.append(Step(input=f"turn_{turn}", output=content, done=True))
+                return steps, messages, content
+
+            # Send format error recovery message
+            messages.append({"role": "user", "content": FORMAT_ERROR_MSG})
+            continue
+
+        # Reset format error counter on successful tool use
+        format_errors = 0
+
+        # Process each tool call
+        submitted = False
+        for tc in msg.tool_calls:
+            fn_name = tc.function.name
+
+            try:
+                args = json.loads(tc.function.arguments)
+            except json.JSONDecodeError:
+                args = {"command": tc.function.arguments}
+
+            command = args.get("command", "")
+
+            if fn_name != "bash":
+                output = f"Unknown tool: {fn_name}. Only 'bash' is available."
+            else:
+                output = _execute_tool(sandbox, command)
+
+            # Check for submission signal
+            if "SUBMIT_PATCH" in command or "SUBMIT_PATCH" in output:
+                submitted = True
+
+            steps.append(Step(input=command, output=output))
+            messages.append(
+                {
+                    "role": "tool",
+                    "tool_call_id": tc.id,
+                    "content": output,
+                }
+            )
+
+        if submitted:
+            # Agent signaled it's done — capture final state
+            return steps, messages, "SUBMITTED"
+
+    return steps, messages, None
 
 
 def _ensure_docker_image(task: dict) -> str:
@@ -133,13 +271,13 @@ def _build_modal_image(task: dict):
     return image
 
 
-class SWEAgentFlow(SandboxedAgentFlow, ToolCallingMixin):
+class SWEAgentFlow(SandboxedAgentFlow):
     """AgentFlow for SWE-bench: runs a bash-tool agent in a sandboxed container.
 
     Sandbox lifecycle is managed by EvalRunner via SandboxedAgentFlow:
     1. setup_sandbox() creates sandbox with the swebench instance image
-    2. on_sandbox_ready() resets the repo to the base commit
-    3. run() executes the multi-turn tool loop
+    2. on_sandbox_ready() resets the repo and configures the environment
+    3. run() executes the custom agent loop
     4. teardown_sandbox() destroys the container
 
     Supports ``sandbox_backend="docker"`` (default) and ``"modal"``.
@@ -173,19 +311,20 @@ class SWEAgentFlow(SandboxedAgentFlow, ToolCallingMixin):
         self.on_sandbox_ready(task, config)
 
     def get_image(self, task: dict) -> str:
-        """Build and return the swebench per-instance Docker image.
-
-        Only used for Docker backend. Modal backend builds images in
-        setup_sandbox() directly.
-        """
+        """Build and return the swebench per-instance Docker image."""
         return _ensure_docker_image(task)
 
     def on_sandbox_ready(self, task: dict, config) -> None:
-        """Reset the repo to the base commit after sandbox creation."""
+        """Reset repo and configure environment for non-interactive use."""
+        if self.sandbox is None:
+            return
+
         base_commit = task.get("base_commit", "")
-        if base_commit and self.sandbox is not None:
+        if base_commit:
             _safe_exec(self.sandbox, f"cd /testbed && git reset --hard {base_commit}")
-            _safe_exec(self.sandbox, "cd /testbed && git clean -fdx")
+            # Use -fd (not -fdx) to preserve compiled extensions (.so files)
+            # that were built during image construction
+            _safe_exec(self.sandbox, "cd /testbed && git clean -fd")
 
     def run(self, task: dict, config) -> Episode:
         instance_id = task.get("instance_id", "unknown")
@@ -194,7 +333,7 @@ class SWEAgentFlow(SandboxedAgentFlow, ToolCallingMixin):
         problem_statement = task.get("question", "")
 
         # Build messages
-        instance_prompt = INSTANCE_PROMPT_TEMPLATE.format(
+        instance_prompt = INSTANCE_PROMPT.format(
             problem_statement=problem_statement,
             repo=repo,
             base_commit=base_commit,
@@ -206,13 +345,12 @@ class SWEAgentFlow(SandboxedAgentFlow, ToolCallingMixin):
 
         client = openai.OpenAI(base_url=config.base_url, api_key="not-needed")
 
-        steps, messages, _ = self.run_tool_loop(
+        steps, messages, final = _run_agent_loop(
             client=client,
             model=config.model,
             messages=messages,
-            tools=[BashTool()],
             sandbox=self.sandbox,
-            max_turns=30,
+            max_turns=40,
         )
 
         # Capture the patch
