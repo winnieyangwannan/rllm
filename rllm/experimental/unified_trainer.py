@@ -27,12 +27,12 @@ from rllm.experimental.common.rejection_sampling import (
     RejectionSamplingState,
     apply_rejection_sampling_and_filtering,
 )
-from rllm.experimental.common.transform import transform_episodes_to_trajectory_groups
+from rllm.experimental.common.transform import _default_traj_grouping_hook, transform_episodes_to_trajectory_groups
 from rllm.experimental.common.visualization import visualize_trajectory_last_steps
 from rllm.experimental.engine.unified_workflow_engine import UnifiedWorkflowEngine
 from rllm.experimental.protocol import BackendProtocol
 from rllm.experimental.rollout import RolloutEngine
-from rllm.utils import EpisodeLogger, Tracking
+from rllm.utils import EpisodeLogger, Tracking, extract_source_metadata
 from rllm.workflows.workflow import TerminationReason, Workflow
 
 
@@ -99,6 +99,9 @@ class UnifiedTrainer:
         workflow_args: dict | None = None,
         backend_args: dict | None = None,
         agent_run_func: Callable | None = None,
+        *,
+        traj_grouping_hook: Callable | None = None,
+        traj_group_adv_estimator_map: dict | None = None,
         **kwargs,
     ):
         """Initialize the UnifiedTrainer.
@@ -125,7 +128,9 @@ class UnifiedTrainer:
         self.rllm_config = config.rllm
 
         # Read user-defined hooks from kwargs
-        self.trajectory_grouping_hook = kwargs.get("trajectory_grouping_hook")
+        self.traj_grouping_hook = traj_grouping_hook or _default_traj_grouping_hook
+        # Extract the TrajectoryGroup-specific estimator from kwargs
+        self.traj_group_adv_estimator_map = traj_group_adv_estimator_map or {}
 
         # SDK factory (set up later if agent_run_func is provided)
         self._sdk_factory = None
@@ -176,6 +181,9 @@ class UnifiedTrainer:
         """Validate and setup common configs."""
         # validate common, backend-agnostic configs
         assert self.rllm_config is not None, "rLLM config is not set"
+        # if the traj_group_adv_estimator_map is given, the user must turn `use_rllm` to True
+        if self.traj_group_adv_estimator_map and not self.rllm_config.algorithm.get("use_rllm", False):
+            raise ValueError("If `traj_group_adv_estimator_map` is given, the user must explicitly turn `rllm.algorithm.use_rllm` to True")
 
         if self.rllm_config.rejection_sample.multiplier != 1:
             assert self.rllm_config.rejection_sample.enable is True, "rejection sampling is disabled, but rejection_sample.multiplier is not 1"
@@ -183,7 +191,6 @@ class UnifiedTrainer:
         # validate backend-specific configs
         self.backend.validate_config()
 
-        # TODO(listar2000): add these configurations to the hydra config
         # compact filtering config (used for filtering out episodes that are not valid)
         self.cf_config = CompactFilteringConfig.from_config(self.rllm_config.compact_filtering)
 
@@ -202,6 +209,7 @@ class UnifiedTrainer:
         # algorithm config (used for rLLM-native advantage computation)
         self.algorithm_config = AlgorithmConfig(
             estimator=self.rllm_config.algorithm.adv_estimator,
+            estimator_map=self.traj_group_adv_estimator_map,  # TODO(listar2000): see if we can make this configurable in config as well
             stepwise_advantage_mode=self.rllm_config.stepwise_advantage.mode,
             norm_adv_by_std_in_grpo=self.rllm_config.stepwise_advantage.get("norm_adv_by_std_in_grpo", True),
             use_rllm=self.rllm_config.algorithm.get("use_rllm", False),
@@ -222,11 +230,17 @@ class UnifiedTrainer:
             )
             self.episode_logger = EpisodeLogger(base_dir=episode_log_dir, subdirectory="episodes")
 
+        source_metadata = extract_source_metadata(
+            workflow_class=self.workflow_class,
+            workflow_args=self.workflow_args,
+        )
+
         self.logger = Tracking(
             project_name=self.rllm_config.trainer.project_name,
             experiment_name=self.rllm_config.trainer.experiment_name,
             default_backend=self.rllm_config.trainer.logger,
             config=OmegaConf.to_container(self.config, resolve=True),
+            source_metadata=source_metadata,
         )
 
     # =========================================================================
@@ -292,7 +306,12 @@ class UnifiedTrainer:
                     await self._train_batch_async(batch, trainer_state)
                 await self.backend.on_batch_end(trainer_state)
 
-                self.logger.log(data=trainer_state.metrics, step=trainer_state.global_step)
+                self.logger.log(
+                    data=trainer_state.metrics,
+                    step=trainer_state.global_step,
+                    episodes=trainer_state.episodes,
+                    trajectory_groups=trainer_state.trajectory_groups,
+                )
 
                 # if the config specifies the `total_batches` parameter, then we check if we should stop
                 if use_total_batches and trainer_state.global_step >= self.rllm_config.trainer.total_batches:
@@ -324,7 +343,7 @@ class UnifiedTrainer:
         workflow_metrics, termination_counts = self._collect_workflow_metrics_from_episodes(trainer_state.episodes)
 
         # stage 2: transform episodes to trajectory groups (sync)
-        trajectory_groups, transform_metrics = transform_episodes_to_trajectory_groups(trainer_state.episodes, self.transform_config, self.trajectory_grouping_hook)
+        trajectory_groups, transform_metrics = transform_episodes_to_trajectory_groups(trainer_state.episodes, self.transform_config, self.cf_config, traj_grouping_hook=self.traj_grouping_hook)
         trainer_state.trajectory_groups = trajectory_groups
         trainer_state.metrics.update(transform_metrics)
 
@@ -389,7 +408,7 @@ class UnifiedTrainer:
         for batch in val_dataloader:
             # Generate episodes and transform to trajectory groups
             val_episodes = await self.backend.generate_episodes(batch, agent_workflow_engine=self.agent_workflow_engine, is_validation=True)
-            val_trajectory_groups, transform_metrics = transform_episodes_to_trajectory_groups(val_episodes, self.transform_config, self.trajectory_grouping_hook)
+            val_trajectory_groups, transform_metrics = transform_episodes_to_trajectory_groups(val_episodes, self.transform_config, self.cf_config, traj_grouping_hook=self.traj_grouping_hook)
             reward_metrics = collect_reward_and_advantage_from_trajectory_groups(val_trajectory_groups, self.algorithm_config, collect_advantage=False)
 
             is_correct_lst.extend([episode.is_correct for episode in val_episodes])
@@ -540,7 +559,7 @@ class AgentTrainer:
                 **kwargs,
             )
         elif backend == "tinker":
-            from rllm.experimental.tinker.tinker_launcher import TinkerTrainerLauncher
+            from rllm.trainer.tinker.tinker_launcher import TinkerTrainerLauncher
 
             self.launcher = TinkerTrainerLauncher(
                 config=config,
