@@ -190,6 +190,8 @@ def _run_train(
     experiment: str,
     output_dir: str | None,
     config_file: str | None,
+    enable_ui: bool = False,
+    ui_url: str | None = None,
 ):
     """Core training logic: resolve catalog, load data, build config, launch trainer."""
     from rich.status import Status
@@ -276,6 +278,24 @@ def _run_train(
         config_file=config_file,
     )
 
+    # ---- Wire UI logging ----
+    if ui_url:
+        enable_ui = True
+    _DEFAULT_UI_URL = "https://ui.rllm-project.com"
+    if enable_ui:
+        if not ui_url and not os.environ.get("RLLM_API_KEY"):
+            console.print("  [error]RLLM_API_KEY env var is required for --ui (or provide --ui-url for a custom instance).[/]")
+            raise SystemExit(1)
+        resolved_ui_url = ui_url or _DEFAULT_UI_URL
+        os.environ["RLLM_UI_URL"] = resolved_ui_url
+        from omegaconf import OmegaConf
+        loggers = list(config.rllm.trainer.logger)
+        if "ui" not in loggers:
+            loggers.append("ui")
+        config = OmegaConf.merge(config, OmegaConf.create({
+            "rllm": {"trainer": {"logger": loggers}},
+        }))
+
     # ---- Build agent_run_func ----
     agent_run_func = make_agent_run_func(agent_flow, evaluator, model)
 
@@ -298,6 +318,8 @@ def _run_train(
     if total_steps is not None:
         epochs_str += f"  [dim](max {total_steps} steps)[/]"
     table.add_row("Epochs", epochs_str)
+    if enable_ui:
+        table.add_row("Live UI", f"[val]{resolved_ui_url}[/]")
     console.print()
     console.print(Panel(table, title="[bold]rLLM Train[/]", border_style="cyan", expand=False))
     console.print()
@@ -359,6 +381,9 @@ def _load_or_pull_dataset(name: str, split: str, catalog: dict):
 @click.option("--experiment", default=None, help="Experiment name (default: <benchmark>).")
 @click.option("--output", "output_dir", default=None, help="Checkpoint directory.")
 @click.option("--config", "config_file", default=None, type=click.Path(exists=True), help="YAML config file merged on top of base templates. CLI flags override it.")
+# UI logging options
+@click.option("--ui", "enable_ui", is_flag=True, default=False, help="Enable live UI logging backend.")
+@click.option("--ui-url", default=None, help="Custom UI backend URL (implies --ui).")
 def train_cmd(
     benchmark: str,
     train_dataset: str | None,
@@ -381,6 +406,8 @@ def train_cmd(
     experiment: str | None,
     output_dir: str | None,
     config_file: str | None,
+    enable_ui: bool,
+    ui_url: str | None,
 ):
     """Train a model on a benchmark dataset using RL."""
     if experiment is None:
@@ -408,4 +435,6 @@ def train_cmd(
         experiment=experiment,
         output_dir=output_dir,
         config_file=config_file,
+        enable_ui=enable_ui,
+        ui_url=ui_url,
     )
