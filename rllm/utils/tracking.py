@@ -333,7 +333,9 @@ class UILogger:
                 "/api/sessions",
                 json={"project": project_name, "experiment": experiment_name, "config": config, "source_metadata": source_metadata or {}},
             )
-            self.session_id = response.json()["id"]
+            response.raise_for_status()
+            resp_data = response.json()
+            self.session_id = resp_data.get("id") or resp_data.get("session_id")
             self.logger.info(f"UILogger initialized with session_id: {self.session_id}")
 
             # Send initial heartbeat
