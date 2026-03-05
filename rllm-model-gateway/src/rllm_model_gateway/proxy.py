@@ -257,10 +257,21 @@ class ReverseProxy:
                 self.router.release(worker.url)
 
                 latency_ms = (time.perf_counter() - t0) * 1000
-                # Build trace from accumulated chunks
+                # Build trace from accumulated chunks.
+                # NOTE: We use create_task instead of await because this
+                # finally block may run during GeneratorExit, where await
+                # on real async I/O (e.g. aiosqlite) is not reliable.
                 if session_id and chunks:
                     trace = build_trace_record_from_chunks(session_id, request_body, chunks, latency_ms)
-                    await self._persist(trace)
+                    task = asyncio.create_task(
+                        self._safe_store(
+                            trace.trace_id,
+                            trace.session_id,
+                            trace.model_dump(),
+                        )
+                    )
+                    self._pending_traces.add(task)
+                    task.add_done_callback(self._pending_traces.discard)
 
         return StreamingResponse(
             event_generator(),

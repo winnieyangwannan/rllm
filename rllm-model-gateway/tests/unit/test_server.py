@@ -11,19 +11,11 @@ import pytest
 import pytest_asyncio
 from rllm_model_gateway import GatewayConfig, create_app
 
-from .conftest import MockVLLMServer
+from tests.helpers.mock_vllm import MockVLLMServer
 
 # ------------------------------------------------------------------
 # Fixtures
 # ------------------------------------------------------------------
-
-
-@pytest.fixture
-def mock_vllm():
-    server = MockVLLMServer(port=0)
-    server.start()
-    yield server
-    server.stop()
 
 
 @pytest.fixture
