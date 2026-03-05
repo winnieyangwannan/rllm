@@ -84,6 +84,10 @@ class SessionRoutingMiddleware:
             try:
                 payload = json.loads(raw)
                 if isinstance(payload, dict):
+                    # Record whether the client originally requested logprobs
+                    # so the proxy can strip them from the response if not.
+                    state = scope["state"]
+                    state["originally_requested_logprobs"] = "logprobs" in payload and payload["logprobs"]
                     self._mutate(payload)
                     raw = json.dumps(payload).encode("utf-8")
             except (json.JSONDecodeError, UnicodeDecodeError):

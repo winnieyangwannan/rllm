@@ -42,6 +42,23 @@ _HOP_BY_HOP = frozenset(
 )
 
 
+def _strip_logprobs(response: dict[str, Any]) -> dict[str, Any]:
+    """Return a copy of *response* with ``logprobs`` removed from each choice.
+
+    Called when the gateway injected ``logprobs=True`` but the original
+    client request did not ask for them — keeps the proxy transparent.
+
+    Returns a new dict so that the original (used for trace capture) is
+    never mutated.
+    """
+    if "choices" not in response:
+        return response
+    return {
+        **response,
+        "choices": [{k: v for k, v in choice.items() if k != "logprobs"} for choice in response["choices"]],
+    }
+
+
 class ReverseProxy:
     """Forward requests to inference workers, capture traces.
 
@@ -99,6 +116,7 @@ class ReverseProxy:
         """Proxy *request* to an inference worker, capture trace, return response."""
         await self._ensure_started()
         session_id: str | None = request.state.session_id
+        originally_requested_logprobs: bool = getattr(request.state, "originally_requested_logprobs", False)
         body = await request.body()
 
         try:
@@ -109,8 +127,8 @@ class ReverseProxy:
         is_stream = request_body.get("stream", False)
 
         if is_stream:
-            return await self._handle_streaming(request, body, request_body, session_id)
-        return await self._handle_non_streaming(request, body, request_body, session_id)
+            return await self._handle_streaming(request, body, request_body, session_id, originally_requested_logprobs)
+        return await self._handle_non_streaming(request, body, request_body, session_id, originally_requested_logprobs)
 
     # ------------------------------------------------------------------
     # Non-streaming
@@ -122,6 +140,7 @@ class ReverseProxy:
         raw_body: bytes,
         request_body: dict[str, Any],
         session_id: str | None,
+        originally_requested_logprobs: bool = False,
     ) -> Response:
         worker = self.router.route(session_id)
         url = self._build_url(worker.url, request.url.path, str(request.url.query))
@@ -150,9 +169,20 @@ class ReverseProxy:
             trace = build_trace_record(session_id, request_body, response_body, latency_ms)
             await self._persist(trace)
 
-        # Sanitise response
-        if self.strip_vllm and isinstance(response_body, dict) and response_body:
-            sanitized = strip_vllm_fields(response_body)
+        # Sanitise response — fast path when nothing needs modifying
+        needs_strip_vllm = self.strip_vllm
+        needs_strip_logprobs = not originally_requested_logprobs
+        if not needs_strip_vllm and not needs_strip_logprobs:
+            return Response(
+                content=content,
+                status_code=resp.status_code,
+                media_type=resp.headers.get("content-type", "application/json"),
+            )
+
+        if isinstance(response_body, dict) and response_body:
+            sanitized = strip_vllm_fields(response_body) if needs_strip_vllm else response_body
+            if needs_strip_logprobs:
+                sanitized = _strip_logprobs(sanitized)
             return Response(
                 content=json.dumps(sanitized),
                 status_code=resp.status_code,
@@ -175,6 +205,7 @@ class ReverseProxy:
         raw_body: bytes,
         request_body: dict[str, Any],
         session_id: str | None,
+        originally_requested_logprobs: bool = False,
     ) -> StreamingResponse:
         worker = self.router.route(session_id)
         url = self._build_url(worker.url, request.url.path, str(request.url.query))
@@ -191,6 +222,8 @@ class ReverseProxy:
 
         t0 = time.perf_counter()
         chunks: list[dict[str, Any]] = []
+        needs_strip_vllm = self.strip_vllm
+        needs_strip_logprobs = not originally_requested_logprobs
 
         async def event_generator():
             try:
@@ -204,11 +237,13 @@ class ReverseProxy:
                         try:
                             chunk = json.loads(data_str)
                             chunks.append(chunk)
-                            if self.strip_vllm:
-                                sanitized = strip_vllm_fields(chunk)
-                                yield f"data: {json.dumps(sanitized)}\n\n"
-                            else:
+                            if not needs_strip_vllm and not needs_strip_logprobs:
                                 yield f"data: {data_str}\n\n"
+                            else:
+                                sanitized = strip_vllm_fields(chunk) if needs_strip_vllm else chunk
+                                if needs_strip_logprobs:
+                                    sanitized = _strip_logprobs(sanitized)
+                                yield f"data: {json.dumps(sanitized)}\n\n"
                             continue
                         except json.JSONDecodeError:
                             pass

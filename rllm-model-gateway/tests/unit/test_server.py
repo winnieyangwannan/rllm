@@ -220,6 +220,38 @@ class TestProxy:
         assert last_req.get("logprobs") is True
         assert last_req.get("return_token_ids") is True
 
+    @pytest.mark.asyncio
+    async def test_logprobs_stripped_when_not_requested(self, client: httpx.AsyncClient):
+        """Response should NOT contain logprobs when client didn't ask for them."""
+        resp = await client.post(
+            "/v1/chat/completions",
+            json={
+                "model": "mock-model",
+                "messages": [{"role": "user", "content": "hi"}],
+            },
+        )
+        assert resp.status_code == 200
+        data = resp.json()
+        for choice in data.get("choices", []):
+            assert "logprobs" not in choice, "logprobs leaked to client that didn't request them"
+
+    @pytest.mark.asyncio
+    async def test_logprobs_preserved_when_requested(self, client: httpx.AsyncClient):
+        """Response should contain logprobs when client explicitly asked for them."""
+        resp = await client.post(
+            "/v1/chat/completions",
+            json={
+                "model": "mock-model",
+                "messages": [{"role": "user", "content": "hi"}],
+                "logprobs": True,
+            },
+        )
+        assert resp.status_code == 200
+        data = resp.json()
+        choice = data["choices"][0]
+        assert "logprobs" in choice, "logprobs should be present when client requested them"
+        assert choice["logprobs"]["content"] is not None
+
 
 # ------------------------------------------------------------------
 # Proxy (streaming)
@@ -278,6 +310,48 @@ class TestStreamingProxy:
         assert "".join(content_parts) == "Hello from mock!"
 
     @pytest.mark.asyncio
+    async def test_streaming_logprobs_stripped_when_not_requested(self, client: httpx.AsyncClient):
+        """SSE chunks should NOT contain logprobs when client didn't ask for them."""
+        resp = await client.post(
+            "/v1/chat/completions",
+            json={
+                "model": "mock-model",
+                "messages": [{"role": "user", "content": "hi"}],
+                "stream": True,
+            },
+        )
+        assert resp.status_code == 200
+
+        for line in resp.text.strip().split("\n"):
+            if line.startswith("data: ") and line.strip() != "data: [DONE]":
+                chunk = json.loads(line[6:])
+                for choice in chunk.get("choices", []):
+                    assert "logprobs" not in choice, "logprobs leaked in SSE chunk"
+
+    @pytest.mark.asyncio
+    async def test_streaming_logprobs_preserved_when_requested(self, client: httpx.AsyncClient):
+        """SSE chunks should contain logprobs when client explicitly asked for them."""
+        resp = await client.post(
+            "/v1/chat/completions",
+            json={
+                "model": "mock-model",
+                "messages": [{"role": "user", "content": "hi"}],
+                "stream": True,
+                "logprobs": True,
+            },
+        )
+        assert resp.status_code == 200
+
+        found_logprobs = False
+        for line in resp.text.strip().split("\n"):
+            if line.startswith("data: ") and line.strip() != "data: [DONE]":
+                chunk = json.loads(line[6:])
+                for choice in chunk.get("choices", []):
+                    if choice.get("logprobs") is not None:
+                        found_logprobs = True
+        assert found_logprobs, "logprobs should be present in at least one SSE chunk when client requested them"
+
+    @pytest.mark.asyncio
     async def test_streaming_trace_captured(self, mock_vllm: MockVLLMServer):
         """Streaming call with session should capture a trace with token data."""
         config = GatewayConfig(
@@ -313,6 +387,52 @@ class TestStreamingProxy:
             assert trace["logprobs"] == [-0.5, -0.3, -0.1]
             assert trace["response_message"]["role"] == "assistant"
             assert "Hello" in trace["response_message"]["content"]
+
+    @pytest.mark.asyncio
+    async def test_streaming_trace_intact_with_strip_vllm_off(self, mock_vllm: MockVLLMServer):
+        """Logprobs stripping must not destroy trace data when strip_vllm=False.
+
+        Regression test: when strip_vllm is disabled, the sanitized chunk
+        aliases the original chunk in the trace buffer.  A mutating
+        _strip_logprobs would destroy logprobs in the trace.
+        """
+        config = GatewayConfig(
+            store_worker="memory",
+            workers=[{"url": f"{mock_vllm.url}/v1", "worker_id": "w0"}],
+            health_check_interval=999,
+            sync_traces=True,
+            strip_vllm_fields=False,
+        )
+        app = create_app(config)
+
+        async with httpx.AsyncClient(
+            transport=httpx.ASGITransport(app=app),
+            base_url="http://testserver",
+        ) as client:
+            # Client does NOT request logprobs — gateway injects them,
+            # then strips them from the response.
+            resp = await client.post(
+                "/sessions/no-strip/v1/chat/completions",
+                json={
+                    "model": "mock-model",
+                    "messages": [{"role": "user", "content": "hi"}],
+                    "stream": True,
+                },
+            )
+            assert resp.status_code == 200
+
+            # Client-facing chunks should NOT have logprobs
+            for line in resp.text.strip().split("\n"):
+                if line.startswith("data: ") and line.strip() != "data: [DONE]":
+                    chunk = json.loads(line[6:])
+                    for choice in chunk.get("choices", []):
+                        assert "logprobs" not in choice, "logprobs leaked to client"
+
+            # Trace should still have logprobs intact
+            traces = (await client.get("/sessions/no-strip/traces")).json()
+            assert len(traces) == 1
+            trace = traces[0]
+            assert trace["logprobs"] == [-0.5, -0.3, -0.1], "logprobs in trace were destroyed by client-facing stripping"
 
 
 # ------------------------------------------------------------------
