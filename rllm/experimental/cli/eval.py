@@ -142,7 +142,14 @@ def _run_eval(benchmark: str, agent_name: str, evaluator_name: str | None, base_
     console.print()
 
     # Run evaluation
-    runner = EvalRunner(base_url=base_url, model=model, concurrency=concurrency, agent_metadata=agent_metadata or {})
+    runner = EvalRunner(
+        base_url=base_url,
+        model=model,
+        concurrency=concurrency,
+        agent_metadata=agent_metadata or {},
+        catalog_entry=catalog_entry,
+        benchmark_name=benchmark,
+    )
     result = asyncio.run(runner.run(dataset, agent, evaluator, agent_name=agent_name))
 
     # Print results

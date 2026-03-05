@@ -10,6 +10,7 @@ from concurrent.futures import ThreadPoolExecutor
 from tqdm.asyncio import tqdm_asyncio
 
 from rllm.experimental.eval.results import EvalItem, EvalResult
+from rllm.experimental.eval.task_spec import build_task_spec
 from rllm.experimental.eval.types import AgentConfig, AgentFlow, Evaluator
 
 logger = logging.getLogger(__name__)
@@ -31,11 +32,21 @@ class EvalRunner:
     The runner writes evaluation results back onto each trajectory and the episode.
     """
 
-    def __init__(self, base_url: str, model: str, concurrency: int = 64, agent_metadata: dict | None = None):
+    def __init__(
+        self,
+        base_url: str,
+        model: str,
+        concurrency: int = 64,
+        agent_metadata: dict | None = None,
+        catalog_entry: dict | None = None,
+        benchmark_name: str = "",
+    ):
         self.base_url = base_url
         self.model = model
         self.concurrency = concurrency
         self.agent_metadata = agent_metadata or {}
+        self.catalog_entry = catalog_entry or {}
+        self.benchmark_name = benchmark_name
         self._executor = ThreadPoolExecutor(max_workers=concurrency)
 
     async def run(self, dataset, agent: AgentFlow, evaluator: Evaluator, agent_name: str = "") -> EvalResult:
@@ -55,6 +66,12 @@ class EvalRunner:
             concurrency = min(concurrency, agent.max_concurrent)
         semaphore = asyncio.Semaphore(concurrency)
 
+        # Build TaskSpec once from catalog + first sample task
+        task_spec = None
+        if self.catalog_entry:
+            sample_task = dataset[0] if len(dataset) > 0 else {}
+            task_spec = build_task_spec(self.benchmark_name, self.catalog_entry, sample_task)
+
         async def eval_one(idx: int, task: dict) -> EvalItem:
             async with semaphore:
                 # Create per-task agent instance for sandboxed agents
@@ -64,11 +81,14 @@ class EvalRunner:
                     task_agent = agent.create_instance()
 
                 try:
+                    metadata = dict(self.agent_metadata)
+                    if task_spec is not None:
+                        metadata["task_spec"] = task_spec
                     config = AgentConfig(
                         base_url=self.base_url,
                         model=self.model,
                         session_uid=f"eval-{idx}",
-                        metadata=dict(self.agent_metadata),
+                        metadata=metadata,
                     )
 
                     # Setup sandbox if needed

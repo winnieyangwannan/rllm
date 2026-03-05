@@ -6,6 +6,28 @@ Entry point: ``rllm [dataset|eval|agent|model]``
 from __future__ import annotations
 
 import click
+from rich.console import Console
+from rich.table import Table
+from rich.text import Text
+from rich import box
+
+_BANNER = """
+       _     _     __  __
+  _ __| |   | |   |  \/  |
+ | '__| |   | |   | |\/| |
+ | |  | |__ | |__ | |  | |
+ |_|  |____||____||_|  |_|
+"""
+
+_COMMAND_ICONS = {
+    "agent": "🤖",
+    "dataset": "📦",
+    "eval": "📊",
+    "model": "⚙️ ",
+    "train": "🏋️",
+}
+
+console = Console()
 
 
 class _LazyGroup(click.Group):
@@ -41,6 +63,60 @@ class _LazyGroup(click.Group):
         mod = importlib.import_module(module_path)
         return getattr(mod, attr)
 
+    def format_help(self, ctx, formatter):
+        """Render a fancy Rich help screen instead of plain Click output."""
+        from importlib.metadata import version as pkg_version
+
+        try:
+            ver = pkg_version("rllm")
+        except Exception:
+            ver = "dev"
+
+        # Banner
+        banner_text = Text(_BANNER, style="bold cyan")
+        console.print(banner_text, highlight=False)
+
+        # Tagline + version
+        tagline = Text()
+        tagline.append("  Reinforcement Learning for Language Agents", style="dim")
+        tagline.append(f"  v{ver}", style="bold green")
+        console.print(tagline)
+        console.print()
+
+        # Usage
+        console.print(Text("  Usage: ", style="bold") + Text("rllm ", style="bold cyan") + Text("[command] [options]", style="dim"))
+        console.print()
+
+        # Commands table
+        table = Table(
+            box=box.SIMPLE_HEAVY,
+            show_header=True,
+            header_style="bold",
+            padding=(0, 2),
+            expand=False,
+        )
+        table.add_column("Command", style="bold cyan", min_width=12)
+        table.add_column("Description", style="dim")
+
+        for name in self.list_commands(ctx):
+            spec = self._COMMANDS.get(name)
+            if spec is None:
+                continue
+            _mod, _attr, short_help = spec
+            icon = _COMMAND_ICONS.get(name, " ")
+            table.add_row(f" {icon} {name}", short_help)
+
+        console.print(table)
+        console.print()
+
+        # Footer hints
+        console.print(Text("  Options:", style="bold"))
+        console.print(Text("    --version  ", style="cyan") + Text("Show the version and exit.", style="dim"))
+        console.print(Text("    --help     ", style="cyan") + Text("Show this message and exit.", style="dim"))
+        console.print()
+        console.print(Text("  Run ", style="dim") + Text("rllm <command> --help", style="bold cyan") + Text(" for more information on a command.", style="dim"))
+        console.print()
+
     def format_commands(self, ctx, formatter):
         """Write the subcommand list without importing the subcommand modules."""
         commands = []
@@ -61,10 +137,14 @@ class _LazyGroup(click.Group):
                 formatter.write_dl(rows)
 
 
-@click.group(cls=_LazyGroup)
+@click.group(cls=_LazyGroup, invoke_without_command=True)
 @click.version_option(package_name="rllm")
-def cli():
+@click.pass_context
+def cli(ctx):
     """rLLM: Reinforcement Learning for Language Agents."""
+    if ctx.invoked_subcommand is None:
+        formatter = ctx.make_formatter()
+        cli.format_help(ctx, formatter)  # renders via Rich console
 
 
 @cli.command("setup", hidden=True)
