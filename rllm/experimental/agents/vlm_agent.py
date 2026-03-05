@@ -137,6 +137,12 @@ You are a helpful assistant with vision capabilities. You are given a question \
 that may include one or more images.
 Analyze the images carefully and answer the question accurately and concisely."""
 
+VLM_GROUNDING_SYSTEM_PROMPT = """\
+You are a visual grounding assistant. Given an image and a referring expression, \
+output the bounding box of the referred object as [x1, y1, x2, y2] where coordinates \
+are normalized to a 0-1000 scale relative to image dimensions.
+Output ONLY the coordinates in the format [x1, y1, x2, y2]. Do not include any other text."""
+
 
 # ---------------------------------------------------------------------------
 # Agent flows
@@ -261,7 +267,45 @@ class VLMOpenAgentFlow:
         return Episode(task=task, trajectories=[traj], artifacts={"answer": response_text})
 
 
+class VLMGroundingAgentFlow:
+    """VLM visual grounding agent flow.
+
+    Handles grounding benchmarks (RefCOCO) where the model must output a
+    bounding box ``[x1, y1, x2, y2]`` for a referring expression.
+    Expects task to have 'question', 'images' (list of image data).
+    """
+
+    def run(self, task: dict, config: AgentConfig) -> Episode:
+        client = OpenAI(base_url=config.base_url, api_key="EMPTY")
+        question = task.get("question", "")
+        image_paths = task.get("images", [])
+
+        # Build multimodal content
+        if image_paths:
+            user_content = _build_vlm_content(question, image_paths)
+        else:
+            user_content = question
+
+        response_text = ""
+        try:
+            response = client.chat.completions.create(
+                model=config.model,
+                messages=[
+                    {"role": "system", "content": VLM_GROUNDING_SYSTEM_PROMPT},
+                    {"role": "user", "content": user_content},
+                ],
+            )
+            response_text = response.choices[0].message.content or ""
+        except Exception as e:
+            logger.warning("LLM call failed: %s", e)
+
+        step = Step(input=question, output=response_text, done=True)
+        traj = Trajectory(name="solver", steps=[step])
+        return Episode(task=task, trajectories=[traj], artifacts={"answer": response_text})
+
+
 # Singleton instances for registry
 vlm_mcq_agent = VLMMCQAgentFlow()
 vlm_math_agent = VLMMathAgentFlow()
 vlm_open_agent = VLMOpenAgentFlow()
+vlm_grounding_agent = VLMGroundingAgentFlow()

@@ -15,10 +15,13 @@ from rllm.experimental.eval.translation_evaluator import TranslationEvaluator
 from rllm.experimental.eval.types import (
     CodeEvaluator,
     CountdownEvaluator,
+    DepthEvaluator,
     Evaluator,
     F1Evaluator,
+    IoUEvaluator,
     MCQEvaluator,
     MathEvaluator,
+    PointInMaskEvaluator,
 )
 from rllm.experimental.eval.widesearch_evaluator import WideSearchEvaluator
 
@@ -121,6 +124,9 @@ _EVALUATOR_REGISTRY: dict[str, type] = {
     "llm_equality_reward_fn": LLMEqualityEvaluator,
     "translation_reward_fn": TranslationEvaluator,
     "widesearch_reward_fn": WideSearchEvaluator,
+    "iou_reward_fn": IoUEvaluator,
+    "point_in_mask_reward_fn": PointInMaskEvaluator,
+    "depth_reward_fn": DepthEvaluator,
 }
 
 

@@ -70,6 +70,11 @@
       "description": "Multi-turn search agent with web search tool calling",
       "module": "rllm.experimental.agents.search",
       "function": "search_agent"
+    },
+    "vlm_grounding": {
+      "description": "VLM visual grounding — outputs bounding box [x1, y1, x2, y2] for referring expressions",
+      "module": "rllm.experimental.agents.vlm_agent",
+      "function": "vlm_grounding_agent"
     }
   }
 }

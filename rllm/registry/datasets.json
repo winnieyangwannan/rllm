@@ -543,6 +543,70 @@
       "reward_fn": "frozenlake_reward_fn",
       "eval_split": "test",
       "generator": "rllm.data.transforms:frozenlake_generate"
+    },
+    "omnidocbench": {
+      "description": "OmniDocBench: Comprehensive document understanding benchmark with structured eval",
+      "source": "rwood-97/english_OmniDocBench_with_eval",
+      "category": "vlm",
+      "splits": ["test"],
+      "default_agent": "vlm_open",
+      "reward_fn": "f1_reward_fn",
+      "eval_split": "test",
+      "hf_split": "train",
+      "transform": "rllm.data.transforms:omnidocbench_transform"
+    },
+    "docvqa": {
+      "description": "DocVQA: Single-page document visual question answering (5,188 validation)",
+      "source": "lmms-lab/DocVQA",
+      "category": "vlm",
+      "splits": ["validation"],
+      "default_agent": "vlm_open",
+      "reward_fn": "f1_reward_fn",
+      "eval_split": "validation",
+      "hf_config": "DocVQA",
+      "transform": "rllm.data.transforms:docvqa_transform"
+    },
+    "refcoco": {
+      "description": "RefCOCO: Referring expression comprehension with bounding box grounding",
+      "source": "lmms-lab/RefCOCO",
+      "category": "vlm",
+      "splits": ["test"],
+      "default_agent": "vlm_grounding",
+      "reward_fn": "iou_reward_fn",
+      "eval_split": "test",
+      "hf_split": "testA",
+      "transform": "rllm.data.transforms:refcoco_transform"
+    },
+    "refspatial": {
+      "description": "RefSpatial-Bench: Referential spatial reasoning with point prediction",
+      "source": "BAAI/RefSpatial-Bench",
+      "category": "vlm",
+      "splits": ["test"],
+      "default_agent": "vlm_open",
+      "reward_fn": "point_in_mask_reward_fn",
+      "eval_split": "test",
+      "hf_split": "location",
+      "transform": "rllm.data.transforms:refspatial_transform"
+    },
+    "lingoqa": {
+      "description": "LingoQA: Language-grounded QA for autonomous driving scenes",
+      "source": "runoob1/lingoqa",
+      "category": "vlm",
+      "splits": ["test"],
+      "default_agent": "vlm_open",
+      "reward_fn": "f1_reward_fn",
+      "eval_split": "test",
+      "transform": "rllm.data.transforms:lingoqa_transform"
+    },
+    "sunrgbd": {
+      "description": "SUN RGB-D: Depth estimation and scene understanding",
+      "source": "wyrx/SUNRGBD_seg",
+      "category": "vlm",
+      "splits": ["test"],
+      "default_agent": "vlm_open",
+      "reward_fn": "depth_reward_fn",
+      "eval_split": "test",
+      "transform": "rllm.data.transforms:sunrgbd_transform"
     }
   }
 }
