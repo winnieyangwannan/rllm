@@ -533,6 +533,16 @@
       "reward_fn": "swebench_reward_fn",
       "eval_split": "test",
       "transform": "rllm.data.transforms:swebench_transform"
+    },
+    "frozenlake": {
+      "description": "FrozenLake grid navigation (random maps, variable size 2-10)",
+      "source": "generated",
+      "category": "agentic",
+      "splits": ["train", "test"],
+      "default_agent": "frozenlake",
+      "reward_fn": "frozenlake_reward_fn",
+      "eval_split": "test",
+      "generator": "rllm.data.transforms:frozenlake_generate"
     }
   }
 }

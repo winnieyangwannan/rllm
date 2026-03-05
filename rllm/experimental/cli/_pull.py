@@ -264,16 +264,50 @@ def _load_all_configs(source: str, split: str, hf_split: str | None = None) -> l
     return all_rows
 
 
-def pull_dataset(name: str, catalog_entry: dict) -> None:
-    """Download a dataset from HuggingFace and register it locally.
+def _pull_generated_dataset(name: str, catalog_entry: dict, generator_path: str) -> None:
+    """Generate a procedural dataset and register it locally.
 
-    Supports optional field_map, hf_config, aggregate_configs, and
-    transform for data normalization.
+    The generator function is specified as 'module:function' and must return
+    a list of dicts for each split. It receives (split, catalog_entry) as args.
+    """
+    from rllm.data import DatasetRegistry
+
+    gen_fn = _load_transform(generator_path)
+    splits = catalog_entry.get("splits", ["train", "test"])
+
+    for split in splits:
+        try:
+            data_list = gen_fn(split, catalog_entry)
+            DatasetRegistry.register_dataset(
+                name=name,
+                data=data_list,
+                split=split,
+                source=catalog_entry.get("source", "generated"),
+                description=catalog_entry.get("description", ""),
+                category=catalog_entry.get("category", ""),
+            )
+            logger.info(f"  Generated and registered {name}/{split} ({len(data_list)} examples)")
+        except Exception as e:
+            logger.error(f"  Failed to generate {name}/{split}: {e}")
+            raise
+
+
+def pull_dataset(name: str, catalog_entry: dict) -> None:
+    """Download a dataset from HuggingFace (or generate it) and register locally.
+
+    Supports optional field_map, hf_config, aggregate_configs, transform,
+    and generator for procedurally-generated datasets.
 
     Args:
         name: Dataset name (e.g., 'gsm8k').
         catalog_entry: Entry from datasets.json with 'source', 'splits', etc.
     """
+    # Check for a generator function (procedural datasets that don't live on HF)
+    generator_path = catalog_entry.get("generator")
+    if generator_path:
+        _pull_generated_dataset(name, catalog_entry, generator_path)
+        return
+
     from datasets import load_dataset
 
     from rllm.data import DatasetRegistry
