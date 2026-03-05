@@ -23,6 +23,7 @@ _COMMAND_ICONS = {
     "agent": "🤖",
     "dataset": "📦",
     "eval": "📊",
+    "init": "🚀",
     "model": "⚙️ ",
     "train": "🏋️",
 }
@@ -43,6 +44,7 @@ class _LazyGroup(click.Group):
         "agent": ("rllm.experimental.cli.agent", "agent", "Manage agent scaffolds."),
         "dataset": ("rllm.experimental.cli.dataset", "dataset", "Manage datasets."),
         "eval": ("rllm.experimental.cli.eval", "eval_cmd", "Evaluate a model on a benchmark dataset."),
+        "init": ("rllm.experimental.cli.init", "init_cmd", "Scaffold a new agent project."),
         "model": ("rllm.experimental.cli.model_cmd", "model", "Manage provider and model configuration."),
         "train": ("rllm.experimental.cli.train", "train_cmd", "Train a model on a benchmark dataset using RL."),
         "setup": None,  # handled inline

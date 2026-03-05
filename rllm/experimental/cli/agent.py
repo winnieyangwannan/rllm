@@ -1,6 +1,6 @@
 """Agent management CLI commands.
 
-``rllm agent [list|info]``
+``rllm agent [list|info|register|unregister]``
 """
 
 from __future__ import annotations
@@ -75,3 +75,35 @@ def info(name: str):
     if compatible:
         click.echo(f"\n  Compatible datasets: {', '.join(compatible)}")
     click.echo()
+
+
+@agent.command()
+@click.argument("name")
+@click.argument("import_path")
+def register(name: str, import_path: str):
+    """Register a custom agent so it's discoverable by name.
+
+    \b
+    NAME is the short name (e.g. "my-agent").
+    IMPORT_PATH is "module:object" (e.g. "my_pkg.agent:my_agent").
+
+    After registration, use it with:
+        rllm eval gsm8k --agent my-agent
+    """
+    from rllm.experimental.eval.agent_loader import register_agent
+
+    register_agent(name, import_path)
+    click.echo(f"Registered agent '{name}' -> {import_path}")
+    click.echo(f"Use it: rllm eval <benchmark> --agent {name}")
+
+
+@agent.command()
+@click.argument("name")
+def unregister(name: str):
+    """Remove a registered custom agent."""
+    from rllm.experimental.eval.agent_loader import unregister_agent
+
+    if unregister_agent(name):
+        click.echo(f"Unregistered agent '{name}'.")
+    else:
+        click.echo(f"Agent '{name}' not found in user registry.")
