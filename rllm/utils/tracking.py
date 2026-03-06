@@ -545,6 +545,14 @@ class UILogger:
         if self.session_id is None:
             return
 
+        # Drain the log queue and stop worker
+        if hasattr(self, "_worker_thread"):
+            self._worker_stop.set()
+            self._queue.put(None)  # sentinel
+            self._worker_thread.join(timeout=30)
+            if self._worker_thread.is_alive():
+                self.logger.warning("UILogger worker thread did not finish within 30s")
+
         # Stop heartbeat thread
         self._heartbeat_stop.set()
 
