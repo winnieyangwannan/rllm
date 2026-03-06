@@ -26,10 +26,11 @@ console = Console(theme=theme)
 def _suggest_benchmarks(name: str, catalog_names: list[str], max_suggestions: int = 3) -> list[str]:
     """Return catalog names similar to *name*, ordered by edit distance."""
     from difflib import get_close_matches
+
     return get_close_matches(name, catalog_names, n=max_suggestions, cutoff=0.5)
 
 
-def _run_eval(benchmark: str, agent_name: str, evaluator_name: str | None, base_url: str, model: str, split: str, concurrency: int, max_examples: int | None, output_path: str | None, agent_metadata: dict | None = None):
+def _run_eval(benchmark: str, agent_name: str, evaluator_name: str | None, base_url: str, model: str, split: str, concurrency: int, max_examples: int | None, output_path: str | None, agent_metadata: dict | None = None, ui_url: str | None = None):
     """Core eval logic, extracted for clean proxy lifecycle management."""
     from rllm.data import DatasetRegistry
     from rllm.experimental.eval.agent_loader import load_agent
@@ -69,7 +70,7 @@ def _run_eval(benchmark: str, agent_name: str, evaluator_name: str | None, base_
         agent = load_agent(agent_name)
     except (KeyError, ImportError, AttributeError, TypeError) as e:
         console.print(f"  [error]Error loading agent '{agent_name}': {e}[/]")
-        raise SystemExit(1)
+        raise SystemExit(1) from None
 
     # Apply sandbox CLI overrides to agent
     if agent_metadata:
@@ -90,7 +91,7 @@ def _run_eval(benchmark: str, agent_name: str, evaluator_name: str | None, base_
             evaluator_display = evaluator_name
         except (KeyError, ImportError, AttributeError, TypeError) as e:
             console.print(f"  [error]Error loading evaluator '{evaluator_name}': {e}[/]")
-            raise SystemExit(1)
+            raise SystemExit(1) from None
     else:
         # Auto-resolve from catalog
         evaluator = resolve_evaluator_from_catalog(benchmark)
@@ -122,6 +123,7 @@ def _run_eval(benchmark: str, agent_name: str, evaluator_name: str | None, base_
     agent_desc = ""
     if ":" not in agent_name:
         from rllm.experimental.cli._pull import load_agent_catalog
+
         agent_catalog = load_agent_catalog()
         agent_entry = agent_catalog.get("agents", {}).get(agent_name, {})
         agent_desc = agent_entry.get("description", "")
@@ -150,7 +152,7 @@ def _run_eval(benchmark: str, agent_name: str, evaluator_name: str | None, base_
         catalog_entry=catalog_entry,
         benchmark_name=benchmark,
     )
-    result = asyncio.run(runner.run(dataset, agent, evaluator, agent_name=agent_name))
+    result, episodes = asyncio.run(runner.run(dataset, agent, evaluator, agent_name=agent_name))
 
     # Print results
     pct = f"{result.score * 100:.1f}%"
@@ -172,6 +174,31 @@ def _run_eval(benchmark: str, agent_name: str, evaluator_name: str | None, base_
     # Save results
     saved_path = result.save(output_path)
     console.print(f"\n  [dim]Saved to {saved_path}[/]")
+
+    # Send to UI if requested
+    if ui_url:
+        import os
+        from datetime import datetime, timezone
+
+        os.environ["RLLM_UI_URL"] = ui_url
+        from rllm.utils.tracking import UILogger
+
+        timestamp = datetime.now(tz=timezone.utc).strftime("%Y%m%d_%H%M%S")
+        experiment = f"{model}_{agent_name}_{timestamp}".replace("/", "_")
+        ui_logger = UILogger(
+            project_name=benchmark,
+            experiment_name=experiment,
+            config={"model": model, "agent": agent_name, "benchmark": benchmark, "split": split},
+            session_type="eval",
+        )
+        if ui_logger.session_id:
+            for episode in episodes:
+                ui_logger.log(data={}, step=0, episodes=[episode])
+            # Send eval result
+            ui_logger.log_eval_result(result)
+            ui_logger.finish()
+            console.print(f"  [dim]Sent to UI at {ui_url}[/]")
+
     console.print()
 
 
@@ -188,7 +215,9 @@ def _run_eval(benchmark: str, agent_name: str, evaluator_name: str | None, base_
 @click.option("--search-backend", "search_backend", default=None, type=click.Choice(["serper", "brave"], case_sensitive=False), help="Search backend for the search agent (auto-detected from API keys if omitted).")
 @click.option("--sandbox-backend", "sandbox_backend", default=None, type=click.Choice(["docker", "local", "modal"], case_sensitive=False), help="Sandbox backend for sandboxed agents (auto-detected from agent if omitted).")
 @click.option("--sandbox-concurrency", "sandbox_concurrency", default=None, type=int, help="Override max concurrent sandboxes (default: agent's max_concurrent).")
-def eval_cmd(benchmark: str, agent_name: str | None, evaluator_name: str | None, base_url: str | None, model: str | None, split: str | None, concurrency: int, max_examples: int | None, output_path: str | None, search_backend: str | None, sandbox_backend: str | None, sandbox_concurrency: int | None):
+@click.option("--ui", "enable_ui", is_flag=True, default=False, help="Send results to rLLM UI (requires RLLM_API_KEY or --ui-url).")
+@click.option("--ui-url", default=None, help="URL of the rLLM UI API server (implies --ui).")
+def eval_cmd(benchmark: str, agent_name: str | None, evaluator_name: str | None, base_url: str | None, model: str | None, split: str | None, concurrency: int, max_examples: int | None, output_path: str | None, search_backend: str | None, sandbox_backend: str | None, sandbox_concurrency: int | None, enable_ui: bool, ui_url: str | None):
     """Evaluate a model on a benchmark dataset."""
     proxy_manager = None
 
@@ -225,7 +254,7 @@ def eval_cmd(benchmark: str, agent_name: str | None, evaluator_name: str | None,
                 console.print(f"\n  [error]Failed to start LiteLLM proxy.[/]\n\n  {e}")
                 console.print("\n  [dim]Make sure litellm is installed:[/] [bold]pip install litellm\\[proxy][/]")
                 console.print()
-                raise SystemExit(1)
+                raise SystemExit(1) from None
         base_url = proxy_manager.get_proxy_url()
         console.print(f"  [success]Proxy ready[/] at [dim]{base_url}[/]")
 
@@ -238,8 +267,21 @@ def eval_cmd(benchmark: str, agent_name: str | None, evaluator_name: str | None,
     if sandbox_concurrency is not None:
         agent_metadata["sandbox_concurrency"] = sandbox_concurrency
 
+    # Resolve UI URL
+    import os
+
+    if ui_url:
+        enable_ui = True
+    resolved_ui_url = None
+    if enable_ui:
+        _DEFAULT_UI_URL = "https://ui.rllm-project.com"
+        if not ui_url and not os.environ.get("RLLM_API_KEY"):
+            console.print("  [error]RLLM_API_KEY env var is required for --ui (or provide --ui-url for a custom instance).[/]")
+            raise SystemExit(1)
+        resolved_ui_url = ui_url or _DEFAULT_UI_URL
+
     try:
-        _run_eval(benchmark, agent_name, evaluator_name, base_url, model, split, concurrency, max_examples, output_path, agent_metadata=agent_metadata)
+        _run_eval(benchmark, agent_name, evaluator_name, base_url, model, split, concurrency, max_examples, output_path, agent_metadata=agent_metadata, ui_url=resolved_ui_url)
     finally:
         if proxy_manager is not None:
             proxy_manager.shutdown_proxy()

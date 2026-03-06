@@ -309,13 +309,14 @@ class UILogger:
         config: Training configuration dict
     """
 
-    def __init__(self, project_name: str, experiment_name: str, config, source_metadata=None):
+    def __init__(self, project_name: str, experiment_name: str, config, source_metadata=None, session_type: str = "training"):
         import logging
         import threading
 
         import httpx
 
         self.logger = logging.getLogger(__name__)
+        self.session_type = session_type
         api_key = os.getenv("RLLM_API_KEY")
         ui_url = os.getenv("RLLM_UI_URL")
         if not ui_url:
@@ -331,7 +332,7 @@ class UILogger:
             # Create session with source metadata
             response = self.client.post(
                 "/api/sessions",
-                json={"project": project_name, "experiment": experiment_name, "config": config, "source_metadata": source_metadata or {}},
+                json={"project": project_name, "experiment": experiment_name, "config": config, "source_metadata": source_metadata or {}, "session_type": session_type},
             )
             response.raise_for_status()
             resp_data = response.json()
@@ -396,14 +397,15 @@ class UILogger:
             try:
                 self.logger.info(f"Sending {len(episodes)} episodes to UI")
                 for episode in episodes:
-                    episode_data = episode.to_dict()
+                    episode_data = episode.to_dict() if hasattr(episode, "to_dict") else episode.model_dump()
 
                     # Add API context fields and remap id to episode_id
                     episode_data["session_id"] = self.session_id
+                    episode_data["session_type"] = self.session_type
                     episode_data["step"] = step
                     episode_data["episode_id"] = episode_data.pop("id")
 
-                    # Strip fields from steps to keep UI payloads lightweight
+                    # Strip training-only fields to keep payloads lightweight
                     _STEP_DROP_KEYS = {"prompt_ids", "response_ids", "logprobs", "model_output"}
                     for traj in episode_data.get("trajectories", []):
                         for s in traj.get("steps", []):
@@ -450,6 +452,34 @@ class UILogger:
                 import traceback
 
                 self.logger.warning(f"Traceback: {traceback.format_exc()}")
+
+    def log_eval_result(self, result) -> None:
+        """Post an EvalResult to the UI backend.
+
+        Args:
+            result: An EvalResult dataclass from rllm.experimental.eval.results
+        """
+        if self.session_id is None:
+            return
+
+        try:
+            payload = {
+                "session_id": self.session_id,
+                "dataset_name": result.dataset_name,
+                "model": result.model,
+                "agent": result.agent,
+                "score": result.score,
+                "total": result.total,
+                "correct": result.correct,
+                "errors": result.errors,
+                "signal_averages": result.signal_averages,
+                "items": [{"idx": item.idx, "reward": item.reward, "is_correct": item.is_correct, "error": item.error, "signals": item.signals} for item in result.items],
+            }
+            payload_json = json.loads(json.dumps(payload, default=self._json_serializer))
+            response = self.client.post("/api/eval-results", json=payload_json)
+            self.logger.info(f"Eval result posted, status: {response.status_code}")
+        except Exception as e:
+            self.logger.warning(f"Failed to send eval result to UI: {e}")
 
     def _json_serializer(self, obj):
         """Convert numpy types and other non-JSON types to native Python."""
