@@ -49,7 +49,7 @@ class EvalRunner:
         self.benchmark_name = benchmark_name
         self._executor = ThreadPoolExecutor(max_workers=concurrency)
 
-    async def run(self, dataset, agent: AgentFlow, evaluator: Evaluator, agent_name: str = "") -> EvalResult:
+    async def run(self, dataset, agent: AgentFlow, evaluator: Evaluator, agent_name: str = "") -> tuple[EvalResult, list]:
         """Run evaluation on a dataset using the given agent and evaluator.
 
         Args:
@@ -59,10 +59,10 @@ class EvalRunner:
             agent_name: Name of the agent for reporting.
 
         Returns:
-            EvalResult with per-example and aggregate metrics.
+            Tuple of (EvalResult with per-example and aggregate metrics, list of Episodes).
         """
         concurrency = self.concurrency
-        if hasattr(agent, 'max_concurrent'):
+        if hasattr(agent, "max_concurrent"):
             concurrency = min(concurrency, agent.max_concurrent)
         semaphore = asyncio.Semaphore(concurrency)
 
@@ -72,7 +72,7 @@ class EvalRunner:
             sample_task = dataset[0] if len(dataset) > 0 else {}
             task_spec = build_task_spec(self.benchmark_name, self.catalog_entry, sample_task)
 
-        async def eval_one(idx: int, task: dict) -> EvalItem:
+        async def eval_one(idx: int, task: dict) -> tuple[EvalItem, object | None]:
             async with semaphore:
                 # Create per-task agent instance for sandboxed agents
                 task_agent = agent
@@ -95,9 +95,7 @@ class EvalRunner:
                     # Setup sandbox if needed
                     if is_sandboxed:
                         loop = asyncio.get_event_loop()
-                        await loop.run_in_executor(
-                            self._executor, task_agent.setup_sandbox, task, config
-                        )
+                        await loop.run_in_executor(self._executor, task_agent.setup_sandbox, task, config)
 
                     # Stage 1: Run agent flow (supports both sync and async agents)
                     if inspect.iscoroutinefunction(task_agent.run):
@@ -123,30 +121,35 @@ class EvalRunner:
                     # Set episode-level correctness
                     episode.is_correct = eval_output.is_correct
 
-                    return EvalItem(
-                        idx=idx,
-                        reward=eval_output.reward,
-                        is_correct=eval_output.is_correct,
-                        signals={s.name: s.value for s in eval_output.signals},
+                    # Clear sandbox artifact before returning (not serializable)
+                    episode.artifacts.pop("_sandbox", None)
+
+                    return (
+                        EvalItem(
+                            idx=idx,
+                            reward=eval_output.reward,
+                            is_correct=eval_output.is_correct,
+                            signals={s.name: s.value for s in eval_output.signals},
+                        ),
+                        episode,
                     )
                 except Exception as e:
                     logger.warning("Error evaluating example %d: %s", idx, e)
-                    return EvalItem(idx=idx, reward=0.0, is_correct=False, error=str(e))
+                    return (EvalItem(idx=idx, reward=0.0, is_correct=False, error=str(e)), None)
                 finally:
                     # Guaranteed sandbox cleanup
                     if is_sandboxed:
                         try:
                             loop = asyncio.get_event_loop()
-                            await loop.run_in_executor(
-                                self._executor, task_agent.teardown_sandbox
-                            )
+                            await loop.run_in_executor(self._executor, task_agent.teardown_sandbox)
                         except Exception:
-                            logger.exception(
-                                "Sandbox teardown error for example %d", idx
-                            )
+                            logger.exception("Sandbox teardown error for example %d", idx)
 
         task_coros = [eval_one(i, task) for i, task in enumerate(dataset)]
-        items = await tqdm_asyncio.gather(*task_coros, desc="Evaluating")
+        results = await tqdm_asyncio.gather(*task_coros, desc="Evaluating")
+
+        items = [r[0] for r in results]
+        episodes = [r[1] for r in results if r[1] is not None]
 
         dataset_name = getattr(dataset, "name", "unknown") or "unknown"
-        return EvalResult.from_items(dataset_name, self.model, agent_name, items)
+        return (EvalResult.from_items(dataset_name, self.model, agent_name, items), episodes)
