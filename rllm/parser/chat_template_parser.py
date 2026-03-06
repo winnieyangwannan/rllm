@@ -3,7 +3,10 @@ import logging
 import re
 from copy import deepcopy
 
-import torch
+try:
+    import torch
+except ImportError:
+    raise ImportError("ChatTemplateParser requires extra dependencies. Install with: pip install rllm[train]")
 
 from rllm.tools.tool_base import Tool, ToolCall, ToolOutput
 

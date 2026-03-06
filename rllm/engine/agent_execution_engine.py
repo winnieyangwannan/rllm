@@ -5,7 +5,10 @@ import traceback
 import uuid
 from concurrent.futures import ThreadPoolExecutor
 
-import torch
+try:
+    import torch
+except ImportError:
+    raise ImportError("AgentExecutionEngine requires extra dependencies. Install with: pip install rllm[train]")
 
 from rllm.agents.agent import Action, BaseAgent, Trajectory
 from rllm.agents.utils import (
