@@ -9,7 +9,7 @@ import pytest
 from rllm.data.dataset import Dataset
 from rllm.experimental.eval.results import EvalItem, EvalResult
 from rllm.experimental.eval.runner import EvalRunner
-from rllm.experimental.eval.types import AgentConfig, EvalOutput, Signal
+from rllm.experimental.eval.types import AgentConfig, EvalOutput, Signal, Task
 from rllm.types import Episode, Step, Trajectory
 
 
@@ -18,13 +18,14 @@ from rllm.types import Episode, Step, Trajectory
 # ---------------------------------------------------------------------------
 
 class _PerfectAgent:
-    def run(self, task: dict, config: AgentConfig) -> Episode:
-        step = Step(input=task.get("question", ""), output="correct", done=True)
-        return Episode(task=task, trajectories=[Trajectory(name="test", steps=[step])], artifacts={"answer": "correct"})
+    def run(self, task: Task, config: AgentConfig) -> Episode:
+        data = task.data if isinstance(task, Task) else task
+        step = Step(input=data.get("question", ""), output="correct", done=True)
+        return Episode(task=data, trajectories=[Trajectory(name="test", steps=[step])], artifacts={"answer": "correct"})
 
 
 class _ErrorAgent:
-    def run(self, task: dict, config: AgentConfig) -> Episode:
+    def run(self, task: Task, config: AgentConfig) -> Episode:
         raise RuntimeError("Simulated failure")
 
 
@@ -127,9 +128,10 @@ def test_reward_written_back_to_trajectories():
     episodes: list[Episode] = []
 
     class _CapturingAgent:
-        def run(self, task: dict, config: AgentConfig) -> Episode:
+        def run(self, task: Task, config: AgentConfig) -> Episode:
+            data = task.data if isinstance(task, Task) else task
             step = Step(input="q", output="a", done=True)
-            ep = Episode(task=task, trajectories=[Trajectory(name="t", steps=[step])])
+            ep = Episode(task=data, trajectories=[Trajectory(name="t", steps=[step])])
             episodes.append(ep)
             return ep
 

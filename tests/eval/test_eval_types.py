@@ -15,6 +15,7 @@ from rllm.experimental.eval.types import (
     F1Evaluator,
     MathEvaluator,
     Signal,
+    Task,
     _extract_agent_answer,
 )
 from rllm.types import Episode, Step, Trajectory
@@ -25,8 +26,8 @@ from rllm.types import Episode, Step, Trajectory
 # ---------------------------------------------------------------------------
 
 class _DummyAgent:
-    def run(self, task: dict, config: AgentConfig) -> Episode:
-        return Episode(task=task, trajectories=[], artifacts={"answer": "42"})
+    def run(self, task: Task, config: AgentConfig) -> Episode:
+        return Episode(task=task.data, trajectories=[], artifacts={"answer": "42"})
 
 
 class _DummyEvaluator:
@@ -44,16 +45,9 @@ def test_evaluator_protocol():
     assert isinstance(evaluator, Evaluator)
 
 
-def test_builtin_agents_are_agent_flows():
-    from rllm.experimental.agents import math_agent, countdown_agent, code_agent, qa_agent
-    for agent in [math_agent, countdown_agent, code_agent, qa_agent]:
-        assert isinstance(agent, AgentFlow), f"{type(agent).__name__} is not an AgentFlow"
-
-
-def test_vlm_agents_are_agent_flows():
-    from rllm.experimental.agents import vlm_mcq_agent, vlm_math_agent, vlm_open_agent
-    for agent in [vlm_mcq_agent, vlm_math_agent, vlm_open_agent]:
-        assert isinstance(agent, AgentFlow), f"{type(agent).__name__} is not an AgentFlow"
+def test_react_agent_is_agent_flow():
+    from rllm.experimental.agents import react_agent
+    assert isinstance(react_agent, AgentFlow), "react_agent is not an AgentFlow"
 
 
 def test_builtin_evaluators_are_evaluators():

@@ -7,7 +7,7 @@ import pytest
 from click.testing import CliRunner
 
 from rllm.experimental.cli.main import cli
-from rllm.experimental.eval.types import AgentConfig, EvalOutput, Signal
+from rllm.experimental.eval.types import AgentConfig, EvalOutput, Signal, Task
 from rllm.types import Episode, Step, Trajectory
 
 
@@ -53,9 +53,10 @@ def mock_train_dataset(tmp_rllm_home):
 
 class _MockAgentFlow:
     """Mock AgentFlow that returns a fixed Episode."""
-    def run(self, task: dict, config: AgentConfig) -> Episode:
-        step = Step(input=task.get("question", ""), output="mock answer", done=True)
-        return Episode(task=task, trajectories=[Trajectory(name="mock", steps=[step])], artifacts={"answer": "mock answer"})
+    def run(self, task: Task, config: AgentConfig) -> Episode:
+        data = task.data if isinstance(task, Task) else task
+        step = Step(input=data.get("question", ""), output="mock answer", done=True)
+        return Episode(task=data, trajectories=[Trajectory(name="mock", steps=[step])], artifacts={"answer": "mock answer"})
 
 
 class _MockEvaluator:

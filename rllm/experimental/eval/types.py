@@ -3,14 +3,28 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from typing import Any, Protocol, runtime_checkable
+from typing import TYPE_CHECKING, Any, Protocol, runtime_checkable
 
 from rllm.types import Episode, Trajectory
+
+if TYPE_CHECKING:
+    from rllm.experimental.eval.task_spec import TaskSpec
 
 
 # ---------------------------------------------------------------------------
 # Data types
 # ---------------------------------------------------------------------------
+
+@dataclass
+class Task:
+    """Wraps a raw dataset row with an optional structured TaskSpec.
+
+    Agents receive this object and can use ``spec`` for instruction/rendering
+    or fall back to reading ``data`` directly.
+    """
+    data: dict
+    spec: TaskSpec | None = None
+
 
 @dataclass
 class AgentConfig:
@@ -53,7 +67,7 @@ class AgentFlow(Protocol):
     Unlike Workflow, it has no training dependencies — just needs
     a base_url and model to make LLM calls.
     """
-    def run(self, task: dict, config: AgentConfig) -> Episode: ...
+    def run(self, task: Task, config: AgentConfig) -> Episode: ...
 
 
 @runtime_checkable

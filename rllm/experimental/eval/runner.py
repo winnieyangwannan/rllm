@@ -11,7 +11,7 @@ from tqdm.asyncio import tqdm_asyncio
 
 from rllm.experimental.eval.results import EvalItem, EvalResult
 from rllm.experimental.eval.task_spec import build_task_spec
-from rllm.experimental.eval.types import AgentConfig, AgentFlow, Evaluator
+from rllm.experimental.eval.types import AgentConfig, AgentFlow, Evaluator, Task
 
 logger = logging.getLogger(__name__)
 
@@ -82,14 +82,15 @@ class EvalRunner:
 
                 try:
                     metadata = dict(self.agent_metadata)
-                    if task_spec is not None:
-                        metadata["task_spec"] = task_spec
                     config = AgentConfig(
                         base_url=self.base_url,
                         model=self.model,
                         session_uid=f"eval-{idx}",
                         metadata=metadata,
                     )
+
+                    # Wrap raw task dict into Task object
+                    task_obj = Task(data=task, spec=task_spec)
 
                     # Setup sandbox if needed
                     if is_sandboxed:
@@ -100,19 +101,19 @@ class EvalRunner:
 
                     # Stage 1: Run agent flow (supports both sync and async agents)
                     if inspect.iscoroutinefunction(task_agent.run):
-                        episode = await task_agent.run(task, config)
+                        episode = await task_agent.run(task_obj, config)
                     else:
                         loop = asyncio.get_event_loop()
                         episode = await loop.run_in_executor(
-                            self._executor, task_agent.run, task, config
+                            self._executor, task_agent.run, task_obj, config
                         )
 
                     # Store sandbox reference in artifacts for evaluator access
                     if is_sandboxed and task_agent.sandbox is not None:
                         episode.artifacts["_sandbox"] = task_agent.sandbox
 
-                    # Stage 2: Evaluate
-                    eval_output = evaluator.evaluate(task, episode)
+                    # Stage 2: Evaluate (evaluators receive raw dict)
+                    eval_output = evaluator.evaluate(task_obj.data, episode)
 
                     # Write back onto trajectories
                     for traj in episode.trajectories:

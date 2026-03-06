@@ -236,11 +236,11 @@ def _render_multimodal(task: dict) -> str | list[dict]:
             return _render_mcq(task)
         return question
 
-    # Build multimodal content blocks (reuse VLM agent utility)
+    # Build multimodal content blocks (reuse VLM utilities)
     try:
-        from rllm.experimental.agents.vlm_agent import _build_vlm_content
+        from rllm.experimental.agents.vlm_utils import _build_vlm_content
     except ImportError:
-        # If vlm_agent is not available, return plain text
+        # If vlm_utils is not available, return plain text
         return question
 
     # Build text: include choices if present (VLM MCQ)
@@ -279,6 +279,38 @@ _AGENT_TO_RENDERER: dict[str, Callable[[dict], str | list[dict]]] = {
     "vlm_grounding": _render_multimodal,
     "swe": _render_plain,
     "frozenlake": _render_plain,
+}
+
+# Reward-fn based renderer lookup (used when default_agent is "react")
+_REWARD_FN_TO_RENDERER: dict[str, Callable[[dict], str | list[dict]]] = {
+    "countdown_reward_fn": _render_countdown,
+    "bfcl_reward_fn": _render_bfcl,
+    "mcq_reward_fn": _render_mcq,
+}
+
+# Category based renderer fallback (used when default_agent is "react")
+_CATEGORY_TO_RENDERER: dict[str, Callable[[dict], str | list[dict]]] = {
+    "math": _render_plain,
+    "code": _render_plain,
+    "qa": _render_plain,
+    "mcq": _render_mcq,
+    "instruction_following": _render_plain,
+    "agentic": _render_plain,
+    "translation": _render_plain,
+    "vlm": _render_multimodal,
+    "search": _render_plain,
+}
+
+# Reward-fn based input-field inference (used when default_agent is "react")
+_REWARD_FN_TO_INPUT_FIELDS: dict[str, list[str]] = {
+    "countdown_reward_fn": ["target", "nums"],
+    "bfcl_reward_fn": ["question", "function"],
+    "mcq_reward_fn": ["question", "choices"],
+}
+
+# Category based input-field fallback (used when default_agent is "react")
+_CATEGORY_TO_INPUT_FIELDS: dict[str, list[str]] = {
+    "vlm": ["question", "images"],
 }
 
 
@@ -356,28 +388,45 @@ def build_task_spec(
         instruction = "Complete the given task to the best of your ability."
 
     # --- Render function ---
-    render_fn = _AGENT_TO_RENDERER.get(default_agent, _render_plain)
+    if default_agent == "react":
+        render_fn = (
+            _REWARD_FN_TO_RENDERER.get(reward_fn)
+            or _CATEGORY_TO_RENDERER.get(category, _render_plain)
+        )
+    else:
+        render_fn = _AGENT_TO_RENDERER.get(default_agent, _render_plain)
 
     # --- Input fields ---
-    input_fields = _infer_input_fields(default_agent, sample_task)
+    input_fields = _infer_input_fields(default_agent, sample_task, reward_fn=reward_fn, category=category)
 
     # --- Modality ---
-    modality = "multimodal" if default_agent.startswith("vlm") else "text"
+    if default_agent.startswith("vlm"):
+        modality = "multimodal"
+    elif default_agent == "react" and category == "vlm":
+        modality = "multimodal"
+    else:
+        modality = "text"
 
     # --- Output type ---
-    output_type = _AGENT_TO_OUTPUT_TYPE.get(
-        default_agent,
-        _CATEGORY_TO_OUTPUT_TYPE.get(category, "text"),
-    )
+    if default_agent == "react":
+        output_type = _CATEGORY_TO_OUTPUT_TYPE.get(category, "text")
+    else:
+        output_type = _AGENT_TO_OUTPUT_TYPE.get(
+            default_agent,
+            _CATEGORY_TO_OUTPUT_TYPE.get(category, "text"),
+        )
 
     # --- Eval method ---
     eval_method = REWARD_FN_TO_EVAL_METHOD.get(reward_fn, "symbolic_match")
 
     # --- Tools hint ---
-    tools_hint = _AGENT_TO_TOOLS_HINT.get(
-        default_agent,
-        _CATEGORY_TO_TOOLS_HINT.get(category),
-    )
+    if default_agent == "react":
+        tools_hint = _CATEGORY_TO_TOOLS_HINT.get(category)
+    else:
+        tools_hint = _AGENT_TO_TOOLS_HINT.get(
+            default_agent,
+            _CATEGORY_TO_TOOLS_HINT.get(category),
+        )
 
     return TaskSpec(
         instruction=instruction,
@@ -392,7 +441,13 @@ def build_task_spec(
     )
 
 
-def _infer_input_fields(default_agent: str, sample_task: dict | None) -> list[str]:
+def _infer_input_fields(
+    default_agent: str,
+    sample_task: dict | None,
+    *,
+    reward_fn: str = "",
+    category: str = "",
+) -> list[str]:
     """Infer input fields from agent type and sample task."""
     # Known agent → fields mapping
     known = {
@@ -415,7 +470,14 @@ def _infer_input_fields(default_agent: str, sample_task: dict | None) -> list[st
         "frozenlake": ["question"],
     }
 
-    fields = known.get(default_agent, ["question"])
+    if default_agent == "react":
+        fields = (
+            _REWARD_FN_TO_INPUT_FIELDS.get(reward_fn)
+            or _CATEGORY_TO_INPUT_FIELDS.get(category)
+            or ["question"]
+        )
+    else:
+        fields = known.get(default_agent, ["question"])
 
     # Validate against sample if available
     if sample_task:

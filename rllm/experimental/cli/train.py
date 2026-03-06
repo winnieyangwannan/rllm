@@ -142,7 +142,7 @@ def make_agent_run_func(agent_flow, evaluator, model_name):
     so that session context set by ``wrap_with_session_context`` propagates
     even through a plain OpenAI client.
     """
-    from rllm.experimental.eval.types import AgentConfig
+    from rllm.experimental.eval.types import AgentConfig, Task
     from rllm.sdk.proxy.metadata_slug import assemble_routing_metadata, build_proxied_base_url
 
     def agent_run_func(**kwargs) -> float:
@@ -157,7 +157,8 @@ def make_agent_run_func(agent_flow, evaluator, model_name):
         else:
             base_url = raw_base_url
         config = AgentConfig(base_url=base_url, model=model_name, session_uid="")
-        episode = agent_flow.run(task, config)
+        task_obj = Task(data=task)
+        episode = agent_flow.run(task_obj, config)
         eval_output = evaluator.evaluate(task, episode)
         return float(eval_output.reward)
 

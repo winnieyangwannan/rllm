@@ -15,7 +15,7 @@ import subprocess
 import uuid
 from abc import ABC, abstractmethod
 
-from rllm.experimental.eval.types import AgentConfig
+from rllm.experimental.eval.types import AgentConfig, Task
 from rllm.sdk.sandbox.protocol import Sandbox
 from rllm.types import Episode
 
@@ -95,7 +95,7 @@ class SandboxedAgentFlow(ABC):
         return self.image
 
     @abstractmethod
-    def run(self, task: dict, config: AgentConfig) -> Episode: ...
+    def run(self, task: Task, config: AgentConfig) -> Episode: ...
 
 
 def create_sandbox(backend: str, name: str, image: str, **kwargs) -> Sandbox:

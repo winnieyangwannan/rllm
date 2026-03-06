@@ -14,7 +14,7 @@ import time
 from openai import OpenAI
 
 from rllm.experimental.agents.search.backends import resolve_search_backend
-from rllm.experimental.eval.types import AgentConfig
+from rllm.experimental.eval.types import AgentConfig, Task
 from rllm.rewards.math_utils.utils import extract_boxed_answer
 from rllm.types import Episode, Step, Trajectory
 
@@ -54,14 +54,15 @@ class SearchAgentFlow:
     def __init__(self, max_turns: int = 16):
         self.max_turns = max_turns
 
-    def run(self, task: dict, config: AgentConfig) -> Episode:
+    def run(self, task: Task, config: AgentConfig) -> Episode:
+        task_data = task.data if isinstance(task, Task) else task
         client = OpenAI(base_url=config.base_url, api_key="EMPTY")
         backend_name = config.metadata.get("search_backend")
         tool = resolve_search_backend(backend_name)
 
         messages = [
             {"role": "system", "content": SEARCH_SYSTEM_PROMPT},
-            {"role": "user", "content": task.get("question", "")},
+            {"role": "user", "content": task_data.get("question", "")},
         ]
 
         steps: list[Step] = []
@@ -199,7 +200,7 @@ class SearchAgentFlow:
         except Exception as e:
             logger.warning("Search agent error: %s", e)
             if not steps:
-                steps.append(Step(input=task.get("question", ""), output="", done=True))
+                steps.append(Step(input=task_data.get("question", ""), output="", done=True))
 
         # Mark last step as done
         if steps and not steps[-1].done:
@@ -230,7 +231,7 @@ class SearchAgentFlow:
 
         traj = Trajectory(name="search", steps=steps)
         return Episode(
-            task=task,
+            task=task_data,
             trajectories=[traj],
             artifacts={
                 "answer": final_answer,
