@@ -6,12 +6,12 @@ Entry point: ``rllm [dataset|eval|agent|model]``
 from __future__ import annotations
 
 import click
+from rich import box
 from rich.console import Console
 from rich.table import Table
 from rich.text import Text
-from rich import box
 
-_BANNER = """
+_BANNER = r"""
        _     _     __  __
   _ __| |   | |   |  \/  |
  | '__| |   | |   | |\/| |
@@ -25,6 +25,7 @@ _COMMAND_ICONS = {
     "eval": "📊",
     "init": "🚀",
     "model": "⚙️ ",
+    "login": "🔑",
     "train": "🏋️",
 }
 
@@ -47,6 +48,7 @@ class _LazyGroup(click.Group):
         "init": ("rllm.experimental.cli.init", "init_cmd", "Scaffold a new agent project."),
         "model": ("rllm.experimental.cli.model_cmd", "model", "Manage provider and model configuration."),
         "train": ("rllm.experimental.cli.train", "train_cmd", "Train a model on a benchmark dataset using RL."),
+        "login": ("rllm.experimental.cli.login", "login_cmd", "Log in to rLLM UI."),
         "setup": None,  # handled inline
     }
 
@@ -62,6 +64,7 @@ class _LazyGroup(click.Group):
             return None
         module_path, attr, _help = spec
         import importlib
+
         mod = importlib.import_module(module_path)
         return getattr(mod, attr)
 
@@ -155,6 +158,7 @@ def setup_alias(ctx):
     """[deprecated] Use ``rllm model setup`` instead."""
     click.echo("Hint: use `rllm model setup` (the `setup` command is deprecated).\n", err=True)
     from rllm.experimental.cli.model_cmd import model_setup
+
     ctx.invoke(model_setup)
 
 

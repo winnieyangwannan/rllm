@@ -318,7 +318,10 @@ class UILogger:
 
         self.logger = logging.getLogger(__name__)
         self.session_type = session_type
-        api_key = os.getenv("RLLM_API_KEY")
+        from rllm.experimental.eval.config import load_ui_config
+
+        ui_config = load_ui_config()
+        api_key = os.getenv("RLLM_API_KEY") or ui_config.get("ui_api_key")
         ui_url = os.getenv("RLLM_UI_URL")
         if not ui_url:
             ui_url = "https://ui.rllm-project.com" if api_key else "http://localhost:3000"

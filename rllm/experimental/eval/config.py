@@ -99,6 +99,43 @@ class RllmConfig:
         return errors
 
 
+def load_ui_config() -> dict:
+    """Return UI-specific config (``ui_api_key``) from ``~/.rllm/config.json``."""
+    path = _config_path()
+    if not os.path.exists(path):
+        return {}
+    try:
+        with open(path) as f:
+            data = json.load(f)
+        result = {}
+        if data.get("ui_api_key"):
+            result["ui_api_key"] = data["ui_api_key"]
+        return result
+    except (json.JSONDecodeError, OSError):
+        return {}
+
+
+def save_ui_config(ui_api_key: str | None) -> None:
+    """Merge or remove ``ui_api_key`` in ``~/.rllm/config.json``."""
+    path = _config_path()
+    os.makedirs(os.path.dirname(path), exist_ok=True)
+    data: dict = {}
+    if os.path.exists(path):
+        try:
+            with open(path) as f:
+                data = json.load(f)
+        except (json.JSONDecodeError, OSError):
+            data = {}
+    if ui_api_key is None:
+        data.pop("ui_api_key", None)
+    else:
+        data["ui_api_key"] = ui_api_key
+    with open(path, "w") as f:
+        json.dump(data, f, indent=2)
+        f.write("\n")
+    os.chmod(path, 0o600)
+
+
 def load_config() -> RllmConfig:
     """Load configuration from ``~/.rllm/config.json``.
 
