@@ -134,6 +134,12 @@ sdk:
     #   max_retry_attempts: boto3 adaptive retry attempts (default: 5)
     extra: {}
 
+# Gateway Configuration (model gateway for AgentFlow-based training)
+gateway:
+  port: 9090
+  host: "127.0.0.1"
+  db_path: null       # Defaults to temp file
+
 # Episode Logging Configuration
 episode_logging:
   log_episodes: false

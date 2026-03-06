@@ -426,8 +426,8 @@ class TestTrainCommand:
         # Verify AgentTrainer was called with correct kwargs
         call_kwargs = mock_at_cls.call_args[1]
         assert call_kwargs["backend"] == "tinker"
-        assert call_kwargs["agent_run_func"] is not None
-        assert callable(call_kwargs["agent_run_func"])
+        assert call_kwargs["agent_flow"] is not None
+        assert call_kwargs["evaluator"] is not None
         assert call_kwargs["train_dataset"] is not None
         assert call_kwargs["config"].model.name == "test-model"
         assert call_kwargs["config"].training.group_size == 4

@@ -309,9 +309,6 @@ def _run_train(
             ),
         )
 
-    # ---- Build agent_run_func ----
-    agent_run_func = make_agent_run_func(agent_flow, evaluator, model)
-
     # ---- Display header ----
     table = Table(show_header=False, box=None, padding=(0, 2))
     table.add_column(style="label", width=14)
@@ -340,7 +337,8 @@ def _run_train(
     # ---- Launch training ----
     trainer = AgentTrainer(
         backend="tinker",
-        agent_run_func=agent_run_func,
+        agent_flow=agent_flow,
+        evaluator=evaluator,
         config=config,
         train_dataset=train_dataset,
         val_dataset=val_dataset,
