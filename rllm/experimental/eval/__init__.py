@@ -12,6 +12,7 @@ from rllm.experimental.eval.types import (
     EvalOutput,
     Evaluator,
     Signal,
+    run_agent_flow,
 )
 
 __all__ = [
@@ -33,4 +34,5 @@ __all__ = [
     "CompoundEvaluator",
     "TaskSpec",
     "build_task_spec",
+    "run_agent_flow",
 ]

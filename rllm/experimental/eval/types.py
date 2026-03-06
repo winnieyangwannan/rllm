@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import asyncio
+import inspect
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Any, Protocol, runtime_checkable
 
@@ -66,8 +68,30 @@ class AgentFlow(Protocol):
     This is the eval-side equivalent of Workflow (training).
     Unlike Workflow, it has no training dependencies — just needs
     a base_url and model to make LLM calls.
+
+    Implementations may provide either ``run`` (sync) or ``arun`` (async).
+    If both are present, callers will prefer ``arun`` when running inside
+    an async event loop.
     """
     def run(self, task: Task, config: AgentConfig) -> Episode: ...
+
+
+async def run_agent_flow(
+    agent: AgentFlow,
+    task: Task,
+    config: AgentConfig,
+    executor=None,
+) -> Episode:
+    """Run an AgentFlow, preferring its async ``arun`` method when available.
+
+    Falls back to running ``run`` in *executor* (a ``ThreadPoolExecutor``)
+    so that sync agent flows don't block the event loop.
+    """
+    if hasattr(agent, "arun") and inspect.iscoroutinefunction(agent.arun):
+        return await agent.arun(task, config)
+
+    loop = asyncio.get_event_loop()
+    return await loop.run_in_executor(executor, agent.run, task, config)
 
 
 @runtime_checkable

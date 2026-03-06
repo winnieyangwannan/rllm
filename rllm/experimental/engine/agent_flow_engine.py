@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import resource
 import uuid
 from collections import defaultdict
 from concurrent.futures import ThreadPoolExecutor
@@ -18,7 +19,7 @@ from tqdm import tqdm
 
 from rllm.agents.agent import Episode, Step, Trajectory
 from rllm.experimental.engine.trace_converter import trace_record_to_step
-from rllm.experimental.eval.types import AgentConfig, EvalOutput, Task
+from rllm.experimental.eval.types import AgentConfig, EvalOutput, Task, run_agent_flow
 from rllm.utils import colorful_print
 from rllm.workflows.workflow import TerminationReason
 
@@ -29,6 +30,24 @@ if TYPE_CHECKING:
     from rllm_model_gateway.models import TraceRecord
 
 logger = logging.getLogger(__name__)
+
+_MIN_FD_LIMIT = 8192
+
+
+def _raise_fd_limit(target: int = _MIN_FD_LIMIT) -> None:
+    """Best-effort raise of the process soft file-descriptor limit.
+
+    Training with many parallel agent flows (each opening HTTP connections
+    through the gateway) can easily exceed the default 1024 FD soft limit.
+    """
+    try:
+        soft, hard = resource.getrlimit(resource.RLIMIT_NOFILE)
+        if soft < target:
+            new_soft = min(target, hard)
+            resource.setrlimit(resource.RLIMIT_NOFILE, (new_soft, hard))
+            logger.info("Raised NOFILE soft limit from %d to %d (hard=%d)", soft, new_soft, hard)
+    except (ValueError, OSError) as e:
+        logger.warning("Could not raise file descriptor limit: %s", e)
 
 
 class AgentFlowEngine:
@@ -54,6 +73,10 @@ class AgentFlowEngine:
         self.raise_on_error = raise_on_error
         self.episode_logger = episode_logger
         self.executor = ThreadPoolExecutor(max_workers=n_parallel_tasks)
+
+        # Raise the file descriptor limit to avoid "Too many open files" when
+        # running many parallel agent flows with individual HTTP clients.
+        _raise_fd_limit()
 
         # Training step tracking (set by set_training_step)
         self.current_step = 0
@@ -190,15 +213,10 @@ class AgentFlowEngine:
             session_uid=uid,
         )
 
-        # 3. Run agent flow (may be sync — run in executor)
+        # 3. Run agent flow (prefers arun if available, else run in executor)
         logger.debug("[%s] Starting agent flow at %s", uid, session_url)
         task_obj = Task(data=task)
-        episode = await loop.run_in_executor(
-            self.executor,
-            self.agent_flow.run,
-            task_obj,
-            config,
-        )
+        episode = await run_agent_flow(self.agent_flow, task_obj, config, executor=self.executor)
         logger.debug("[%s] Agent flow completed, %d trajectories", uid, len(episode.trajectories))
 
         # 4. Evaluate

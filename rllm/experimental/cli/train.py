@@ -10,6 +10,7 @@ Evaluator into an ``agent_run_func(**task) -> float`` and hand it to
 
 from __future__ import annotations
 
+import asyncio
 import os
 from pathlib import Path
 
@@ -148,6 +149,9 @@ def make_agent_run_func(agent_flow, evaluator, model_name):
     2. Evaluates the episode
     3. Returns the reward as a float
 
+    If the AgentFlow provides an async ``arun`` method, the wrapper will call
+    it via ``asyncio.run`` so it integrates with the sync SdkWorkflow path.
+
     Note: AgentFlows use a plain ``openai.OpenAI`` client, which does not
     inject session metadata into the URL.  The LiteLLM proxy's
     ``TracingCallback`` needs ``session_uids`` (embedded in a URL slug) to
@@ -156,8 +160,12 @@ def make_agent_run_func(agent_flow, evaluator, model_name):
     so that session context set by ``wrap_with_session_context`` propagates
     even through a plain OpenAI client.
     """
+    import inspect
+
     from rllm.experimental.eval.types import AgentConfig, Task
     from rllm.sdk.proxy.metadata_slug import assemble_routing_metadata, build_proxied_base_url
+
+    _has_arun = hasattr(agent_flow, "arun") and inspect.iscoroutinefunction(agent_flow.arun)
 
     def agent_run_func(**kwargs) -> float:
         task = dict(kwargs)
@@ -172,7 +180,10 @@ def make_agent_run_func(agent_flow, evaluator, model_name):
             base_url = raw_base_url
         config = AgentConfig(base_url=base_url, model=model_name, session_uid="")
         task_obj = Task(data=task)
-        episode = agent_flow.run(task_obj, config)
+        if _has_arun:
+            episode = asyncio.run(agent_flow.arun(task_obj, config))
+        else:
+            episode = agent_flow.run(task_obj, config)
         eval_output = evaluator.evaluate(task, episode)
         return float(eval_output.reward)
 

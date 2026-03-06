@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import asyncio
-import inspect
 import logging
 from concurrent.futures import ThreadPoolExecutor
 
@@ -11,7 +10,7 @@ from tqdm.asyncio import tqdm_asyncio
 
 from rllm.experimental.eval.results import EvalItem, EvalResult
 from rllm.experimental.eval.task_spec import build_task_spec
-from rllm.experimental.eval.types import AgentConfig, AgentFlow, Evaluator, Task
+from rllm.experimental.eval.types import AgentConfig, AgentFlow, Evaluator, Task, run_agent_flow
 
 logger = logging.getLogger(__name__)
 
@@ -97,14 +96,8 @@ class EvalRunner:
                         loop = asyncio.get_event_loop()
                         await loop.run_in_executor(self._executor, task_agent.setup_sandbox, task, config)
 
-                    # Stage 1: Run agent flow (supports both sync and async agents)
-                    if inspect.iscoroutinefunction(task_agent.run):
-                        episode = await task_agent.run(task_obj, config)
-                    else:
-                        loop = asyncio.get_event_loop()
-                        episode = await loop.run_in_executor(
-                            self._executor, task_agent.run, task_obj, config
-                        )
+                    # Stage 1: Run agent flow (prefers arun if available, else run in executor)
+                    episode = await run_agent_flow(task_agent, task_obj, config, executor=self._executor)
 
                     # Store sandbox reference in artifacts for evaluator access
                     if is_sandboxed and task_agent.sandbox is not None:
