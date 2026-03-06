@@ -175,8 +175,12 @@ class AgentFlowEngine:
         """Run a single AgentFlow task: execute, evaluate, enrich."""
         loop = asyncio.get_event_loop()
 
-        # 1. Create gateway session
-        self.gateway.create_session(uid)
+        # 1. Create gateway session (run in executor to avoid blocking event loop)
+        await loop.run_in_executor(
+            self.executor,
+            self.gateway.create_session,
+            uid,
+        )
         session_url = self.gateway.get_session_url(uid)
 
         # 2. Build config
@@ -187,6 +191,7 @@ class AgentFlowEngine:
         )
 
         # 3. Run agent flow (may be sync — run in executor)
+        logger.debug("[%s] Starting agent flow at %s", uid, session_url)
         task_obj = Task(data=task)
         episode = await loop.run_in_executor(
             self.executor,
@@ -194,6 +199,7 @@ class AgentFlowEngine:
             task_obj,
             config,
         )
+        logger.debug("[%s] Agent flow completed, %d trajectories", uid, len(episode.trajectories))
 
         # 4. Evaluate
         eval_output: EvalOutput = await loop.run_in_executor(
@@ -203,13 +209,20 @@ class AgentFlowEngine:
             episode,
         )
 
-        # Apply reward to all trajectories
+        # Apply reward to trajectories that don't already have one.
+        # Evaluators for multi-trajectory flows (e.g. solver-judge) may set
+        # per-trajectory rewards directly on the episode; those are preserved.
         for traj in episode.trajectories:
-            traj.reward = eval_output.reward
+            if traj.reward is None:
+                traj.reward = eval_output.reward
         episode.is_correct = eval_output.is_correct
 
-        # 5. Retrieve traces from gateway
-        traces = self.gateway.get_traces(uid)
+        # 5. Retrieve traces from gateway (run in executor to avoid blocking event loop)
+        traces = await loop.run_in_executor(
+            self.executor,
+            self.gateway.get_traces,
+            uid,
+        )
 
         # 6. Enrich episode with token data
         enriched = self._enrich_episode(episode, traces, uid, task)
