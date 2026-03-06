@@ -32,6 +32,7 @@ _CONFIG_PKG = Path(__file__).resolve().parent.parent / "config"
 # 1. build_train_config  — CLI flags → OmegaConf DictConfig
 # ---------------------------------------------------------------------------
 
+
 def build_train_config(
     *,
     model_name: str,
@@ -78,46 +79,58 @@ def build_train_config(
         merged = OmegaConf.merge(merged, user_cfg)
 
     # Apply CLI overrides (only non-default values)
-    overrides = OmegaConf.create({
-        "model": {"name": model_name, "lora_rank": lora_rank},
-        "training": {"group_size": group_size, "learning_rate": lr},
-        "validation": {"group_size": group_size},
-        "data": {"train_batch_size": batch_size},
-        "rllm": {
-            # model_name is read by SdkWorkflowFactory to register
-            # the model in the LiteLLM proxy
-            "model_name": model_name,
-            "trainer": {
-                "total_epochs": total_epochs,
-                "test_freq": val_freq,
-                "save_freq": save_freq,
-                "project_name": project,
-                "experiment_name": experiment,
-            },
-            "rollout": {
-                "n": group_size,
-            },
-            "workflow": {
-                "use_workflow": True,
-                "workflow_args": {
-                    "timeout": 300,  # 5-minute timeout per rollout
+    overrides = OmegaConf.create(
+        {
+            "model": {"name": model_name, "lora_rank": lora_rank},
+            "training": {"group_size": group_size, "learning_rate": lr},
+            "validation": {"group_size": group_size},
+            "data": {"train_batch_size": batch_size},
+            "rllm": {
+                # model_name is read by SdkWorkflowFactory to register
+                # the model in the LiteLLM proxy
+                "model_name": model_name,
+                "trainer": {
+                    "total_epochs": total_epochs,
+                    "test_freq": val_freq,
+                    "save_freq": save_freq,
+                    "project_name": project,
+                    "experiment_name": experiment,
+                },
+                "rollout": {
+                    "n": group_size,
+                },
+                "workflow": {
+                    "use_workflow": True,
+                    "workflow_args": {
+                        "timeout": 300,  # 5-minute timeout per rollout
+                    },
                 },
             },
-        },
-    })
+        }
+    )
     merged = OmegaConf.merge(merged, overrides)
 
     # total_steps overrides epochs
     if total_steps is not None:
-        merged = OmegaConf.merge(merged, OmegaConf.create({
-            "rllm": {"trainer": {"total_batches": total_steps, "total_epochs": 1}},
-        }))
+        merged = OmegaConf.merge(
+            merged,
+            OmegaConf.create(
+                {
+                    "rllm": {"trainer": {"total_batches": total_steps, "total_epochs": 1}},
+                }
+            ),
+        )
 
     # Output directory
     if output_dir is not None:
-        merged = OmegaConf.merge(merged, OmegaConf.create({
-            "training": {"default_local_dir": output_dir},
-        }))
+        merged = OmegaConf.merge(
+            merged,
+            OmegaConf.create(
+                {
+                    "training": {"default_local_dir": output_dir},
+                }
+            ),
+        )
 
     return merged
 
@@ -125,6 +138,7 @@ def build_train_config(
 # ---------------------------------------------------------------------------
 # 2. make_agent_run_func  — AgentFlow + Evaluator → callable(**task) -> float
 # ---------------------------------------------------------------------------
+
 
 def make_agent_run_func(agent_flow, evaluator, model_name):
     """Wrap an AgentFlow and Evaluator into a training-compatible callable.
@@ -169,6 +183,7 @@ def make_agent_run_func(agent_flow, evaluator, model_name):
 # 3. _run_train  — core training logic
 # ---------------------------------------------------------------------------
 
+
 def _run_train(
     benchmark: str,
     agent_name: str | None,
@@ -192,12 +207,9 @@ def _run_train(
     output_dir: str | None,
     config_file: str | None,
     enable_ui: bool = False,
-    ui_url: str | None = None,
 ):
     """Core training logic: resolve catalog, load data, build config, launch trainer."""
-    from rich.status import Status
 
-    from rllm.data import DatasetRegistry
     from rllm.experimental.eval.agent_loader import load_agent
     from rllm.experimental.eval.evaluator_loader import load_evaluator, resolve_evaluator_from_catalog
     from rllm.experimental.unified_trainer import AgentTrainer
@@ -218,7 +230,7 @@ def _run_train(
         agent_flow = load_agent(agent_name)
     except (KeyError, ImportError, AttributeError, TypeError) as e:
         console.print(f"  [error]Error loading agent '{agent_name}': {e}[/]")
-        raise SystemExit(1)
+        raise SystemExit(1) from None
 
     # ---- Resolve evaluator ----
     evaluator = None
@@ -229,7 +241,7 @@ def _run_train(
             evaluator_display = evaluator_name
         except (KeyError, ImportError, AttributeError, TypeError) as e:
             console.print(f"  [error]Error loading evaluator '{evaluator_name}': {e}[/]")
-            raise SystemExit(1)
+            raise SystemExit(1) from None
     else:
         evaluator = resolve_evaluator_from_catalog(benchmark)
         if evaluator is not None:
@@ -280,22 +292,22 @@ def _run_train(
     )
 
     # ---- Wire UI logging ----
-    if ui_url:
-        enable_ui = True
-    _DEFAULT_UI_URL = "https://ui.rllm-project.com"
     if enable_ui:
-        if not ui_url and not os.environ.get("RLLM_API_KEY"):
-            console.print("  [error]RLLM_API_KEY env var is required for --ui (or provide --ui-url for a custom instance).[/]")
-            raise SystemExit(1)
-        resolved_ui_url = ui_url or _DEFAULT_UI_URL
-        os.environ["RLLM_UI_URL"] = resolved_ui_url
+        if not os.environ.get("RLLM_UI_URL"):
+            os.environ["RLLM_UI_URL"] = "https://ui.rllm-project.com"
         from omegaconf import OmegaConf
+
         loggers = list(config.rllm.trainer.logger)
         if "ui" not in loggers:
             loggers.append("ui")
-        config = OmegaConf.merge(config, OmegaConf.create({
-            "rllm": {"trainer": {"logger": loggers}},
-        }))
+        config = OmegaConf.merge(
+            config,
+            OmegaConf.create(
+                {
+                    "rllm": {"trainer": {"logger": loggers}},
+                }
+            ),
+        )
 
     # ---- Build agent_run_func ----
     agent_run_func = make_agent_run_func(agent_flow, evaluator, model)
@@ -320,7 +332,7 @@ def _run_train(
         epochs_str += f"  [dim](max {total_steps} steps)[/]"
     table.add_row("Epochs", epochs_str)
     if enable_ui:
-        table.add_row("Live UI", f"[val]{resolved_ui_url}[/]")
+        table.add_row("Live UI", f"[val]{os.environ['RLLM_UI_URL']}[/]")
     console.print()
     console.print(Panel(table, title="[bold]rLLM Train[/]", border_style="cyan", expand=False))
     console.print()
@@ -356,6 +368,7 @@ def _load_or_pull_dataset(name: str, split: str, catalog: dict):
 # 4. train_cmd  — Click command
 # ---------------------------------------------------------------------------
 
+
 @click.command("train")
 @click.argument("benchmark")
 # Dataset options
@@ -383,8 +396,7 @@ def _load_or_pull_dataset(name: str, split: str, catalog: dict):
 @click.option("--output", "output_dir", default=None, help="Checkpoint directory.")
 @click.option("--config", "config_file", default=None, type=click.Path(exists=True), help="YAML config file merged on top of base templates. CLI flags override it.")
 # UI logging options
-@click.option("--ui", "enable_ui", is_flag=True, default=False, help="Enable live UI logging backend.")
-@click.option("--ui-url", default=None, help="Custom UI backend URL (implies --ui).")
+@click.option("--ui", "enable_ui", is_flag=True, default=False, help="Enable live UI logging (uses RLLM_UI_URL or defaults to ui.rllm-project.com).")
 def train_cmd(
     benchmark: str,
     train_dataset: str | None,
@@ -408,7 +420,6 @@ def train_cmd(
     output_dir: str | None,
     config_file: str | None,
     enable_ui: bool,
-    ui_url: str | None,
 ):
     """Train a model on a benchmark dataset using RL."""
     if experiment is None:
@@ -437,5 +448,4 @@ def train_cmd(
         output_dir=output_dir,
         config_file=config_file,
         enable_ui=enable_ui,
-        ui_url=ui_url,
     )

@@ -30,7 +30,7 @@ def _suggest_benchmarks(name: str, catalog_names: list[str], max_suggestions: in
     return get_close_matches(name, catalog_names, n=max_suggestions, cutoff=0.5)
 
 
-def _run_eval(benchmark: str, agent_name: str, evaluator_name: str | None, base_url: str, model: str, split: str, concurrency: int, max_examples: int | None, output_path: str | None, agent_metadata: dict | None = None, ui_url: str | None = None):
+def _run_eval(benchmark: str, agent_name: str, evaluator_name: str | None, base_url: str, model: str, split: str, concurrency: int, max_examples: int | None, output_path: str | None, agent_metadata: dict | None = None, enable_ui: bool = False):
     """Core eval logic, extracted for clean proxy lifecycle management."""
     from rllm.data import DatasetRegistry
     from rllm.experimental.eval.agent_loader import load_agent
@@ -176,13 +176,13 @@ def _run_eval(benchmark: str, agent_name: str, evaluator_name: str | None, base_
     console.print(f"\n  [dim]Saved to {saved_path}[/]")
 
     # Send to UI if requested
-    if ui_url:
+    if enable_ui:
         import os
         from datetime import datetime, timezone
 
-        os.environ["RLLM_UI_URL"] = ui_url
         from rllm.utils.tracking import UILogger
 
+        ui_url = os.environ.get("RLLM_UI_URL", "https://ui.rllm-project.com")
         timestamp = datetime.now(tz=timezone.utc).strftime("%Y%m%d_%H%M%S")
         experiment = f"{model}_{agent_name}_{timestamp}".replace("/", "_")
         ui_logger = UILogger(
@@ -215,9 +215,8 @@ def _run_eval(benchmark: str, agent_name: str, evaluator_name: str | None, base_
 @click.option("--search-backend", "search_backend", default=None, type=click.Choice(["serper", "brave"], case_sensitive=False), help="Search backend for the search agent (auto-detected from API keys if omitted).")
 @click.option("--sandbox-backend", "sandbox_backend", default=None, type=click.Choice(["docker", "local", "modal"], case_sensitive=False), help="Sandbox backend for sandboxed agents (auto-detected from agent if omitted).")
 @click.option("--sandbox-concurrency", "sandbox_concurrency", default=None, type=int, help="Override max concurrent sandboxes (default: agent's max_concurrent).")
-@click.option("--ui", "enable_ui", is_flag=True, default=False, help="Send results to rLLM UI (requires RLLM_API_KEY or --ui-url).")
-@click.option("--ui-url", default=None, help="URL of the rLLM UI API server (implies --ui).")
-def eval_cmd(benchmark: str, agent_name: str | None, evaluator_name: str | None, base_url: str | None, model: str | None, split: str | None, concurrency: int, max_examples: int | None, output_path: str | None, search_backend: str | None, sandbox_backend: str | None, sandbox_concurrency: int | None, enable_ui: bool, ui_url: str | None):
+@click.option("--ui", "enable_ui", is_flag=True, default=False, help="Enable live UI logging (uses RLLM_UI_URL or defaults to ui.rllm-project.com).")
+def eval_cmd(benchmark: str, agent_name: str | None, evaluator_name: str | None, base_url: str | None, model: str | None, split: str | None, concurrency: int, max_examples: int | None, output_path: str | None, search_backend: str | None, sandbox_backend: str | None, sandbox_concurrency: int | None, enable_ui: bool):
     """Evaluate a model on a benchmark dataset."""
     proxy_manager = None
 
@@ -270,18 +269,12 @@ def eval_cmd(benchmark: str, agent_name: str | None, evaluator_name: str | None,
     # Resolve UI URL
     import os
 
-    if ui_url:
-        enable_ui = True
-    resolved_ui_url = None
     if enable_ui:
-        _DEFAULT_UI_URL = "https://ui.rllm-project.com"
-        if not ui_url and not os.environ.get("RLLM_API_KEY"):
-            console.print("  [error]RLLM_API_KEY env var is required for --ui (or provide --ui-url for a custom instance).[/]")
-            raise SystemExit(1)
-        resolved_ui_url = ui_url or _DEFAULT_UI_URL
+        if not os.environ.get("RLLM_UI_URL"):
+            os.environ["RLLM_UI_URL"] = "https://ui.rllm-project.com"
 
     try:
-        _run_eval(benchmark, agent_name, evaluator_name, base_url, model, split, concurrency, max_examples, output_path, agent_metadata=agent_metadata, ui_url=resolved_ui_url)
+        _run_eval(benchmark, agent_name, evaluator_name, base_url, model, split, concurrency, max_examples, output_path, agent_metadata=agent_metadata, enable_ui=enable_ui)
     finally:
         if proxy_manager is not None:
             proxy_manager.shutdown_proxy()
