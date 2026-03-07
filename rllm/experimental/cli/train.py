@@ -3,14 +3,12 @@
 ``rllm train <benchmark> --model <name> [OPTIONS]``
 
 Reuses the eval framework's dataset catalog, AgentFlows, and Evaluators to run
-RL training via the Tinker backend.  The key idea is to wrap an AgentFlow +
-Evaluator into an ``agent_run_func(**task) -> float`` and hand it to
-``AgentTrainer(backend="tinker", agent_run_func=...)``.
+RL training via the Tinker backend.  Uses ``AgentTrainer(backend="tinker",
+agent_flow=..., evaluator=...)`` with the AgentFlow + Evaluator path.
 """
 
 from __future__ import annotations
 
-import asyncio
 import os
 from pathlib import Path
 
@@ -137,61 +135,7 @@ def build_train_config(
 
 
 # ---------------------------------------------------------------------------
-# 2. make_agent_run_func  — AgentFlow + Evaluator → callable(**task) -> float
-# ---------------------------------------------------------------------------
-
-
-def make_agent_run_func(agent_flow, evaluator, model_name):
-    """Wrap an AgentFlow and Evaluator into a training-compatible callable.
-
-    Returns a function with signature ``(**task) -> float`` that:
-    1. Runs the agent flow on the task
-    2. Evaluates the episode
-    3. Returns the reward as a float
-
-    If the AgentFlow provides an async ``arun`` method, the wrapper will call
-    it via ``asyncio.run`` so it integrates with the sync SdkWorkflow path.
-
-    Note: AgentFlows use a plain ``openai.OpenAI`` client, which does not
-    inject session metadata into the URL.  The LiteLLM proxy's
-    ``TracingCallback`` needs ``session_uids`` (embedded in a URL slug) to
-    associate traces with the correct session.  We build the proxied URL
-    here using ``assemble_routing_metadata`` + ``build_proxied_base_url``
-    so that session context set by ``wrap_with_session_context`` propagates
-    even through a plain OpenAI client.
-    """
-    import inspect
-
-    from rllm.experimental.eval.types import AgentConfig, Task
-    from rllm.sdk.proxy.metadata_slug import assemble_routing_metadata, build_proxied_base_url
-
-    _has_arun = hasattr(agent_flow, "arun") and inspect.iscoroutinefunction(agent_flow.arun)
-
-    def agent_run_func(**kwargs) -> float:
-        task = dict(kwargs)
-        raw_base_url = os.environ.get("RLLM_SDK_BASE_URL", "http://127.0.0.1:4000/v1")
-        # Inject session metadata into the URL so the proxy can link traces
-        # to this session (session_uids, session_name come from context vars
-        # set by wrap_with_session_context in SdkWorkflow).
-        routing_metadata = assemble_routing_metadata()
-        if routing_metadata:
-            base_url = build_proxied_base_url(raw_base_url, routing_metadata)
-        else:
-            base_url = raw_base_url
-        config = AgentConfig(base_url=base_url, model=model_name, session_uid="")
-        task_obj = Task(data=task)
-        if _has_arun:
-            episode = asyncio.run(agent_flow.arun(task_obj, config))
-        else:
-            episode = agent_flow.run(task_obj, config)
-        eval_output = evaluator.evaluate(task, episode)
-        return float(eval_output.reward)
-
-    return agent_run_func
-
-
-# ---------------------------------------------------------------------------
-# 3. _run_train  — core training logic
+# 2. _run_train  — core training logic
 # ---------------------------------------------------------------------------
 
 
@@ -374,7 +318,7 @@ def _load_or_pull_dataset(name: str, split: str, catalog: dict):
 
 
 # ---------------------------------------------------------------------------
-# 4. train_cmd  — Click command
+# 3. train_cmd  — Click command
 # ---------------------------------------------------------------------------
 
 

@@ -95,6 +95,9 @@ rejection_sample:
   min_trajs_per_group: 2
 
 # SDK Configuration
+# DEPRECATED: This section is only kept for backward compatibility with
+# standalone SDK usage (rllm/sdk/). The unified trainer no longer uses the
+# SDK/agent_run_func path — use AgentFlow + Evaluator instead.
 sdk:
   store:
     path: ~/.rllm/traces.db

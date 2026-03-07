@@ -11,7 +11,7 @@ from __future__ import annotations
 import argparse
 
 from rllm.data import DatasetRegistry
-from rllm.experimental.cli.train import build_train_config, make_agent_run_func
+from rllm.experimental.cli.train import build_train_config
 from rllm.experimental.eval.agent_loader import load_agent
 from rllm.experimental.eval.evaluator_loader import load_evaluator
 from rllm.experimental.unified_trainer import AgentTrainer
@@ -34,7 +34,6 @@ def main() -> None:
     agent = load_agent("concierge")
     evaluator = load_evaluator("relevance")
 
-    agent_run_func = make_agent_run_func(agent, evaluator, args.model)
     config = build_train_config(
         model_name=args.model,
         group_size=args.group_size,
@@ -53,7 +52,8 @@ def main() -> None:
 
     trainer = AgentTrainer(
         backend="tinker",
-        agent_run_func=agent_run_func,
+        agent_flow=agent,
+        evaluator=evaluator,
         config=config,
         train_dataset=train_dataset,
         val_dataset=val_dataset,
