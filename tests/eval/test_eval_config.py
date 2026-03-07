@@ -1,6 +1,5 @@
 """Tests for rllm eval config (load/save/validate)."""
 
-import json
 import os
 import stat
 

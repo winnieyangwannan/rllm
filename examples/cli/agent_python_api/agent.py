@@ -11,11 +11,7 @@ from rllm.types import Episode, Step, Trajectory
 class ConciergeAgent:
     """A restaurant recommendation agent."""
 
-    SYSTEM_PROMPT = (
-        "You are a helpful restaurant concierge. "
-        "Given a user query about restaurants or food, provide a short, "
-        "helpful recommendation. Always mention the cuisine type in your answer."
-    )
+    SYSTEM_PROMPT = "You are a helpful restaurant concierge. Given a user query about restaurants or food, provide a short, helpful recommendation. Always mention the cuisine type in your answer."
 
     def run(self, task: dict, config: AgentConfig) -> Episode:
         client = OpenAI(base_url=config.base_url, api_key="EMPTY")

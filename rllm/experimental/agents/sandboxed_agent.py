@@ -78,7 +78,7 @@ class SandboxedAgentFlow(ABC):
         # Subclass hook for additional setup
         self.on_sandbox_ready(task, config)
 
-    def on_sandbox_ready(self, task: dict, config: AgentConfig) -> None:
+    def on_sandbox_ready(self, task: dict, config: AgentConfig) -> None:  # noqa: B027
         """Hook for subclasses to run additional setup after sandbox creation."""
 
     def teardown_sandbox(self) -> None:
@@ -113,14 +113,10 @@ def create_sandbox(backend: str, name: str, image: str, **kwargs) -> Sandbox:
 
         return ModalSandbox(name=name, **kwargs)
     else:
-        raise ValueError(
-            f"Unknown sandbox backend: {backend}. Available: docker, local, modal"
-        )
+        raise ValueError(f"Unknown sandbox backend: {backend}. Available: docker, local, modal")
 
 
-def _safe_exec(
-    sandbox: Sandbox, command: str, timeout: float | None = None
-) -> str:
+def _safe_exec(sandbox: Sandbox, command: str, timeout: float | None = None) -> str:
     """Execute command, returning stderr on non-zero exit instead of raising."""
     try:
         return sandbox.exec(command, timeout=timeout)

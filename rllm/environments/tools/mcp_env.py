@@ -9,8 +9,8 @@ from typing import Any
 try:
     from mcp import ClientSession, StdioServerParameters
     from mcp.client.stdio import stdio_client
-except ImportError:
-    raise ImportError("MCP environment requires extra dependencies. Install with: pip install rllm[tools]")
+except ImportError as err:
+    raise ImportError("MCP environment requires extra dependencies. Install with: pip install rllm[tools]") from err
 
 from rllm.environments.base.base_env import BaseEnv
 from rllm.rewards.reward_fn import RewardFunction, zero_reward

@@ -7,7 +7,7 @@ import pytest
 from click.testing import CliRunner
 
 from rllm.experimental.cli.main import cli
-from rllm.experimental.eval.config import load_config, save_config, RllmConfig
+from rllm.experimental.eval.config import RllmConfig, load_config, save_config
 
 
 @pytest.fixture
@@ -24,6 +24,7 @@ def runner():
 
 
 # --- model setup ---
+
 
 def test_model_setup_fresh(runner, tmp_rllm_home):
     """First-time setup: provider -> key -> model."""
@@ -70,6 +71,7 @@ def test_model_setup_already_configured_swap(runner, tmp_rllm_home):
 
 # --- model swap ---
 
+
 def test_model_swap_same_provider_new_model(runner, tmp_rllm_home):
     """Swap model within same provider — key is preserved without prompting."""
     save_config(RllmConfig(provider="openai", model="gpt-5-nano", api_keys={"openai": "sk-keep"}))
@@ -101,11 +103,13 @@ def test_model_swap_new_provider_prompts_key(runner, tmp_rllm_home):
 
 def test_model_swap_known_provider_no_key_prompt(runner, tmp_rllm_home):
     """Swap to a provider that already has a stored key — no key prompt."""
-    save_config(RllmConfig(
-        provider="openai",
-        model="gpt-5-mini",
-        api_keys={"openai": "sk-oai", "anthropic": "sk-ant-stored"},
-    ))
+    save_config(
+        RllmConfig(
+            provider="openai",
+            model="gpt-5-mini",
+            api_keys={"openai": "sk-oai", "anthropic": "sk-ant-stored"},
+        )
+    )
 
     # 2 = anthropic (has stored key), n = don't change key, 1 = first model
     result = runner.invoke(cli, ["model", "swap"], input="2\nn\n1\n")
@@ -124,6 +128,7 @@ def test_model_swap_requires_setup(runner, tmp_rllm_home):
 
 
 # --- model show ---
+
 
 def test_model_show(runner, tmp_rllm_home):
     """Show should display current config."""
@@ -144,6 +149,7 @@ def test_model_show_not_configured(runner, tmp_rllm_home):
 
 
 # --- backward compatibility ---
+
 
 def test_config_backward_compat(tmp_rllm_home):
     """Old format with 'api_key' string should load correctly."""

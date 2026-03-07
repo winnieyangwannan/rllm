@@ -13,9 +13,7 @@ import os
 logger = logging.getLogger(__name__)
 
 # Default root for rllm datasets (overridden by RLLM_HOME env var)
-_DATASETS_ROOT = os.path.join(
-    os.environ.get("RLLM_HOME", os.path.expanduser("~/.rllm")), "datasets"
-)
+_DATASETS_ROOT = os.path.join(os.environ.get("RLLM_HOME", os.path.expanduser("~/.rllm")), "datasets")
 
 
 def _detect_mime_type(data: bytes) -> str:
@@ -57,10 +55,12 @@ def _build_vlm_content(text: str, image_items: list) -> list[dict]:
     for img_data in image_items:
         try:
             data_uri = _image_to_data_uri(img_data)
-            content.append({
-                "type": "image_url",
-                "image_url": {"url": data_uri},
-            })
+            content.append(
+                {
+                    "type": "image_url",
+                    "image_url": {"url": data_uri},
+                }
+            )
         except Exception as e:
             logger.warning("Failed to load image %s: %s", img_data if isinstance(img_data, str) else f"<{len(img_data)} bytes>", e)
 

@@ -54,11 +54,7 @@ class ReactAgentFlow:
         # key "_execute" for the agent to dispatch.
         tools_meta: list[dict] = config.metadata.get("tools", [])
         tool_schemas = [t for t in tools_meta if "function" in t] or None
-        tool_executors: dict[str, callable] = {
-            t["function"]["name"]: t["_execute"]
-            for t in tools_meta
-            if "_execute" in t
-        }
+        tool_executors: dict[str, callable] = {t["function"]["name"]: t["_execute"] for t in tools_meta if "_execute" in t}
 
         messages: list[dict] = [
             {"role": "system", "content": system_prompt},
@@ -118,11 +114,13 @@ class ReactAgentFlow:
                         except Exception as e:
                             tool_result = f"Error: {e}"
 
-                    messages.append({
-                        "role": "tool",
-                        "tool_call_id": tc.id,
-                        "content": str(tool_result),
-                    })
+                    messages.append(
+                        {
+                            "role": "tool",
+                            "tool_call_id": tc.id,
+                            "content": str(tool_result),
+                        }
+                    )
 
                 steps.append(Step(input=input_text, output=assistant_content, done=False))
             else:

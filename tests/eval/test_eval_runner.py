@@ -12,10 +12,10 @@ from rllm.experimental.eval.runner import EvalRunner
 from rllm.experimental.eval.types import AgentConfig, EvalOutput, Signal, Task
 from rllm.types import Episode, Step, Trajectory
 
-
 # ---------------------------------------------------------------------------
 # Test agents and evaluators
 # ---------------------------------------------------------------------------
+
 
 class _PerfectAgent:
     def run(self, task: Task, config: AgentConfig) -> Episode:
@@ -32,7 +32,8 @@ class _ErrorAgent:
 class _AlwaysCorrectEvaluator:
     def evaluate(self, task: dict, episode: Episode) -> EvalOutput:
         return EvalOutput(
-            reward=1.0, is_correct=True,
+            reward=1.0,
+            is_correct=True,
             signals=[Signal(name="accuracy", value=1.0)],
         )
 
@@ -40,7 +41,8 @@ class _AlwaysCorrectEvaluator:
 class _AlwaysWrongEvaluator:
     def evaluate(self, task: dict, episode: Episode) -> EvalOutput:
         return EvalOutput(
-            reward=0.0, is_correct=False,
+            reward=0.0,
+            is_correct=False,
             signals=[Signal(name="accuracy", value=0.0)],
         )
 
@@ -48,7 +50,8 @@ class _AlwaysWrongEvaluator:
 class _MultiSignalEvaluator:
     def evaluate(self, task: dict, episode: Episode) -> EvalOutput:
         return EvalOutput(
-            reward=0.8, is_correct=True,
+            reward=0.8,
+            is_correct=True,
             signals=[
                 Signal(name="accuracy", value=1.0),
                 Signal(name="format", value=0.5),
@@ -60,6 +63,7 @@ class _MultiSignalEvaluator:
 # Fixtures
 # ---------------------------------------------------------------------------
 
+
 @pytest.fixture
 def small_dataset():
     data = [{"question": f"q{i}", "ground_truth": f"a{i}"} for i in range(5)]
@@ -69,6 +73,7 @@ def small_dataset():
 # ---------------------------------------------------------------------------
 # Tests
 # ---------------------------------------------------------------------------
+
 
 def test_perfect_score(small_dataset):
     runner = EvalRunner(base_url="http://fake", model="test")

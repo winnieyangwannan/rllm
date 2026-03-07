@@ -2,9 +2,10 @@
 
 from __future__ import annotations
 
+from rllm_model_gateway.models import TraceRecord
+
 from rllm.agents.agent import Step
 from rllm.experimental.rollout import ModelOutput
-from rllm_model_gateway.models import TraceRecord
 
 
 def trace_record_to_step(trace: TraceRecord) -> Step:

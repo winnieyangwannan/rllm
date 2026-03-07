@@ -13,18 +13,17 @@ from rich.panel import Panel
 from rich.prompt import Confirm, Prompt
 from rich.table import Table
 
+from rllm.experimental.cli._ui import (
+    _mask_key,
+    _select_model,
+    _select_provider,
+    console,
+)
 from rllm.experimental.eval.config import (
     PROVIDER_ENV_KEYS,
     RllmConfig,
     load_config,
     save_config,
-)
-
-from rllm.experimental.cli._ui import (
-    console,
-    _mask_key,
-    _select_model,
-    _select_provider,
 )
 
 

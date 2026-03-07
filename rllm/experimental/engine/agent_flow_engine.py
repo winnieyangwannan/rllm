@@ -13,7 +13,7 @@ import resource
 import uuid
 from collections import defaultdict
 from concurrent.futures import ThreadPoolExecutor
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING
 
 from tqdm import tqdm
 
@@ -24,10 +24,11 @@ from rllm.utils import colorful_print
 from rllm.workflows.workflow import TerminationReason
 
 if TYPE_CHECKING:
+    from rllm_model_gateway.models import TraceRecord
+
     from rllm.experimental.engine.gateway_manager import GatewayManager
     from rllm.experimental.eval.types import AgentFlow, Evaluator
     from rllm.utils.episode_logger import EpisodeLogger
-    from rllm_model_gateway.models import TraceRecord
 
 logger = logging.getLogger(__name__)
 
@@ -116,9 +117,7 @@ class AgentFlowEngine:
         for idx, (task, task_id) in enumerate(zip(tasks, task_ids, strict=True)):
             rollout_idx = task_id_counter[task_id]
             task_id_counter[task_id] += 1
-            futures.append(
-                self._process_task_with_retry(task, task_id, rollout_idx, idx, is_validation=is_validation)
-            )
+            futures.append(self._process_task_with_retry(task, task_id, rollout_idx, idx, is_validation=is_validation))
 
         with tqdm(total=len(tasks), desc="Generating trajectories") as pbar:
             for future in asyncio.as_completed(futures):
@@ -183,12 +182,17 @@ class AgentFlowEngine:
                     raise
 
                 # Return an error episode
-                return task_id, rollout_idx, result_idx, Episode(
-                    id=uid,
-                    task=task,
-                    is_correct=False,
-                    termination_reason=TerminationReason.ERROR,
-                    metadata={"error": {"message": str(e)}},
+                return (
+                    task_id,
+                    rollout_idx,
+                    result_idx,
+                    Episode(
+                        id=uid,
+                        task=task,
+                        is_correct=False,
+                        termination_reason=TerminationReason.ERROR,
+                        metadata={"error": {"message": str(e)}},
+                    ),
                 )
 
         # Should not reach here, but satisfy type checker

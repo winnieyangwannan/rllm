@@ -15,7 +15,6 @@ import re
 import click
 from rich.console import Console
 from rich.panel import Panel
-from rich.text import Text
 
 console = Console()
 
@@ -92,7 +91,8 @@ def _write_file(path: str, content: str) -> None:
 @click.command("init")
 @click.argument("project_name", required=False)
 @click.option(
-    "--template", "-t",
+    "--template",
+    "-t",
     type=click.Choice(list(TEMPLATES.keys())),
     help="Agent template to use.",
 )
@@ -144,7 +144,7 @@ def init_cmd(project_name: str | None, template: str | None, evaluator: bool, ou
         agent_instance = module_name + "_agent"
     # TestMathAgent -> TestMathEvaluator (not TestMathEvaluatorEvaluator)
     if agent_class.endswith("Agent"):
-        evaluator_class = agent_class[:-len("Agent")] + "Evaluator"
+        evaluator_class = agent_class[: -len("Agent")] + "Evaluator"
     else:
         evaluator_class = agent_class + "Evaluator"
 
@@ -201,18 +201,17 @@ def init_cmd(project_name: str | None, template: str | None, evaluator: bool, ou
 
     # Print summary
     console.print()
-    console.print(Panel(
-        f"[bold green]Project created:[/bold green] {project_dir}\n\n"
-        f"[bold]Template:[/bold] {tpl_info['label']}\n"
-        f"[bold]Agent:[/bold] {module_name}.agent:{agent_instance}\n"
-        + (f"[bold]Evaluator:[/bold] {module_name}.evaluator:{evaluator_class}\n" if evaluator else ""),
-        title="[bold cyan]rllm init[/bold cyan]",
-        border_style="cyan",
-    ))
+    console.print(
+        Panel(
+            f"[bold green]Project created:[/bold green] {project_dir}\n\n[bold]Template:[/bold] {tpl_info['label']}\n[bold]Agent:[/bold] {module_name}.agent:{agent_instance}\n" + (f"[bold]Evaluator:[/bold] {module_name}.evaluator:{evaluator_class}\n" if evaluator else ""),
+            title="[bold cyan]rllm init[/bold cyan]",
+            border_style="cyan",
+        )
+    )
 
     console.print("[bold]Next steps:[/bold]\n")
     console.print(f"  [cyan]cd {project_name}[/cyan]")
-    console.print(f"  [cyan]pip install -e .[/cyan]")
+    console.print("  [cyan]pip install -e .[/cyan]")
     console.print()
     console.print("  [dim]# Edit your agent logic:[/dim]")
     console.print(f"  [cyan]$EDITOR {module_name}/agent.py[/cyan]")

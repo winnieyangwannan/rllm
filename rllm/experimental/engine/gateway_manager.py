@@ -160,9 +160,13 @@ class GatewayManager:
     def _start_process(self) -> None:
         """Launch gateway as a subprocess and poll until healthy."""
         cmd = [
-            sys.executable, "-m", "rllm_model_gateway",
-            "--host", self.host,
-            "--port", str(self.port),
+            sys.executable,
+            "-m",
+            "rllm_model_gateway",
+            "--host",
+            self.host,
+            "--port",
+            str(self.port),
         ]
         if self.db_path:
             cmd.extend(["--db-path", self.db_path])
@@ -180,7 +184,7 @@ class GatewayManager:
             except Exception:
                 if self._process.poll() is not None:
                     stderr = self._process.stderr.read().decode() if self._process.stderr else ""
-                    raise RuntimeError(f"Gateway process exited unexpectedly: {stderr}")
+                    raise RuntimeError(f"Gateway process exited unexpectedly: {stderr}") from None
                 time.sleep(_HEALTH_POLL_INTERVAL)
 
         self._process.terminate()
@@ -189,7 +193,6 @@ class GatewayManager:
     def _start_thread(self) -> None:
         """Start gateway in a background thread using create_app + uvicorn."""
         import uvicorn
-
         from rllm_model_gateway.models import GatewayConfig
         from rllm_model_gateway.server import create_app
 

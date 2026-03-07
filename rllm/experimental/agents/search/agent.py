@@ -112,21 +112,25 @@ class SearchAgentFlow:
 
                 if not tool_calls or turn >= self.max_turns - 1:
                     # No tool calls or last turn — treat as final answer
-                    steps.append(Step(
-                        input=messages[1].get("content", ""),
-                        output=assistant_content,
-                        done=True,
-                    ))
+                    steps.append(
+                        Step(
+                            input=messages[1].get("content", ""),
+                            output=assistant_content,
+                            done=True,
+                        )
+                    )
                     break
 
                 # Check for excessive parallel tool calls
                 if len(tool_calls) >= 9:
                     excessive_parallel_calls = True
-                    steps.append(Step(
-                        input=messages[1].get("content", ""),
-                        output=assistant_content,
-                        done=True,
-                    ))
+                    steps.append(
+                        Step(
+                            input=messages[1].get("content", ""),
+                            output=assistant_content,
+                            done=True,
+                        )
+                    )
                     break
 
                 # Check for duplicate search calls
@@ -138,11 +142,13 @@ class SearchAgentFlow:
                     executed_search_calls.add(call_key)
 
                 if duplicate_search_detected:
-                    steps.append(Step(
-                        input=messages[1].get("content", ""),
-                        output=assistant_content,
-                        done=True,
-                    ))
+                    steps.append(
+                        Step(
+                            input=messages[1].get("content", ""),
+                            output=assistant_content,
+                            done=True,
+                        )
+                    )
                     break
 
                 # Execute tool calls
@@ -179,20 +185,24 @@ class SearchAgentFlow:
                         tool_error_detected = True
 
                     # Append tool response message
-                    messages.append({
-                        "role": "tool",
-                        "tool_call_id": tc.id,
-                        "content": tool_result,
-                    })
+                    messages.append(
+                        {
+                            "role": "tool",
+                            "tool_call_id": tc.id,
+                            "content": tool_result,
+                        }
+                    )
 
                 per_turn_metrics.append(turn_metrics)
 
                 # Record step for this turn
-                steps.append(Step(
-                    input=query,
-                    output=assistant_content,
-                    done=False,
-                ))
+                steps.append(
+                    Step(
+                        input=query,
+                        output=assistant_content,
+                        done=False,
+                    )
+                )
 
                 if tool_error_detected:
                     break
@@ -236,11 +246,7 @@ class SearchAgentFlow:
             artifacts={
                 "answer": final_answer,
                 "metrics": aggregated_metrics,
-                "conversation": [
-                    {"role": m.get("role", ""), "content": m.get("content", "")}
-                    for m in messages
-                    if m.get("role") in ("assistant", "user", "system")
-                ],
+                "conversation": [{"role": m.get("role", ""), "content": m.get("content", "")} for m in messages if m.get("role") in ("assistant", "user", "system")],
             },
         )
 

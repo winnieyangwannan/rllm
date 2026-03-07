@@ -44,12 +44,10 @@ try:
     from langchain_core.callbacks import BaseCallbackHandler
     from langchain_core.messages import (
         AIMessage,
-        BaseMessage,
         HumanMessage,
         SystemMessage,
         ToolMessage,
     )
-    from langchain_core.outputs import ChatGeneration, LLMResult
 
     _LANGCHAIN_AVAILABLE = True
 except ImportError:
@@ -109,14 +107,16 @@ def _langchain_message_to_openai(msg: Any) -> dict:
                 tool_calls_list = []
                 for call in tc:
                     if isinstance(call, dict):
-                        tool_calls_list.append({
-                            "id": call.get("id", f"call_{uuid.uuid4().hex[:8]}"),
-                            "type": "function",
-                            "function": {
-                                "name": call.get("name", ""),
-                                "arguments": _safe_json(call.get("args", {})),
-                            },
-                        })
+                        tool_calls_list.append(
+                            {
+                                "id": call.get("id", f"call_{uuid.uuid4().hex[:8]}"),
+                                "type": "function",
+                                "function": {
+                                    "name": call.get("name", ""),
+                                    "arguments": _safe_json(call.get("args", {})),
+                                },
+                            }
+                        )
         elif isinstance(msg, ToolMessage):
             role = "tool"
             tool_call_id = getattr(msg, "tool_call_id", None)
@@ -235,10 +235,7 @@ class RLLMTrajectoryCallbackHandler(BaseCallbackHandler):  # type: ignore[misc]
 
     def __init__(self) -> None:
         if not _LANGCHAIN_AVAILABLE:
-            raise ImportError(
-                "LangChain is required for RLLMTrajectoryCallbackHandler. "
-                "Install it with: pip install langchain-core langchain-openai"
-            )
+            raise ImportError("LangChain is required for RLLMTrajectoryCallbackHandler. Install it with: pip install langchain-core langchain-openai")
         super().__init__()
         self._traces: list[Trace] = []
         self._trajectories: list[Trajectory] = []
@@ -357,10 +354,12 @@ class RLLMTrajectoryCallbackHandler(BaseCallbackHandler):  # type: ignore[misc]
         if self._traces:
             last = self._traces[-1]
             tool_name = kwargs.get("name", "unknown")
-            last.metadata.setdefault("tool_executions", []).append({
-                "tool_name": tool_name,
-                "tool_result": str(output)[:500],
-            })
+            last.metadata.setdefault("tool_executions", []).append(
+                {
+                    "tool_name": tool_name,
+                    "tool_result": str(output)[:500],
+                }
+            )
 
     # ---- internal helpers -----------------------------------------------------
 

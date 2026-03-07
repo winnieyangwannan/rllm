@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import os
 from unittest.mock import MagicMock
 
 import pytest
@@ -149,16 +148,19 @@ class TestRegisterAgent:
         register_agent("test_agent", "rllm.experimental.agents.react_agent:ReactAgentFlow")
         agent = load_agent("test_agent")
         from rllm.experimental.agents.react_agent import ReactAgentFlow
+
         assert isinstance(agent, ReactAgentFlow)
 
     def test_register_class(self):
         from rllm.experimental.agents.react_agent import ReactAgentFlow
+
         register_agent("test_agent", ReactAgentFlow)
         agent = load_agent("test_agent")
         assert isinstance(agent, ReactAgentFlow)
 
     def test_register_instance(self):
         from rllm.experimental.agents.react_agent import ReactAgentFlow
+
         register_agent("test_agent", ReactAgentFlow())
         agent = load_agent("test_agent")
         assert isinstance(agent, ReactAgentFlow)
@@ -166,6 +168,7 @@ class TestRegisterAgent:
     def test_persists_to_disk(self, tmp_path):
         register_agent("test_agent", "rllm.experimental.agents.react_agent:ReactAgentFlow")
         import json
+
         data = json.loads((tmp_path / "agents.json").read_text())
         assert "test_agent" in data
         assert data["test_agent"]["import_path"] == "rllm.experimental.agents.react_agent:ReactAgentFlow"

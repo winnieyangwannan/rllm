@@ -2,12 +2,10 @@
 
 from __future__ import annotations
 
-import base64
 import importlib
 import json
 import logging
 import os
-from pathlib import Path
 
 logger = logging.getLogger(__name__)
 
@@ -76,6 +74,7 @@ def _is_pil_image(obj: object) -> bool:
     """Check if an object is a PIL Image without importing PIL at module level."""
     try:
         from PIL import Image
+
         return isinstance(obj, Image.Image)
     except ImportError:
         return False
@@ -96,7 +95,8 @@ def _disable_image_decoding(hf_dataset):
     Returns:
         The same dataset with Image columns cast to ``decode=False``.
     """
-    from datasets import Image as HFImage, Sequence
+    from datasets import Image as HFImage
+    from datasets import Sequence
 
     for col_name, feature in hf_dataset.features.items():
         if isinstance(feature, HFImage):
@@ -394,10 +394,7 @@ def pull_dataset(name: str, catalog_entry: dict) -> None:
             # Provide a clearer message for gated datasets
             err_str = str(e)
             if "gated dataset" in err_str.lower() or "must be authenticated" in err_str.lower():
-                logger.warning(
-                    f"  Failed to pull {name}/{split}: This is a gated dataset. "
-                    f"Set the HF_TOKEN environment variable or run 'huggingface-cli login' to authenticate."
-                )
+                logger.warning(f"  Failed to pull {name}/{split}: This is a gated dataset. Set the HF_TOKEN environment variable or run 'huggingface-cli login' to authenticate.")
             else:
                 logger.warning(f"  Failed to pull {name}/{split}: {e}")
             raise

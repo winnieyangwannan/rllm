@@ -14,14 +14,16 @@ from rllm.experimental.eval.config import (
     RllmConfig,
 )
 
-theme = Theme({
-    "option": "cyan",
-    "option.selected": "bold cyan",
-    "label": "dim",
-    "success": "bold green",
-    "error": "bold red",
-    "key": "yellow",
-})
+theme = Theme(
+    {
+        "option": "cyan",
+        "option.selected": "bold cyan",
+        "label": "dim",
+        "success": "bold green",
+        "error": "bold red",
+        "key": "yellow",
+    }
+)
 console = Console(theme=theme)
 
 
@@ -47,6 +49,7 @@ def _get_terminal_menu():
     """Lazy-import TerminalMenu. Returns the class or None if unavailable."""
     try:
         from simple_term_menu import TerminalMenu
+
         return TerminalMenu
     except ImportError:
         return None

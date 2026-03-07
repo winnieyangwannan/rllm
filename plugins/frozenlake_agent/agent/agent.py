@@ -7,7 +7,7 @@ import re
 
 import openai
 
-from rllm.experimental.eval.types import AgentConfig, AgentFlow
+from rllm.experimental.eval.types import AgentConfig
 from rllm.types import Episode, Step, Trajectory
 
 from .env import ACTION_INVALID, FrozenLakeEnv
@@ -85,19 +85,9 @@ class FrozenLakeAgentFlow:
         num_steps = 0
 
         for turn in range(max_steps):
-            user_content = (
-                f"Current Observation ({turn}):\n{obs}\n"
-                "You have not achieved the goal, P has not reached G yet. "
-                "Please give the next action."
-            )
+            user_content = f"Current Observation ({turn}):\n{obs}\nYou have not achieved the goal, P has not reached G yet. Please give the next action."
             if turn > 0 and steps and not steps[-1].metadata.get("action_is_effective", True):
-                user_content += (
-                    "\nYour last response is invalid. Your position didn't change at all. "
-                    "You may need to recheck your thinking process, action outputted, and "
-                    "the format of response. Remember, you should only output the NEXT "
-                    "ACTION at each interation in the ``` ```. "
-                    "For example, if you want to move up, you should output ```Up```."
-                )
+                user_content += "\nYour last response is invalid. Your position didn't change at all. You may need to recheck your thinking process, action outputted, and the format of response. Remember, you should only output the NEXT ACTION at each interation in the ``` ```. For example, if you want to move up, you should output ```Up```."
             remaining = max_steps - turn
             user_content += f"\nThe maximum number of steps remaining is {remaining}."
 
@@ -115,14 +105,16 @@ class FrozenLakeAgentFlow:
             obs, reward, done, info = env.step(action)
             num_steps += 1
 
-            steps.append(Step(
-                input=user_content,
-                output=assistant_text,
-                action=action,
-                reward=reward,
-                done=done,
-                metadata=info,
-            ))
+            steps.append(
+                Step(
+                    input=user_content,
+                    output=assistant_text,
+                    action=action,
+                    reward=reward,
+                    done=done,
+                    metadata=info,
+                )
+            )
 
             if done:
                 break

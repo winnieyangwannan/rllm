@@ -5,7 +5,7 @@ from unittest.mock import MagicMock, patch
 import pytest
 
 from rllm.experimental.eval.types import AgentConfig, Task
-from rllm.types import Episode, Step, Trajectory
+from rllm.types import Episode
 
 
 def _mock_openai_response(content: str, tool_calls=None):
@@ -46,9 +46,7 @@ class TestReactAgentFlow:
 
         with patch("rllm.experimental.agents.react_agent.OpenAI") as MockOpenAI:
             mock_client = MagicMock()
-            mock_client.chat.completions.create.return_value = _mock_openai_response(
-                "The answer is \\boxed{4}"
-            )
+            mock_client.chat.completions.create.return_value = _mock_openai_response("The answer is \\boxed{4}")
             MockOpenAI.return_value = mock_client
 
             result = react_agent.run(task, base_config)
@@ -96,9 +94,7 @@ class TestReactAgentFlow:
 
         with patch("rllm.experimental.agents.react_agent.OpenAI") as MockOpenAI:
             mock_client = MagicMock()
-            mock_client.chat.completions.create.return_value = _mock_openai_response(
-                "The answer is \\boxed{4}"
-            )
+            mock_client.chat.completions.create.return_value = _mock_openai_response("The answer is \\boxed{4}")
             MockOpenAI.return_value = mock_client
 
             result = react_agent.run(task, base_config)
@@ -221,7 +217,7 @@ class TestReactAgentFlow:
 
         # Every response has a tool call — never gives a final answer
         def always_tool_call(*a, **kw):
-            tc = _mock_tool_call("tc", "search", '{}')
+            tc = _mock_tool_call("tc", "search", "{}")
             return _mock_openai_response("Searching...", tool_calls=[tc])
 
         agent = ReactAgentFlow(max_turns=3)
@@ -276,7 +272,7 @@ class TestReactAgentFlow:
         )
 
         task = Task(data={"question": "Use the tool."})
-        tc = _mock_tool_call("tc_1", "broken", '{}')
+        tc = _mock_tool_call("tc_1", "broken", "{}")
         resp1 = _mock_openai_response("Calling tool.", tool_calls=[tc])
         resp2 = _mock_openai_response("Tool failed, here's my answer.")
 

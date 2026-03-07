@@ -97,6 +97,7 @@ class EvalProxyManager(ProxyManager):
         env = os.environ.copy()
         try:
             import certifi
+
             ca_path = certifi.where()
             env["SSL_CERT_FILE"] = ca_path
             env["REQUESTS_CA_BUNDLE"] = ca_path
@@ -112,9 +113,7 @@ class EvalProxyManager(ProxyManager):
                 pass
 
         # Capture stderr to a temp file so we can show errors on failure
-        stderr_file = tempfile.NamedTemporaryFile(
-            mode="w", prefix="rllm_proxy_", suffix=".log", delete=False
-        )
+        stderr_file = tempfile.NamedTemporaryFile(mode="w", prefix="rllm_proxy_", suffix=".log", delete=False)
         self._stderr_path = stderr_file.name
 
         logger.info("Starting proxy subprocess: %s", " ".join(cmd))

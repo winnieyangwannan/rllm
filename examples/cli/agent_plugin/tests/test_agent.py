@@ -6,6 +6,7 @@ from unittest.mock import MagicMock, patch
 
 from concierge_agent.agent import ConciergeAgent
 from concierge_agent.evaluator import RelevanceEvaluator
+
 from rllm.experimental.eval.types import AgentConfig
 
 
@@ -26,9 +27,7 @@ class TestConciergeAgent:
     @patch("concierge_agent.agent.OpenAI")
     def test_returns_episode(self, mock_openai_cls):
         mock_client = MagicMock()
-        mock_client.chat.completions.create.return_value = _mock_completion(
-            "I recommend Sakura — a great Japanese sushi restaurant."
-        )
+        mock_client.chat.completions.create.return_value = _mock_completion("I recommend Sakura — a great Japanese sushi restaurant.")
         mock_openai_cls.return_value = mock_client
 
         agent = ConciergeAgent()
@@ -57,9 +56,7 @@ class TestRelevanceEvaluator:
     @patch("concierge_agent.agent.OpenAI")
     def test_correct_cuisine(self, mock_openai_cls):
         mock_client = MagicMock()
-        mock_client.chat.completions.create.return_value = _mock_completion(
-            "Try Sakura for authentic Japanese cuisine."
-        )
+        mock_client.chat.completions.create.return_value = _mock_completion("Try Sakura for authentic Japanese cuisine.")
         mock_openai_cls.return_value = mock_client
 
         agent = ConciergeAgent()
@@ -75,9 +72,7 @@ class TestRelevanceEvaluator:
     @patch("concierge_agent.agent.OpenAI")
     def test_wrong_cuisine(self, mock_openai_cls):
         mock_client = MagicMock()
-        mock_client.chat.completions.create.return_value = _mock_completion(
-            "Try the burger at Joe's Diner."
-        )
+        mock_client.chat.completions.create.return_value = _mock_completion("Try the burger at Joe's Diner.")
         mock_openai_cls.return_value = mock_client
 
         agent = ConciergeAgent()

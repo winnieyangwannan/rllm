@@ -5,8 +5,8 @@ from copy import deepcopy
 
 try:
     import torch
-except ImportError:
-    raise ImportError("ChatTemplateParser requires extra dependencies. Install with: pip install rllm[train]")
+except ImportError as err:
+    raise ImportError("ChatTemplateParser requires extra dependencies. Install with: pip install rllm[train]") from err
 
 from rllm.tools.tool_base import Tool, ToolCall, ToolOutput
 

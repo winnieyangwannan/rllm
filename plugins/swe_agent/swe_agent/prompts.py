@@ -78,11 +78,7 @@ BASH_TOOL = {
     "type": "function",
     "function": {
         "name": "bash",
-        "description": (
-            "Execute a bash command in the sandbox environment. "
-            "The working directory is /testbed (the repository root). "
-            "Use this to explore code, edit files, run tests, and submit."
-        ),
+        "description": ("Execute a bash command in the sandbox environment. The working directory is /testbed (the repository root). Use this to explore code, edit files, run tests, and submit."),
         "parameters": {
             "type": "object",
             "properties": {

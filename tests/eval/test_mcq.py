@@ -2,15 +2,11 @@
 
 from __future__ import annotations
 
-import pytest
-
 from rllm.experimental.eval.types import (
     Evaluator,
     MCQEvaluator,
-    Signal,
 )
 from rllm.types import Episode
-
 
 # ---------------------------------------------------------------------------
 # MCQEvaluator

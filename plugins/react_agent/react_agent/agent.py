@@ -17,8 +17,8 @@ from agents import Agent, Runner
 from agents.extensions.models.litellm_model import LitellmModel
 from agents.run import RunConfig
 
-from rllm.sdk.integrations.openai_agents import RLLMTrajectoryHooks
 from rllm.experimental.eval.types import AgentConfig
+from rllm.sdk.integrations.openai_agents import RLLMTrajectoryHooks
 from rllm.types import Episode
 
 
@@ -51,21 +51,24 @@ def _to_agent_input(rendered: str | list[dict]) -> str | list[dict[str, Any]]:
             url = block.get("image_url", {})
             if isinstance(url, dict):
                 url = url.get("url", "")
-            content.append({
-                "type": "input_image",
-                "image_url": url,
-                "detail": "auto",
-            })
+            content.append(
+                {
+                    "type": "input_image",
+                    "image_url": url,
+                    "detail": "auto",
+                }
+            )
         elif block.get("type") == "text":
-            content.append({
-                "type": "input_text",
-                "text": block.get("text", ""),
-            })
+            content.append(
+                {
+                    "type": "input_text",
+                    "text": block.get("text", ""),
+                }
+            )
 
     if not content:
         # Fallback: extract text parts
-        text_parts = [b.get("text", "") for b in rendered
-                      if isinstance(b, dict) and b.get("type") == "text"]
+        text_parts = [b.get("text", "") for b in rendered if isinstance(b, dict) and b.get("type") == "text"]
         return "\n".join(text_parts) if text_parts else str(rendered)
 
     return [{"role": "user", "content": content}]

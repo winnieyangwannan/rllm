@@ -3,15 +3,11 @@
 from __future__ import annotations
 
 import json
-from unittest.mock import MagicMock, patch
-
-import pytest
 
 from rllm.experimental.eval.bfcl_evaluator import BFCLEvaluator, _compare_function_calls
 from rllm.experimental.eval.llm_judge_evaluator import LLMJudgeEvaluator
-from rllm.experimental.eval.types import AgentConfig, Evaluator
+from rllm.experimental.eval.types import Evaluator
 from rllm.types import Episode
-
 
 # ---------------------------------------------------------------------------
 # BFCLEvaluator
@@ -24,10 +20,12 @@ class TestBFCLEvaluator:
         task = {
             "ground_truth": [json.dumps({"name": "get_weather", "arguments": {"city": "Paris"}})],
         }
-        ep = Episode(artifacts={
-            "answer": "",
-            "tool_calls": [{"name": "get_weather", "arguments": '{"city": "Paris"}'}],
-        })
+        ep = Episode(
+            artifacts={
+                "answer": "",
+                "tool_calls": [{"name": "get_weather", "arguments": '{"city": "Paris"}'}],
+            }
+        )
         result = evaluator.evaluate(task, ep)
         assert result.is_correct is True
         assert result.reward == 1.0
@@ -37,10 +35,12 @@ class TestBFCLEvaluator:
         task = {
             "ground_truth": [json.dumps({"name": "get_weather", "arguments": {"city": "Paris"}})],
         }
-        ep = Episode(artifacts={
-            "answer": "",
-            "tool_calls": [{"name": "get_time", "arguments": '{"city": "Paris"}'}],
-        })
+        ep = Episode(
+            artifacts={
+                "answer": "",
+                "tool_calls": [{"name": "get_time", "arguments": '{"city": "Paris"}'}],
+            }
+        )
         result = evaluator.evaluate(task, ep)
         assert result.is_correct is False
 

@@ -6,8 +6,8 @@ from contextlib import contextmanager
 
 try:
     from codetiming import Timer
-except ImportError:
-    raise ImportError("Performance timing requires extra dependencies. Install with: pip install rllm[train]")
+except ImportError as err:
+    raise ImportError("Performance timing requires extra dependencies. Install with: pip install rllm[train]") from err
 
 
 def _timer(name: str, timing_raw: dict[str, float]):

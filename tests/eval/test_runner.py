@@ -15,6 +15,7 @@ from rllm.types import Episode, Step, Trajectory
 
 class _PerfectAgent:
     """Agent that always returns a trajectory."""
+
     def run(self, task: Task, config: AgentConfig) -> Episode:
         data = task.data if isinstance(task, Task) else task
         step = Step(input=data.get("question", ""), output="correct", reward=1.0, done=True)
@@ -23,6 +24,7 @@ class _PerfectAgent:
 
 class _ErrorAgent:
     """Agent that always raises an exception."""
+
     def run(self, task: Task, config: AgentConfig) -> Episode:
         raise RuntimeError("Simulated failure")
 
@@ -99,6 +101,7 @@ def test_result_save(tmp_path):
     assert (tmp_path / "results.json").exists()
 
     import json
+
     with open(path) as f:
         data = json.load(f)
     assert data["score"] == 1.0

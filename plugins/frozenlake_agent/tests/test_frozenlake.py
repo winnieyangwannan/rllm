@@ -4,14 +4,12 @@ from __future__ import annotations
 
 from unittest.mock import MagicMock, patch
 
-import pytest
-
 from agent.agent import FrozenLakeAgentFlow, _parse_action
 from agent.env import FrozenLakeEnv, generate_random_map
 from eval.evaluator import FrozenLakeEvaluator
-from rllm.experimental.eval.types import AgentConfig
-from rllm.types import Episode, Trajectory
 
+from rllm.experimental.eval.types import AgentConfig
+from rllm.types import Episode
 
 # ---------------------------------------------------------------------------
 # Environment tests
@@ -64,7 +62,6 @@ class TestFrozenLakeEnv:
     def test_step_moves_player(self):
         env = FrozenLakeEnv(size=4, p=0.8, seed=42)
         env.reset()
-        pos_before = env._player
         # Try all 4 directions; at least one should move
         moved = False
         for action in [1, 2, 3, 4]:

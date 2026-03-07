@@ -137,13 +137,10 @@ class StrandsAgentFlow:
                     if cb is not None:
                         content_blocks.append(cb)
             prompt = content_blocks if content_blocks else str(user_content)
-            user_content_str = text_for_input or str(user_content)
         elif isinstance(user_content, str):
             prompt = user_content
-            user_content_str = user_content
         else:
             prompt = str(user_content)
-            user_content_str = prompt
 
         # Create model routed through the eval proxy
         model = OpenAIModel(

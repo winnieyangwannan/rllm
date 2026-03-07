@@ -52,9 +52,7 @@ def _truncate_output(output: str) -> str:
     total = len(output)
     head = output[:OUTPUT_HEAD]
     tail = output[-OUTPUT_TAIL:]
-    return (
-        f"{head}\n\n... [{total - OUTPUT_HEAD - OUTPUT_TAIL} characters truncated] ...\n\n{tail}"
-    )
+    return f"{head}\n\n... [{total - OUTPUT_HEAD - OUTPUT_TAIL} characters truncated] ...\n\n{tail}"
 
 
 def _execute_tool(sandbox: Sandbox, command: str) -> str:
@@ -65,11 +63,7 @@ def _execute_tool(sandbox: Sandbox, command: str) -> str:
     2. Set non-interactive env vars (PAGER=cat, etc.)
     3. Run from /testbed
     """
-    wrapped = (
-        "source /opt/miniconda3/etc/profile.d/conda.sh && conda activate testbed && "
-        "export PAGER=cat GIT_PAGER=cat TERM=dumb NO_COLOR=1 PIP_PROGRESS_BAR=off && "
-        f"cd /testbed && {command}"
-    )
+    wrapped = f"source /opt/miniconda3/etc/profile.d/conda.sh && conda activate testbed && export PAGER=cat GIT_PAGER=cat TERM=dumb NO_COLOR=1 PIP_PROGRESS_BAR=off && cd /testbed && {command}"
     output = _safe_exec(sandbox, wrapped, timeout=120)
     return _truncate_output(output)
 
@@ -95,7 +89,6 @@ def _run_agent_loop(
     steps: list[Step] = []
     format_errors = 0
     max_format_errors = 3
-    patch: str | None = None
 
     for turn in range(max_turns):
         try:
@@ -242,8 +235,16 @@ def _build_modal_image(task: dict):
         .run_commands("apt update")
         .env({"DEBIAN_FRONTEND": "noninteractive", "TZ": "Etc/UTC"})
         .apt_install(
-            "wget", "git", "build-essential", "libffi-dev", "libtiff-dev",
-            "jq", "curl", "locales", "locales-all", "tzdata",
+            "wget",
+            "git",
+            "build-essential",
+            "libffi-dev",
+            "libtiff-dev",
+            "jq",
+            "curl",
+            "locales",
+            "locales-all",
+            "tzdata",
         )
         .run_commands(
             # Install Miniconda3
@@ -304,9 +305,7 @@ class SWEAgentFlow(SandboxedAgentFlow):
         else:
             # Docker: build local swebench instance image
             image = _ensure_docker_image(task)
-            self._sandbox = create_sandbox(
-                self.sandbox_backend, name=name, image=image
-            )
+            self._sandbox = create_sandbox(self.sandbox_backend, name=name, image=image)
 
         self.on_sandbox_ready(task, config)
 

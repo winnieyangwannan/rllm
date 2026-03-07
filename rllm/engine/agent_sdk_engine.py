@@ -14,8 +14,8 @@ from tqdm import tqdm
 try:
     import numpy as np
     import torch
-except ImportError:
-    raise ImportError("AgentSdkEngine requires extra dependencies. Install with: pip install rllm[train]")
+except ImportError as err:
+    raise ImportError("AgentSdkEngine requires extra dependencies. Install with: pip install rllm[train]") from err
 
 from rllm.agents.agent import Episode, Trajectory
 from rllm.engine.rollout import ModelOutput, RolloutEngine

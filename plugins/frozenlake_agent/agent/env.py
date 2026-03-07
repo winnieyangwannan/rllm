@@ -6,14 +6,12 @@ rllm/environments/frozenlake/frozenlake.py using only numpy.
 
 from __future__ import annotations
 
-import copy
-
 import numpy as np
-
 
 # ---------------------------------------------------------------------------
 # Map generation
 # ---------------------------------------------------------------------------
+
 
 def _is_valid(board: list[list[str]], max_steps: int) -> bool:
     """DFS check that a path from S to G exists within max_steps."""
@@ -40,9 +38,7 @@ def _is_valid(board: list[list[str]], max_steps: int) -> bool:
     return False
 
 
-def generate_random_map(
-    size: int = 8, p: float = 0.8, seed: int = 0, max_steps: int = 5
-) -> tuple[list[str], tuple[int, int]]:
+def generate_random_map(size: int = 8, p: float = 0.8, seed: int = 0, max_steps: int = 5) -> tuple[list[str], tuple[int, int]]:
     """Generate a random valid FrozenLake map.
 
     Args:
@@ -137,9 +133,7 @@ class FrozenLakeEnv:
 
     def reset(self) -> str:
         """Reset environment and return initial observation."""
-        self._map, self._goal = generate_random_map(
-            size=self.size, p=self.p, seed=self.seed, max_steps=self.max_steps
-        )
+        self._map, self._goal = generate_random_map(size=self.size, p=self.p, seed=self.seed, max_steps=self.max_steps)
         # Find start position
         for r, row in enumerate(self._map):
             for c, ch in enumerate(row):

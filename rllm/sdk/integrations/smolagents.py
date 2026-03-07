@@ -37,7 +37,7 @@ from rllm.sdk.protocol import (
 )
 
 try:
-    from smolagents import ChatMessage
+    import smolagents  # noqa: F401
 
     _SMOLAGENTS_AVAILABLE = True
 except ImportError:
@@ -200,14 +200,16 @@ def _smolagents_response_to_openai(output: Any) -> dict:
                     func_args = getattr(tc, "arguments", "")
                 if not isinstance(func_args, str):
                     func_args = _safe_json(func_args)
-                oai_tool_calls.append({
-                    "id": tc_id,
-                    "type": "function",
-                    "function": {
-                        "name": func_name,
-                        "arguments": func_args,
-                    },
-                })
+                oai_tool_calls.append(
+                    {
+                        "id": tc_id,
+                        "type": "function",
+                        "function": {
+                            "name": func_name,
+                            "arguments": func_args,
+                        },
+                    }
+                )
         msg["tool_calls"] = oai_tool_calls
 
     return msg

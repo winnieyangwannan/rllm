@@ -61,10 +61,7 @@ def _extract_final_answer(messages: list) -> str:
             if isinstance(content, str) and content:
                 return content
             if isinstance(content, list):
-                text_parts = [
-                    b.get("text", "") for b in content
-                    if isinstance(b, dict) and b.get("type") == "text"
-                ]
+                text_parts = [b.get("text", "") for b in content if isinstance(b, dict) and b.get("type") == "text"]
                 if text_parts:
                     return "\n".join(text_parts)
     return ""
@@ -156,9 +153,7 @@ class LangGraphAgentFlow:
                         result = tool.invoke(tc["args"])
                     else:
                         result = f"Tool '{tc['name']}' not found."
-                    tool_messages.append(
-                        ToolMessage(content=str(result), tool_call_id=tc["id"])
-                    )
+                    tool_messages.append(ToolMessage(content=str(result), tool_call_id=tc["id"]))
                 return {"messages": tool_messages}
 
             graph.add_node("tools", tools_node)
