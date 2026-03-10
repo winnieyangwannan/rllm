@@ -1,3 +1,4 @@
+import importlib
 import sys
 import types
 
@@ -94,7 +95,12 @@ _STUB_MODULES = [
 ]
 
 for _name in _STUB_MODULES:
-    if _name not in sys.modules:
+    if _name in sys.modules:
+        continue
+    try:
+        importlib.import_module(_name)
+        continue
+    except Exception:
         sys.modules[_name] = types.ModuleType(_name)
 
 # Provide minimal attributes expected by some modules during import
