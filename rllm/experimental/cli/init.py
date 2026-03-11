@@ -23,35 +23,10 @@ _TEMPLATE_DIR = os.path.join(os.path.dirname(__file__), "templates")
 
 # Available agent templates
 TEMPLATES = {
-    "minimal": {
-        "file": "minimal_agent.py.tpl",
-        "label": "Minimal single-turn agent (OpenAI SDK)",
-        "extra_deps": "",
-    },
     "react": {
         "file": "react_agent.py.tpl",
         "label": "Multi-turn ReAct agent with tool use",
         "extra_deps": "",
-    },
-    "langchain": {
-        "file": "langchain_agent.py.tpl",
-        "label": "LangChain / LangGraph agent",
-        "extra_deps": '    "langchain-openai",\n    "langgraph",\n',
-    },
-    "openai-agents": {
-        "file": "openai_agents_agent.py.tpl",
-        "label": "OpenAI Agents SDK",
-        "extra_deps": '    "openai-agents",\n',
-    },
-    "crewai": {
-        "file": "crewai_agent.py.tpl",
-        "label": "CrewAI agent",
-        "extra_deps": '    "crewai",\n',
-    },
-    "google-adk": {
-        "file": "google_adk_agent.py.tpl",
-        "label": "Google ADK agent",
-        "extra_deps": '    "google-adk",\n',
     },
 }
 
@@ -121,13 +96,8 @@ def init_cmd(project_name: str | None, template: str | None, evaluator: bool, ou
         project_name = click.prompt("Project name", default="my-agent")
 
     if not template:
-        console.print("[bold]Choose an agent template:[/bold]\n")
-        choices = list(TEMPLATES.items())
-        for i, (key, info) in enumerate(choices, 1):
-            console.print(f"  [cyan]{i}[/cyan]) {info['label']}  [dim]({key})[/dim]")
-        console.print()
-        idx = click.prompt("Template", type=click.IntRange(1, len(choices)), default=1)
-        template = choices[idx - 1][0]
+        # Default to the only available template
+        template = list(TEMPLATES.keys())[0]
 
     # Only prompt if running interactively (template was also prompted)
     if not evaluator and was_interactive:
