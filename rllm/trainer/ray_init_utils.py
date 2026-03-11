@@ -50,7 +50,7 @@ def get_ray_init_settings(config: Any | None = None) -> dict[str, Any]:
     settings: dict[str, Any] = {}
 
     if config is not None and hasattr(config, "ray_init"):
-        for k, v in getattr(config, "ray_init").items():
+        for k, v in config.ray_init.items():
             if v is not None:
                 settings[k] = v
 
