@@ -228,7 +228,6 @@ def eval_cmd(benchmark: str, agent_name: str | None, evaluator_name: str | None,
     else:
         # Proxy mode: auto-start LiteLLM proxy from config
         from rllm.experimental.eval.config import load_config
-        from rllm.experimental.eval.proxy import EvalProxyManager
 
         config = load_config()
         if not config.is_configured():
@@ -241,21 +240,32 @@ def eval_cmd(benchmark: str, agent_name: str | None, evaluator_name: str | None,
         if model is None:
             model = config.model
 
-        proxy_manager = EvalProxyManager(
-            provider=config.provider,
-            model_name=model,
-            api_key=config.api_key,
-        )
-        with Status(f"[dim]Starting LiteLLM proxy for [bold]{config.provider}/{model}[/bold]...[/]", console=console):
-            try:
-                proxy_manager.start_proxy_subprocess(proxy_manager.build_proxy_config())
-            except (RuntimeError, TimeoutError) as e:
-                console.print(f"\n  [error]Failed to start LiteLLM proxy.[/]\n\n  {e}")
-                console.print("\n  [dim]Make sure litellm is installed:[/] [bold]pip install litellm\\[proxy][/]")
-                console.print()
-                raise SystemExit(1) from None
-        base_url = proxy_manager.get_proxy_url()
-        console.print(f"  [success]Proxy ready[/] at [dim]{base_url}[/]")
+        if config.provider == "custom":
+            # Custom provider: skip LiteLLM proxy, use base_url directly
+            import os as _os
+
+            base_url = config.base_url
+            if config.api_key:
+                _os.environ.setdefault("OPENAI_API_KEY", config.api_key)
+            console.print(f"  [success]Using custom endpoint[/] at [dim]{base_url}[/]")
+        else:
+            from rllm.experimental.eval.proxy import EvalProxyManager
+
+            proxy_manager = EvalProxyManager(
+                provider=config.provider,
+                model_name=model,
+                api_key=config.api_key,
+            )
+            with Status(f"[dim]Starting LiteLLM proxy for [bold]{config.provider}/{model}[/bold]...[/]", console=console):
+                try:
+                    proxy_manager.start_proxy_subprocess(proxy_manager.build_proxy_config())
+                except (RuntimeError, TimeoutError) as e:
+                    console.print(f"\n  [error]Failed to start LiteLLM proxy.[/]\n\n  {e}")
+                    console.print("\n  [dim]Make sure litellm is installed:[/] [bold]pip install litellm\\[proxy][/]")
+                    console.print()
+                    raise SystemExit(1) from None
+            base_url = proxy_manager.get_proxy_url()
+            console.print(f"  [success]Proxy ready[/] at [dim]{base_url}[/]")
 
     # Build agent metadata from CLI options
     agent_metadata = {}
