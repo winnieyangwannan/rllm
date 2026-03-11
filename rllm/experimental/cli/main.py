@@ -7,17 +7,13 @@ from __future__ import annotations
 
 import click
 from rich import box
+from rich.align import Align
 from rich.console import Console
+from rich.panel import Panel
 from rich.table import Table
 from rich.text import Text
 
-_BANNER = r"""
-       _     _     __  __
-  _ __| |   | |   |  \/  |
- | '__| |   | |   | |\/| |
- | |  | |__ | |__ | |  | |
- |_|  |____||____||_|  |_|
-"""
+_BANNER = "        [bold #00CCFF]██╗     [/][bold #00C4FF]██╗     [/][bold #00BBFF]███╗   ███╗[/]\n        [bold #00CCFF]██║     [/][bold #00C4FF]██║     [/][bold #00BBFF]████╗ ████║[/]\n[bold #00AAFF]██████╗ [/][bold #009FFF]██║     [/][bold #0094FF]██║     [/][bold #0088FF]██╔████╔██║[/]\n[bold #00AAFF]██╔═══╝ [/][bold #009FFF]██║     [/][bold #0094FF]██║     [/][bold #0088FF]██║╚██╔╝██║[/]\n[bold #0077FF]██║     [/][bold #006AFF]███████╗[/][bold #005DFF]███████╗[/][bold #0050FF]██║ ╚═╝ ██║[/]\n[bold #0077FF]╚═╝     [/][bold #006AFF]╚══════╝[/][bold #005DFF]╚══════╝[/][bold #0050FF]╚═╝     ╚═╝[/]"
 
 _COMMAND_ICONS = {
     "agent": "🤖",
@@ -77,31 +73,44 @@ class _LazyGroup(click.Group):
         except Exception:
             ver = "dev"
 
-        # Banner
-        banner_text = Text(_BANNER, style="bold cyan")
-        console.print(banner_text, highlight=False)
-
-        # Tagline + version
-        tagline = Text()
-        tagline.append("  Reinforcement Learning for Language Agents", style="dim")
-        tagline.append(f"  v{ver}", style="bold green")
-        console.print(tagline)
         console.print()
 
+        # Banner with logo inside a styled panel
+        from rich.console import Group
+
+        logo = Text.from_markup(_BANNER)
+        tagline = Text(
+            "Reinforcement Learning for Language Agents",
+            style="dim #88BBFF",
+            justify="center",
+        )
+
+        panel = Panel(
+            Group(Align.center(logo), Text(), tagline),
+            title=f"[bold #00D4FF]rLLM[/] [dim]v{ver}[/]",
+            border_style="#0077FF",
+            padding=(1, 2),
+            expand=False,
+        )
+        console.print(panel)
+
         # Usage
-        console.print(Text("  Usage: ", style="bold") + Text("rllm ", style="bold cyan") + Text("[command] [options]", style="dim"))
+        console.print(Text("  Usage: ", style="bold") + Text("rllm ", style="bold #00D4FF") + Text("<command> ", style="#00AAFF") + Text("[options]", style="dim"))
         console.print()
 
         # Commands table
         table = Table(
-            box=box.SIMPLE_HEAVY,
+            box=box.ROUNDED,
             show_header=True,
-            header_style="bold",
+            header_style="bold #00D4FF",
             padding=(0, 2),
             expand=False,
+            border_style="dim #0077FF",
+            title="[bold]Commands[/]",
+            title_style="bold",
         )
-        table.add_column("Command", style="bold cyan", min_width=12)
-        table.add_column("Description", style="dim")
+        table.add_column("Command", style="bold #00CCFF", min_width=14)
+        table.add_column("Description", style="#88BBFF")
 
         for name in self.list_commands(ctx):
             spec = self._COMMANDS.get(name)
@@ -116,10 +125,10 @@ class _LazyGroup(click.Group):
 
         # Footer hints
         console.print(Text("  Options:", style="bold"))
-        console.print(Text("    --version  ", style="cyan") + Text("Show the version and exit.", style="dim"))
-        console.print(Text("    --help     ", style="cyan") + Text("Show this message and exit.", style="dim"))
+        console.print(Text("    --version  ", style="#00AAFF") + Text("Show the version and exit.", style="dim"))
+        console.print(Text("    --help     ", style="#00AAFF") + Text("Show this message and exit.", style="dim"))
         console.print()
-        console.print(Text("  Run ", style="dim") + Text("rllm <command> --help", style="bold cyan") + Text(" for more information on a command.", style="dim"))
+        console.print(Text("  Run ", style="dim") + Text("rllm <command> --help", style="bold #00D4FF") + Text(" for more information on a command.", style="dim"))
         console.print()
 
     def format_commands(self, ctx, formatter):
