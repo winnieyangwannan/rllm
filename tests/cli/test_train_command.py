@@ -437,8 +437,9 @@ class TestTrainCommand:
         call_kwargs = mock_at_cls.call_args[1]
         assert call_kwargs["config"].rllm.trainer.experiment_name == "test_math"
 
-    def test_train_default_no_ui_logger(self, runner, tmp_rllm_home, mock_train_dataset):
-        """By default, 'ui' should NOT be in the logger list."""
+    def test_train_default_no_ui_logger(self, runner, tmp_rllm_home, mock_train_dataset, monkeypatch):
+        """When not logged in, 'ui' should NOT be in the logger list by default."""
+        monkeypatch.delenv("RLLM_API_KEY", raising=False)
         catalog = {"datasets": {"test_math": {"default_agent": "math", "reward_fn": "math_reward_fn", "eval_split": "test"}}}
         mock_agent = _MockAgentFlow()
         mock_evaluator = _MockEvaluator()

@@ -349,7 +349,7 @@ def _load_or_pull_dataset(name: str, split: str, catalog: dict):
 @click.option("--output", "output_dir", default=None, help="Checkpoint directory.")
 @click.option("--config", "config_file", default=None, type=click.Path(exists=True), help="YAML config file merged on top of base templates. CLI flags override it.")
 # UI logging options
-@click.option("--ui", "enable_ui", is_flag=True, default=False, help="Enable live UI logging (uses RLLM_UI_URL or defaults to ui.rllm-project.com).")
+@click.option("--ui/--no-ui", "enable_ui", default=None, help="Enable/disable live UI logging. Default: auto-enabled when logged in (see 'rllm login').")
 def train_cmd(
     benchmark: str,
     train_dataset: str | None,
@@ -372,9 +372,16 @@ def train_cmd(
     experiment: str | None,
     output_dir: str | None,
     config_file: str | None,
-    enable_ui: bool,
+    enable_ui: bool | None,
 ):
     """Train a model on a benchmark dataset using RL."""
+    # Auto-detect UI logging: enable if user is logged in (has ui_api_key or RLLM_API_KEY)
+    if enable_ui is None:
+        from rllm.experimental.eval.config import load_ui_config
+
+        ui_config = load_ui_config()
+        enable_ui = bool(os.environ.get("RLLM_API_KEY") or ui_config.get("ui_api_key"))
+
     if experiment is None:
         experiment = benchmark
 

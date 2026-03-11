@@ -215,9 +215,18 @@ def _run_eval(benchmark: str, agent_name: str, evaluator_name: str | None, base_
 @click.option("--search-backend", "search_backend", default=None, type=click.Choice(["serper", "brave"], case_sensitive=False), help="Search backend for the search agent (auto-detected from API keys if omitted).")
 @click.option("--sandbox-backend", "sandbox_backend", default=None, type=click.Choice(["docker", "local", "modal"], case_sensitive=False), help="Sandbox backend for sandboxed agents (auto-detected from agent if omitted).")
 @click.option("--sandbox-concurrency", "sandbox_concurrency", default=None, type=int, help="Override max concurrent sandboxes (default: agent's max_concurrent).")
-@click.option("--ui", "enable_ui", is_flag=True, default=False, help="Enable live UI logging (uses RLLM_UI_URL or defaults to ui.rllm-project.com).")
-def eval_cmd(benchmark: str, agent_name: str | None, evaluator_name: str | None, base_url: str | None, model: str | None, split: str | None, concurrency: int, max_examples: int | None, output_path: str | None, search_backend: str | None, sandbox_backend: str | None, sandbox_concurrency: int | None, enable_ui: bool):
+@click.option("--ui/--no-ui", "enable_ui", default=None, help="Enable/disable live UI logging. Default: auto-enabled when logged in (see 'rllm login').")
+def eval_cmd(benchmark: str, agent_name: str | None, evaluator_name: str | None, base_url: str | None, model: str | None, split: str | None, concurrency: int, max_examples: int | None, output_path: str | None, search_backend: str | None, sandbox_backend: str | None, sandbox_concurrency: int | None, enable_ui: bool | None):
     """Evaluate a model on a benchmark dataset."""
+    # Auto-detect UI logging: enable if user is logged in (has ui_api_key or RLLM_API_KEY)
+    if enable_ui is None:
+        import os
+
+        from rllm.experimental.eval.config import load_ui_config
+
+        ui_config = load_ui_config()
+        enable_ui = bool(os.environ.get("RLLM_API_KEY") or ui_config.get("ui_api_key"))
+
     proxy_manager = None
 
     if base_url is not None:
@@ -275,13 +284,6 @@ def eval_cmd(benchmark: str, agent_name: str | None, evaluator_name: str | None,
         agent_metadata["sandbox_backend"] = sandbox_backend
     if sandbox_concurrency is not None:
         agent_metadata["sandbox_concurrency"] = sandbox_concurrency
-
-    # Resolve UI URL
-    import os
-
-    if enable_ui:
-        if not os.environ.get("RLLM_UI_URL"):
-            os.environ["RLLM_UI_URL"] = "https://ui.rllm-project.com"
 
     try:
         _run_eval(benchmark, agent_name, evaluator_name, base_url, model, split, concurrency, max_examples, output_path, agent_metadata=agent_metadata, enable_ui=enable_ui)
