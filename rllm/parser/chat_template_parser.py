@@ -3,10 +3,12 @@ import logging
 import re
 from copy import deepcopy
 
-try:
-    import torch
-except ImportError as err:
-    raise ImportError("ChatTemplateParser requires extra dependencies. Install with: pip install rllm[train]") from err
+def _import_torch():
+    try:
+        import torch
+        return torch
+    except ImportError as err:
+        raise ImportError("ChatTemplateParser.tokenize_and_mask requires PyTorch. Install with: pip install rllm[train]") from err
 
 from rllm.tools.tool_base import Tool, ToolCall, ToolOutput
 
@@ -136,6 +138,7 @@ class ChatTemplateParser:
         response_ids = self.tokenizer.encode(response, add_special_tokens=False)
         response_mask = [1] * len(response_ids)
 
+        torch = _import_torch()
         prompt_ids = torch.tensor(prompt_ids, dtype=torch.long)
         response_ids = torch.tensor(response_ids, dtype=torch.long)
         response_mask = torch.tensor(response_mask, dtype=torch.long)
@@ -168,6 +171,7 @@ class ChatTemplateParser:
                 response_ids.extend(ids)
                 response_mask.extend([0] * len(ids))
 
+        torch = _import_torch()
         prompt_ids = torch.tensor(prompt_ids, dtype=torch.long)
         response_ids = torch.tensor(response_ids, dtype=torch.long)
         response_mask = torch.tensor(response_mask, dtype=torch.long)

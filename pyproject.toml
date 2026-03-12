@@ -37,25 +37,16 @@ dependencies = [
     "pyarrow",
     "litellm[proxy]",
     "aiosqlite",
+    "hydra-core",
+    "codetiming",
+    "tinker ; python_version >= '3.11'",
+    "tinker-cookbook @ git+https://github.com/thinking-machines-lab/tinker-cookbook.git#egg=tinker-cookbook ; python_version >= '3.11'",
 ]
 
 [project.scripts]
 rllm = "rllm.experimental.cli.main:cli"
 
 [project.optional-dependencies]
-
-train = [
-    "torch",
-    "transformers>=4.55.0",
-    "numpy",
-    "hydra-core",
-    "wandb",
-    "codetiming",
-    "wrapt",
-    "asgiref>=3.7.0",
-    "tinker ; python_version >= '3.11'",
-    "tinker-cookbook @ git+https://github.com/thinking-machines-lab/tinker-cookbook.git#egg=tinker-cookbook ; python_version >= '3.11'",
-]
 
 rewards = [
     "sympy",
@@ -93,6 +84,9 @@ dev = [
 ]
 
 verl = [
+    "torch",
+    "transformers>=4.55.0,<5.0.0",
+    "numpy",
     "verl==0.6.1",
     "ray",
     "torch>=2.8.0",
