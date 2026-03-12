@@ -1,11 +1,11 @@
-# LangGraph Agent Plugin
+# LangGraph Agent
 
-rLLM agent plugin that runs benchmarks using the [LangGraph](https://github.com/langchain-ai/langgraph) framework.
+rLLM agent that runs benchmarks using the [LangGraph](https://github.com/langchain-ai/langgraph) framework.
 
 ## Installation
 
 ```bash
-pip install -e plugins/langgraph_agent
+pip install -e agenthub/langgraph_agent
 ```
 
 ## Usage
@@ -28,7 +28,7 @@ episode = agent.run(task, config)
 
 ## How It Works
 
-The plugin implements the `AgentFlow` protocol using LangGraph's `StateGraph` and LangChain's `ChatOpenAI`:
+The agent implements the `AgentFlow` protocol using LangGraph's `StateGraph` and LangChain's `ChatOpenAI`:
 
 1. Creates a `ChatOpenAI` model pointed at the rLLM eval proxy (`config.base_url`)
 2. Attaches an `RLLMTrajectoryCallbackHandler` to capture LLM call traces via LangChain's callback system

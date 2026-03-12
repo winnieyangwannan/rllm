@@ -185,7 +185,7 @@ def load_evaluator(name_or_path: str) -> Evaluator:
             return obj
 
     available = ", ".join(sorted(_EVALUATOR_REGISTRY.keys()))
-    raise KeyError(f"Evaluator '{name_or_path}' not found in registry or plugins. Available built-in: {available}")
+    raise KeyError(f"Evaluator '{name_or_path}' not found in registry or agenthub. Available built-in: {available}")
 
 
 def resolve_evaluator_from_catalog(benchmark: str) -> Evaluator | None:
@@ -223,7 +223,7 @@ def resolve_evaluator_from_catalog(benchmark: str) -> Evaluator | None:
 
 
 def list_evaluators() -> list[dict]:
-    """List all available evaluators (user-registered + built-in + plugins).
+    """List all available evaluators (user-registered + built-in + agenthub).
 
     Returns:
         A list of dicts with keys: name, source, type.

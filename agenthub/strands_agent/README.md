@@ -1,11 +1,11 @@
-# Strands Agent Plugin
+# Strands Agent
 
-rLLM agent plugin that runs benchmarks using the [Strands Agents](https://github.com/strands-agents/strands-agents) framework.
+rLLM agent that runs benchmarks using the [Strands Agents](https://github.com/strands-agents/strands-agents) framework.
 
 ## Installation
 
 ```bash
-pip install -e plugins/strands_agent
+pip install -e agenthub/strands_agent
 ```
 
 ## Usage
@@ -28,7 +28,7 @@ episode = agent.run(task, config)
 
 ## How It Works
 
-The plugin implements the `AgentFlow` protocol using Strands' `Agent` and `OpenAIModel`:
+The agent implements the `AgentFlow` protocol using Strands' `Agent` and `OpenAIModel`:
 
 1. Creates an `OpenAIModel` pointed at the rLLM eval proxy (`config.base_url`)
 2. Attaches an `RLLMTrajectoryHookProvider` to capture LLM call traces via Strands' hook system

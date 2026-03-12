@@ -165,9 +165,14 @@ def _run_train(
 ):
     """Core training logic: resolve catalog, load data, build config, launch trainer."""
 
-    from rllm.experimental.eval.agent_loader import load_agent
-    from rllm.experimental.eval.evaluator_loader import load_evaluator, resolve_evaluator_from_catalog
-    from rllm.experimental.unified_trainer import AgentTrainer
+    try:
+        from rllm.experimental.eval.agent_loader import load_agent
+        from rllm.experimental.eval.evaluator_loader import load_evaluator, resolve_evaluator_from_catalog
+        from rllm.experimental.unified_trainer import AgentTrainer
+    except ImportError as e:
+        console.print(f"  [error]Missing training dependencies: {e}[/]")
+        console.print("  Install with: [bold]pip install rllm\\[train][/]")
+        raise SystemExit(1) from None
 
     # ---- Load catalog ----
     catalog = load_dataset_catalog()

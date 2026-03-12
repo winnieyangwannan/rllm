@@ -1,11 +1,11 @@
-# SmolAgents Agent Plugin
+# SmolAgents Agent
 
-rLLM agent plugin that runs benchmarks using the [SmolAgents](https://github.com/huggingface/smolagents) framework.
+rLLM agent that runs benchmarks using the [SmolAgents](https://github.com/huggingface/smolagents) framework.
 
 ## Installation
 
 ```bash
-pip install -e plugins/smolagents_agent
+pip install -e agenthub/smolagents_agent
 ```
 
 ## Usage
@@ -28,7 +28,7 @@ episode = agent.run(task, config)
 
 ## How It Works
 
-The plugin implements the `AgentFlow` protocol using SmolAgents' `ToolCallingAgent` and `OpenAIServerModel`:
+The agent implements the `AgentFlow` protocol using SmolAgents' `ToolCallingAgent` and `OpenAIServerModel`:
 
 1. Creates an `OpenAIServerModel` pointed at the rLLM eval proxy (`config.base_url`)
 2. Wraps the model with `RLLMSmolAgentsTracer` to capture LLM call traces

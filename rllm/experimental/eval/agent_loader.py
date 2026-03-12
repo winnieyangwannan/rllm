@@ -158,11 +158,11 @@ def load_agent(name_or_path: str) -> AgentFlow:
             return obj
 
     available = ", ".join(sorted(agents.keys()))
-    raise KeyError(f"Agent '{name_or_path}' not found in registry or plugins. Available built-in: {available}")
+    raise KeyError(f"Agent '{name_or_path}' not found in registry or agenthub. Available built-in: {available}")
 
 
 def list_agents() -> list[dict]:
-    """List all available agents (user-registered + built-in + plugins).
+    """List all available agents (user-registered + built-in + agenthub).
 
     Returns:
         A list of dicts with keys: name, source, description, module.

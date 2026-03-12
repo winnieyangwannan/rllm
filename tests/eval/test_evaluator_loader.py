@@ -139,7 +139,7 @@ class TestEntryPointDiscovery:
         assert evaluator is instance
 
     def test_builtin_takes_priority_over_plugin(self, monkeypatch):
-        """Built-in evaluators take priority over plugins with the same name."""
+        """Built-in evaluators take priority over agenthub entries with the same name."""
         mock_ep = MagicMock()
         mock_ep.name = "math_reward_fn"
         mock_ep.load.return_value = _DummyEvaluator
