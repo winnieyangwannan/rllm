@@ -466,10 +466,19 @@ class UILogger:
         if groups_payloads:
             try:
                 self.logger.info(f"Sending {len(groups_payloads)} trajectory groups to UI [step {step}]")
+                batch_payload = {"session_id": self.session_id, "groups": groups_payloads}
+                resp = self.client.post("/api/trajectory-groups/batch", json=batch_payload)
+                resp.raise_for_status()
+                self.logger.info(f"Sent {len(groups_payloads)} trajectory groups via batch endpoint")
+            except Exception as batch_err:
+                self.logger.info(f"Trajectory groups batch endpoint failed ({batch_err}), falling back to individual POSTs")
                 for gp in groups_payloads:
-                    self.client.post("/api/trajectory-groups", json=gp)
-            except Exception as e:
-                self.logger.warning(f"Failed to send trajectory groups to UI: {e}")
+                    try:
+                        self.client.post("/api/trajectory-groups", json=gp)
+                    except Exception as e:
+                        self.logger.warning(f"Failed to send trajectory group to UI: {e}")
+                else:
+                    self.logger.info(f"Sent {len(groups_payloads)} trajectory groups individually")
 
     def log(self, data, step, episodes=None, trajectory_groups=None):
         """Log metrics and optionally episodes/trajectory_groups.
