@@ -11,8 +11,8 @@
 
 <div align="center">
   
-[![Documentation](https://img.shields.io/badge/Documentation-blue?style=for-the-badge&logo=googledocs&logoColor=white)](https://rllm-project.readthedocs.io/en/latest)
-[![Discord](https://img.shields.io/badge/Discord-5865F2?style=for-the-badge&logo=discord&logoColor=white)](https://discord.gg/BDH46HT9en)
+[![Documentation](https://img.shields.io/badge/Documentation-blue?style=for-the-badge&logo=googledocs&logoColor=white)](https://docs.rllm-project.com/)
+[![Slack](https://img.shields.io/badge/Slack-4A154B?style=for-the-badge&logo=slack&logoColor=white)](https://join.slack.com/t/rllmproject/shared_invite/zt-3pyblo6ef-m9kqAoInI8xSyUBkpuOyXA)
 [![Website](https://img.shields.io/badge/Site-%233f72af.svg?style=for-the-badge&logo=semanticweb&logoColor=white)](https://rllm-project.com)
 [![Blogs](https://img.shields.io/badge/Blogs-007AFF?style=for-the-badge)](https://rllm-project.com/blog)
 [![X](https://img.shields.io/badge/-black?logo=X&style=for-the-badge)](https://x.com/rllm_project)
