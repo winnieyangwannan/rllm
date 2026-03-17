@@ -151,9 +151,12 @@ Under the hood:
 - [V1: Unifying Generation and Self-Verification](https://arxiv.org/abs/2603.04304) — Pairwise self-verification for parallel test-time scaling
 ## Articles & Blog Posts
 
-- [rLLM-FinQA: 4B Agent Outperforms 235B on Finance](https://rllm-project.com/blog) — Feb 2026
-- [rLLM v0.2.1: Tinker Backend, LoRA, VLM Training](https://rllm-project.com/post.html?post=sdk.md) — Dec 2025
-- [rLLM v0.2: AgentWorkflowEngine + Megatron](https://rllm-project.com/post.html?post=rllm_v0.2.md) — Oct 2025
+- [rLLM UI: Real-Time Observability Tool for Agent Training & Evaluation](https://rllm-project.com/post.html?post=rllm_ui.md) — Mar 2026
+- [rLLM On-Policy Distillation: Training Smaller Students from Stronger Teachers](https://rllm-project.com/post.html?post=opd.md) — Mar 2026
+- [Faster and Better: Open-Source Recipe for Deep Research Agents with Fully Async Training](https://rllm-project.com/post.html?post=async_rl.md) — Feb 2026
+- [rLLM-FinQA: How a 4B Model Outperforms 235B and Rivals Gemini 2.5 Pro on Financial Analysis](https://rllm-project.com/post.html?post=finqa.md) — Feb 2026
+- [rLLM SDK: Training Any Agentic Program without Code Changes](https://rllm-project.com/post.html?post=sdk.md) — Dec 2025
+- [rLLM v0.2: RL Training for General Agentic Programs](https://rllm-project.com/post.html?post=rllm_v0.2.md) — Oct 2025
 - [DeepSWE: Open-source SWE Agent via RL](https://pretty-radio-b75.notion.site/DeepSWE-Training-a-Fully-Open-sourced-State-of-the-Art-Coding-Agent-by-Scaling-RL-22281902c1468193aabbe9a8c59bbe33) — Jul 2025
 - [DeepCoder: 14B Coder at O3-mini Level](https://pretty-radio-b75.notion.site/DeepCoder-A-Fully-Open-Source-14B-Coder-at-O3-mini-Level-1cf81902c14680b3bee5eb349a512a51) — Apr 2025
 - [DeepScaleR: 1.5B Surpasses O1-Preview](https://pretty-radio-b75.notion.site/DeepScaleR-Surpassing-O1-Preview-with-a-1-5B-Model-by-Scaling-RL-19681902c1468005bed8ca303013a4e2) — Feb 2025
