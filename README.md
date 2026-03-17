@@ -25,15 +25,11 @@ rLLM is an open-source framework for training AI agents with reinforcement learn
 - **Multiple RL algorithms** — GRPO, REINFORCE, RLOO, rejection sampling, and more. 🧠
 - **Two training backends** — `verl` for distributed multi-GPU training, `tinker` for single-machine / CPU setups. Same API either way. 🔧
 
-Read more on our [documentation site](https://rllm-project.readthedocs.io/en/latest).
+Read more on our [documentation site](https://docs.rllm-project.com/).
 
 ## Installation
 
 rLLM requires `Python >= 3.10` (`3.11` is needed if using `tinker`). You can install it either directly via pip or build from source.
-
-rLLM supports two training backends: `verl` and `tinker`. Choose one based on your needs.
-
-### Approach A: Direct Installation
 
 ```bash
 uv pip install "rllm @ git+https://github.com/rllm-org/rllm.git"
@@ -48,23 +44,7 @@ To use `verl` as the training backend (GPU machine required), install via
 uv pip install rllm[verl] @ git+https://github.com/rllm-org/rllm.git
 ```
 
-### Approach B: Building from Source with `uv`
-
-```bash
-# Clone the repository
-git clone https://github.com/rllm-org/rllm.git
-cd rllm
-
-# Create an uv environment
-uv venv --python 3.11
-source .venv/bin/activate
-
-# install rLLM with verl as training backend
-uv pip install -e .[verl]
-```
-
-
-For building from source or Docker, see the [installation guide](https://rllm-project.readthedocs.io/en/latest/getting-started/installation).
+For building from source or Docker, see the [installation guide](https://docs.rllm-project.com/installation).
 
 ## Quickstart
 
@@ -157,15 +137,6 @@ Under the hood:
 - **LiteLLM Proxy** routes requests and captures token IDs + logprobs
 - **Transform Pipeline** groups trajectories for advantage computation
 - **Training Backend** (verl or tinker) handles the policy update
-
-## Trained Models & Results
-
-| Model | Task | Result |
-|-------|------|--------|
-| [rLLM-FinQA-4B](https://huggingface.co/rLLM/rLLM-FinQA-4B) | Financial QA | Outperforms Qwen3-235B (59.7% vs 51.4%), rivals Gemini 2.5 Pro |
-| [DeepSWE](https://pretty-radio-b75.notion.site/DeepSWE-Training-a-Fully-Open-sourced-State-of-the-Art-Coding-Agent-by-Scaling-RL-22281902c1468193aabbe9a8c59bbe33) | SWE-Bench | 59% verified, #1 open-weight model |
-| [DeepCoder-14B](https://pretty-radio-b75.notion.site/DeepCoder-A-Fully-Open-Source-14B-Coder-at-O3-mini-Level-1cf81902c14680b3bee5eb349a512a51) | LiveCodeBench | 60.6% Pass@1, matches o3-mini |
-| [DeepScaleR-1.5B](https://pretty-radio-b75.notion.site/DeepScaleR-Surpassing-O1-Preview-with-a-1-5B-Model-by-Scaling-RL-19681902c1468005bed8ca303013a4e2) | AIME | 43.1% Pass@1, surpasses O1-Preview |
 
 ## Community Projects
 
