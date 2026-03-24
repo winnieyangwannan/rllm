@@ -32,7 +32,7 @@ class TaskSubmission:
 class RemoteTaskResult:
     """Result returned from a remote runtime."""
 
-    success: bool
+    finished: bool  # True if agent loop completed; False on transport/application error
     session_id: str
     task_id: str = ""  # GRPO grouping key (from TaskSubmission)
     reward: float | None = None
@@ -48,7 +48,9 @@ class RemoteAgentRuntime(Protocol):
         """Client setup from config."""
         ...
 
-    async def execute_tasks(self, submissions: list[TaskSubmission], timeout: float | None = None) -> list[RemoteTaskResult]:
+    async def execute_tasks(
+        self, submissions: list[TaskSubmission], timeout: float | None = None
+    ) -> list[RemoteTaskResult]:
         """Submit tasks concurrently and gather results. Returns one result per submission."""
         ...
 

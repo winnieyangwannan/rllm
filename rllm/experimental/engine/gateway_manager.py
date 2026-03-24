@@ -90,6 +90,10 @@ class GatewayManager:
         self._local_handler: Any = None  # in-process handler for tinker
         self._client: GatewayClient | None = None
 
+        # Per-mode sampling params (extracted from rollout engine in start())
+        self._train_sampling_params: dict[str, Any] = {}
+        self._val_sampling_params: dict[str, Any] = {}
+
     @property
     def gateway_url(self) -> str:
         return f"http://{self.host}:{self.port}"
@@ -127,6 +131,10 @@ class GatewayManager:
                 worker_id = self.client.add_worker(url=url)
                 logger.info("Registered worker %s -> %s", worker_id, url)
 
+        # Extract per-mode sampling params from the rollout engine
+        self._train_sampling_params = getattr(rollout_engine, "train_sampling_params", {})
+        self._val_sampling_params = getattr(rollout_engine, "val_sampling_params", {})
+
     def stop(self) -> None:
         """Terminate the gateway (process or thread)."""
         if self._client is not None:
@@ -152,8 +160,9 @@ class GatewayManager:
 
     # -- Session / trace API -------------------------------------------------
 
-    def create_session(self, session_id: str) -> str:
-        return self.client.create_session(session_id=session_id)
+    def create_session(self, session_id: str, is_validation: bool = False) -> str:
+        sp = self._val_sampling_params if is_validation else self._train_sampling_params
+        return self.client.create_session(session_id=session_id, sampling_params=sp or None)
 
     def get_session_url(self, session_id: str) -> str:
         return self.client.get_session_url(session_id)

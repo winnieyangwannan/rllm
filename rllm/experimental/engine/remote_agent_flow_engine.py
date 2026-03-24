@@ -76,7 +76,7 @@ class RemoteAgentFlowEngine:
             uid = f"{task_id}:{rollout_idx}"
             session_id = str(uuid.uuid4())
 
-            self.gateway.create_session(session_id)
+            self.gateway.create_session(session_id, is_validation=is_validation)
             session_url = self.gateway.get_session_url(session_id)
 
             submissions.append(
@@ -98,12 +98,14 @@ class RemoteAgentFlowEngine:
 
         for result in remote_results:
             idx, uid, task = session_metadata[result.session_id]
-            if not result.success:
-                episode_map[idx] = _error_episode(uid, task, result.error)
-                logger.warning("[%s] Remote task failed: %s", uid, result.error)
-            else:
-                traces = self.gateway.get_traces(result.session_id)
-                episode_map[idx] = _build_episode(traces, result, uid, task)
+            if not result.finished:
+                logger.warning("[%s] Remote task failed (assigning reward=0): %s", uid, result.error)
+                result.reward = 0.0
+            traces = self.gateway.get_traces(result.session_id)
+            episode = _build_episode(traces, result, uid, task)
+            if not result.finished:
+                episode.metadata["error"] = {"message": result.error or "Unknown error"}
+            episode_map[idx] = episode
 
         episodes = [episode_map[i] for i in range(len(tasks))]
 
@@ -124,17 +126,6 @@ class RemoteAgentFlowEngine:
     def shutdown(self) -> None:
         """No local resources to clean up (runtime shutdown is separate)."""
         pass
-
-
-def _error_episode(uid: str, task: dict, error: str | None) -> Episode:
-    """Create an error Episode for a failed remote task."""
-    return Episode(
-        id=uid,
-        task=task,
-        is_correct=False,
-        termination_reason=TerminationReason.ERROR,
-        metadata={"error": {"message": error or "Unknown error"}},
-    )
 
 
 def _build_episode(

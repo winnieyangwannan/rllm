@@ -74,7 +74,7 @@ class AgentCoreRuntime(RemoteAgentRuntime):
         except Exception as e:
             logger.error("Task %s failed: %s", sub.session_id, e)
             return RemoteTaskResult(
-                success=False,
+                finished=False,
                 session_id=sub.session_id,
                 task_id=sub.task_id,
                 error=str(e),
@@ -91,7 +91,7 @@ class AgentCoreRuntime(RemoteAgentRuntime):
                 error_msg,
             )
             return RemoteTaskResult(
-                success=False,
+                finished=False,
                 session_id=sub.session_id,
                 task_id=sub.task_id,
                 error=error_msg,
@@ -104,7 +104,7 @@ class AgentCoreRuntime(RemoteAgentRuntime):
             reward = reward[-1] if reward else None
 
         return RemoteTaskResult(
-            success=True,
+            finished=True,
             session_id=sub.session_id,
             task_id=sub.task_id,
             reward=reward,
@@ -112,7 +112,9 @@ class AgentCoreRuntime(RemoteAgentRuntime):
             raw_result=result,
         )
 
-    async def execute_tasks(self, submissions: list[TaskSubmission], timeout: float | None = None) -> list[RemoteTaskResult]:
+    async def execute_tasks(
+        self, submissions: list[TaskSubmission], timeout: float | None = None
+    ) -> list[RemoteTaskResult]:
         """Submit all tasks concurrently via asyncio.gather.
 
         Each task invokes then polls in sequence; all tasks run in parallel.
