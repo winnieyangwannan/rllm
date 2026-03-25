@@ -35,7 +35,7 @@ dependencies = [
     "pandas",
     "polars",
     "pyarrow",
-    "litellm[proxy]",
+    "litellm[proxy]>=1.80.0,<1.82.7",
     "aiosqlite",
     "hydra-core",
     "codetiming",
@@ -87,11 +87,11 @@ verl = [
     "torch",
     "transformers>=4.55.0,<5.0.0",
     "numpy",
-    "verl==0.6.1",
+    "verl==0.7.1",
     "ray",
     "torch>=2.8.0",
     "torchvision>=0.23.0",
-    "vllm>=0.10.2,<=0.11.0",
+    "vllm>=0.10.2,<=0.12.0",
     "flash-attn>=2.8.1",
     "qwen-vl-utils",
 ]
@@ -148,7 +148,7 @@ code-tools = [
 
 [tool.uv]
 override-dependencies = [
-    "litellm[proxy]>=1.80.0",
+    "litellm[proxy]>=1.80.0,<1.82.7",
 ]
 
 [tool.uv.extra-build-dependencies]
@@ -157,7 +157,7 @@ flash-attn = [
 ]
 
 [tool.ruff]
-# line-length = 150  # slightly conservative value, turn this on later.
+line-length = 200  # slightly conservative value, turn this on later.
 
 [tool.ruff.lint]
 isort = {known-first-party = ["rllm"], known-third-party = ["verl"]}
