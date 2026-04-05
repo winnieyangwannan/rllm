@@ -18,7 +18,7 @@ import threading
 import time
 from typing import TYPE_CHECKING, Any
 
-from rllm_model_gateway.client import GatewayClient
+from rllm_model_gateway.client import AsyncGatewayClient, GatewayClient
 from rllm_model_gateway.models import TraceRecord
 
 if TYPE_CHECKING:
@@ -89,6 +89,7 @@ class GatewayManager:
         self._server: Any = None  # uvicorn.Server when using thread mode
         self._local_handler: Any = None  # in-process handler for tinker
         self._client: GatewayClient | None = None
+        self._async_client: AsyncGatewayClient | None = None
 
         # Per-mode sampling params (extracted from rollout engine in start())
         self._train_sampling_params: dict[str, Any] = {}
@@ -100,9 +101,17 @@ class GatewayManager:
 
     @property
     def client(self) -> GatewayClient:
+        """Sync client for lifecycle operations (start, stop, health polling)."""
         if self._client is None:
             self._client = GatewayClient(self.gateway_url)
         return self._client
+
+    @property
+    def async_client(self) -> AsyncGatewayClient:
+        """Async client for runtime operations (sessions, traces)."""
+        if self._async_client is None:
+            self._async_client = AsyncGatewayClient(self.gateway_url)
+        return self._async_client
 
     # -- Lifecycle -----------------------------------------------------------
 
@@ -170,6 +179,16 @@ class GatewayManager:
     def get_traces(self, session_id: str) -> list[TraceRecord]:
         self.client.flush()
         return self.client.get_session_traces(session_id)
+
+    # -- Async session / trace API -------------------------------------------
+
+    async def acreate_session(self, session_id: str, is_validation: bool = False) -> str:
+        sp = self._val_sampling_params if is_validation else self._train_sampling_params
+        return await self.async_client.create_session(session_id=session_id, sampling_params=sp or None)
+
+    async def aget_traces(self, session_id: str) -> list[TraceRecord]:
+        await self.async_client.flush()
+        return await self.async_client.get_session_traces(session_id)
 
     # -- Worker setup --------------------------------------------------------
 

@@ -622,10 +622,10 @@ class VerlBackend(BackendProtocol[Iterable, DataProto], RayPPOTrainer):
             return False
         else:
             trainer_state.is_training = False
-            self.rollout_engine.validate = True  # type: ignore[attr-defined]
+            self.rollout_engine.is_validation = True
             return True
 
     async def on_validation_end(self, trainer_state: TrainerState) -> None:
         """Called at the end of validation."""
         trainer_state.is_training = True
-        self.rollout_engine.validate = False  # type: ignore[attr-defined]
+        self.rollout_engine.is_validation = False
