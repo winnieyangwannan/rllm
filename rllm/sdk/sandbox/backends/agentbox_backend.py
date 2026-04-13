@@ -102,24 +102,32 @@ class AgentBoxSandbox:
         block_count = 0
 
         with self._container.shell(work_dir=Path("/workspace")) as shell:
-            for block in shell.execute(command):
+            for block in shell.execute(command, timeout=timeout):
                 if block_count < self._max_streaming_blocks:
                     output_parts.append(block.output)
                 block_count += 1
 
         result = "".join(output_parts)
 
-        # OOM detection (ported from AMAIA agentbox_backend.py)
+        # OOM detection (aligned with amaia-collab agentbox_backend.py)
+        # Query dmesg for recent OOM killer messages filtered for relevant entries
         if "Killed" in result:
             try:
                 oom_parts = []
                 with self._container.shell() as shell:
-                    for block in shell.execute("dmesg | tail -5"):
+                    # Filter dmesg for OOM-related entries only (matches amaia-collab)
+                    for block in shell.execute(
+                        "dmesg 2>/dev/null | grep -iE 'oom|killed|out of memory' | tail -5",
+                        timeout=5.0,
+                    ):
                         oom_parts.append(block.output)
-                oom_info = "".join(oom_parts)
-                result += f"\n[OOM detected] dmesg:\n{oom_info}"
-            except Exception:
-                pass
+                        if block.done:
+                            break
+                dmesg_output = "".join(oom_parts).strip()
+                if dmesg_output:
+                    result += f"\n\n[System log (dmesg):\n{dmesg_output}]"
+            except Exception as e:
+                logger.debug(f"Failed to get dmesg: {e}")
 
         return result
 

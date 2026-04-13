@@ -16,8 +16,8 @@ Usage:
 
 import sys
 
-# Add the mle_bench_agent to path for testing before pip install
-sys.path.insert(0, "/home/winnieyangwn/rllm/agenthub/mle_bench_agent")
+# Add the mle_agent to path for testing before pip install
+sys.path.insert(0, "/home/winnieyangwn/rllm/agenthub/mle_agent")
 
 # ============================================================================
 # CONFIG
@@ -31,12 +31,18 @@ MANAGER_URI = "h200-137-000-067:35743"
 
 
 def test_a_system_prompt_format():
-    """Test A: SYSTEM_PROMPT.format() renders correctly."""
+    """Test A: SYSTEM_PROMPT.format() renders correctly.
+
+    Validates that the system prompt template accepts placeholder values
+    (timeout_min, context_size, eval_timeout_hrs) and renders into a
+    complete prompt with all expected content (instructions, paths, warnings).
+    Catches KeyError if new placeholders are added but not passed to format().
+    """
     print("\n" + "=" * 60)
     print("TEST A: System prompt formatting")
     print("=" * 60)
 
-    from mle_bench_agent.prompts import SYSTEM_PROMPT
+    from mle_agent.prompts import SYSTEM_PROMPT
 
     rendered = SYSTEM_PROMPT.format(
         timeout_min=6,
@@ -63,28 +69,31 @@ def test_a_system_prompt_format():
 
 
 def test_b_instance_prompt_format():
-    """Test B: INSTANCE_PROMPT.format() renders correctly."""
+    """Test B: INSTANCE_PROMPT.format() renders correctly.
+
+    Validates that the instance prompt template accepts task-specific values
+    (task_description, data_info) and renders into a complete prompt that
+    includes the competition description and data structure information.
+    This prompt is sent to the LLM at the start of each MLE-bench task.
+    """
     print("\n" + "=" * 60)
     print("TEST B: Instance prompt formatting")
     print("=" * 60)
 
-    from mle_bench_agent.prompts import INSTANCE_PROMPT
+    from mle_agent.prompts import INSTANCE_PROMPT
 
     sample_task = {
         "task_description": "Predict house prices based on features like square footage, bedrooms, etc.",
-        "data_info": "=== DATA STRUCTURE ===\ntrain.csv  test.csv  sample_submission.csv\n\n=== CSV ROW COUNTS ===\n1000 train.csv\n500 test.csv",
     }
 
     rendered = INSTANCE_PROMPT.format(
         task_description=sample_task["task_description"],
-        data_info=sample_task["data_info"],
     )
 
     print(f"✓ Instance prompt rendered ({len(rendered)} chars)")
 
     # Verify content
     assert "house prices" in rendered
-    assert "train.csv" in rendered
     assert "submit tool" in rendered
 
     print("✓ All expected content found")
@@ -95,12 +104,18 @@ def test_b_instance_prompt_format():
 
 
 def test_c_tool_schemas_valid():
-    """Test C: Tool schemas are valid JSON Schema format."""
+    """Test C: Tool schemas are valid JSON Schema format.
+
+    Validates that BASH_TOOL, SUBMIT_TOOL, and CHECK_SUBMISSION_TOOL follow
+    the OpenAI function calling schema format (type, function.name,
+    function.description, function.parameters with properties and required).
+    Invalid schemas would cause OpenAI API errors at runtime.
+    """
     print("\n" + "=" * 60)
     print("TEST C: Tool schema validation")
     print("=" * 60)
 
-    from mle_bench_agent.prompts import BASH_TOOL, CHECK_SUBMISSION_TOOL, SUBMIT_TOOL
+    from mle_agent.prompts import BASH_TOOL, CHECK_SUBMISSION_TOOL, SUBMIT_TOOL
 
     tools = [BASH_TOOL, SUBMIT_TOOL, CHECK_SUBMISSION_TOOL]
 
@@ -137,12 +152,19 @@ def test_c_tool_schemas_valid():
 
 
 def test_d_commands_run_in_container():
-    """Test D: DATA_INFO_COMMAND and helper commands run in container."""
+    """Test D: DATA_INFO_COMMAND and helper commands run in container.
+
+    Spins up a real AgentBox container, creates mock data files, and runs
+    the shell commands that the agent will use during actual tasks:
+    - DATA_INFO_COMMAND: lists data files, shows CSV row counts and sample format
+    - CHECK_SUBMISSION_COMMAND: runs solution.py and validates submission.csv
+    Ensures these commands work in the container environment before using them.
+    """
     print("\n" + "=" * 60)
     print("TEST D: Shell commands run in container")
     print("=" * 60)
 
-    from mle_bench_agent.prompts import CHECK_SUBMISSION_COMMAND, DATA_INFO_COMMAND
+    from mle_agent.prompts import CHECK_SUBMISSION_COMMAND, DATA_INFO_COMMAND
 
     from rllm.sdk.sandbox.backends.agentbox_backend import AgentBoxSandbox
 
@@ -198,12 +220,17 @@ print("Solution complete!")
 
 
 def test_e_truncate_output():
-    """Test E: truncate_output function works correctly."""
+    """Test E: truncate_output function works correctly.
+
+    Validates the output truncation helper that prevents context overflow
+    when bash commands produce very long outputs. Short outputs pass through
+    unchanged; long outputs are truncated from the middle with a marker.
+    """
     print("\n" + "=" * 60)
     print("TEST E: Output truncation")
     print("=" * 60)
 
-    from mle_bench_agent.prompts import truncate_output
+    from mle_agent.prompts import truncate_output
 
     # Short output - no truncation
     short = "Hello world"

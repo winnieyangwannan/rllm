@@ -3,7 +3,7 @@ requires = ["setuptools>=64"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "mle-bench-agent"
+name = "mle-agent"
 version = "0.1.0"
 description = "MLE-bench agent plugin for rLLM - trains agents to solve Kaggle ML competitions"
 requires-python = ">=3.11"
@@ -20,11 +20,11 @@ grading = ["mlebench"]
 training = ["hydra-core"]
 
 [tool.setuptools.packages.find]
-include = ["mle_bench_agent*"]
+include = ["mle_agent*"]
 
 # Plugin discovery: rllm CLI finds these by name
 [project.entry-points."rllm.agents"]
-mle_bench = "mle_bench_agent.agent:mle_bench_agent"
+mle = "mle_agent.agent:mle_agent"
 
 [project.entry-points."rllm.evaluators"]
-mle_bench_evaluator = "mle_bench_agent.evaluator:MLEBenchEvaluator"
+mle_evaluator = "mle_agent.evaluator:MLEEvaluator"

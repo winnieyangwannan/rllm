@@ -54,6 +54,68 @@ training = [
 ]
 ```
 
+## Installation
+
+### Required Packages
+
+The MLE-bench evaluator requires two packages that are **NOT** on PyPI:
+
+| Package | Source | Provides |
+|---------|--------|----------|
+| **aira-dojo** | [facebookresearch/aira-dojo](https://github.com/facebookresearch/aira-dojo) | `dojo.tasks.mlebench.evaluate` (scoring, percentile calculation) |
+| **mle-bench** | [openai/mle-bench](https://github.com/openai/mle-bench) (cloned by aira-dojo) | `mlebench.grade.validate_submission`, `mlebench.registry` |
+
+### Installation Steps
+
+```bash
+# 1. Activate rllm environment
+conda activate rllm
+
+# 2. Clone aira-dojo
+cd /home/winnieyangwn
+git clone https://github.com/facebookresearch/aira-dojo.git
+cd aira-dojo
+
+# 3. Install aira-dojo
+pip install -e .
+
+# 4. Run the mlebench install script (clones OpenAI's mle-bench and installs it)
+bash install_mlebench.sh
+
+# 5. Verify both packages work
+python -c "import dojo.tasks.mlebench.evaluate as evaluate; print('dojo OK')"
+python -c "from mlebench.grade import validate_submission; from mlebench.registry import registry; print('mlebench OK')"
+```
+
+### MLE-bench Data Directory
+
+The competition data is already available at:
+```
+MLE_BENCH_DATA_DIR=/checkpoint/maui/shared/cache/dojo/tasks/mlebench/
+```
+
+This directory contains prepared task data (train/test CSV files, leaderboards, etc.) for all MLE-bench competitions.
+
+### Test Task Files
+
+Single-task JSONL files are available for testing:
+```
+/checkpoint/maui_sft/winnieyangwn/datasets/spooky-author-identification.jsonl
+/checkpoint/maui_sft/winnieyangwn/datasets/billion-word-imputation.jsonl
+/checkpoint/maui_sft/winnieyangwn/datasets/bms-molecular-translation.jsonl
+```
+
+Each JSONL file contains one line with the task definition:
+```json
+{
+  "instance_id": "spooky-author-identification",
+  "difficulty": "lite",
+  "docker_url": "vmvm-registry.fbinfra.net/kniu/spooky-author-identification:v2",
+  "task_description": "# Overview\n...",
+  "data_info": "=== FILE LIST ===\n..."
+}
+```
+
 ## Files to Create
 
 ### 1. `rllm/sdk/sandbox/backends/agentbox_backend.py` — AgentBox Sandbox
@@ -784,6 +846,40 @@ print("All connection tests passed.")
 
 ---
 
+### Step 2b: Data Mount Verification Test _(quick sanity check)_
+
+**Goal**: Verify that MLE-bench task data is correctly mounted in the container before running full end-to-end tests.
+
+**What to build**:
+1. Create `cookbooks/mlebench/test_step2b_data_real.py` — standalone script to test data accessibility ✅ **DONE**
+
+**What to test**:
+- A) Container starts with `ContainerConfig` using `read_only_binds={data_path: "/root/data"}`
+- B) `/root/data` directory exists in the container
+- C) `/root/data` contains expected files (CSV files, sample_submission.csv, etc.)
+- D) Data is readable (can list contents, count rows)
+
+**Test script**: `cookbooks/mlebench/test_step2b_data_real.py`
+
+```bash
+# Usage
+python cookbooks/mlebench/test_step2b_data_real.py --task mlsp-2013-birds
+python cookbooks/mlebench/test_step2b_data_real.py --task mlsp-2013-birds --manager-uri h200-137-000-067:42499
+```
+
+**What it does**:
+1. Creates AgentBoxSandbox with same ContainerConfig as end-to-end test
+2. Checks if `/root/data` exists
+3. Lists contents to verify data is mounted
+4. Checks for expected CSV files
+5. Exits with code 0 (success) or 1 (failure)
+
+**Pass criteria**: Script exits with code 0, prints "DATA ACCESSIBILITY TEST PASSED".
+
+**When to use**: Run this quick test before `test_step7_end_to_end.py` to catch data mount issues early (e.g., missing `container_config`, wrong data path).
+
+---
+
 ### Step 3: Prompts & Tool Schemas _(pure data, no infrastructure)_
 
 **Goal**: Validate prompts and OpenAI tool schemas are correct before using them.
@@ -846,9 +942,19 @@ print("All connection tests passed.")
 
 **Goal**: Test the 7-stage evaluation pipeline against pre-made submissions.
 
+**Prerequisites**:
+- Install `aira-dojo` and `mle-bench` packages (see Installation section above)
+- Verify with: `python -c "from mlebench.grade import validate_submission; from mlebench.registry import registry; print('OK')"`
+
+**Test task**: Use `spooky-author-identification` (text classification, fast training):
+```
+Task JSONL: /checkpoint/maui_sft/winnieyangwn/datasets/spooky-author-identification.jsonl
+Task data:  /checkpoint/maui/shared/cache/dojo/tasks/mlebench/spooky-author-identification/
+```
+
 **What to build**:
-1. Create `agenthub/mle_bench_agent/mle_bench_agent/evaluator.py` — `MLEBenchEvaluator`
-2. Port `get_rank_and_percentile()` from AMAIA
+1. Create `agenthub/mle_agent/mle_agent/evaluator.py` — `MLEEvaluator`
+2. Port `get_rank_and_percentile()` from AMAIA's `evaluation.py`
 
 **What to test**:
 - A) **Stage 1 — no solution**: Pass an episode with `pred_solution=None` → `reward=0.0`
@@ -868,13 +974,18 @@ print("All connection tests passed.")
 
 **Goal**: Full pipeline — agent produces a submission, evaluator grades it.
 
+**Test task**: Use `spooky-author-identification`:
+```
+Task JSONL: /checkpoint/maui_sft/winnieyangwn/datasets/spooky-author-identification.jsonl
+```
+
 **What to build**:
-1. Create `agenthub/mle_bench_agent/pyproject.toml`
+1. Create `agenthub/mle_agent/pyproject.toml`
 2. Create plugin `__init__.py` with entry points
 3. Wire agent + evaluator together
 
 **What to test**:
-- A) Run agent on one competition → get Episode → pass to evaluator → get `EvalOutput`
+- A) Run agent on `spooky-author-identification` → get Episode → pass to evaluator → get `EvalOutput`
 - B) Verify the sandbox is reused (evaluator accesses via `episode.artifacts["_sandbox"]`)
 - C) Run on 2–3 competitions to confirm generalization
 - D) Verify resource cleanup: no leaked machines/containers after the run
@@ -908,28 +1019,117 @@ print("All connection tests passed.")
 |------|-----------|-----------|-------------|------------|
 | 1 | AgentBox raw connection | `agentbox` package | AgentBox manager | Low |
 | 2 | `AgentBoxSandbox` wrapper | Step 1 | AgentBox manager | Low |
+| 2b | Data mount verification | Step 2 | AgentBox manager + MLE data | Trivial ✅ |
 | 3 | Prompts & tool schemas | None | OpenAI API key | Trivial |
 | 4 | Agent loop (mocked) | Step 3 | None | Medium |
 | 5 | Agent loop (real) | Steps 2, 3, 4 | AgentBox + LLM | High |
-| 6 | Evaluator (staged) | Step 2 | AgentBox + `mlebench` | Medium |
-| 7 | End-to-end eval | Steps 5, 6 | AgentBox + LLM + `mlebench` | High |
+| 6 | Evaluator (staged) | Step 2, `aira-dojo` install | AgentBox + `mlebench` + `dojo` | Medium |
+| 7 | End-to-end eval | Steps 2b, 5, 6 | AgentBox + LLM + `mlebench` | High |
 | 8 | Training integration | Step 7 | All above + GPU cluster | High |
 
 **Key principle**: Test each layer in isolation before combining. Steps 1–4 can
 be done with minimal infrastructure. Steps 3 and 4 can be done in parallel with
 Steps 1–2 since they have no dependency on AgentBox infrastructure.
 
+## Sandbox Lifecycle
+
+The sandbox (AgentBox container) must persist through both rollout AND evaluation
+so the evaluator can access the agent's generated files (`submission.csv`, `solution.py`).
+
+### Lifecycle Pattern (matches rLLM EvalRunner):
+
+```
+┌──────────────────────────────────────────────────────────────────────┐
+│  EvalRunner (orchestrator)                                            │
+│                                                                       │
+│  1. Creates task from JSONL                                           │
+│  2. task_agent = agent.create_instance()  [fresh _sandbox = None]     │
+│                                                                       │
+│  3. Calls task_agent.setup_sandbox(task, config) ────────────┐        │
+│                                                               │        │
+│     ┌───────────────────────────────────────────────────┐    │        │
+│     │  MLEAgentFlow.setup_sandbox()                      │    │        │
+│     │                                                    │    │        │
+│     │  • Creates AgentBoxSandbox with task-specific      │    │        │
+│     │    ContainerConfig (data mounts, overlays, env)    │    │        │
+│     │  • Sets self._sandbox                              │    │        │
+│     │  • Calls on_sandbox_ready() (mkdir /workspace)     │    │        │
+│     └───────────────────────────────────────────────────┘    │        │
+│                                                               │        │
+│  4. Calls task_agent.run(task, config) ──────────────────┐    │        │
+│                                                           │    │        │
+│     ┌───────────────────────────────────────────────────┐│    │        │
+│     │  MLEAgentFlow.run()                                ││    │        │
+│     │                                                    ││    │        │
+│     │  • Uses self.sandbox (already created in step 3)   ││    │        │
+│     │  • Runs multi-turn agent loop                      ││    │        │
+│     │  • Does NOT close sandbox                          ││    │        │
+│     │  • Does NOT put _sandbox in artifacts              ││    │        │
+│     │  • Returns Episode                                 ││    │        │
+│     └───────────────────────────────────────────────────┘│    │        │
+│                                                           │    │        │
+│  5. Receives Episode ◄────────────────────────────────────┘    │        │
+│  6. EvalRunner injects sandbox into artifacts:                  │        │
+│     episode.artifacts["_sandbox"] = task_agent.sandbox          │        │
+│                                                                  │        │
+│  7. Calls evaluator.evaluate(task, episode) ──────────────┐     │        │
+│                                                             │     │        │
+│     ┌───────────────────────────────────────────────────┐  │     │        │
+│     │  MLEEvaluator.evaluate()                           │  │     │        │
+│     │                                                    │  │     │        │
+│     │  • Gets sandbox from episode.artifacts["_sandbox"] │  │     │        │
+│     │  • Uses sandbox to run solution.py                 │  │     │        │
+│     │  • Fetches submission.csv from container           │  │     │        │
+│     │  • Validates & scores submission                   │  │     │        │
+│     │  • Does NOT close sandbox                          │  │     │        │
+│     │  • Returns EvalOutput                              │  │     │        │
+│     └───────────────────────────────────────────────────┘  │     │        │
+│                                                             │     │        │
+│  8. Receives EvalOutput ◄───────────────────────────────────┘     │        │
+│  9. Removes sandbox ref: episode.artifacts.pop("_sandbox", None)  │        │
+│ 10. finally: task_agent.teardown_sandbox()                         │        │
+│     → self._sandbox.close()  [releases container + machine]        │        │
+└──────────────────────────────────────────────────────────────────────┘
+```
+
+### Key Rules:
+
+1. **EvalRunner calls `setup_sandbox()`** before `run()` — agent creates sandbox there, not in `run()`
+2. **Agent uses `self.sandbox`** in `run()` and does NOT close it or put it in artifacts
+3. **EvalRunner injects sandbox** into `episode.artifacts["_sandbox"]` after `run()` returns
+4. **Evaluator accesses sandbox** from `episode.artifacts["_sandbox"]` — read-only, does NOT close it
+5. **EvalRunner removes `_sandbox`** from artifacts after evaluation (not serializable)
+6. **EvalRunner calls `teardown_sandbox()`** in a `finally` block — guaranteed cleanup even on failure
+
+### Error Handling in Evaluator:
+
+```python
+sandbox = episode.artifacts.get("_sandbox")
+if sandbox is None:
+    return EvalOutput(reward=0.0, is_correct=False,
+                      metadata={"reason": "no_sandbox"})
+
+try:
+    result = sandbox.exec("cat /workspace/submission.csv")
+except Exception as e:
+    return EvalOutput(reward=0.0, is_correct=False,
+                      metadata={"reason": f"sandbox_error: {e}"})
+```
+
 ## Open Questions
 
-1. **`mlebench` grading library** — Is this pip-installable, or does it still
-   live inside AMAIA? If it's not a standalone package, the evaluator will need
-   a vendored copy of the grading functions (`validate_submission`,
-   `evaluate_submission`, `get_rank_and_percentile`).
+1. ~~**`mlebench` grading library**~~ — **RESOLVED**: Install via `aira-dojo` which
+   includes a script to clone and install OpenAI's `mle-bench`. See Installation section.
 
-2. **Task dataset** — How are competition task definitions (task_id,
-   task_description, data paths) loaded? Need to confirm whether rLLM's
-   `DatasetRegistry` supports this or if we load from a JSONL file directly.
+2. ~~**Task dataset**~~ — **RESOLVED**: Load task definitions from JSONL files
+   (e.g., `/checkpoint/maui_sft/winnieyangwn/datasets/spooky-author-identification.jsonl`).
+   Each line contains `instance_id`, `task_description`, `docker_url`, `data_info`.
 
-3. **Container reuse across group_size rollouts** — For GRPO with `group_size=4`,
+3. ~~**Sandbox lifecycle**~~ — **RESOLVED**: Follows rLLM's `EvalRunner` pattern.
+   EvalRunner calls `setup_sandbox()` before `run()`, injects `_sandbox` into
+   `episode.artifacts` after `run()`, evaluator reads it, and EvalRunner calls
+   `teardown_sandbox()` in a `finally` block. See "Sandbox Lifecycle" section above.
+
+4. **Container reuse across group_size rollouts** — For GRPO with `group_size=4`,
    should all 4 rollouts share a container (same machine, different runs) or
    each get their own? Sharing saves startup time but risks state leakage.
