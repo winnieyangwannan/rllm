@@ -1,0 +1,30 @@
+# MLE-bench Evaluation - Base Config
+# This file contains shared defaults. Override in model-specific configs.
+
+# Agent settings
+agent:
+  max_turns: 128
+  session_timeout: 1200      # 20 min per bash call
+  rollout_timeout: 43200     # 12 hours total
+  context_size: 98304
+  temperature: 1.0
+  submit_file: csv           # 'csv' or 'code'
+  check_submission_validity: true
+
+# Sandbox/container settings
+sandbox:
+  manager_uri: h200-137-000-067:42499
+  superimage_directory: /checkpoint/maui_sft/shared/sif
+  superimage_version: 2025-05-02v2
+  superimage_overlay: /checkpoint/fair-maui-hs/hotfix/kniu.2025-09-19.cache.overlay.ext3.img
+
+# Data paths
+data:
+  mle_bench_data_dir: /checkpoint/maui/shared/cache/dojo/tasks/mlebench
+  task_jsonl_dir: /checkpoint/maui_sft/winnieyangwn/datasets
+
+# Evaluation settings
+eval:
+  samples_per_prompt: 2      # Default for testing, override for production
+  output_dir: /checkpoint/maui_sft/winnieyangwn/RLLM
+  parallel: true             # Run rollouts in parallel

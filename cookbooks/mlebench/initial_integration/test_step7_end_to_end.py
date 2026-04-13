@@ -17,9 +17,6 @@ Usage:
     # Basic usage (parallel by default, 2 samples)
     python test_step7_end_to_end.py --task mlsp-2013-birds
 
-    # Run sequentially instead of parallel
-    python test_step7_end_to_end.py --task mlsp-2013-birds --sequential
-
     # Run 4 parallel samples
     python test_step7_end_to_end.py --task mlsp-2013-birds --samples 4
 
