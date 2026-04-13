@@ -112,8 +112,12 @@ def create_sandbox(backend: str, name: str, image: str, **kwargs) -> Sandbox:
         from rllm.sdk.sandbox.backends.modal_backend import ModalSandbox
 
         return ModalSandbox(name=name, **kwargs)
+    elif backend == "agentbox":
+        from rllm.sdk.sandbox.backends.agentbox_backend import AgentBoxSandbox
+
+        return AgentBoxSandbox(name=name, image=image, **kwargs)
     else:
-        raise ValueError(f"Unknown sandbox backend: {backend}. Available: docker, local, modal")
+        raise ValueError(f"Unknown sandbox backend: {backend}. Available: docker, local, modal, agentbox")
 
 
 def _safe_exec(sandbox: Sandbox, command: str, timeout: float | None = None) -> str:
