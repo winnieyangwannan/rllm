@@ -15,13 +15,15 @@ model:
 # Agent settings - Code mode
 agent:
   submit_file: code          # Evaluator runs train.py
-  session_timeout: 1200      # 20 minutes per bash command for code mode
+  session_timeout: 1200      # 20 minutes per bash command
+  eval_timeout: 86400        # 24 hours for train.py execution
 
 # Sandbox settings
 sandbox:
-  manager_uri: h200-137-001-039:45027
+  manager_uri:  h200-137-001-093:36689
 
 # Production eval settings
 eval:
   samples_per_prompt: 64
   output_dir: /checkpoint/maui_sft/winnieyangwn/RLLM/test_code
+  tasks: mlsp-2013-birds,spooky-author-identification,whale-categorization-playground,h-and-m-personalized-fashion-recommendations # tasks: task1,task2,task3           # Or multiple tasks (comma-separated)

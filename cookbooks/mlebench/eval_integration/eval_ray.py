@@ -69,13 +69,16 @@ from rllm.trainer.ray_init_utils import get_ray_init_settings
 # Default max concurrent tasks per node (can be overridden via config)
 
 
-def get_completed_samples(jsonl_path: Path) -> set[int]:
-    """Read existing JSONL file and return set of completed sample indices.
+def get_completed_samples_by_task(jsonl_path: Path) -> dict[str, set[int]]:
+    """Read existing JSONL file and return dict of completed sample indices per task.
 
     Used for resume mode to skip already-completed samples.
-    Parses sample_idx from episode id format: "{task_id}:{sample_idx}"
+    Parses task_id and sample_idx from episode id format: "{task_id}:{sample_idx}"
+
+    Returns:
+        dict mapping task_id -> set of completed sample indices
     """
-    completed = set()
+    completed = {}  # task_id -> set of sample_idx
     if not jsonl_path.exists():
         return completed
 
@@ -85,13 +88,17 @@ def get_completed_samples(jsonl_path: Path) -> set[int]:
                 if line.strip():
                     try:
                         data = json.loads(line)
-                        # Sample index is parsed from episode id: "task_id:sample_idx"
+                        # Parse episode id: "task_id:sample_idx"
                         episode_id = data.get("id", "")
                         if ":" in episode_id:
                             try:
-                                sample_idx = int(episode_id.split(":")[-1])
-                                completed.add(sample_idx)
-                            except ValueError:
+                                parts = episode_id.rsplit(":", 1)
+                                task_id = parts[0]
+                                sample_idx = int(parts[1])
+                                if task_id not in completed:
+                                    completed[task_id] = set()
+                                completed[task_id].add(sample_idx)
+                            except (ValueError, IndexError):
                                 continue
                     except json.JSONDecodeError:
                         continue
@@ -102,7 +109,19 @@ def get_completed_samples(jsonl_path: Path) -> set[int]:
 
 
 # This is the PRIMARY parallelism control - explicit throttling via ray.wait()
-DEFAULT_MAX_CONCURRENT_TASKS = 64
+# This is the per-node default; actual max_concurrent = per_node * num_nodes
+DEFAULT_MAX_CONCURRENT_TASKS_PER_NODE = 64
+
+
+def get_num_ray_nodes() -> int:
+    """Get the number of active Ray nodes in the cluster."""
+    try:
+        nodes = ray.nodes()
+        # Count only alive nodes
+        alive_nodes = [n for n in nodes if n.get("Alive", False)]
+        return max(1, len(alive_nodes))
+    except Exception:
+        return 1
 
 
 @ray.remote(num_cpus=1)  # Minimal resource claim - parallelism controlled by max_concurrent_tasks
@@ -142,7 +161,13 @@ def run_task_eval_ray(
     # Use CLI overrides or config defaults
     num_samples = num_samples or cfg.eval.samples_per_prompt
     output_dir = output_dir or cfg.eval.get("output_dir")
-    max_concurrent = max_concurrent or cfg.get("ray", {}).get("max_concurrent_tasks", DEFAULT_MAX_CONCURRENT_TASKS)
+
+    # Scale max_concurrent with number of nodes (config specifies per-node value)
+    if max_concurrent is None:
+        per_node = cfg.get("ray", {}).get("max_concurrent_tasks_per_node", DEFAULT_MAX_CONCURRENT_TASKS_PER_NODE)
+        num_nodes = get_num_ray_nodes()
+        max_concurrent = per_node * num_nodes
+        print(f"\nParallelism: {per_node} tasks/node × {num_nodes} nodes = {max_concurrent} total concurrent")
 
     print("\n" + "=" * 70)
     print(f"RAY TASK EVAL: {task_id}")
@@ -181,12 +206,13 @@ def run_task_eval_ray(
     if output_dir:
         output_path = Path(output_dir)
         output_path.mkdir(parents=True, exist_ok=True)
-        jsonl_path = output_path / f"{task_id}.jsonl"
+        jsonl_path = output_path / "trajectories.jsonl"
 
         # Check for existing completed samples (resume mode)
-        completed_samples = get_completed_samples(jsonl_path)
+        all_completed = get_completed_samples_by_task(jsonl_path)
+        completed_samples = all_completed.get(task_id, set())
         if completed_samples:
-            print(f"✓ Found {len(completed_samples)} completed samples in {jsonl_path}")
+            print(f"✓ Found {len(completed_samples)} completed samples for {task_id} in {jsonl_path}")
         print(f"✓ Will save results to {jsonl_path}")
 
     # Build list of samples to run (skip completed ones)
@@ -305,7 +331,12 @@ def run_all_tasks_parallel(
     Returns:
         Dict mapping task_id -> list of EvalResults
     """
-    max_concurrent = max_concurrent or cfg.get("ray", {}).get("max_concurrent_tasks", DEFAULT_MAX_CONCURRENT_TASKS)
+    # Scale max_concurrent with number of nodes (config specifies per-node value)
+    if max_concurrent is None:
+        per_node = cfg.get("ray", {}).get("max_concurrent_tasks_per_node", DEFAULT_MAX_CONCURRENT_TASKS_PER_NODE)
+        num_nodes = get_num_ray_nodes()
+        max_concurrent = per_node * num_nodes
+        print(f"\nParallelism: {per_node} tasks/node × {num_nodes} nodes = {max_concurrent} total concurrent")
     total_rollouts = len(task_ids) * num_samples
 
     print("\n" + "=" * 70)
@@ -331,22 +362,24 @@ def run_all_tasks_parallel(
     # Convert config to dict for Ray serialization
     cfg_dict = OmegaConf.to_container(cfg, resolve=True)
 
-    # Prepare output files and check for completed samples (resume mode)
-    jsonl_paths = {}
+    # Prepare output file and check for completed samples (resume mode)
+    jsonl_path = None
     completed_samples = {task_id: set() for task_id in task_ids}
     total_previously_completed = 0
     all_results = {task_id: [] for task_id in task_ids}  # Initialize early for resume case
     if output_dir:
         output_path = Path(output_dir)
         output_path.mkdir(parents=True, exist_ok=True)
+        jsonl_path = output_path / "trajectories.jsonl"
+
+        # Check for existing completed samples (resume mode)
+        all_completed = get_completed_samples_by_task(jsonl_path)
         for task_id in task_ids:
-            jsonl_path = output_path / f"{task_id}.jsonl"
-            jsonl_paths[task_id] = jsonl_path
-            completed_samples[task_id] = get_completed_samples(jsonl_path)
+            completed_samples[task_id] = all_completed.get(task_id, set())
             if completed_samples[task_id]:
                 print(f"  ✓ Found {len(completed_samples[task_id])} completed samples for {task_id}")
                 total_previously_completed += len(completed_samples[task_id])
-        print(f"\n✓ Will save results to {output_dir}/")
+        print(f"\n✓ Will save results to {jsonl_path}")
 
     # Build work queue: all (task_id, sample_idx) pairs, skipping completed ones
     work_queue = [(task_id, sample_idx) for task_id in task_ids for sample_idx in range(num_samples) if sample_idx not in completed_samples[task_id]]
@@ -410,10 +443,10 @@ def run_all_tasks_parallel(
                     )
 
                     # Save trajectory incrementally
-                    if task_id in jsonl_paths and result.steps:
+                    if jsonl_path and result.steps:
                         task_data = task_data_map[task_id]
                         episode_dict = build_trajectory_dict(result, task_data, cfg)
-                        with open(jsonl_paths[task_id], "a") as f:
+                        with open(jsonl_path, "a") as f:
                             f.write(json.dumps(episode_dict) + "\n")
 
                 except Exception as e:

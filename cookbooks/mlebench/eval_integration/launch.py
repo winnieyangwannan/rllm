@@ -12,6 +12,8 @@ Usage:
 
     # Multiple tasks with multi-node
     python launch.py --config configs/gpt5.yaml --name multi_node_2_tasks --tasks mlsp-2013-birds,spooky-author-identification --samples 64 --nodes 2
+    python launch.py --config configs/test_code.yaml --name multi_node_2_tasks_code --tasks mlsp-2013-birds,spooky-author-identification --samples 64 --nodes 2
+
 
     # Resume a failed/incomplete run
     # - Shows progress for each task (completed / remaining)
@@ -53,7 +55,7 @@ from omegaconf import OmegaConf
 # Default paths
 RLLM_ROOT = Path("/home/winnieyangwn/rllm")
 EVAL_SCRIPT = RLLM_ROOT / "cookbooks/mlebench/eval_integration/eval.py"
-DEFAULT_DUMP_DIR = Path("/checkpoint/maui_sft/winnieyangwn/mlebench_dumps")
+DEFAULT_DUMP_DIR = Path("/checkpoint/maui_sft/winnieyangwn/rllm/eval")
 
 
 def get_completed_samples(jsonl_path: Path) -> set[int]:

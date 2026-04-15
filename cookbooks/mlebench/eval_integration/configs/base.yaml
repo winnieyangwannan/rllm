@@ -43,4 +43,4 @@ slurm:
 
 # Ray settings (used by eval_ray.py)
 ray:
-  max_concurrent_tasks: 64   # Max parallel rollouts per node (primary parallelism control)
+  max_concurrent_tasks_per_node: 64   # Max parallel rollouts PER NODE (auto-scales with nodes)
