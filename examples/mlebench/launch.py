@@ -5,7 +5,7 @@ This launcher creates a dump directory, copies code for reproducibility,
 and submits a SLURM job to run the evaluation.
 
 Usage:
-    cd /home/winnieyangwn/rllm/cookbooks/mlebench/eval_integration
+    cd /home/winnieyangwn/rllm/examples/mlebench
 
     # Basic usage (64 samples with gpt5 config)
     python launch.py --config configs/gpt5.yaml --name exp_001 --task mlsp-2013-birds
@@ -54,7 +54,7 @@ from omegaconf import OmegaConf
 
 # Default paths
 RLLM_ROOT = Path("/home/winnieyangwn/rllm")
-EVAL_SCRIPT = RLLM_ROOT / "cookbooks/mlebench/eval_integration/eval.py"
+EVAL_SCRIPT = RLLM_ROOT / "examples/mlebench/eval.py"
 DEFAULT_DUMP_DIR = Path("/checkpoint/maui_sft/winnieyangwn/rllm/eval")
 
 
@@ -309,7 +309,7 @@ ray status
 export RAY_ADDRESS=$HEAD_IP:$HEAD_PORT
 
 # Run evaluation
-python {runtime_code_dir}/cookbooks/mlebench/eval_integration/{eval_script} \\
+python {runtime_code_dir}/examples/mlebench/{eval_script} \\
     --config {config_path} \\
     --output-dir {dump_dir}/results \\
     --samples {samples} \\
@@ -323,7 +323,7 @@ EXIT_CODE=$?
         # Single-node: Ray starts locally in eval_ray.py
         script += f"""
 # Run evaluation (Ray starts locally on this node)
-python {runtime_code_dir}/cookbooks/mlebench/eval_integration/{eval_script} \\
+python {runtime_code_dir}/examples/mlebench/{eval_script} \\
     --config {config_path} \\
     --output-dir {dump_dir}/results \\
     --samples {samples} \\
@@ -400,7 +400,7 @@ Examples:
     config_path = Path(args.config)
     if not config_path.is_absolute():
         if not config_path.exists():
-            config_path = RLLM_ROOT / "cookbooks/mlebench/eval_integration" / args.config
+            config_path = RLLM_ROOT / "examples/mlebench" / args.config
 
     if config_path.exists():
         cfg = OmegaConf.load(config_path)

@@ -14,7 +14,7 @@ agent:
 
 # Sandbox/container settings
 sandbox:
-  manager_uri:  h200-137-001-093:36689
+  manager_uri:   h200-137-001-039:44571
   superimage_directory: /checkpoint/maui_sft/shared/sif
   superimage_version: 2025-05-02v2
   superimage_overlay: /checkpoint/fair-maui-hs/hotfix/kniu.2025-09-19.cache.overlay.ext3.img
@@ -34,8 +34,8 @@ eval:
 # SLURM settings (used by launch.py)
 slurm:
   partition: h200            # SLURM partition
-  qos: h200_coding_shared
-  account: aira_ws2
+  qos: h200_agentic-models_high #h200_coding_shared
+  account: agentic-models # aira_ws2
   time: "168:00:00"          # 7 days default
   nodes: 1
   gpus_per_node: 1           # GPUs per node (H200 nodes have 8)

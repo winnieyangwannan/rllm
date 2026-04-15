@@ -10,7 +10,7 @@ at once. Ray load-balances across all of them automatically, which is better
 when tasks have different difficulty levels.
 
 Usage:
-    cd /home/winnieyangwn/rllm/cookbooks/mlebench/eval_integration
+    cd /home/winnieyangwn/rllm/examples/mlebench
     conda activate rllm
 
     # Single-node mode (starts local Ray cluster automatically)
@@ -50,6 +50,8 @@ from omegaconf import OmegaConf
 
 # Add mle_agent to path
 sys.path.insert(0, "/home/winnieyangwn/rllm/agenthub/mle_agent")
+# Add examples/mlebench to path (for mle_agent_loop)
+sys.path.insert(0, "/home/winnieyangwn/rllm/examples/mlebench")
 
 # Import from main eval.py (reuse everything)
 from eval import (

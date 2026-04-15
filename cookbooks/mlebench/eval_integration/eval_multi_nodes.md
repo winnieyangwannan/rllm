@@ -625,9 +625,30 @@ def main():
 4. **`num_cpus=1`**: Each rollout is IO-bound (waiting on LLM API + sandbox). 1 CPU per task maximizes parallelism.
 5. **No changes to `run_single_rollout`**: The existing function is called as-is inside the Ray task.
 
-### Fallback to Single-Node
+### Single Entry Point: `eval_ray.py` for All Cases
 
-When no Ray cluster is running, `ray.init()` starts a local cluster. `eval_ray.py` works identically to `eval.py` in this case — no separate code path needed.
+When no Ray cluster is running, `ray.init()` starts a local cluster. `eval_ray.py` works identically to the single-node case — no separate code path needed.
+
+**Design decision:** `eval_ray.py` is the **sole entry point** for running evaluations (both single-node and multi-node). The original `eval.py` is kept as a **core library** that `eval_ray.py` imports from:
+
+```python
+# eval_ray.py imports core functions from eval.py:
+from eval import (
+    EvalResult,
+    build_trajectory_dict,
+    load_config,
+    load_task_from_jsonl,
+    print_summary,
+    run_single_rollout,
+)
+```
+
+| Scenario | Command |
+|----------|---------|
+| Single-node | `python eval_ray.py --config configs/gpt5.yaml --task mlsp-2013-birds --samples 4` |
+| Multi-node via SLURM | `python launch.py --config configs/gpt5.yaml --nodes 3 --samples 192` |
+
+Users never need to call `eval.py` directly. It exists solely as the importable module containing core functions and dataclasses (`EvalResult`, `RolloutOutput`, `run_single_rollout`, `run_agent`, `evaluate_rollout`, etc.) that both `eval_ray.py` and Stage 4 training integration will use.
 
 ### Test Plan for Stage 1
 
@@ -747,8 +768,19 @@ ray:
 
 2. **Delete deprecated files:**
    - `distributed.py` — torch.distributed approach, replaced by Ray
+   - `eval_distributed.py` — if it exists, replaced by Ray approach
 
-3. **Update `eval.py`** — add note in docstring pointing to `eval_ray.py` for multi-node
+3. **Update `eval.py` docstring** — clarify it's a library module, not an entry point:
+   ```python
+   """MLE-bench Evaluation Core Library.
+
+   Contains core functions and dataclasses used by eval_ray.py.
+   DO NOT RUN DIRECTLY — use eval_ray.py for evaluation.
+
+   For single-node: python eval_ray.py --config configs/gpt5.yaml --task ... --samples 4
+   For multi-node:  python launch.py --config configs/gpt5.yaml --nodes 3 --samples 192
+   """
+   ```
 
 ### Test Plan for Stage 3
 
@@ -1174,6 +1206,657 @@ This stage is NOT implemented in Stages 1-3 — documenting the full path so des
 
 ---
 
+## Path A Detailed Implementation Plan (with Tests)
+
+This section provides step-by-step implementation for Path A (UnifiedTrainer) with tests at each stage.
+
+### Stage A0: Refactor `eval.py` — Decompose `run_single_rollout`
+
+**Goal:** Split the monolithic `run_single_rollout()` into composable functions. Backward compatible.
+
+**Changes:**
+
+```python
+# eval.py — add these new functions
+
+def create_client(cfg, base_url: str | None = None):
+    """Create LLM client from config.
+    
+    Args:
+        cfg: Config with model settings
+        base_url: Override URL for training (gateway session URL).
+                  If None, creates AzureOpenAI client for direct eval.
+    """
+    import openai
+    if base_url:
+        return openai.OpenAI(base_url=base_url, api_key="EMPTY")
+    else:
+        return openai.AzureOpenAI(
+            azure_endpoint=cfg.model.azure_endpoint,
+            api_key=cfg.model.api_key,
+            api_version=cfg.model.api_version,
+        )
+
+def create_sandbox(task_data: dict, sample_idx: int, cfg) -> AgentBoxSandbox:
+    """Create and configure sandbox for a task.
+    
+    Returns configured AgentBoxSandbox with data mounts.
+    """
+    # Extract sandbox creation logic from run_single_rollout
+    ...
+
+def build_messages(task_data: dict, cfg) -> list[dict]:
+    """Build initial messages (system + user prompt) for a task.
+    
+    Returns list of message dicts ready for agent loop.
+    """
+    # Extract prompt building logic from run_single_rollout
+    ...
+
+def run_agent(
+    task_data: dict,
+    sample_idx: int,
+    cfg,
+    base_url: str | None = None,
+) -> RolloutOutput:
+    """Pure rollout: sandbox → agent loop → result. No evaluation.
+    
+    Args:
+        task_data: Task dict with instance_id, description, etc.
+        sample_idx: Sample index for this rollout
+        cfg: Config with model/data settings
+        base_url: Override URL for training gateway
+        
+    Returns:
+        RolloutOutput with steps, messages, pred_solution, sandbox
+    """
+    client = create_client(cfg, base_url)
+    sandbox = create_sandbox(task_data, sample_idx, cfg)
+    messages = build_messages(task_data, cfg)
+    
+    steps, final_messages, pred_solution, rollout_metrics = _run_agent_loop(
+        client=client,
+        model=cfg.model.name,
+        messages=messages,
+        sandbox=sandbox,
+        ...
+    )
+    
+    return RolloutOutput(
+        steps=steps,
+        messages=final_messages,
+        pred_solution=pred_solution,
+        sandbox=sandbox,  # Keep open for evaluation
+        task_id=task_data["instance_id"],
+        sample_idx=sample_idx,
+        duration=...,
+        rollout_metrics=rollout_metrics,
+    )
+
+def evaluate_rollout(
+    task_data: dict,
+    rollout_output: RolloutOutput,
+    cfg,
+) -> EvalOutput:
+    """Run MLEEvaluator on a completed rollout.
+    
+    Returns:
+        EvalOutput with reward (percentile), is_correct, signals
+    """
+    from mle_agent.evaluator import MLEEvaluator
+    
+    class _EvalEpisode:
+        def __init__(self, pred_solution, sandbox):
+            self.artifacts = {"_sandbox": sandbox, "pred_solution": pred_solution}
+    
+    evaluator = MLEEvaluator(
+        mle_bench_data_dir=cfg.data.mle_bench_data_dir,
+        eval_timeout=cfg.agent.get("eval_timeout", 32400),
+        submit_file=cfg.agent.submit_file,
+    )
+    task = {"task_id": task_data["instance_id"], "instance_id": task_data["instance_id"]}
+    episode = _EvalEpisode(rollout_output.pred_solution, rollout_output.sandbox)
+    
+    return evaluator.evaluate(task, episode)
+
+def run_single_rollout(task_data, sample_idx, cfg) -> EvalResult:
+    """Full eval pipeline: rollout + evaluate. (BACKWARD COMPATIBLE)"""
+    rollout_output = run_agent(task_data, sample_idx, cfg)
+    eval_output = evaluate_rollout(task_data, rollout_output, cfg)
+    
+    # Convert to EvalResult (same as before)
+    signals_dict = {s.name: s.value for s in eval_output.signals}
+    return EvalResult(
+        task_id=rollout_output.task_id,
+        sample_idx=sample_idx,
+        success=eval_output.reward > 0,
+        percentile=eval_output.reward,
+        score=signals_dict.get("raw_score"),
+        num_steps=len(rollout_output.steps),
+        duration=rollout_output.duration,
+        pred_solution=rollout_output.pred_solution,
+        steps=rollout_output.steps,
+        messages=rollout_output.messages,
+        ...
+    )
+```
+
+**Test A0.1: Backward Compatibility**
+```bash
+# Run single eval before and after refactor, compare results
+cd /home/winnieyangwn/rllm/examples/mlebench
+
+# Before refactor: save known-good output
+python eval_ray.py --config configs/gpt5_test.yaml --task mlsp-2013-birds --samples 1 \
+    --output-dir /tmp/eval_before_refactor
+
+# After refactor: should produce identical output
+python eval_ray.py --config configs/gpt5_test.yaml --task mlsp-2013-birds --samples 1 \
+    --output-dir /tmp/eval_after_refactor
+
+# Compare (percentile, steps, termination_reason should match)
+diff <(jq -S . /tmp/eval_before_refactor/trajectories.jsonl) \
+     <(jq -S . /tmp/eval_after_refactor/trajectories.jsonl)
+```
+
+**Test A0.2: New Functions Work Independently**
+```python
+# test_refactor.py
+from eval import create_client, create_sandbox, build_messages, run_agent, evaluate_rollout, load_config, load_task_from_jsonl
+
+cfg = load_config("configs/gpt5_test.yaml")
+task_data = load_task_from_jsonl("mlsp-2013-birds", cfg.data.task_path)
+
+# Test create_client
+client = create_client(cfg)
+assert hasattr(client, 'chat')
+print("✓ create_client works")
+
+# Test create_sandbox
+sandbox = create_sandbox(task_data, 0, cfg)
+result = sandbox.exec("echo hello")
+assert "hello" in result
+sandbox.close()
+print("✓ create_sandbox works")
+
+# Test build_messages
+messages = build_messages(task_data, cfg)
+assert len(messages) == 2
+assert messages[0]["role"] == "system"
+assert messages[1]["role"] == "user"
+print("✓ build_messages works")
+
+# Test run_agent (this actually runs an agent!)
+rollout = run_agent(task_data, 0, cfg)
+assert rollout.task_id == "mlsp-2013-birds"
+assert len(rollout.steps) > 0
+print(f"✓ run_agent works ({len(rollout.steps)} steps)")
+
+# Test evaluate_rollout
+eval_output = evaluate_rollout(task_data, rollout)
+print(f"✓ evaluate_rollout works (reward={eval_output.reward})")
+
+# Cleanup
+rollout.sandbox.close()
+```
+
+---
+
+### Stage A1: Create `@rllm.rollout` Wrapper
+
+**Goal:** Wrap `run_agent()` with rllm's decorator and type protocol.
+
+**File:** `cookbooks/mlebench/train_integration/rollout.py`
+
+```python
+"""MLE-bench rollout wrapper for rllm training (Path A)."""
+
+import sys
+sys.path.insert(0, "/home/winnieyangwn/rllm/examples/mlebench")
+sys.path.insert(0, "/home/winnieyangwn/rllm/agenthub/mle_agent")
+
+import rllm
+from rllm.types import Episode, Trajectory, Step
+from rllm.experimental.eval.types import Task, AgentConfig
+
+from eval import run_agent, load_config
+
+
+@rllm.rollout
+def mle_bench_rollout(task: Task, config: AgentConfig) -> Episode:
+    """MLE-bench rollout for rllm training.
+    
+    Uses config.base_url (gateway session URL) to route through rllm's
+    gateway which captures token IDs + logprobs for policy gradient.
+    """
+    # Get eval config from metadata
+    cfg = config.metadata["cfg"]
+    task_data = task.data
+    
+    # Run agent with gateway URL
+    rollout_output = run_agent(
+        task_data=task_data,
+        sample_idx=0,
+        cfg=cfg,
+        base_url=config.base_url,  # Gateway session URL
+    )
+    
+    # Convert steps to rllm Step format
+    rllm_steps = []
+    for step in rollout_output.steps:
+        rllm_steps.append(Step(
+            input=step.input,
+            output=step.output,
+            metadata=step.metadata if hasattr(step, 'metadata') else {},
+        ))
+    
+    trajectory = Trajectory(
+        name="mle_agent",
+        steps=rllm_steps,
+        output=rollout_output.pred_solution,
+    )
+    
+    return Episode(
+        id=f"{task_data['instance_id']}:{config.session_uid}",
+        task=task_data,
+        trajectories=[trajectory],
+        artifacts={
+            "pred_solution": rollout_output.pred_solution,
+            "_sandbox": rollout_output.sandbox,
+            "rollout_metrics": rollout_output.rollout_metrics,
+        },
+    )
+```
+
+**Test A1.1: Rollout Function Signature**
+```python
+# test_rollout_wrapper.py
+import sys
+sys.path.insert(0, "/home/winnieyangwn/rllm/examples/mlebench")
+sys.path.insert(0, "/home/winnieyangwn/rllm/cookbooks/mlebench/train_integration")
+
+from eval import load_config, load_task_from_jsonl
+from rollout import mle_bench_rollout
+from rllm.experimental.eval.types import Task, AgentConfig
+
+cfg = load_config("configs/gpt5_test.yaml")
+task_data = load_task_from_jsonl("mlsp-2013-birds", cfg.data.task_path)
+
+# Create Task and AgentConfig (simulating what rllm provides)
+task = Task(data=task_data)
+config = AgentConfig(
+    base_url=None,  # No gateway for this test (uses AzureOpenAI directly)
+    model=cfg.model.name,
+    session_uid="test-session-001",
+    metadata={"cfg": cfg},
+)
+
+# Call rollout
+episode = mle_bench_rollout(task, config)
+
+# Verify Episode structure
+assert episode.id == "mlsp-2013-birds:test-session-001"
+assert len(episode.trajectories) == 1
+assert episode.trajectories[0].name == "mle_agent"
+assert "pred_solution" in episode.artifacts
+assert "_sandbox" in episode.artifacts
+print(f"✓ Episode created: {len(episode.trajectories[0].steps)} steps")
+
+# Cleanup
+episode.artifacts["_sandbox"].close()
+```
+
+**Test A1.2: Rollout with Gateway URL (Mock)**
+```python
+# Test that base_url is passed through correctly
+# This doesn't actually connect to a gateway, just verifies the path
+
+from unittest.mock import patch, MagicMock
+
+with patch('eval.create_client') as mock_create:
+    mock_client = MagicMock()
+    mock_create.return_value = mock_client
+    
+    # Simulate gateway URL
+    config = AgentConfig(
+        base_url="http://localhost:9090/session/abc123/v1",
+        model="gpt-4",
+        session_uid="abc123",
+        metadata={"cfg": cfg},
+    )
+    
+    # This would fail because mock_client doesn't really work,
+    # but we can verify base_url was passed
+    try:
+        mle_bench_rollout(task, config)
+    except:
+        pass
+    
+    # Verify create_client was called with base_url
+    mock_create.assert_called_once()
+    call_args = mock_create.call_args
+    assert call_args[1].get('base_url') == "http://localhost:9090/session/abc123/v1"
+    print("✓ base_url passed through correctly")
+```
+
+---
+
+### Stage A2: Create `@rllm.evaluator` Wrapper
+
+**Goal:** Wrap `evaluate_rollout()` with rllm's evaluator protocol.
+
+**File:** `cookbooks/mlebench/train_integration/evaluator.py`
+
+```python
+"""MLE-bench evaluator wrapper for rllm training."""
+
+import sys
+sys.path.insert(0, "/home/winnieyangwn/rllm/examples/mlebench")
+sys.path.insert(0, "/home/winnieyangwn/rllm/agenthub/mle_agent")
+
+import rllm
+from rllm.types import Episode
+from rllm.experimental.eval.types import EvalOutput
+
+from eval import load_config
+from mle_agent.evaluator import MLEEvaluator
+
+
+def create_mle_bench_evaluator(cfg):
+    """Factory to create evaluator with config bound."""
+    
+    evaluator_instance = MLEEvaluator(
+        mle_bench_data_dir=cfg.data.mle_bench_data_dir,
+        eval_timeout=cfg.agent.get("eval_timeout", 32400),
+        submit_file=cfg.agent.submit_file,
+    )
+    
+    @rllm.evaluator
+    def mle_bench_evaluator(task: dict, episode: Episode) -> EvalOutput:
+        """Evaluate MLE-bench episode.
+        
+        Args:
+            task: Task dict with instance_id, etc.
+            episode: Episode with artifacts containing pred_solution and _sandbox
+            
+        Returns:
+            EvalOutput with reward (percentile), is_correct, signals
+        """
+        # MLEEvaluator expects Episode-like object with artifacts
+        class _EvalEpisode:
+            def __init__(self, artifacts):
+                self.artifacts = artifacts
+        
+        eval_episode = _EvalEpisode(episode.artifacts)
+        task_dict = {"task_id": task["instance_id"], "instance_id": task["instance_id"]}
+        
+        return evaluator_instance.evaluate(task_dict, eval_episode)
+    
+    return mle_bench_evaluator
+```
+
+**Test A2.1: Evaluator Returns Correct EvalOutput**
+```python
+# test_evaluator_wrapper.py
+import sys
+sys.path.insert(0, "/home/winnieyangwn/rllm/examples/mlebench")
+sys.path.insert(0, "/home/winnieyangwn/rllm/cookbooks/mlebench/train_integration")
+
+from eval import load_config, load_task_from_jsonl, run_agent
+from evaluator import create_mle_bench_evaluator
+from rllm.types import Episode, Trajectory
+
+cfg = load_config("configs/gpt5_test.yaml")
+task_data = load_task_from_jsonl("mlsp-2013-birds", cfg.data.task_path)
+
+# Run agent to get real rollout
+rollout_output = run_agent(task_data, 0, cfg)
+
+# Create Episode (simulating what rllm provides after rollout)
+episode = Episode(
+    id="mlsp-2013-birds:test",
+    task=task_data,
+    trajectories=[Trajectory(name="mle_agent", steps=[], output=rollout_output.pred_solution)],
+    artifacts={
+        "pred_solution": rollout_output.pred_solution,
+        "_sandbox": rollout_output.sandbox,
+    },
+)
+
+# Create and call evaluator
+evaluator = create_mle_bench_evaluator(cfg)
+eval_output = evaluator(task_data, episode)
+
+# Verify EvalOutput structure
+assert hasattr(eval_output, 'reward')
+assert hasattr(eval_output, 'is_correct')
+assert hasattr(eval_output, 'signals')
+assert isinstance(eval_output.reward, float)
+assert 0.0 <= eval_output.reward <= 1.0
+print(f"✓ EvalOutput: reward={eval_output.reward}, is_correct={eval_output.is_correct}")
+print(f"  Signals: {[s.name for s in eval_output.signals]}")
+
+# Cleanup
+rollout_output.sandbox.close()
+```
+
+---
+
+### Stage A3: Integration Test with UnifiedTrainer (Dry Run)
+
+**Goal:** Test that rollout + evaluator work together in rllm's training pipeline, without actually training.
+
+**File:** `cookbooks/mlebench/train_integration/test_integration.py`
+
+```python
+"""Integration test for MLE-bench + rllm Path A."""
+
+import sys
+sys.path.insert(0, "/home/winnieyangwn/rllm/examples/mlebench")
+sys.path.insert(0, "/home/winnieyangwn/rllm/cookbooks/mlebench/train_integration")
+
+from eval import load_config, load_task_from_jsonl
+from rollout import mle_bench_rollout
+from evaluator import create_mle_bench_evaluator
+from rllm.experimental.eval.types import Task, AgentConfig
+
+
+def test_full_pipeline():
+    """Test rollout → Episode → evaluator → EvalOutput pipeline."""
+    
+    cfg = load_config("configs/gpt5_test.yaml")
+    task_data = load_task_from_jsonl("mlsp-2013-birds", cfg.data.task_path)
+    
+    # Step 1: Create Task and AgentConfig
+    task = Task(data=task_data)
+    config = AgentConfig(
+        base_url=None,  # Direct eval mode
+        model=cfg.model.name,
+        session_uid="integration-test-001",
+        metadata={"cfg": cfg},
+    )
+    
+    # Step 2: Run rollout
+    print("Running rollout...")
+    episode = mle_bench_rollout(task, config)
+    print(f"✓ Rollout complete: {len(episode.trajectories[0].steps)} steps")
+    
+    # Step 3: Run evaluator
+    print("Running evaluator...")
+    evaluator = create_mle_bench_evaluator(cfg)
+    eval_output = evaluator(task_data, episode)
+    print(f"✓ Evaluation complete: reward={eval_output.reward}")
+    
+    # Step 4: Verify reward flows correctly
+    assert eval_output.reward >= 0.0
+    assert eval_output.reward <= 1.0
+    
+    # Cleanup
+    episode.artifacts["_sandbox"].close()
+    
+    print("\n" + "=" * 50)
+    print("INTEGRATION TEST PASSED")
+    print("=" * 50)
+    print(f"Task: {task_data['instance_id']}")
+    print(f"Steps: {len(episode.trajectories[0].steps)}")
+    print(f"Reward: {eval_output.reward}")
+    print(f"Submitted: {episode.artifacts['pred_solution'] is not None}")
+
+
+if __name__ == "__main__":
+    test_full_pipeline()
+```
+
+**Test A3.1: Run Integration Test**
+```bash
+cd /home/winnieyangwn/rllm/cookbooks/mlebench/train_integration
+python test_integration.py
+```
+
+---
+
+### Stage A4: Test with UnifiedTrainer + Verl Backend (1 Step)
+
+**Goal:** Run actual training for 1 step with Verl distributed backend.
+
+**Prerequisites:**
+- Ray cluster running (same setup as eval_ray.py multi-node)
+- GPU nodes with model weights accessible
+- vLLM/SGLang installed
+
+**File:** `cookbooks/mlebench/train_integration/train.py`
+
+```python
+"""MLE-bench training script using UnifiedTrainer + Verl (Path A)."""
+
+import sys
+sys.path.insert(0, "/home/winnieyangwn/rllm/examples/mlebench")
+sys.path.insert(0, "/home/winnieyangwn/rllm/cookbooks/mlebench/train_integration")
+
+import ray
+from omegaconf import OmegaConf
+from eval import load_config, load_tasks_from_jsonl
+from rollout import mle_bench_rollout
+from evaluator import create_mle_bench_evaluator
+
+from rllm.experimental.unified_trainer import UnifiedTrainer
+from rllm.trainer.ray_init_utils import get_ray_init_settings
+
+
+def main():
+    # Initialize Ray cluster
+    ray.init(**get_ray_init_settings())
+    print(f"Ray cluster: {ray.cluster_resources()}")
+    
+    # Load MLE-bench config
+    mle_cfg = load_config("../eval_integration/configs/gpt5_test.yaml")
+    
+    # Load training tasks
+    task_ids = ["mlsp-2013-birds"]  # Start with 1 task
+    tasks = load_tasks_from_jsonl(task_ids, mle_cfg.data.task_path)
+    train_dataset = [{"task_id": tid, **tasks[tid]} for tid in task_ids]
+    
+    # Create evaluator
+    evaluator = create_mle_bench_evaluator(mle_cfg)
+    
+    # Training config for Verl backend
+    train_config = OmegaConf.create({
+        "backend": "verl",
+        
+        # Model config
+        "model": {
+            "path": "/path/to/model/weights",  # HF model or local path
+            "tensor_parallel_size": 1,  # Adjust based on GPU count
+        },
+        
+        # Rollout config
+        "n_rollouts_per_task": 2,  # 2 rollouts per task for variance
+        "n_parallel_tasks": 64,    # Parallel rollout generation
+        
+        # Training config
+        "batch_size": 2,
+        "max_steps": 1,  # Just 1 training step for testing
+        "algorithm": "grpo",  # GRPO, reinforce, rloo, etc.
+        "lr": 1e-6,
+        
+        # Gateway config (for trace capture)
+        "gateway": {
+            "port": 9090,
+        },
+        
+        # Pass MLE-bench config for rollout
+        "rollout_metadata": {"cfg": mle_cfg},
+    })
+    
+    # Create trainer
+    trainer = UnifiedTrainer(
+        agent_flow=mle_bench_rollout,
+        evaluator=evaluator,
+        config=train_config,
+        train_dataset=train_dataset,
+    )
+    
+    # Run 1 training step
+    print("Starting training (1 step)...")
+    trainer.train()
+    print("✓ Training step completed!")
+    
+    ray.shutdown()
+
+
+if __name__ == "__main__":
+    main()
+```
+
+**Test A4.1: Single Training Step on Ray Cluster**
+```bash
+# Option 1: Local Ray (single node with GPU)
+cd /home/winnieyangwn/rllm/cookbooks/mlebench/train_integration
+python train.py
+
+# Option 2: Multi-node via SLURM (reuse eval launch.py pattern)
+# Create train_launch.py similar to launch.py but runs train.py
+python train_launch.py --nodes 2 --config train_config.yaml
+```
+
+**Expected output:**
+- Ray cluster initialized
+- Gateway started (captures token IDs + logprobs)
+- 2 rollouts generated via gateway
+- Episodes enriched with traces
+- Advantage computation (GRPO)
+- 1 gradient step on actor model
+- No crashes!
+
+---
+
+### Stage A5: Multi-Task Training
+
+**Goal:** Scale to multiple tasks and verify load balancing.
+
+**Test A5.1: Train on 3 Tasks**
+```python
+# Modify train.py:
+task_ids = ["mlsp-2013-birds", "spooky-author-identification", "forest-cover-type-prediction"]
+train_config.n_rollouts_per_task = 4
+train_config.max_steps = 3
+```
+
+---
+
+## Path A Implementation Checklist
+
+| Stage | Description | Test | Status |
+|-------|-------------|------|--------|
+| A0 | Refactor `eval.py` | Backward compatibility + unit tests | ⬜ |
+| A1 | `@rllm.rollout` wrapper | Signature + Episode structure | ⬜ |
+| A2 | `@rllm.evaluator` wrapper | EvalOutput structure | ⬜ |
+| A3 | Integration test (no training) | Rollout → Eval pipeline | ⬜ |
+| A4 | Single training step | UnifiedTrainer + Verl | ⬜ |
+| A5 | Multi-task training | Scale test | ⬜ |
+
+---
+
 ## File Summary
 
 ### Stage 0: Refactor (backward compatible)
@@ -1196,37 +1879,6 @@ This stage is NOT implemented in Stages 1-3 — documenting the full path so des
 |---|---|
 | `configs/base.yaml` | Already has `slurm:` and `ray:` sections (no changes needed) |
 | `distributed.py` | **Delete** — torch.distributed approach replaced by Ray |
+| `eval_distributed.py` | **Delete** if exists — replaced by Ray approach |
+| `eval.py` | Update docstring to clarify it's a library, not an entry point |
 
-### Stage 4 (Future): Training Integration
-| File | Purpose |
-|---|---|
-| `train_integration/rollout.py` | `@rllm.rollout` wrapper for Path A (UnifiedTrainer) |
-| `train_integration/evaluator.py` | `@rllm.evaluator` wrapper (shared by both paths) |
-| `train_integration/train.py` | Training script for Path A (UnifiedTrainer) |
-| `train_integration/rollout_async.py` | **Path B:** Async rollout function for FullyAsyncTaskRunner |
-| `train_integration/train_async.py` | **Path B:** Training script using FullyAsyncTaskRunner |
-| `mle_agent/agent_async.py` | **Path B:** Native async `_run_agent_loop_async()` using RolloutClient |
-
----
-
-## Risks and Mitigations
-
-| Risk | Mitigation |
-|---|---|
-| Ray not installed in conda env | `eval_ray.py` imports Ray at top — clear error message. Ray is already a rllm dependency (used by Verl backend). |
-| OmegaConf serialization edge cases | `OmegaConf.to_container(cfg, resolve=True)` handles interpolations. Test with all config files. |
-| Ray task OOM (sandbox process heavy) | `num_cpus=1` limits concurrency per node. Can add `memory=` resource spec if needed. |
-| SLURM Ray cluster startup race | Sleep 10-15s between head start and worker join. Add retry logic if workers fail to connect. |
-| Sandbox `manager_uri` points to single node | All nodes must reach the AgentBox manager. Verify network connectivity in multi-node SLURM. This is an existing constraint — sandbox manager runs as a separate service. |
-| Large number of concurrent sandboxes | AgentBox manager has container limits. Add `max_concurrent` config to throttle if needed (Ray supports resource-based throttling via custom resources). |
-
-### Fully Async Training Specific Risks (Path B)
-
-| Risk | Mitigation |
-|---|---|
-| `RolloutClient` vs OpenAI interface mismatch | Stage 4d adds `_run_agent_loop_async()` that uses RolloutClient directly. Eval still uses sync OpenAI client. |
-| MLE-bench rollouts are slow (sandbox heavy) | Fully async helps — training continues while rollouts generate. Staleness threshold allows 10%+ extra samples. |
-| Weight sync interrupts long rollouts | `RolloutClient.resume_event` handles pause/resume. Aborted requests auto-retry with new weights. |
-| Tokenizer dependency for RolloutClient | Pass tokenizer to `mle_bench_rollout_fn()`. Use same tokenizer as SGLang inference servers. |
-| Sandbox state during weight sync | Sandbox is independent of LLM weights — no reset needed. Only in-flight LLM calls are aborted. |
-| Long evaluation time (code mode) | Evaluation happens after rollout completes. Consider running eval async or in separate actor. |

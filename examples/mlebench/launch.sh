@@ -34,7 +34,7 @@ conda activate rllm
 cd /home/winnieyangwn/rllm
 
 # Set defaults
-CONFIG=${CONFIG:-/home/winnieyangwn/rllm/cookbooks/mlebench/eval_integration/configs/gpt5.yaml}
+CONFIG=${CONFIG:-/home/winnieyangwn/rllm/examples/mlebench/configs/gpt5.yaml}
 SAMPLES=${SAMPLES:-64}
 OUTPUT_DIR=${OUTPUT_DIR:-/checkpoint/maui_sft/winnieyangwn/RLLM/slurm_${SLURM_JOB_ID}}
 
@@ -52,7 +52,7 @@ echo "========================================"
 if [ -n "${TASK}" ]; then
     # Single task mode
     echo "Running single task: ${TASK}"
-    python /home/winnieyangwn/rllm/cookbooks/mlebench/eval_integration/eval.py \
+    python /home/winnieyangwn/rllm/examples/mlebench/eval.py \
         --config ${CONFIG} \
         --task ${TASK} \
         --samples ${SAMPLES} \
@@ -60,7 +60,7 @@ if [ -n "${TASK}" ]; then
 elif [ -n "${TASKS}" ]; then
     # Multiple tasks mode
     echo "Running multiple tasks: ${TASKS}"
-    python /home/winnieyangwn/rllm/cookbooks/mlebench/eval_integration/eval.py \
+    python /home/winnieyangwn/rllm/examples/mlebench/eval.py \
         --config ${CONFIG} \
         --tasks ${TASKS} \
         --samples ${SAMPLES} \

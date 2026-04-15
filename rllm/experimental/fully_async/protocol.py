@@ -76,6 +76,14 @@ class OutputWithVersion:
             end_version=end_version,
         )
 
+    def get_completion_tokens(self) -> int:
+        """Number of completion tokens (total response token IDs across all chunks)."""
+        return len(self.all_response_ids())
+
+    def get_input_context_size(self) -> int:
+        """Input context size (prompt tokens only) for overflow detection."""
+        return len(self.prompt_ids)
+
 
 @dataclass
 class Sequence:

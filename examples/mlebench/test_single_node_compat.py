@@ -5,8 +5,8 @@ Verifies that eval_ray.py produces identical results to eval.py when run on a si
 This is the first test to pass before implementing multi-node support.
 
 Usage:
-    # Run from eval_integration directory
-    cd /home/winnieyangwn/rllm/cookbooks/mlebench/eval_integration
+    # Run from mlebench directory
+    cd /home/winnieyangwn/rllm/examples/mlebench
     conda activate rllm
 
     # Test baseline (eval.py only)

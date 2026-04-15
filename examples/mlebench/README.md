@@ -21,12 +21,15 @@ python eval.py --config configs/base.yaml --list-tasks
 ## Directory Structure
 
 ```
-eval_integration/
+examples/mlebench/
 ├── configs/
 │   ├── base.yaml           # Shared defaults (inherited by others)
 │   ├── gpt5.yaml           # GPT-5 production config (64 samples)
 │   └── gpt5_test.yaml      # GPT-5 test config (2 samples)
-├── eval.py                 # Main evaluation script
+├── eval.py                 # Single-node evaluation script
+├── eval_ray.py             # Multi-node Ray-based evaluation
+├── launch.py               # SLURM launcher with code copy for reproducibility
+├── launch.sh               # Simple SLURM script
 ├── eval.md                 # Implementation plan
 └── README.md               # This file
 ```

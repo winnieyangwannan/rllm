@@ -361,7 +361,7 @@ class MLEAgentFlow(SandboxedAgentFlow):
 
         client = openai.OpenAI(base_url=config.base_url, api_key="not-needed")
 
-        steps, messages, pred_solution = _run_agent_loop(
+        steps, messages, pred_solution, _rollout_metrics = _run_agent_loop(
             client=client,
             model=config.model,
             messages=messages,

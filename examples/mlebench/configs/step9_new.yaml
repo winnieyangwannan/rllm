@@ -1,0 +1,21 @@
+# Step 9 Validation - NEW agent loop config
+# Uses separate manager URI: h200-137-001-039:45027
+
+defaults:
+  - base
+
+# Model settings (Azure OpenAI)
+model:
+  name: gpt-5
+  azure_endpoint: https://azure-services-fair-openai1-eastus2n3.azure-api.net
+  api_key: ${oc.env:AZURE_API_KEY,73afb4e502de426c8ea645416de6ec0b}
+  api_version: 2025-03-01-preview
+
+# Override sandbox manager URI for this job
+sandbox:
+  manager_uri: h200-137-003-002:35219
+
+# Evaluation settings
+eval:
+  samples_per_prompt: 64
+  output_dir: /checkpoint/maui_sft/winnieyangwn/rllm/step9_validation/new

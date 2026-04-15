@@ -8,7 +8,7 @@ For multi-node evaluation, see eval_ray.py which distributes rollouts
 across a Ray cluster.
 
 Usage:
-    cd /home/winnieyangwn/rllm/cookbooks/mlebench/eval_integration
+    cd /home/winnieyangwn/rllm/examples/mlebench
     conda activate rllm
 
     # Basic usage with config file
@@ -30,8 +30,8 @@ Usage:
     python eval.py --config configs/gpt5.yaml --task mlsp-2013-birds --no-save
 
     # Or run from anywhere with absolute paths:
-    python /home/winnieyangwn/rllm/cookbooks/mlebench/eval_integration/eval.py \
-        --config /home/winnieyangwn/rllm/cookbooks/mlebench/eval_integration/configs/gpt5_test.yaml \
+    python /home/winnieyangwn/rllm/examples/mlebench/eval.py \
+        --config /home/winnieyangwn/rllm/examples/mlebench/configs/gpt5_test.yaml \
         --task mlsp-2013-birds
 """
 
@@ -53,9 +53,14 @@ from omegaconf import OmegaConf
 
 # Add mle_agent to path
 sys.path.insert(0, "/home/winnieyangwn/rllm/agenthub/mle_agent")
+# Add examples/mlebench to path (for mle_agent_loop)
+sys.path.insert(0, "/home/winnieyangwn/rllm/examples/mlebench")
 
 # Import rLLM types for trajectory saving
 from rllm.types import Episode, Trajectory
+
+# Module-level flag for legacy agent loop fallback (set by --legacy-agent-loop CLI flag)
+_USE_LEGACY_AGENT_LOOP = False
 
 
 @dataclass
@@ -89,7 +94,7 @@ class EvalResult:
     messages: list | None = None
 
     # NEW: Token metrics (from OpenAI API usage)
-    prompt_tokens: int = 0
+    last_input_context_size: int = 0
     completion_tokens: int = 0
 
     # NEW: Duration breakdown
@@ -219,6 +224,87 @@ def list_available_tasks(task_path: str) -> list[str]:
     return sorted(tasks)
 
 
+def _run_agent_loop_legacy(task_data, sandbox, cfg, reasoning_effort, task_id):
+    """Legacy agent loop path using the old sync _run_agent_loop.
+
+    Returns (steps, final_messages, pred_solution, rollout_metrics) with
+    metrics keys matching the new MLEBenchAgent format.
+    """
+    import openai
+    from mle_agent.agent import _run_agent_loop
+
+    if cfg.agent.submit_file == "csv":
+        from mle_agent.prompts_csv import INSTANCE_PROMPT, SYSTEM_PROMPT
+    else:
+        from mle_agent.prompts_code import INSTANCE_PROMPT, SYSTEM_PROMPT
+
+    # Gather data info from container
+    data_info_cmd = """cd /root/data && \
+echo "=== DATA STRUCTURE ===" && ls -sh && \
+echo -e "\\n=== CSV ROW COUNTS ===" && wc -l *.csv 2>/dev/null && \
+echo -e "\\n=== SAMPLE SUBMISSION FORMAT ===" && head -3 sample_submission.csv 2>/dev/null"""
+    _data_info = sandbox.exec(data_info_cmd, timeout=30)  # noqa: F841
+    print("✓ Gathered data info (legacy)")
+
+    if cfg.agent.submit_file == "csv":
+        system_prompt = SYSTEM_PROMPT.format(
+            timeout_min=int(cfg.agent.session_timeout / 60),
+            timeout_unit="minutes",
+            context_size=cfg.agent.context_size,
+            rollout_timeout_hrs=int(cfg.agent.rollout_timeout / 3600),
+            max_turns=cfg.agent.max_turns,
+        )
+    else:
+        system_prompt = SYSTEM_PROMPT.format(
+            timeout_min=int(cfg.agent.session_timeout / 60),
+            context_size=cfg.agent.context_size,
+            eval_timeout_hrs=int(cfg.agent.rollout_timeout / 3600),
+            max_turns=cfg.agent.max_turns,
+        )
+
+    instance_prompt = INSTANCE_PROMPT.format(
+        task_description=task_data.get("task_description", ""),
+    )
+
+    messages = [
+        {"role": "system", "content": system_prompt},
+        {"role": "user", "content": instance_prompt},
+    ]
+
+    client = openai.AzureOpenAI(
+        azure_endpoint=cfg.model.azure_endpoint,
+        api_key=cfg.model.api_key,
+        api_version=cfg.model.api_version,
+    )
+    print(f"✓ Created AzureOpenAI client (model: {cfg.model.name}) [legacy]")
+
+    print(f"Starting agent loop [legacy] (max_turns={cfg.agent.max_turns}, timeout={cfg.agent.rollout_timeout}s, context_size={cfg.agent.context_size})...")
+    if reasoning_effort:
+        print(f"Reasoning effort: {reasoning_effort}")
+
+    steps, final_messages, pred_solution, rollout_metrics = _run_agent_loop(
+        client=client,
+        model=cfg.model.name,
+        messages=messages,
+        sandbox=sandbox,
+        max_turns=cfg.agent.max_turns,
+        session_timeout=cfg.agent.session_timeout,
+        rollout_timeout=cfg.agent.rollout_timeout,
+        context_size=cfg.agent.context_size,
+        temperature=cfg.agent.temperature,
+        check_submission_validity=cfg.agent.check_submission_validity,
+        task_id=task_id,
+        mle_bench_data_dir=cfg.data.mle_bench_data_dir,
+        submit_file=cfg.agent.submit_file,
+        reasoning_effort=reasoning_effort,
+    )
+
+    # Normalize metric keys to match new format
+    rollout_metrics["last_input_context_size"] = rollout_metrics.pop("prompt_tokens", 0)
+
+    return steps, final_messages, pred_solution, rollout_metrics
+
+
 def run_single_rollout(
     task_data: dict[str, Any],
     sample_idx: int,
@@ -233,19 +319,11 @@ def run_single_rollout(
     """
     import openai
     from agentbox import ContainerConfig
-    from mle_agent.agent import _run_agent_loop
     from mle_agent.evaluator import MLEEvaluator
-
-    # Import prompts based on submit_file mode (csv or code)
-    if cfg.agent.submit_file == "csv":
-        from mle_agent.prompts_csv import INSTANCE_PROMPT, SYSTEM_PROMPT
-    else:  # code mode
-        from mle_agent.prompts_code import INSTANCE_PROMPT, SYSTEM_PROMPT
 
     from rllm.sdk.sandbox.backends.agentbox_backend import AgentBoxSandbox
 
     task_id = task_data["instance_id"]
-    task_description = task_data.get("task_description", "")
 
     print(f"\n{'=' * 60}")
     print(f"ROLLOUT {sample_idx + 1}: {task_id}")
@@ -280,76 +358,80 @@ def run_single_rollout(
         # Set up workspace
         sandbox.exec("mkdir -p /workspace")
 
-        # Gather data info from container
-        data_info_cmd = """cd /root/data && \
-echo "=== DATA STRUCTURE ===" && ls -sh && \
-echo -e "\\n=== CSV ROW COUNTS ===" && wc -l *.csv 2>/dev/null && \
-echo -e "\\n=== SAMPLE SUBMISSION FORMAT ===" && head -3 sample_submission.csv 2>/dev/null"""
-        _data_info = sandbox.exec(data_info_cmd, timeout=30)  # noqa: F841
-        print("✓ Gathered data info")
-
-        # Build prompts based on submit_file mode
-        if cfg.agent.submit_file == "csv":
-            system_prompt = SYSTEM_PROMPT.format(
-                timeout_min=int(cfg.agent.session_timeout / 60),
-                timeout_unit="minutes",
-                context_size=cfg.agent.context_size,
-                rollout_timeout_hrs=int(cfg.agent.rollout_timeout / 3600),
-                max_turns=cfg.agent.max_turns,
-            )
-        else:  # code mode
-            system_prompt = SYSTEM_PROMPT.format(
-                timeout_min=int(cfg.agent.session_timeout / 60),
-                context_size=cfg.agent.context_size,
-                eval_timeout_hrs=int(cfg.agent.rollout_timeout / 3600),
-                max_turns=cfg.agent.max_turns,
-            )
-
-        instance_prompt = INSTANCE_PROMPT.format(
-            task_description=task_description,
-        )
-
-        messages = [
-            {"role": "system", "content": system_prompt},
-            {"role": "user", "content": instance_prompt},
-        ]
-
-        # Create OpenAI client
-        client = openai.AzureOpenAI(
-            azure_endpoint=cfg.model.azure_endpoint,
-            api_key=cfg.model.api_key,
-            api_version=cfg.model.api_version,
-        )
-        print(f"✓ Created AzureOpenAI client (model: {cfg.model.name})")
-
-        # Run agent loop
-        print(f"Starting agent loop (max_turns={cfg.agent.max_turns}, timeout={cfg.agent.rollout_timeout}s, context_size={cfg.agent.context_size})...")
-        print(f"Tools: bash, edit, create, submit ({cfg.agent.submit_file} mode), check_submission_validity")
         reasoning_effort = getattr(cfg.model, "reasoning_effort", None)
-        if reasoning_effort:
-            print(f"Reasoning effort: {reasoning_effort}")
-        steps, final_messages, pred_solution, rollout_metrics = _run_agent_loop(
-            client=client,
-            model=cfg.model.name,
-            messages=messages,
-            sandbox=sandbox,
-            max_turns=cfg.agent.max_turns,
-            session_timeout=cfg.agent.session_timeout,
-            rollout_timeout=cfg.agent.rollout_timeout,
-            context_size=cfg.agent.context_size,
-            temperature=cfg.agent.temperature,
-            check_submission_validity=cfg.agent.check_submission_validity,
-            task_id=task_id,
-            mle_bench_data_dir=cfg.data.mle_bench_data_dir,
-            submit_file=cfg.agent.submit_file,
-            reasoning_effort=reasoning_effort,
-        )
+
+        if _USE_LEGACY_AGENT_LOOP:
+            # ---- Legacy path: use old sync _run_agent_loop ----
+            steps, final_messages, pred_solution, rollout_metrics = _run_agent_loop_legacy(
+                task_data=task_data,
+                sandbox=sandbox,
+                cfg=cfg,
+                reasoning_effort=reasoning_effort,
+                task_id=task_id,
+            )
+        else:
+            # ---- New path: use async MLEBenchAgent + EvalClient ----
+            import asyncio
+
+            from mle_agent_loop import EvalClient, MLEBenchAgent, build_initial_messages
+
+            messages = build_initial_messages(
+                task=task_data,
+                sandbox=sandbox,
+                submit_file=cfg.agent.submit_file,
+                session_timeout=cfg.agent.session_timeout,
+                context_size=cfg.agent.context_size,
+                rollout_timeout=cfg.agent.rollout_timeout,
+                max_turns=cfg.agent.max_turns,
+            )
+            print("✓ Built initial messages")
+
+            openai_client = openai.AzureOpenAI(
+                azure_endpoint=cfg.model.azure_endpoint,
+                api_key=cfg.model.api_key,
+                api_version=cfg.model.api_version,
+                max_retries=0,
+            )
+            client = EvalClient(
+                openai_client=openai_client,
+                model=cfg.model.name,
+                reasoning_effort=reasoning_effort,
+            )
+            print(f"✓ Created EvalClient (model: {cfg.model.name})")
+
+            print(f"Starting agent loop (max_turns={cfg.agent.max_turns}, timeout={cfg.agent.rollout_timeout}s, context_size={cfg.agent.context_size})...")
+            print(f"Tools: bash, edit, create, submit ({cfg.agent.submit_file} mode), check_submission_validity")
+            if reasoning_effort:
+                print(f"Reasoning effort: {reasoning_effort}")
+
+            agent = MLEBenchAgent(
+                client=client,
+                sandbox=sandbox,
+                max_turns=cfg.agent.max_turns,
+                session_timeout=cfg.agent.session_timeout,
+                rollout_timeout=cfg.agent.rollout_timeout,
+                context_size=cfg.agent.context_size,
+                sampling_params={"temperature": cfg.agent.temperature},
+                check_submission_validity=cfg.agent.check_submission_validity,
+                task_id=task_id,
+                mle_bench_data_dir=cfg.data.mle_bench_data_dir,
+                submit_file=cfg.agent.submit_file,
+                max_retries=3,
+                retry_base_delay=5.0,
+            )
+
+            result = asyncio.run(agent.run(messages))
+
+            steps = result.steps
+            final_messages = result.messages
+            pred_solution = result.pred_solution
+            rollout_metrics = result.metrics
 
         rollout_end_time = time.time()
         rollout_duration = rollout_metrics.get("rollout_duration", rollout_end_time - start_time)
         print(f"✓ Agent completed with {len(steps)} steps in {rollout_duration:.1f}s")
         print(f"  Termination: {rollout_metrics.get('termination_reason', 'unknown')}")
-        print(f"  Tokens: {rollout_metrics.get('prompt_tokens', 0)} prompt + {rollout_metrics.get('completion_tokens', 0)} completion")
+        print(f"  Tokens: {rollout_metrics.get('last_input_context_size', 0)} last input context + {rollout_metrics.get('completion_tokens', 0)} completion")
 
         # Log steps summary
         for i, step in enumerate(steps):
@@ -428,7 +510,7 @@ echo -e "\\n=== SAMPLE SUBMISSION FORMAT ===" && head -3 sample_submission.csv 2
             steps=steps,
             messages=final_messages,
             # NEW fields
-            prompt_tokens=rollout_metrics.get("prompt_tokens", 0),
+            last_input_context_size=rollout_metrics.get("last_input_context_size", 0),
             completion_tokens=rollout_metrics.get("completion_tokens", 0),
             rollout_duration=rollout_duration,
             eval_duration=eval_duration,
@@ -453,7 +535,7 @@ echo -e "\\n=== SAMPLE SUBMISSION FORMAT ===" && head -3 sample_submission.csv 2
             steps=None,
             messages=None,
             # NEW fields for error case
-            prompt_tokens=0,
+            last_input_context_size=0,
             completion_tokens=0,
             rollout_duration=error_duration,
             eval_duration=0.0,
@@ -517,9 +599,8 @@ def build_trajectory_dict(result: EvalResult, task_data: dict, cfg: OmegaConf) -
             "num_steps": result.num_steps,
             "duration": result.duration,
             # Token metrics (NEW)
-            "prompt_tokens": result.prompt_tokens,
+            "last_input_context_size": result.last_input_context_size,
             "completion_tokens": result.completion_tokens,
-            "total_tokens": result.prompt_tokens + result.completion_tokens,
             # Duration breakdown (NEW)
             "rollout_duration": result.rollout_duration,
             "eval_duration": result.eval_duration,
@@ -796,8 +877,15 @@ Examples:
     parser.add_argument("--output-dir", type=str, help="Override output directory from config")
     parser.add_argument("--no-save", action="store_true", help="Skip saving trajectories")
     parser.add_argument("--list-tasks", action="store_true", help="List available tasks and exit")
+    parser.add_argument("--legacy-agent-loop", action="store_true", help="Use old sync _run_agent_loop instead of async MLEBenchAgent")
 
     args = parser.parse_args()
+
+    # Set legacy agent loop flag
+    global _USE_LEGACY_AGENT_LOOP
+    _USE_LEGACY_AGENT_LOOP = args.legacy_agent_loop
+    if _USE_LEGACY_AGENT_LOOP:
+        print("⚠ Using legacy agent loop (--legacy-agent-loop)")
 
     # Load config
     print(f"Loading config from {args.config}...")
