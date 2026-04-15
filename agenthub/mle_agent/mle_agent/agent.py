@@ -53,12 +53,14 @@ def _run_agent_loop(
     max_turns: int = 128,
     session_timeout: float = 360.0,
     rollout_timeout: float = 32400.0,  # 9 hours default
+    context_size: int = 131072,  # Max tokens before hard stop
     temperature: float = 1.0,
     check_submission_validity: bool = True,
     task_id: str = "",
     mle_bench_data_dir: str = "/checkpoint/maui/shared/cache/dojo/tasks/mlebench",
     submit_file: str = "csv",
-) -> tuple[list[Step], list[dict], str | None]:
+    reasoning_effort: str | None = None,  # none, minimal, low, medium, high, xhigh
+) -> tuple[list[Step], list[dict], str | None, dict]:
     """Custom agent loop with format error recovery and submission detection.
 
     Args:
@@ -69,6 +71,7 @@ def _run_agent_loop(
         max_turns: Maximum number of LLM turns
         session_timeout: Timeout per bash command (seconds)
         rollout_timeout: Total wall-clock budget (seconds)
+        context_size: Max total tokens before hard stop (default 131072)
         temperature: Sampling temperature (1.0 for RL exploration)
         check_submission_validity: Whether to include check_submission_validity tool
         task_id: Task ID for validation
@@ -76,10 +79,12 @@ def _run_agent_loop(
         submit_file: "csv" (agent generates CSV) or "code" (evaluator runs train.py)
 
     Returns:
-        Tuple of (steps, messages, pred_solution):
+        Tuple of (steps, messages, pred_solution, rollout_metrics):
         - steps: List of Step objects for the trajectory
         - messages: Full conversation history
         - pred_solution: Content of train.py if submitted, else None
+        - rollout_metrics: Dict with prompt_tokens, completion_tokens, num_turns,
+                          termination_reason, rollout_duration
 
     Submit Modes:
     - "csv" (default): Agent runs train.py, generates submission.csv, submits both
@@ -92,6 +97,13 @@ def _run_agent_loop(
     - Submit detection: 'submit' tool ends loop and captures train.py
     - Rollout timeout: checks wall-clock time budget each turn
     - Temperature 1.0 for RL exploration (not 0.0 like SWE-agent)
+
+    Returns:
+        Tuple of (steps, messages, pred_solution, rollout_metrics):
+        - steps: List of Step objects for the trajectory
+        - messages: Full conversation history
+        - pred_solution: Content of train.py if submitted, else None
+        - rollout_metrics: Dict with token counts, termination reason, etc.
     """
     # Select tool set based on mode
     tool_schemas = get_tools(submit_file=submit_file, check_submission_validity=check_submission_validity)
@@ -102,23 +114,51 @@ def _run_agent_loop(
     pred_solution = None
     start_time = time.time()
 
+    # Track token usage across all turns
+    total_prompt_tokens = 0
+    total_completion_tokens = 0
+    termination_reason = None  # Will be set on exit
+    turn = -1  # Initialize for edge case where loop doesn't run
+
     for turn in range(max_turns):
         # Check rollout timeout
         elapsed = time.time() - start_time
         if elapsed >= rollout_timeout:
             logger.warning("Rollout timeout reached after %.1f seconds", elapsed)
+            termination_reason = "rollout_timeout"
             break
 
         try:
-            response = client.chat.completions.create(
-                model=model,
-                messages=messages,
-                tools=tool_schemas,
-                temperature=temperature,
-            )
+            # Build API call kwargs
+            api_kwargs = {
+                "model": model,
+                "messages": messages,
+                "tools": tool_schemas,
+                "temperature": temperature,
+            }
+            # Add reasoning_effort if specified (for GPT-5/o1/o3 models)
+            if reasoning_effort:
+                api_kwargs["reasoning_effort"] = reasoning_effort
+
+            response = client.chat.completions.create(**api_kwargs)
         except Exception:
             logger.exception("LLM API call failed on turn %d", turn)
+            termination_reason = "model_call_error"
             break
+
+        # Track token usage (cumulative for cost tracking)
+        if response.usage:
+            total_prompt_tokens += response.usage.prompt_tokens
+            total_completion_tokens += response.usage.completion_tokens
+
+            # Hard stop if context size exceeded
+            # Use CURRENT turn's prompt_tokens as the actual context window size
+            # (prompt_tokens = full conversation history sent to model)
+            current_context_size = response.usage.prompt_tokens + response.usage.completion_tokens
+            if current_context_size > context_size:
+                logger.warning("Context size exceeded: %d > %d tokens", current_context_size, context_size)
+                termination_reason = "context_exceeded"
+                break
 
         choice = response.choices[0]
         msg = choice.message
@@ -133,8 +173,16 @@ def _run_agent_loop(
 
             if format_errors >= max_format_errors:
                 logger.warning("Max format errors reached, ending loop")
+                termination_reason = "format_error"
                 steps.append(Step(input=f"turn_{turn}", output=content, done=True))
-                return steps, messages, pred_solution
+                rollout_metrics = {
+                    "prompt_tokens": total_prompt_tokens,
+                    "completion_tokens": total_completion_tokens,
+                    "num_turns": turn + 1,
+                    "termination_reason": termination_reason,
+                    "rollout_duration": time.time() - start_time,
+                }
+                return steps, messages, pred_solution, rollout_metrics
 
             # Send format error recovery message
             messages.append({"role": "user", "content": FORMAT_ERROR_MSG})
@@ -179,9 +227,28 @@ def _run_agent_loop(
             )
 
         if submitted:
-            return steps, messages, pred_solution
+            termination_reason = "submit"
+            rollout_metrics = {
+                "prompt_tokens": total_prompt_tokens,
+                "completion_tokens": total_completion_tokens,
+                "num_turns": turn + 1,
+                "termination_reason": termination_reason,
+                "rollout_duration": time.time() - start_time,
+            }
+            return steps, messages, pred_solution, rollout_metrics
 
-    return steps, messages, pred_solution
+    # Loop ended without submit - either max_turns or timeout/error
+    if termination_reason is None:
+        termination_reason = "max_turns"
+
+    rollout_metrics = {
+        "prompt_tokens": total_prompt_tokens,
+        "completion_tokens": total_completion_tokens,
+        "num_turns": max(0, turn + 1),
+        "termination_reason": termination_reason,
+        "rollout_duration": time.time() - start_time,
+    }
+    return steps, messages, pred_solution, rollout_metrics
 
 
 class MLEAgentFlow(SandboxedAgentFlow):

@@ -465,18 +465,19 @@ def execute_create(
         return "Error: No path provided"
 
     # Check if file already exists
-    check_cmd = f"test -f {path} && echo 'EXISTS' || echo 'NOT_EXISTS'"
+    # Use distinct markers to avoid substring matching issues (EXISTS vs NOT_EXISTS)
+    check_cmd = f"test -f {path} && echo 'FILE_FOUND' || echo 'FILE_MISSING'"
     result = _exec(sandbox, check_cmd, timeout=10)
 
-    if "EXISTS" in result:
+    if "FILE_FOUND" in result:
         return f"Error: File already exists: {path}. Use edit tool to modify existing files."
 
     # Check if parent directory exists
     parent = str(Path(path).parent)
-    check_parent = f"test -d {parent} && echo 'DIR_EXISTS' || echo 'DIR_NOT_EXISTS'"
+    check_parent = f"test -d {parent} && echo 'DIR_FOUND' || echo 'DIR_MISSING'"
     result = _exec(sandbox, check_parent, timeout=10)
 
-    if "DIR_NOT_EXISTS" in result:
+    if "DIR_MISSING" in result:
         return f"Error: Parent directory does not exist: {parent}"
 
     # Create file using heredoc

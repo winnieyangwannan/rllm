@@ -1,0 +1,26 @@
+# MLE-bench Evaluation - Test CSV Mode
+# submit_file=csv, agent generates submission.csv
+
+defaults:
+  - base
+
+# Model settings (Azure OpenAI)
+model:
+  name: gpt-5
+  azure_endpoint: https://azure-services-fair-openai1-eastus2n3.azure-api.net
+  api_key: ${oc.env:AZURE_API_KEY,73afb4e502de426c8ea645416de6ec0b}
+  api_version: 2025-03-01-preview
+  reasoning_effort: high    # none, minimal, low, medium, high, xhigh
+
+# Agent settings - CSV mode
+agent:
+  submit_file: csv           # Agent generates submission.csv
+
+# Sandbox settings
+sandbox:
+  manager_uri: h200-137-001-093:36689
+
+# Production eval settings
+eval:
+  samples_per_prompt: 64
+  output_dir: /checkpoint/maui_sft/winnieyangwn/RLLM/test_csv

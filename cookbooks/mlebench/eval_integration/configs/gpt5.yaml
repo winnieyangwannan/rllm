@@ -10,8 +10,10 @@ model:
   azure_endpoint: https://azure-services-fair-openai1-eastus2n3.azure-api.net
   api_key: ${oc.env:AZURE_API_KEY,73afb4e502de426c8ea645416de6ec0b}
   api_version: 2025-03-01-preview
+  reasoning_effort: high    # none, minimal, low, medium, high, xhigh
 
 # Production eval settings (override base)
 eval:
   samples_per_prompt: 64     # Full evaluation
   output_dir: /checkpoint/maui_sft/winnieyangwn/RLLM/gpt5
+  tasks: mlsp-2013-birds,spooky-author-identification,whale-categorization-playground,h-and-m-personalized-fashion-recommendations # tasks: task1,task2,task3           # Or multiple tasks (comma-separated)

@@ -4,6 +4,9 @@
 This script runs MLE-bench evaluations using configuration files.
 Based on test_step7_end_to_end.py but with externalized config.
 
+For multi-node evaluation, see eval_ray.py which distributes rollouts
+across a Ray cluster.
+
 Usage:
     cd /home/winnieyangwn/rllm/cookbooks/mlebench/eval_integration
     conda activate rllm
@@ -15,8 +18,8 @@ Usage:
     python eval.py --config configs/gpt5.yaml --task mlsp-2013-birds --samples 4
 
     # Run multiple tasks
-    python eval.py --config configs/gpt5.yaml --tasks mlsp-2013-birds,spooky-author-identification
-
+    python launch.py --config configs/gpt5.yaml --nodes 4 --samples 64
+    
     # Run all tasks from JSONL directory
     python eval.py --config configs/gpt5.yaml --all-tasks
 
@@ -36,7 +39,9 @@ from __future__ import annotations
 
 import argparse
 import json
+import queue
 import sys
+import threading
 import time
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from dataclasses import dataclass
@@ -51,6 +56,19 @@ sys.path.insert(0, "/home/winnieyangwn/rllm/agenthub/mle_agent")
 
 # Import rLLM types for trajectory saving
 from rllm.types import Episode, Trajectory
+
+
+@dataclass
+class RolloutOutput:
+    """Output from run_agent — the pure rollout result before evaluation."""
+
+    steps: list
+    messages: list
+    pred_solution: str | None
+    sandbox: Any  # AgentBoxSandbox instance, kept open for evaluation
+    task_id: str
+    sample_idx: int
+    duration: float
 
 
 @dataclass
@@ -69,6 +87,20 @@ class EvalResult:
     # Trajectory data for saving
     steps: list | None = None
     messages: list | None = None
+
+    # NEW: Token metrics (from OpenAI API usage)
+    prompt_tokens: int = 0
+    completion_tokens: int = 0
+
+    # NEW: Duration breakdown
+    rollout_duration: float = 0.0  # Agent interaction time
+    eval_duration: float = 0.0  # Evaluation/scoring time (CODE mode: includes train.py execution)
+
+    # NEW: Termination info
+    termination_reason: str | None = None  # "submit", "max_turns", "rollout_timeout", "format_error", "model_call_error", "error"
+
+    # NEW: Outcome flags (matching amaia-collab OutcomeMetrics)
+    outcomes: dict | None = None
 
 
 def load_config(config_path: str) -> OmegaConf:
@@ -104,9 +136,17 @@ def load_config(config_path: str) -> OmegaConf:
     return cfg
 
 
-def load_task_from_jsonl(task_id: str, task_jsonl_dir: str) -> dict[str, Any]:
-    """Load task instance from JSONL file."""
-    jsonl_path = Path(task_jsonl_dir) / f"{task_id}.jsonl"
+def load_task_from_jsonl(task_id: str, task_path: str) -> dict[str, Any]:
+    """Load a single task instance from JSONL file.
+
+    Args:
+        task_id: The instance_id of the task to load
+        task_path: Path to JSONL file containing all tasks (one task per line)
+
+    Returns:
+        Task dict with instance_id, task_description, etc.
+    """
+    jsonl_path = Path(task_path)
     if not jsonl_path.exists():
         raise FileNotFoundError(f"Task JSONL not found: {jsonl_path}")
 
@@ -119,13 +159,63 @@ def load_task_from_jsonl(task_id: str, task_jsonl_dir: str) -> dict[str, Any]:
     raise ValueError(f"Task {task_id} not found in {jsonl_path}")
 
 
-def list_available_tasks(task_jsonl_dir: str) -> list[str]:
-    """List all available task IDs from JSONL directory."""
-    jsonl_dir = Path(task_jsonl_dir)
+def load_tasks_from_jsonl(task_ids: list[str], task_path: str) -> dict[str, dict[str, Any]]:
+    """Load multiple tasks from JSONL file in a single pass.
+
+    More efficient than calling load_task_from_jsonl multiple times,
+    as it reads the file only once.
+
+    Args:
+        task_ids: List of instance_ids to load
+        task_path: Path to JSONL file containing all tasks
+
+    Returns:
+        Dict mapping instance_id -> task dict
+    """
+    jsonl_path = Path(task_path)
+    if not jsonl_path.exists():
+        raise FileNotFoundError(f"Task JSONL not found: {jsonl_path}")
+
+    wanted = set(task_ids)
+    found: dict[str, dict[str, Any]] = {}
+
+    with open(jsonl_path) as f:
+        for line in f:
+            data = json.loads(line)
+            instance_id = data.get("instance_id")
+            if instance_id in wanted:
+                found[instance_id] = data
+                if len(found) == len(wanted):
+                    break  # Found all, stop early
+
+    # Check for missing tasks
+    missing = wanted - found.keys()
+    if missing:
+        raise ValueError(f"Tasks not found in {jsonl_path}: {missing}")
+
+    return found
+
+
+def list_available_tasks(task_path: str) -> list[str]:
+    """List all available task IDs from JSONL file.
+
+    Args:
+        task_path: Path to JSONL file containing all tasks
+
+    Returns:
+        Sorted list of instance_ids from the file
+    """
+    jsonl_path = Path(task_path)
+    if not jsonl_path.exists():
+        raise FileNotFoundError(f"Task JSONL not found: {jsonl_path}")
+
     tasks = []
-    for jsonl_file in jsonl_dir.glob("*.jsonl"):
-        task_id = jsonl_file.stem
-        tasks.append(task_id)
+    with open(jsonl_path) as f:
+        for line in f:
+            data = json.loads(line)
+            instance_id = data.get("instance_id")
+            if instance_id:
+                tasks.append(instance_id)
     return sorted(tasks)
 
 
@@ -145,7 +235,12 @@ def run_single_rollout(
     from agentbox import ContainerConfig
     from mle_agent.agent import _run_agent_loop
     from mle_agent.evaluator import MLEEvaluator
-    from mle_agent.prompts import INSTANCE_PROMPT, SYSTEM_PROMPT
+
+    # Import prompts based on submit_file mode (csv or code)
+    if cfg.agent.submit_file == "csv":
+        from mle_agent.prompts_csv import INSTANCE_PROMPT, SYSTEM_PROMPT
+    else:  # code mode
+        from mle_agent.prompts_code import INSTANCE_PROMPT, SYSTEM_PROMPT
 
     from rllm.sdk.sandbox.backends.agentbox_backend import AgentBoxSandbox
 
@@ -193,12 +288,22 @@ echo -e "\\n=== SAMPLE SUBMISSION FORMAT ===" && head -3 sample_submission.csv 2
         _data_info = sandbox.exec(data_info_cmd, timeout=30)  # noqa: F841
         print("✓ Gathered data info")
 
-        # Build prompts
-        system_prompt = SYSTEM_PROMPT.format(
-            timeout_min=int(cfg.agent.session_timeout / 60),
-            context_size=cfg.agent.context_size,
-            eval_timeout_hrs=int(cfg.agent.rollout_timeout / 3600),
-        )
+        # Build prompts based on submit_file mode
+        if cfg.agent.submit_file == "csv":
+            system_prompt = SYSTEM_PROMPT.format(
+                timeout_min=int(cfg.agent.session_timeout / 60),
+                timeout_unit="minutes",
+                context_size=cfg.agent.context_size,
+                rollout_timeout_hrs=int(cfg.agent.rollout_timeout / 3600),
+                max_turns=cfg.agent.max_turns,
+            )
+        else:  # code mode
+            system_prompt = SYSTEM_PROMPT.format(
+                timeout_min=int(cfg.agent.session_timeout / 60),
+                context_size=cfg.agent.context_size,
+                eval_timeout_hrs=int(cfg.agent.rollout_timeout / 3600),
+                max_turns=cfg.agent.max_turns,
+            )
 
         instance_prompt = INSTANCE_PROMPT.format(
             task_description=task_description,
@@ -218,9 +323,12 @@ echo -e "\\n=== SAMPLE SUBMISSION FORMAT ===" && head -3 sample_submission.csv 2
         print(f"✓ Created AzureOpenAI client (model: {cfg.model.name})")
 
         # Run agent loop
-        print(f"Starting agent loop (max_turns={cfg.agent.max_turns}, timeout={cfg.agent.rollout_timeout}s)...")
+        print(f"Starting agent loop (max_turns={cfg.agent.max_turns}, timeout={cfg.agent.rollout_timeout}s, context_size={cfg.agent.context_size})...")
         print(f"Tools: bash, edit, create, submit ({cfg.agent.submit_file} mode), check_submission_validity")
-        steps, final_messages, pred_solution = _run_agent_loop(
+        reasoning_effort = getattr(cfg.model, "reasoning_effort", None)
+        if reasoning_effort:
+            print(f"Reasoning effort: {reasoning_effort}")
+        steps, final_messages, pred_solution, rollout_metrics = _run_agent_loop(
             client=client,
             model=cfg.model.name,
             messages=messages,
@@ -228,15 +336,20 @@ echo -e "\\n=== SAMPLE SUBMISSION FORMAT ===" && head -3 sample_submission.csv 2
             max_turns=cfg.agent.max_turns,
             session_timeout=cfg.agent.session_timeout,
             rollout_timeout=cfg.agent.rollout_timeout,
+            context_size=cfg.agent.context_size,
             temperature=cfg.agent.temperature,
             check_submission_validity=cfg.agent.check_submission_validity,
             task_id=task_id,
             mle_bench_data_dir=cfg.data.mle_bench_data_dir,
             submit_file=cfg.agent.submit_file,
+            reasoning_effort=reasoning_effort,
         )
 
-        duration = time.time() - start_time
-        print(f"✓ Agent completed with {len(steps)} steps in {duration:.1f}s")
+        rollout_end_time = time.time()
+        rollout_duration = rollout_metrics.get("rollout_duration", rollout_end_time - start_time)
+        print(f"✓ Agent completed with {len(steps)} steps in {rollout_duration:.1f}s")
+        print(f"  Termination: {rollout_metrics.get('termination_reason', 'unknown')}")
+        print(f"  Tokens: {rollout_metrics.get('prompt_tokens', 0)} prompt + {rollout_metrics.get('completion_tokens', 0)} completion")
 
         # Log steps summary
         for i, step in enumerate(steps):
@@ -250,8 +363,11 @@ echo -e "\\n=== SAMPLE SUBMISSION FORMAT ===" && head -3 sample_submission.csv 2
 
         # Run evaluation
         print("\nRunning evaluation...")
+        eval_start_time = time.time()
         evaluator = MLEEvaluator(
             mle_bench_data_dir=cfg.data.mle_bench_data_dir,
+            eval_timeout=cfg.agent.get("eval_timeout", 32400),  # 9 hours default for code mode
+            submit_file=cfg.agent.submit_file,
         )
 
         # Create mock Episode-like object for evaluator
@@ -266,6 +382,7 @@ echo -e "\\n=== SAMPLE SUBMISSION FORMAT ===" && head -3 sample_submission.csv 2
         episode = MockEpisode(pred_solution, sandbox)
 
         eval_output = evaluator.evaluate(task, episode)
+        eval_duration = time.time() - eval_start_time
 
         # Convert signals list to dict for easier access
         signals_dict = {s.name: s.value for s in eval_output.signals}
@@ -273,24 +390,57 @@ echo -e "\\n=== SAMPLE SUBMISSION FORMAT ===" && head -3 sample_submission.csv 2
         print("✓ Evaluation complete:")
         print(f"  Percentile: {eval_output.reward:.4f}")
         print(f"  Signals: {signals_dict}")
+        print(f"  Eval duration: {eval_duration:.1f}s")
+
+        # Build outcomes dict (matching amaia-collab OutcomeMetrics)
+        termination_reason = rollout_metrics.get("termination_reason", "unknown")
+        outcomes = {
+            # Success/failure flags
+            "pass": eval_output.reward > 0,
+            "valid_submission": signals_dict.get("valid_submission", 0.0) > 0,
+            "pred_solution_provided": pred_solution is not None,
+            "submission_csv_provided": signals_dict.get("submission_csv_provided", 0.0) > 0,
+            # Termination status
+            "max_turns_reached": termination_reason == "max_turns",
+            "rollout_timeout": termination_reason == "rollout_timeout",
+            "context_exceeded": termination_reason == "context_exceeded",
+            "model_call_error": termination_reason == "model_call_error",
+            "parse_error": termination_reason == "format_error",
+            # Eval timeout (code mode: train.py exceeded eval_timeout)
+            "eval_timeout": cfg.agent.submit_file == "code" and eval_duration > cfg.agent.eval_timeout,
+            # Outcome details
+            "eval_outcome": "pass" if eval_output.reward > 0 else "fail",
+            "eval_error_message": "",
+            "eval_error_output": "",
+        }
+
+        total_duration = time.time() - start_time
 
         return EvalResult(
             task_id=task_id,
             sample_idx=sample_idx,
             success=eval_output.reward > 0,
             percentile=eval_output.reward,
-            score=signals_dict.get("score"),
+            score=signals_dict.get("raw_score"),
             num_steps=len(steps),
-            duration=duration,
+            duration=total_duration,
             pred_solution=pred_solution,
             steps=steps,
             messages=final_messages,
+            # NEW fields
+            prompt_tokens=rollout_metrics.get("prompt_tokens", 0),
+            completion_tokens=rollout_metrics.get("completion_tokens", 0),
+            rollout_duration=rollout_duration,
+            eval_duration=eval_duration,
+            termination_reason=termination_reason,
+            outcomes=outcomes,
         )
 
     except Exception as e:
         import traceback
 
         traceback.print_exc()
+        error_duration = time.time() - start_time
         return EvalResult(
             task_id=task_id,
             sample_idx=sample_idx,
@@ -298,10 +448,31 @@ echo -e "\\n=== SAMPLE SUBMISSION FORMAT ===" && head -3 sample_submission.csv 2
             percentile=0.0,
             score=None,
             num_steps=0,
-            duration=time.time() - start_time,
+            duration=error_duration,
             error=str(e),
             steps=None,
             messages=None,
+            # NEW fields for error case
+            prompt_tokens=0,
+            completion_tokens=0,
+            rollout_duration=error_duration,
+            eval_duration=0.0,
+            termination_reason="error",
+            outcomes={
+                "pass": False,
+                "valid_submission": False,
+                "pred_solution_provided": False,
+                "submission_csv_provided": False,
+                "max_turns_reached": False,
+                "rollout_timeout": False,
+                "context_exceeded": False,
+                "model_call_error": False,
+                "parse_error": False,
+                "eval_timeout": False,
+                "eval_outcome": "exception",
+                "eval_error_message": str(e),
+                "eval_error_output": traceback.format_exc()[:4096],
+            },
         )
 
     finally:
@@ -309,11 +480,11 @@ echo -e "\\n=== SAMPLE SUBMISSION FORMAT ===" && head -3 sample_submission.csv 2
         print("✓ Sandbox closed")
 
 
-def save_trajectory(result: EvalResult, task_data: dict, output_dir: Path, cfg: OmegaConf) -> str:
-    """Save trajectory to JSON file.
+def build_trajectory_dict(result: EvalResult, task_data: dict, cfg: OmegaConf) -> dict:
+    """Build trajectory/episode as a dictionary for JSONL output.
 
     Returns:
-        Path to saved file.
+        Dictionary representation of the episode.
     """
     # Build Trajectory and Episode objects
     trajectory = Trajectory(
@@ -331,6 +502,7 @@ def save_trajectory(result: EvalResult, task_data: dict, output_dir: Path, cfg: 
     episode = Episode(
         id=f"{result.task_id}:{result.sample_idx}",
         task=task_data,
+        termination_reason=result.termination_reason,
         is_correct=result.success,
         trajectories=[trajectory],
         artifacts={
@@ -339,12 +511,35 @@ def save_trajectory(result: EvalResult, task_data: dict, output_dir: Path, cfg: 
             "config": OmegaConf.to_container(cfg),
         },
         metrics={
+            # Core performance metrics
             "percentile": result.percentile,
             "score": result.score,
             "num_steps": result.num_steps,
             "duration": result.duration,
+            # Token metrics (NEW)
+            "prompt_tokens": result.prompt_tokens,
+            "completion_tokens": result.completion_tokens,
+            "total_tokens": result.prompt_tokens + result.completion_tokens,
+            # Duration breakdown (NEW)
+            "rollout_duration": result.rollout_duration,
+            "eval_duration": result.eval_duration,
         },
     )
+
+    # Convert to dict and add outcomes at top level
+    episode_dict = episode.model_dump()
+    episode_dict["outcomes"] = result.outcomes or {}
+
+    return episode_dict
+
+
+def save_trajectory(result: EvalResult, task_data: dict, output_dir: Path, cfg: OmegaConf) -> str:
+    """Save trajectory to individual JSON file (legacy format).
+
+    Returns:
+        Path to saved file.
+    """
+    episode_dict = build_trajectory_dict(result, task_data, cfg)
 
     # Create output directory
     output_dir.mkdir(parents=True, exist_ok=True)
@@ -352,9 +547,60 @@ def save_trajectory(result: EvalResult, task_data: dict, output_dir: Path, cfg: 
     # Save to JSON
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
     output_path = output_dir / f"{result.task_id}_{result.sample_idx}_{timestamp}.json"
-    output_path.write_text(episode.model_dump_json(indent=2))
+    output_path.write_text(json.dumps(episode_dict, indent=2))
 
     return str(output_path)
+
+
+def trajectory_writer(
+    write_queue: queue.Queue,
+    output_path: Path,
+    num_expected: int,
+    exc_queue: queue.Queue,
+) -> None:
+    """Dedicated thread for writing trajectories to JSONL file.
+
+    Consumes from write_queue and writes each item as a line in JSONL.
+    Expects exactly num_expected items, then a single None as shutdown signal.
+
+    Args:
+        write_queue: Queue containing (result, task_data, cfg) tuples, then None
+        output_path: Path to output JSONL file
+        num_expected: Number of results expected
+        exc_queue: Queue for reporting exceptions
+    """
+    try:
+        output_path.parent.mkdir(parents=True, exist_ok=True)
+        written_count = 0
+        received_count = 0
+
+        with open(output_path, "w") as f:
+            while received_count < num_expected:
+                item = write_queue.get()
+                received_count += 1
+
+                if item is None:
+                    # Skip failed rollouts (they send None as placeholder)
+                    continue
+
+                # Unpack and write
+                result, task_data, cfg = item
+                try:
+                    episode_dict = build_trajectory_dict(result, task_data, cfg)
+                    f.write(json.dumps(episode_dict) + "\n")
+                    f.flush()  # Flush after each write for crash safety
+                    written_count += 1
+                    print(f"✓ Writer: saved rollout {result.sample_idx} ({received_count}/{num_expected})")
+                except Exception as e:
+                    print(f"⚠ Writer: failed to save rollout {result.sample_idx}: {e}")
+
+        print(f"✓ Writer thread: wrote {written_count} trajectories to {output_path}")
+
+    except Exception as e:
+        import traceback
+
+        traceback.print_exc()
+        exc_queue.put(e)
 
 
 def run_task_eval(
@@ -363,12 +609,16 @@ def run_task_eval(
     num_samples: int | None = None,
     output_dir: str | None = None,
 ) -> list[EvalResult]:
-    """Run evaluation on a single task with N samples."""
+    """Run evaluation on a single task with N samples.
+
+    Uses a dedicated writer thread for thread-safe JSONL output.
+    """
 
     # Use CLI overrides or config defaults
     num_samples = num_samples or cfg.eval.samples_per_prompt
     output_dir = output_dir or cfg.eval.get("output_dir")
     parallel = cfg.eval.get("parallel", True)
+    max_workers = cfg.eval.get("max_workers") or num_samples  # Default to num_samples if not set
 
     print("\n" + "=" * 70)
     print(f"TASK EVAL: {task_id}")
@@ -376,6 +626,7 @@ def run_task_eval(
     print("Config:")
     print(f"  model: {cfg.model.name}")
     print(f"  samples_per_prompt: {num_samples}")
+    print(f"  max_workers: {max_workers}")
     print(f"  rollout_timeout: {cfg.agent.rollout_timeout}s ({cfg.agent.rollout_timeout / 60:.0f} min)")
     print(f"  session_timeout: {cfg.agent.session_timeout}s ({cfg.agent.session_timeout / 60:.0f} min)")
     print(f"  max_turns: {cfg.agent.max_turns}")
@@ -386,30 +637,50 @@ def run_task_eval(
 
     # Load task
     print("\nLoading task from JSONL...")
-    task_data = load_task_from_jsonl(task_id, cfg.data.task_jsonl_dir)
+    task_data = load_task_from_jsonl(task_id, cfg.data.task_path)
     print(f"✓ Loaded task: {task_id}")
     print(f"  Difficulty: {task_data.get('difficulty', 'unknown')}")
     print(f"  Description length: {len(task_data.get('task_description', ''))} chars")
+
+    # Set up queues and writer thread if saving is enabled
+    write_queue = None
+    writer_thread = None
+    exc_queue = queue.Queue()
+
+    if output_dir:
+        output_path = Path(output_dir) / f"{task_id}.jsonl"
+        write_queue = queue.Queue()
+        writer_thread = threading.Thread(
+            target=trajectory_writer,
+            kwargs={
+                "write_queue": write_queue,
+                "output_path": output_path,
+                "num_expected": num_samples,
+                "exc_queue": exc_queue,
+            },
+            daemon=True,
+        )
+        writer_thread.start()
+        print(f"✓ Started writer thread for {output_path}")
 
     # Run rollouts
     results = []
 
     if parallel and num_samples > 1:
-        print(f"\nRunning {num_samples} rollouts in parallel...")
-        with ThreadPoolExecutor(max_workers=num_samples) as executor:
+        print(f"\nRunning {num_samples} rollouts in parallel (max_workers={max_workers})...")
+        with ThreadPoolExecutor(max_workers=max_workers) as executor:
             futures = {executor.submit(run_single_rollout, task_data, i, cfg): i for i in range(num_samples)}
             for future in as_completed(futures):
                 sample_idx = futures[future]
                 try:
                     result = future.result()
                     results.append(result)
-                    # Save trajectory if output_dir specified
-                    if output_dir and result.steps:
-                        try:
-                            saved_path = save_trajectory(result, task_data, Path(output_dir), cfg)
-                            print(f"✓ Saved trajectory to {saved_path}")
-                        except Exception as e:
-                            print(f"⚠ Failed to save trajectory: {e}")
+                    # Queue trajectory for writing if enabled
+                    if write_queue:
+                        if result.steps:
+                            write_queue.put((result, task_data, cfg))
+                        else:
+                            write_queue.put(None)  # Placeholder for failed/empty rollout
                 except Exception as e:
                     print(f"⚠ Rollout {sample_idx} failed with exception: {e}")
                     results.append(
@@ -424,6 +695,9 @@ def run_task_eval(
                             error=str(e),
                         )
                     )
+                    # Send placeholder for failed rollout
+                    if write_queue:
+                        write_queue.put(None)
         # Sort results by sample_idx for consistent ordering
         results.sort(key=lambda r: r.sample_idx)
     else:
@@ -431,13 +705,28 @@ def run_task_eval(
             result = run_single_rollout(task_data, i, cfg)
             results.append(result)
 
-            # Save trajectory if output_dir specified
-            if output_dir and result.steps:
-                try:
-                    saved_path = save_trajectory(result, task_data, Path(output_dir), cfg)
-                    print(f"✓ Saved trajectory to {saved_path}")
-                except Exception as e:
-                    print(f"⚠ Failed to save trajectory: {e}")
+            # Queue trajectory for writing if enabled
+            if write_queue:
+                if result.steps:
+                    write_queue.put((result, task_data, cfg))
+                else:
+                    write_queue.put(None)
+
+    # Wait for writer thread to finish
+    if writer_thread:
+        # Send remaining kill signals if some rollouts had steps (and thus sent data, not None)
+        # Actually we need to count how many data items vs None we sent
+        # Simpler: just wait with timeout
+        writer_thread.join(timeout=60)
+        if writer_thread.is_alive():
+            print("⚠ Writer thread did not finish in time")
+
+        # Check for exceptions
+        try:
+            exc = exc_queue.get_nowait()
+            print(f"⚠ Writer thread exception: {exc}")
+        except queue.Empty:
+            pass
 
     return results
 
@@ -517,7 +806,7 @@ Examples:
 
     # List tasks mode
     if args.list_tasks:
-        tasks = list_available_tasks(cfg.data.task_jsonl_dir)
+        tasks = list_available_tasks(cfg.data.task_path)
         print(f"\nAvailable tasks ({len(tasks)}):")
         for task in tasks:
             print(f"  - {task}")
@@ -530,7 +819,7 @@ Examples:
     elif args.tasks:
         task_ids = [t.strip() for t in args.tasks.split(",")]
     elif args.all_tasks:
-        task_ids = list_available_tasks(cfg.data.task_jsonl_dir)
+        task_ids = list_available_tasks(cfg.data.task_path)
     else:
         parser.error("Must specify --task, --tasks, or --all-tasks")
 
