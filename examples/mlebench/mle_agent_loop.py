@@ -308,6 +308,63 @@ class MLEBenchAgent:
                 await asyncio.sleep(delay)
         raise last_error  # Unreachable, but satisfies type checker
 
+    async def _call_llm_with_retry_timed(self, messages, sampling_params, tools):
+        """Call LLM with retry and timing breakdown.
+
+        Returns:
+            tuple: (msg, output, timing_dict) where timing_dict contains:
+                - inference_time: Total time spent in actual LLM calls
+                - retry_delay_time: Total time spent waiting between retries
+                - num_retries: Number of retries performed
+        """
+        try:
+            from rllm.experimental.fully_async.client import LLMCallError as RolloutLLMCallError
+        except ImportError:
+            RolloutLLMCallError = LLMCallError
+
+        last_error = None
+        total_inference_time = 0.0
+        total_retry_delay = 0.0
+        num_retries = 0
+
+        for attempt in range(1 + self.max_retries):
+            call_start = time.monotonic()
+            try:
+                result = await self.client.chat_completion(
+                    messages=messages,
+                    sampling_params=sampling_params,
+                    tools=tools,
+                )
+                total_inference_time += time.monotonic() - call_start
+                return (
+                    result[0],
+                    result[1],
+                    {
+                        "inference_time": total_inference_time,
+                        "retry_delay_time": total_retry_delay,
+                        "num_retries": num_retries,
+                    },
+                )
+            except (LLMCallError, RolloutLLMCallError) as e:
+                total_inference_time += time.monotonic() - call_start
+                last_error = e
+                retryable = getattr(e, "retryable", False)
+                if not retryable or attempt == self.max_retries:
+                    raise
+                delay = min(self.retry_base_delay * (2**attempt), self.retry_max_delay)
+                logger.warning(
+                    "LLM call failed (attempt %d/%d), retrying in %.0fs: %s",
+                    attempt + 1,
+                    1 + self.max_retries,
+                    delay,
+                    e,
+                )
+                delay_start = time.monotonic()
+                await asyncio.sleep(delay)
+                total_retry_delay += time.monotonic() - delay_start
+                num_retries += 1
+        raise last_error
+
     async def run(self, messages: list[dict]) -> AgentResult:
         """Run the async agent loop.
 
@@ -329,7 +386,18 @@ class MLEBenchAgent:
         start_time = time.monotonic()
         turn = -1
 
+        # Timing breakdown accumulators
+        total_llm_time = 0.0  # Time spent in LLM inference (excluding retries)
+        total_llm_retry_time = 0.0  # Time spent waiting during retries
+        total_tool_time = 0.0  # Time spent in tool execution
+        per_turn_timing: list[dict] = []  # Detailed per-turn timing
+
         for turn in range(self.max_turns):
+            turn_start = time.monotonic()
+            turn_llm_time = 0.0
+            turn_retry_time = 0.0
+            turn_tool_time = 0.0
+
             # Check rollout timeout
             elapsed = time.monotonic() - start_time
             if elapsed >= self.rollout_timeout:
@@ -345,15 +413,20 @@ class MLEBenchAgent:
                 RolloutLLMCallError = LLMCallError
 
             try:
-                msg, output = await self._call_llm_with_retry(
+                msg, output, llm_timing = await self._call_llm_with_retry_timed(
                     messages=messages,
                     sampling_params=self.sampling_params,
                     tools=self.tools,
                 )
+                turn_llm_time = llm_timing["inference_time"]
+                turn_retry_time = llm_timing["retry_delay_time"]
             except (LLMCallError, RolloutLLMCallError) as e:
                 logger.warning("LLM call failed after retries on turn %d: %s", turn, e)
                 termination_reason = "model_call_error"
                 break
+
+            total_llm_time += turn_llm_time
+            total_llm_retry_time += turn_retry_time
 
             # --- Token tracking (uniform interface) ---
             last_completion_tokens = output.get_completion_tokens()
@@ -404,6 +477,7 @@ class MLEBenchAgent:
                         termination_reason = "format_error"
                     break
 
+                tool_start = time.monotonic()
                 output_str, is_terminal, solution = await asyncio.to_thread(
                     execute_tool,
                     self.sandbox,
@@ -414,8 +488,17 @@ class MLEBenchAgent:
                     mle_bench_data_dir=self.mle_bench_data_dir,
                     submit_file=self.submit_file,
                 )
+                tool_exec_time = time.monotonic() - tool_start
+                turn_tool_time += tool_exec_time
+                total_tool_time += tool_exec_time
 
-                steps.append(Step(input={"tool": tool_name, **tool_args}, output=output_str))
+                steps.append(
+                    Step(
+                        input={"tool": tool_name, **tool_args},
+                        output=output_str,
+                        metadata={"tool_exec_time": tool_exec_time, "turn": turn},
+                    )
+                )
                 messages.append(
                     {
                         "role": "tool",
@@ -433,10 +516,25 @@ class MLEBenchAgent:
             if not tool_parse_failed:
                 format_error_count = 0
 
+            # Record per-turn timing
+            turn_total = time.monotonic() - turn_start
+            per_turn_timing.append(
+                {
+                    "turn": turn,
+                    "llm_time": turn_llm_time,
+                    "retry_time": turn_retry_time,
+                    "tool_time": turn_tool_time,
+                    "turn_total": turn_total,
+                }
+            )
+
             if termination_reason in ("submit", "format_error"):
                 break
 
         duration = time.monotonic() - start_time
+
+        # Calculate overhead (time not accounted for by LLM or tools)
+        overhead_time = duration - total_llm_time - total_llm_retry_time - total_tool_time
 
         # trajectory is only meaningful if it has sequences (i.e., training mode)
         final_trajectory = trajectory if trajectory.sequences else None
@@ -452,6 +550,12 @@ class MLEBenchAgent:
                 "num_turns": max(0, turn + 1),
                 "termination_reason": termination_reason,
                 "rollout_duration": duration,
+                # Timing breakdown (in seconds)
+                "timing_llm_inference": total_llm_time,
+                "timing_llm_retry_delay": total_llm_retry_time,
+                "timing_tool_execution": total_tool_time,
+                "timing_overhead": overhead_time,  # Async overhead, message building, etc.
+                "timing_per_turn": per_turn_timing,  # Detailed per-turn breakdown
             },
             trajectory=final_trajectory,
         )

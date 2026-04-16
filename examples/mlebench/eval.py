@@ -103,6 +103,13 @@ class EvalResult:
     rollout_duration: float = 0.0  # Agent interaction time
     eval_duration: float = 0.0  # Evaluation/scoring time (CODE mode: includes train.py execution)
 
+    # NEW: Timing breakdown (in seconds)
+    timing_llm_inference: float = 0.0  # Time in LLM calls (excluding retries)
+    timing_llm_retry_delay: float = 0.0  # Time waiting between retries
+    timing_tool_execution: float = 0.0  # Time in tool execution
+    timing_overhead: float = 0.0  # Async overhead, message building, etc.
+    timing_per_turn: list | None = None  # Detailed per-turn timing
+
     # NEW: Termination info
     termination_reason: str | None = None  # "submit", "max_turns", "rollout_timeout", "format_error", "model_call_error", "error"
 
@@ -573,6 +580,12 @@ def run_single_rollout(
             completion_tokens=rollout_metrics.get("completion_tokens", 0),
             rollout_duration=rollout_duration,
             eval_duration=eval_duration,
+            # Timing breakdown
+            timing_llm_inference=rollout_metrics.get("timing_llm_inference", 0.0),
+            timing_llm_retry_delay=rollout_metrics.get("timing_llm_retry_delay", 0.0),
+            timing_tool_execution=rollout_metrics.get("timing_tool_execution", 0.0),
+            timing_overhead=rollout_metrics.get("timing_overhead", 0.0),
+            timing_per_turn=rollout_metrics.get("timing_per_turn"),
             termination_reason=termination_reason,
             outcomes=outcomes,
         )
@@ -688,6 +701,12 @@ def build_trajectory_dict(result: EvalResult, task_data: dict, cfg: OmegaConf) -
             # Duration breakdown
             "rollout_duration": result.rollout_duration,
             "eval_duration": result.eval_duration,
+            # Timing breakdown (in seconds) - where time was spent
+            "timing_llm_inference": result.timing_llm_inference,
+            "timing_llm_retry_delay": result.timing_llm_retry_delay,
+            "timing_tool_execution": result.timing_tool_execution,
+            "timing_overhead": result.timing_overhead,
+            "timing_per_turn": result.timing_per_turn,
         },
     )
 
