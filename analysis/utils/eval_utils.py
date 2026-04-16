@@ -50,9 +50,12 @@ def categorize_error(row):
     else:
         outcomes = row
 
+    # Use both error message and output for categorization
     error_output = outcomes.get("eval_error_output", "")
-    error_str = str(error_output).lower()
-    error_str_original = str(error_output)
+    error_message = outcomes.get("eval_error_message", "")
+    # Combine both for pattern matching - message is the primary reason, output is execution details
+    error_str = str(error_output).lower() + " " + str(error_message).lower()
+    error_str_original = str(error_output) + " " + str(error_message)
 
     model_call_error = outcomes.get("model_call_error", False)
     max_turns_reached = outcomes.get("max_turns_reached", False)
@@ -80,8 +83,13 @@ def categorize_error(row):
     if parse_error:
         return "Tool Call Parsing Error"
 
-    if error_str.strip() == "" or error_str == "none":
+    # Check if both error_message and error_output are empty (combined string would just be a space)
+    if error_str.strip() == "" or error_str.strip() == "none":
         return "Empty error message"
+
+    # Check for submission.csv not found (common in code mode)
+    if "submission.csv not found" in error_str:
+        return "submission.csv Not Generated"
 
     # Check for common error patterns
     if "worker connection failed" in error_str or "worker became unresponsive" in error_str:

@@ -527,6 +527,12 @@ def run_single_rollout(
 
         # Build outcomes dict (matching amaia-collab OutcomeMetrics)
         termination_reason = rollout_metrics.get("termination_reason", "unknown")
+
+        # Extract error info from evaluator metadata (populated by _fail() in evaluator.py)
+        eval_metadata = eval_output.metadata or {}
+        eval_error_reason = eval_metadata.get("reason", "")
+        eval_exec_output = eval_metadata.get("exec_output", "")
+
         outcomes = {
             # Success/failure flags
             "pass": eval_output.reward > 0,
@@ -543,8 +549,8 @@ def run_single_rollout(
             "eval_timeout": cfg.agent.submit_file == "code" and eval_duration > cfg.agent.eval_timeout,
             # Outcome details
             "eval_outcome": "pass" if eval_output.reward > 0 else "fail",
-            "eval_error_message": "",
-            "eval_error_output": "",
+            "eval_error_message": eval_error_reason,
+            "eval_error_output": eval_exec_output,
         }
 
         total_duration = time.time() - start_time
