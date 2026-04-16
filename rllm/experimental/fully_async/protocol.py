@@ -19,6 +19,9 @@ class OutputWithVersion:
     output_chunks: list[OutputChunk]
     finish_reason: str = "Not Finish"
     prompt_text: str = ""  # Original prompt text (if available)
+    # Optional overrides for text mode (no token IDs available from /v1/chat/completions)
+    _completion_token_count: int | None = None
+    _input_context_size: int | None = None
 
     @property
     def num_output_tokens(self):
@@ -58,6 +61,10 @@ class OutputWithVersion:
         return ids
 
     def to_sequence(self):
+        # Text mode: no token data available, return None
+        if self._completion_token_count is not None or not self.output_chunks:
+            return None
+
         response_ids = []
         response_logprobs = []
         for chunk in self.output_chunks:
@@ -78,10 +85,14 @@ class OutputWithVersion:
 
     def get_completion_tokens(self) -> int:
         """Number of completion tokens (total response token IDs across all chunks)."""
+        if self._completion_token_count is not None:
+            return self._completion_token_count
         return len(self.all_response_ids())
 
     def get_input_context_size(self) -> int:
         """Input context size (prompt tokens only) for overflow detection."""
+        if self._input_context_size is not None:
+            return self._input_context_size
         return len(self.prompt_ids)
 
 

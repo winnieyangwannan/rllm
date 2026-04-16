@@ -273,7 +273,17 @@ class MLEBenchAgent:
         self.tools = get_tools(submit_file=submit_file, check_submission_validity=check_submission_validity)
 
     async def _call_llm_with_retry(self, messages, sampling_params, tools):
-        """Call LLM with exponential backoff retry for transient errors."""
+        """Call LLM with exponential backoff retry for transient errors.
+
+        Catches both mle_agent_loop.LLMCallError (from EvalClient) and
+        rllm.experimental.fully_async.client.LLMCallError (from RolloutClient).
+        """
+        # Import RolloutClient's LLMCallError to catch both exception types
+        try:
+            from rllm.experimental.fully_async.client import LLMCallError as RolloutLLMCallError
+        except ImportError:
+            RolloutLLMCallError = LLMCallError  # Fallback to local if import fails
+
         last_error = None
         for attempt in range(1 + self.max_retries):
             try:
@@ -282,9 +292,10 @@ class MLEBenchAgent:
                     sampling_params=sampling_params,
                     tools=tools,
                 )
-            except LLMCallError as e:
+            except (LLMCallError, RolloutLLMCallError) as e:
                 last_error = e
-                if not e.retryable or attempt == self.max_retries:
+                retryable = getattr(e, "retryable", False)
+                if not retryable or attempt == self.max_retries:
                     raise
                 delay = min(self.retry_base_delay * (2**attempt), self.retry_max_delay)
                 logger.warning(
@@ -310,7 +321,8 @@ class MLEBenchAgent:
         steps: list[Step] = []
         trajectory = TrainingTrajectory(sequences=[])
         completion_tokens = 0
-        last_input_context_size = 0
+        context_size = 0  # Context window size on last turn
+        last_completion_tokens = 0  # Completion tokens on last turn
         termination_reason = "max_turns"
         format_error_count = 0
         pred_solution = None
@@ -326,24 +338,31 @@ class MLEBenchAgent:
                 break
 
             # --- LLM call with retry + error handling ---
+            # Catch both local LLMCallError and RolloutClient's LLMCallError
+            try:
+                from rllm.experimental.fully_async.client import LLMCallError as RolloutLLMCallError
+            except ImportError:
+                RolloutLLMCallError = LLMCallError
+
             try:
                 msg, output = await self._call_llm_with_retry(
                     messages=messages,
                     sampling_params=self.sampling_params,
                     tools=self.tools,
                 )
-            except LLMCallError as e:
+            except (LLMCallError, RolloutLLMCallError) as e:
                 logger.warning("LLM call failed after retries on turn %d: %s", turn, e)
                 termination_reason = "model_call_error"
                 break
 
             # --- Token tracking (uniform interface) ---
-            completion_tokens += output.get_completion_tokens()
-            last_input_context_size = output.get_input_context_size()
+            last_completion_tokens = output.get_completion_tokens()
+            completion_tokens += last_completion_tokens
+            context_size = output.get_input_context_size()
 
             effective_limit = self.context_size * self.context_safety_margin
-            if last_input_context_size > effective_limit:
-                logger.warning("Context size exceeded: %d > %d", last_input_context_size, int(effective_limit))
+            if context_size > effective_limit:
+                logger.warning("Context size exceeded: %d > %d", context_size, int(effective_limit))
                 termination_reason = "context_exceeded"
                 break
 
@@ -427,8 +446,9 @@ class MLEBenchAgent:
             steps=steps,
             pred_solution=pred_solution,
             metrics={
-                "completion_tokens": completion_tokens,
-                "last_input_context_size": last_input_context_size,
+                "completion_tokens": completion_tokens,  # Sum across all turns
+                "context_size": context_size,  # Context window on last turn
+                "total_tokens": context_size + last_completion_tokens,  # Total conversation length
                 "num_turns": max(0, turn + 1),
                 "termination_reason": termination_reason,
                 "rollout_duration": duration,

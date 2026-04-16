@@ -11,6 +11,19 @@ agent:
   temperature: 1.0
   submit_file: csv           # 'csv' or 'code'
   check_submission_validity: true
+  llm_timeout: 600.0         # Timeout per LLM call (seconds) - used by RolloutClient text mode
+
+# Model settings (override in model-specific configs)
+# Supported backends: "azure" (default), "sglang", "vllm"
+model:
+  name: ""
+  backend: azure             # "azure", "sglang", or "vllm"
+  base_url: null             # For sglang/vllm: http://localhost:30000
+  # Azure-specific (used when backend=azure):
+  # azure_endpoint: ""
+  # api_key: ""
+  # api_version: ""
+  # reasoning_effort: null
 
 # Sandbox/container settings
 sandbox:

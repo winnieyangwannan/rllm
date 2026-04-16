@@ -259,19 +259,72 @@ def truncate_output(output: str, max_length: int = MAX_OUTPUT_LENGTH) -> str:
     return output[:half] + f"\n\n... [TRUNCATED {len(output) - max_length} characters] ...\n\n" + output[-half:]
 
 
-def _safe_exec(sandbox: Sandbox, command: str, timeout: float = 60.0) -> tuple[str, int]:
-    """Execute command in sandbox with timeout.
+class WorkerDeadError(Exception):
+    """Raised when the agentbox worker hosting the container is unreachable.
+
+    This error is unrecoverable - the container must be recreated on a new worker.
+    """
+
+    pass
+
+
+def _safe_exec(
+    sandbox: Sandbox,
+    command: str,
+    timeout: float = 60.0,
+    max_retries: int = 3,
+    retry_delay: float = 2.0,
+) -> tuple[str, int]:
+    """Execute command in sandbox with timeout and retry logic.
 
     Returns:
         Tuple of (output, exit_code). exit_code is -1 on exception.
+
+    Raises:
+        WorkerDeadError: If the worker is permanently unreachable (connection refused).
     """
-    try:
-        output = sandbox.exec(command, timeout=timeout)
-        # Try to extract exit code by running echo $?
-        # This is a best-effort approach since AgentBox doesn't return exit codes
-        return output, 0  # Assume success if no exception
-    except Exception as e:
-        return f"Error: {e}", -1
+    import time
+
+    consecutive_connection_failures = 0
+    last_error = None
+
+    for attempt in range(max_retries + 1):
+        try:
+            output = sandbox.exec(command, timeout=timeout)
+            # Success - reset failure counter
+            return output, 0
+        except Exception as e:
+            last_error = e
+            error_str = str(e).lower()
+
+            # Detect dead worker patterns
+            is_connection_error = any(
+                pattern in error_str
+                for pattern in [
+                    "connection refused",
+                    "unavailable",
+                    "failed to connect",
+                    "shell session failed to start",
+                ]
+            )
+
+            if is_connection_error:
+                consecutive_connection_failures += 1
+                logger.warning("Sandbox connection error (attempt %d/%d): %s", attempt + 1, max_retries + 1, e)
+
+                # After 3 consecutive connection failures, worker is likely dead
+                if consecutive_connection_failures >= 3:
+                    raise WorkerDeadError(f"Worker appears dead after {consecutive_connection_failures} consecutive connection failures: {e}") from e
+
+                # Wait before retry
+                if attempt < max_retries:
+                    time.sleep(retry_delay * (attempt + 1))
+            else:
+                # Non-connection error - don't retry
+                return f"Error: {e}", -1
+
+    # Max retries exceeded
+    return f"Error after {max_retries + 1} attempts: {last_error}", -1
 
 
 def _exec(sandbox: Sandbox, command: str, timeout: float = 60.0) -> str:

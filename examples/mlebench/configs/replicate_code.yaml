@@ -1,0 +1,37 @@
+# Replicate CODE mode (multi_node_2_tasks_code)
+# submit_file=code, evaluator runs train.py
+
+defaults:
+  - base
+
+# Model settings (Azure OpenAI)
+model:
+  name: gpt-5
+  azure_endpoint: https://azure-services-fair-openai1-eastus2n3.azure-api.net
+  api_key: ${oc.env:AZURE_API_KEY,73afb4e502de426c8ea645416de6ec0b}
+  api_version: 2025-03-01-preview
+  reasoning_effort: high
+
+# Agent settings - Code mode (same as original test_code.yaml)
+agent:
+  submit_file: code
+  session_timeout: 1200      # 20 minutes per bash command
+  eval_timeout: 86400        # 24 hours for train.py execution
+
+# Sandbox settings
+sandbox:
+  manager_uri: h200-137-001-039:40543
+
+# Evaluation settings
+eval:
+  samples_per_prompt: 64
+  output_dir: /checkpoint/maui_sft/winnieyangwn/rllm/replicate_code
+
+# SLURM settings
+slurm:
+  qos: h200_agentic-models_high
+  account: agentic-models
+
+# Ray settings
+ray:
+  max_concurrent_tasks_per_node: 32

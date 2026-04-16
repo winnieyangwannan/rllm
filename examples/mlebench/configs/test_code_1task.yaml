@@ -1,0 +1,33 @@
+# Test CODE mode - 1 task, 1 node
+defaults:
+  - base
+
+# Model settings (Azure OpenAI)
+model:
+  name: gpt-5
+  azure_endpoint: https://azure-services-fair-openai1-eastus2n3.azure-api.net
+  api_key: ${oc.env:AZURE_API_KEY,73afb4e502de426c8ea645416de6ec0b}
+  api_version: 2025-03-01-preview
+  reasoning_effort: high
+
+# Agent settings - Code mode
+agent:
+  submit_file: code
+  session_timeout: 1200      # 20 minutes per bash command
+  eval_timeout: 86400        # 24 hours for train.py execution
+
+# Sandbox settings
+sandbox:
+  manager_uri: h200-137-003-002:44961
+
+# Evaluation settings
+eval:
+  samples_per_prompt: 8   # Small test - 8 samples
+  tasks: mlsp-2013-birds  # 1 task only
+  output_dir: /checkpoint/maui_sft/winnieyangwn/rllm/eval/test_code_1task
+
+# SLURM settings - 1 node
+slurm:
+  qos: h200_agentic-models_high
+  account: agentic-models
+  nodes: 1

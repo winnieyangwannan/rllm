@@ -1,0 +1,51 @@
+# MLE-bench Evaluation with vLLM Server - Qwen3.5-4B
+#
+# SETUP (2 steps):
+#
+# Step 1: Start vLLM server (in a separate terminal or screen session)
+#   vllm serve /checkpoint/agentic-models/winnieyangwn/models/Qwen3.5-4B \
+#       --port 30000 \
+#       --enable-auto-tool-choice \
+#       --tool-call-parser hermes
+#
+# Step 2: Launch evaluation
+#   cd /home/winnieyangwn/rllm/examples/mlebench
+#   python launch.py --config configs/vllm_test.yaml --name vllm_test \
+#       --task mlsp-2013-birds --samples 4
+#
+# Notes:
+# - vLLM server must be running BEFORE launching eval
+# - Ray parallelization works with server mode
+# - --tool-call-parser hermes works well with Qwen models
+
+defaults:
+  - base
+
+# Model settings (vLLM server mode)
+model:
+  name: /checkpoint/agentic-models/winnieyangwn/models/Qwen3.5-4B
+  backend: vllm              # Server mode (NOT vllm_embedded)
+  base_url: http://localhost:30000
+  api_key: null              # vLLM doesn't require auth by default
+
+# Agent settings for Qwen3.5-4B
+agent:
+  context_size: 32768        # Qwen3.5 context window
+  temperature: 1.0
+  llm_timeout: 600.0         # 10 min timeout per LLM call
+
+# Test eval settings
+eval:
+  samples_per_prompt: 4
+  output_dir: /checkpoint/maui_sft/winnieyangwn/RLLM/vllm_test
+  task: mlsp-2013-birds      # Default task for testing
+
+# SLURM settings (for launch.py)
+slurm:
+  partition: h200
+  qos: h200_coding_shared
+  account: aira_ws2
+  time: "4:00:00"
+  nodes: 1
+  gpus_per_node: 8           # For running sandboxes, not model (model is on separate server)
+  cpus_per_node: 192

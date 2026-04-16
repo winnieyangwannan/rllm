@@ -7,6 +7,7 @@ defaults:
 # Model settings (Azure OpenAI)
 model:
   name: gpt-5
+  backend: azure             # Use Azure OpenAI
   azure_endpoint: https://azure-services-fair-openai1-eastus2n3.azure-api.net
   api_key: ${oc.env:AZURE_API_KEY,73afb4e502de426c8ea645416de6ec0b}
   api_version: 2025-03-01-preview

@@ -126,7 +126,20 @@ def get_num_ray_nodes() -> int:
         return 1
 
 
-@ray.remote(num_cpus=1)  # Minimal resource claim - parallelism controlled by max_concurrent_tasks
+# Import WorkerDeadError for Ray retry logic
+try:
+    from mle_agent.tools import WorkerDeadError
+except ImportError:
+    # Fallback if mle_agent not installed
+    class WorkerDeadError(Exception):
+        pass
+
+
+@ray.remote(
+    num_cpus=1,  # Minimal resource claim - parallelism controlled by max_concurrent_tasks
+    max_retries=-1,  # Unlimited retries on WorkerDeadError (worker death is transient)
+    retry_exceptions=[WorkerDeadError],  # Only retry on worker death, not other errors
+)
 def run_rollout_task(task_data: dict, sample_idx: int, cfg_dict: dict) -> dict:
     """Stateless Ray task wrapping run_single_rollout.
 
@@ -137,6 +150,12 @@ def run_rollout_task(task_data: dict, sample_idx: int, cfg_dict: dict) -> dict:
 
     Returns:
         EvalResult as dict (for Ray serialization)
+
+    Note:
+        If WorkerDeadError is raised (agentbox worker died), Ray will automatically
+        retry the task on a different worker. With max_retries=-1, it retries
+        indefinitely until success - this is safe because WorkerDeadError only
+        occurs for transient infrastructure failures, not bugs in the rollout.
     """
     # Reconstruct OmegaConf inside the task
     cfg = OmegaConf.create(cfg_dict)

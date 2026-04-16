@@ -1,0 +1,34 @@
+# MLE-bench Evaluation with SGLang-served model
+#
+# Prerequisites:
+# 1. Start SGLang server:
+#    python -m sglang.launch_server --model-path Qwen/Qwen3-32B \
+#        --tool-call-parser qwen25 --port 30000
+#
+# 2. Run eval:
+#    python eval.py --config configs/sglang.yaml --task mlsp-2013-birds
+#
+# Notes:
+# - Use --tool-call-parser qwen25 for Qwen models (OpenAI-compatible tool format)
+# - Model name must match --model-path exactly
+# - SGLang server must be running before starting eval
+
+defaults:
+  - base
+
+# Model settings (SGLang local server)
+model:
+  name: Qwen/Qwen3-32B       # Must match --model-path
+  backend: sglang            # Use SGLang backend
+  base_url: http://localhost:30000
+  api_key: null              # SGLang doesn't require auth by default
+
+# Agent settings for Qwen
+agent:
+  context_size: 32768        # Qwen3 context window
+  temperature: 1.0
+
+# Test eval settings (override for production)
+eval:
+  samples_per_prompt: 2
+  output_dir: /checkpoint/maui_sft/winnieyangwn/RLLM/sglang_test

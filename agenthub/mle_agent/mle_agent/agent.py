@@ -117,6 +117,8 @@ def _run_agent_loop(
     # Track token usage across all turns
     total_prompt_tokens = 0
     total_completion_tokens = 0
+    last_context_size = 0  # Context window size on the last turn (for tracking actual context usage)
+    last_completion_tokens = 0  # Completion tokens on the last turn
     termination_reason = None  # Will be set on exit
     turn = -1  # Initialize for edge case where loop doesn't run
 
@@ -151,6 +153,10 @@ def _run_agent_loop(
             total_prompt_tokens += response.usage.prompt_tokens
             total_completion_tokens += response.usage.completion_tokens
 
+            # Track last turn's context size and completion tokens
+            last_context_size = response.usage.prompt_tokens
+            last_completion_tokens = response.usage.completion_tokens
+
             # Hard stop if context size exceeded
             # Use CURRENT turn's prompt_tokens as the actual context window size
             # (prompt_tokens = full conversation history sent to model)
@@ -176,8 +182,9 @@ def _run_agent_loop(
                 termination_reason = "format_error"
                 steps.append(Step(input=f"turn_{turn}", output=content, done=True))
                 rollout_metrics = {
-                    "prompt_tokens": total_prompt_tokens,
                     "completion_tokens": total_completion_tokens,
+                    "context_size": last_context_size,  # Context window on last turn
+                    "total_tokens": last_context_size + last_completion_tokens,  # Total conversation length
                     "num_turns": turn + 1,
                     "termination_reason": termination_reason,
                     "rollout_duration": time.time() - start_time,
@@ -229,8 +236,9 @@ def _run_agent_loop(
         if submitted:
             termination_reason = "submit"
             rollout_metrics = {
-                "prompt_tokens": total_prompt_tokens,
                 "completion_tokens": total_completion_tokens,
+                "context_size": last_context_size,  # Context window on last turn
+                "total_tokens": last_context_size + last_completion_tokens,  # Total conversation length
                 "num_turns": turn + 1,
                 "termination_reason": termination_reason,
                 "rollout_duration": time.time() - start_time,
@@ -242,8 +250,9 @@ def _run_agent_loop(
         termination_reason = "max_turns"
 
     rollout_metrics = {
-        "prompt_tokens": total_prompt_tokens,
         "completion_tokens": total_completion_tokens,
+        "context_size": last_context_size,  # Context window on last turn
+        "total_tokens": last_context_size + last_completion_tokens,  # Total conversation length
         "num_turns": max(0, turn + 1),
         "termination_reason": termination_reason,
         "rollout_duration": time.time() - start_time,

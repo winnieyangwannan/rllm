@@ -421,7 +421,7 @@ class TestMaxTurnsExhaustion:
 
 
 class TestTokenTracking:
-    """K. last_input_context_size is last turn only, not cumulative."""
+    """K. context_size is last turn only, not cumulative. prompt_tokens is cumulative."""
 
     def test_last_turn_only(self):
         responses = [
@@ -441,7 +441,9 @@ class TestTokenTracking:
                 )
             )
 
-        assert result.metrics["last_input_context_size"] == 3000  # NOT 6000
+        assert result.metrics["context_size"] == 3000  # Last turn only
+        assert result.metrics["total_tokens"] == 3030  # context_size + last_completion = 3000 + 30
+        assert result.metrics["prompt_tokens"] == 6000  # Cumulative: 1000 + 2000 + 3000
         assert result.metrics["completion_tokens"] == 60  # 10 + 20 + 30
 
 

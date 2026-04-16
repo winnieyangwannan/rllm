@@ -1,0 +1,44 @@
+# Qwen3.5-4B via vLLM - CODE mode
+# Uses RolloutClient in text mode against external vLLM server
+#
+# Prerequisites:
+#   vLLM server must be running at base_url with tool calling enabled
+#   Start with: vllm serve Qwen/Qwen3.5-4B --port 32490 --enable-auto-tool-choice --tool-call-parser hermes
+#
+# Launch:
+#   cd /home/winnieyangwn/rllm/examples/mlebench
+#   python launch.py --config configs/qwen4b_vllm_code.yaml --name qwen4b_vllm_test \
+#       --tasks mlsp-2013-birds --samples 64 --nodes 1
+
+defaults:
+  - base
+
+# Model settings (vLLM server - external)
+model:
+  name: Qwen/Qwen3.5-4B
+  backend: vllm
+  base_url: http://h200-137-004-019:32490
+
+# Agent settings - Code mode (same timeouts as replicate_code.yaml)
+agent:
+  submit_file: code
+  session_timeout: 1200      # 20 minutes per bash command
+  eval_timeout: 86400        # 24 hours for train.py execution
+  context_size: 32768        # Qwen3.5-4B context window
+  temperature: 1.0
+  llm_timeout: 600.0         # 10 min timeout per LLM call
+
+# Sandbox settings
+sandbox:
+  manager_uri: h200-137-001-039:38311
+
+# Evaluation settings
+eval:
+  samples_per_prompt: 64
+  output_dir: /checkpoint/maui_sft/winnieyangwn/rllm/eval/qwen4b_vllm_code
+
+# SLURM settings
+slurm:
+  qos: h200_agentic-models_high
+  account: agentic-models
+  gpus_per_node: 1

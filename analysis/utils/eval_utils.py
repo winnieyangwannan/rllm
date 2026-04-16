@@ -362,6 +362,66 @@ def analyze_invalid_submissions(df):
     return df_errors, summary_df, rollout_indices_df
 
 
+def plot_invalid_error_distribution(df_errors, figsize=(12, 6), task_names=None, task_col="task"):
+    """
+    Visualize the distribution of error types in invalid submissions.
+
+    Args:
+        df_errors: DataFrame with 'error_category' column containing categorized errors
+        figsize: Tuple specifying figure size (width, height)
+        task_names: Optional list of task names to filter on. If None, use all tasks.
+        task_col: Column name for task identifier (default: "task")
+
+    Returns:
+        tuple: (error_counts, error_pct) for further analysis
+    """
+    # Filter by task_names if provided
+    if task_names is not None:
+        df_errors = df_errors[df_errors[task_col].isin(task_names)]
+        print(f"Filtered to {len(df_errors)} errors for {len(task_names)} tasks")
+
+    # Calculate error distribution
+    error_counts = df_errors["error_category"].value_counts()
+    error_pct = (error_counts / error_counts.sum() * 100).round(2)
+
+    # Create horizontal bar chart
+    fig, ax = plt.subplots(figsize=figsize)
+    error_counts.plot(kind="barh", ax=ax, color="steelblue")
+    ax.set_xlabel("Count")
+    ax.set_ylabel("Error Category")
+
+    # Set title based on whether task_names is provided
+    if task_names is not None:
+        if len(task_names) == 1:
+            title = f"Distribution of Error Types in Invalid Submissions\nTask: {task_names[0]}"
+        else:
+            title = f"Distribution of Error Types in Invalid Submissions\n({len(task_names)} tasks)"
+    else:
+        title = "Distribution of Error Types in Invalid Submissions"
+    ax.set_title(title)
+
+    # Add percentage labels on each bar
+    total = error_counts.sum()
+    for i, (count, category) in enumerate(zip(error_counts.values, error_counts.index, strict=False)):
+        pct = count / total * 100
+        ax.text(count + 0.5, i, f"{count} ({pct:.1f}%)", va="center", fontsize=9)
+
+    # Adjust x-axis to make room for labels
+    ax.set_xlim(0, error_counts.max() * 1.25)
+
+    plt.tight_layout()
+    plt.show()
+
+    # Show percentage breakdown
+    print("\n" + "=" * 60)
+    print("ERROR CATEGORY PERCENTAGE")
+    print("=" * 60)
+    for cat, pct in error_pct.items():
+        print(f"{cat}: {pct}%")
+
+    return error_counts, error_pct
+
+
 def get_summary_stats(df):
     """Get summary statistics from a trajectories DataFrame.
 
@@ -1294,3 +1354,476 @@ def process_df(df: pd.DataFrame, Ks: list[int] = None, mle_bench_data_dir: str =
     df_task = df_task[final_cols]
 
     return df, df_task
+
+
+# ======================== METRIC DISTRIBUTION PLOTTING ========================
+
+
+def plot_metric_distribution(
+    dfs,
+    task_name=None,
+    labels=None,
+    nbins=10,
+    height=350,
+    width=1400,
+    valid_only=False,
+    colormap="YlGnBu",
+):
+    """
+    Plot submission analysis with 9 panels in a 3-row layout.
+    All panels show side-by-side comparison of multiple datasets.
+
+    Note: Percentile distribution and mean percentile are calculated across ALL rollouts,
+    with invalid submissions treated as 0 percentile (unless valid_only=True).
+
+    Layout:
+        Row 1 (3 panels): (1) Valid Rate, (2) Percentile Distribution (all rollouts), (3) Mean Percentile Score (all rollouts)
+        Row 2 (4 panels): (4) Any Medal Rate, (5) Gold Medal Rate, (6) Silver Medal Rate, (7) Bronze Medal Rate
+        Row 3 (2 panels): (8) Rollout Duration Distribution, (9) Total Tokens Distribution
+
+    Args:
+        dfs: DataFrame or list of DataFrames from process_df() containing
+             'task_name', 'valid_submission', 'percentile', and 'medal' columns.
+             Can also work with raw trajectories DataFrames (will extract fields automatically).
+        task_name: Name of the task to analyze, or list of task names (creates separate plot for each).
+                   If None, analyzes all data combined.
+        labels: List of labels for each dataset (e.g., ['Before', 'After RLM'])
+        nbins: Number of bins for histogram (default: 10)
+        height: Plot height per row in pixels (default: 350)
+        width: Plot width in pixels (default: 1400)
+        valid_only: If True, only include valid submissions in the analysis (default: False)
+        colormap: Matplotlib colormap name (default: "YlGnBu")
+
+    Returns:
+        list of dicts: Summary statistics for each dataset including valid_count, invalid_count, all_percentiles, and medal_rates
+    """
+    if not PLOTLY_AVAILABLE:
+        print("Plotly not available. Install with: pip install plotly")
+        return None
+
+    import plotly.graph_objects as go
+    from plotly.subplots import make_subplots
+
+    # If task_name is a list, loop through each task and create separate plots
+    if isinstance(task_name, list):
+        all_results = []
+        for single_task in task_name:
+            results = plot_metric_distribution(
+                dfs,
+                task_name=single_task,
+                labels=labels,
+                nbins=nbins,
+                height=height,
+                width=width,
+                valid_only=valid_only,
+                colormap=colormap,
+            )
+            all_results.append({"task": single_task, "results": results})
+        return all_results
+
+    # Convert single inputs to lists for uniform processing
+    if not isinstance(dfs, list):
+        dfs = [dfs]
+    if labels is None:
+        # Default to 'Before', 'After' for backward compatibility
+        default_labels = ["Before", "After"] + [f"Dataset {i + 3}" for i in range(len(dfs) - 2)]
+        labels = default_labels[: len(dfs)]
+
+    # Define colors for each dataset from colormap
+    cmap = plt.get_cmap(colormap)
+    n_items = len(dfs)
+    # Sample colors from colormap, avoiding very light colors (start from 0.3)
+    colors = [f"rgb({int(c[0] * 255)},{int(c[1] * 255)},{int(c[2] * 255)})" for c in [cmap(0.3 + 0.7 * i / max(n_items - 1, 1)) for i in range(n_items)]]
+
+    # Create subplot titles (note: colspan cells still need placeholder titles)
+    subplot_titles = [
+        "Valid Submission Rate",  # row 1, col 1
+        "Percentile Distribution",  # row 1, col 2 (spans to col 3)
+        "Percentile",  # row 1, col 4
+        "Any Medal Rate",  # row 2, col 1
+        "Gold Medal Rate",  # row 2, col 2
+        "Silver Medal Rate",  # row 2, col 3
+        "Bronze Medal Rate",  # row 2, col 4
+        "Rollout Duration Distribution",  # row 3, col 1 (spans to col 2)
+        "Total Tokens Distribution",  # row 3, col 3 (spans to col 4)
+    ]
+
+    # Create 3x4 subplots (percentile distribution spans 2 columns, row 3 has 2 histograms spanning 2 cols each)
+    fig = make_subplots(
+        rows=3,
+        cols=4,
+        subplot_titles=subplot_titles,
+        vertical_spacing=0.12,
+        horizontal_spacing=0.06,
+        specs=[
+            [{"type": "bar"}, {"type": "histogram", "colspan": 2}, None, {"type": "bar"}],
+            [{"type": "bar"}, {"type": "bar"}, {"type": "bar"}, {"type": "bar"}],
+            [{"type": "histogram", "colspan": 2}, None, {"type": "histogram", "colspan": 2}, None],
+        ],
+    )
+
+    results = []
+
+    # Process each dataset
+    for idx, (df, label) in enumerate(zip(dfs, labels, strict=False)):
+        color = colors[idx % len(colors)]
+        x_label = label
+
+        # Make a copy to avoid modifying original
+        df_work = df.copy()
+
+        # Extract fields from nested dicts if needed (for raw trajectories)
+        if "task_name" not in df_work.columns and "task" in df_work.columns:
+            first_task = df_work["task"].iloc[0]
+            if isinstance(first_task, dict):
+                df_work["task_name"] = df_work["task"].apply(lambda x: x.get("instance_id", str(x)) if isinstance(x, dict) else str(x))
+            else:
+                df_work["task_name"] = df_work["task"]
+
+        if "percentile" not in df_work.columns and "metrics" in df_work.columns:
+            df_work["percentile"] = df_work["metrics"].apply(lambda x: x.get("percentile") if isinstance(x, dict) else None)
+
+        if "valid_submission" not in df_work.columns and "outcomes" in df_work.columns:
+            df_work["valid_submission"] = df_work["outcomes"].apply(lambda x: x.get("valid_submission", False) if isinstance(x, dict) else False)
+
+        # Filter to task if specified, otherwise use all data
+        if task_name is not None:
+            # Handle both string and list inputs for task_name
+            task_names_list = task_name if isinstance(task_name, list) else [task_name]
+            # Try 'task_name' column first, then 'task_id'
+            if "task_name" in df_work.columns:
+                task_df = df_work[df_work["task_name"].isin(task_names_list)]
+            elif "task_id" in df_work.columns:
+                task_df = df_work[df_work["task_id"].isin(task_names_list)]
+            else:
+                task_df = df_work
+        else:
+            task_df = df_work
+
+        # Store original counts before filtering
+        original_total = len(task_df)
+        original_valid = task_df["valid_submission"].sum()
+
+        # Filter to only valid submissions if valid_only=True
+        if valid_only:
+            task_df = task_df[task_df["valid_submission"] == True]
+
+        valid_count = task_df["valid_submission"].sum()
+        invalid_count = len(task_df) - valid_count
+        total_count = len(task_df)
+        valid_rate = original_valid / original_total * 100 if original_total > 0 else 0
+
+        # Calculate standard error for valid rate (binomial proportion) - use original counts
+        valid_rate_se = np.sqrt((valid_rate / 100) * (1 - valid_rate / 100) / original_total) * 100 if original_total > 0 else 0
+
+        # Get percentiles from the dataframe's 'percentile' column for ALL rollouts
+        # Invalid submissions are treated as 0 percentile
+        task_percentiles = task_df["percentile"].values
+        valid_mask = task_df["valid_submission"].values
+        # All percentiles: use 0 for invalid submissions, keep valid percentiles as-is
+        all_percentiles = []
+        for p, v in zip(task_percentiles, valid_mask, strict=False):
+            if v and p is not None and not np.isnan(p):
+                all_percentiles.append(p)
+            else:
+                all_percentiles.append(0.0)  # Invalid submissions count as 0 percentile
+        mean_percentile = np.mean(all_percentiles) * 100 if all_percentiles else 0
+        # Calculate standard error for mean percentile
+        percentile_se = (np.std(all_percentiles) / np.sqrt(len(all_percentiles))) * 100 if len(all_percentiles) > 1 else 0
+
+        # Panel 1: Valid Submission Rate (grouped bar)
+        fig.add_trace(
+            go.Bar(
+                x=[x_label],
+                y=[valid_rate],
+                name=x_label,
+                marker_color=color,
+                text=[f"{valid_rate:.1f}%"],
+                textposition="auto",
+                error_y=dict(type="data", array=[valid_rate_se], visible=True),
+                showlegend=True,
+                legendgroup=x_label,
+            ),
+            row=1,
+            col=1,
+        )
+
+        # Panel 2: Percentile Distribution (overlaid histograms) - ALL rollouts
+        fig.add_trace(
+            go.Histogram(
+                x=all_percentiles,
+                nbinsx=nbins,
+                name=x_label,
+                marker_color=color,
+                showlegend=False,
+                legendgroup=x_label,
+            ),
+            row=1,
+            col=2,
+        )
+
+        # Panel 3: Mean Percentile Score (grouped bar) - in column 4 due to colspan
+        fig.add_trace(
+            go.Bar(
+                x=[x_label],
+                y=[mean_percentile],
+                name=x_label,
+                marker_color=color,
+                text=[f"{mean_percentile:.1f}%"],
+                textposition="auto",
+                error_y=dict(type="data", array=[percentile_se], visible=True),
+                showlegend=False,
+                legendgroup=x_label,
+            ),
+            row=1,
+            col=4,
+        )
+
+        # Get medal rates directly from df's medal column (or medal boolean fields)
+        medal_rates = None
+        medal_rates_se = {}
+        if total_count > 0:
+            # Check for medal boolean fields first (from process_df), then fall back to medal string column
+            if "any_medal" in task_df.columns:
+                gold_count = task_df["gold_medal"].sum() if "gold_medal" in task_df.columns else 0
+                silver_count = task_df["silver_medal"].sum() if "silver_medal" in task_df.columns else 0
+                bronze_count = task_df["bronze_medal"].sum() if "bronze_medal" in task_df.columns else 0
+                any_medal_count = task_df["any_medal"].sum()
+            elif "medal" in task_df.columns:
+                # Calculate medal rates from the medal column
+                medals = task_df["medal"].values
+                gold_count = sum(1 for m in medals if m == "gold")
+                silver_count = sum(1 for m in medals if m == "silver")
+                bronze_count = sum(1 for m in medals if m == "bronze")
+                any_medal_count = gold_count + silver_count + bronze_count
+            else:
+                gold_count = silver_count = bronze_count = any_medal_count = 0
+
+            medal_rates = {
+                "gold_rate": gold_count / total_count,
+                "silver_rate": silver_count / total_count,
+                "bronze_rate": bronze_count / total_count,
+                "any_medal_rate": any_medal_count / total_count,
+            }
+
+            # Calculate standard errors for medal rates (binomial proportion)
+            medal_rates_se = {
+                "any_medal_se": np.sqrt(medal_rates["any_medal_rate"] * (1 - medal_rates["any_medal_rate"]) / total_count) * 100 if total_count > 0 else 0,
+                "gold_se": np.sqrt(medal_rates["gold_rate"] * (1 - medal_rates["gold_rate"]) / total_count) * 100 if total_count > 0 else 0,
+                "silver_se": np.sqrt(medal_rates["silver_rate"] * (1 - medal_rates["silver_rate"]) / total_count) * 100 if total_count > 0 else 0,
+                "bronze_se": np.sqrt(medal_rates["bronze_rate"] * (1 - medal_rates["bronze_rate"]) / total_count) * 100 if total_count > 0 else 0,
+            }
+
+            # Panel 4: Any Medal Rate
+            fig.add_trace(
+                go.Bar(
+                    x=[x_label],
+                    y=[medal_rates["any_medal_rate"] * 100],
+                    name=x_label,
+                    marker_color=color,
+                    text=[f"{medal_rates['any_medal_rate'] * 100:.1f}%"],
+                    textposition="outside",
+                    error_y=dict(type="data", array=[medal_rates_se["any_medal_se"]], visible=True),
+                    showlegend=False,
+                    legendgroup=x_label,
+                ),
+                row=2,
+                col=1,
+            )
+
+            # Panel 5: Gold Medal Rate
+            fig.add_trace(
+                go.Bar(
+                    x=[x_label],
+                    y=[medal_rates["gold_rate"] * 100],
+                    name=x_label,
+                    marker_color=color,
+                    text=[f"{medal_rates['gold_rate'] * 100:.1f}%"],
+                    textposition="outside",
+                    error_y=dict(type="data", array=[medal_rates_se["gold_se"]], visible=True),
+                    showlegend=False,
+                    legendgroup=x_label,
+                ),
+                row=2,
+                col=2,
+            )
+
+            # Panel 6: Silver Medal Rate
+            fig.add_trace(
+                go.Bar(
+                    x=[x_label],
+                    y=[medal_rates["silver_rate"] * 100],
+                    name=x_label,
+                    marker_color=color,
+                    text=[f"{medal_rates['silver_rate'] * 100:.1f}%"],
+                    textposition="outside",
+                    error_y=dict(type="data", array=[medal_rates_se["silver_se"]], visible=True),
+                    showlegend=False,
+                    legendgroup=x_label,
+                ),
+                row=2,
+                col=3,
+            )
+
+            # Panel 7: Bronze Medal Rate
+            fig.add_trace(
+                go.Bar(
+                    x=[x_label],
+                    y=[medal_rates["bronze_rate"] * 100],
+                    name=x_label,
+                    marker_color=color,
+                    text=[f"{medal_rates['bronze_rate'] * 100:.1f}%"],
+                    textposition="outside",
+                    error_y=dict(type="data", array=[medal_rates_se["bronze_se"]], visible=True),
+                    showlegend=False,
+                    legendgroup=x_label,
+                ),
+                row=2,
+                col=4,
+            )
+
+        # Extract rollout_duration - try direct column first, then nested metrics
+        # Convert from seconds to minutes
+        rollout_durations = []
+        if "rollout_duration" in task_df.columns:
+            rollout_durations = [d / 60.0 for d in task_df["rollout_duration"].dropna().tolist()]
+        elif "metrics" in task_df.columns:
+            for m in task_df["metrics"]:
+                if isinstance(m, dict) and "rollout_duration" in m:
+                    val = m.get("rollout_duration")
+                    if val is not None and not np.isnan(val):
+                        rollout_durations.append(val / 60.0)  # Convert seconds to minutes
+
+        # Extract total_tokens - try direct column first, then nested metrics
+        total_tokens = []
+        if "total_tokens" in task_df.columns:
+            total_tokens = task_df["total_tokens"].dropna().tolist()
+        elif "metrics" in task_df.columns:
+            for m in task_df["metrics"]:
+                if isinstance(m, dict) and "total_tokens" in m:
+                    val = m.get("total_tokens")
+                    if val is not None and not np.isnan(val):
+                        total_tokens.append(val)
+
+        # Panel 8: Rollout Duration Distribution (row 3, col 1)
+        if rollout_durations:
+            fig.add_trace(
+                go.Histogram(
+                    x=rollout_durations,
+                    nbinsx=nbins,
+                    name=x_label,
+                    marker_color=color,
+                    showlegend=False,
+                    legendgroup=x_label,
+                ),
+                row=3,
+                col=1,
+            )
+
+        # Panel 9: Total Tokens Distribution (row 3, col 3)
+        if total_tokens:
+            fig.add_trace(
+                go.Histogram(
+                    x=total_tokens,
+                    nbinsx=nbins,
+                    name=x_label,
+                    marker_color=color,
+                    showlegend=False,
+                    legendgroup=x_label,
+                ),
+                row=3,
+                col=3,
+            )
+
+        results.append(
+            {
+                "label": label,
+                "valid_count": valid_count,
+                "invalid_count": invalid_count,
+                "total_count": total_count,
+                "valid_rate": valid_rate,
+                "all_percentiles": all_percentiles,
+                "mean_percentile": mean_percentile,
+                "medal_rates": medal_rates,
+                "rollout_durations": rollout_durations,
+                "total_tokens": total_tokens,
+            }
+        )
+
+    # Update axes labels - Row 1
+    fig.update_yaxes(title_text="Pass@1", ticksuffix="%", row=1, col=1)
+    fig.update_yaxes(title_text="Count", row=1, col=2)
+    fig.update_yaxes(title_text="Pass@1", ticksuffix="%", row=1, col=4)
+
+    # Update axes labels - Row 2
+    fig.update_yaxes(title_text="Pass@1", ticksuffix="%", row=2, col=1)
+    fig.update_yaxes(title_text="Pass@1", ticksuffix="%", row=2, col=2)
+    fig.update_yaxes(title_text="Pass@1", ticksuffix="%", row=2, col=3)
+    fig.update_yaxes(title_text="Pass@1", ticksuffix="%", row=2, col=4)
+
+    # Update axes labels - Row 3
+    fig.update_yaxes(title_text="Count", row=3, col=1)
+    fig.update_yaxes(title_text="Count", row=3, col=3)
+    fig.update_xaxes(title_text="Duration (minutes)", row=3, col=1)
+    fig.update_xaxes(title_text="Tokens", row=3, col=3)
+
+    # Update x-axis for percentile distribution
+    fig.update_xaxes(title_text="Percentile", tickformat=".0%", range=[-0.05, 1.05], row=1, col=2)
+
+    # Set y-axis range for rate panels
+    fig.update_yaxes(range=[0, 105], row=1, col=1)
+    fig.update_yaxes(range=[0, 105], row=1, col=4)
+    fig.update_yaxes(range=[0, 105], row=2, col=1)
+    fig.update_yaxes(range=[0, 105], row=2, col=2)
+    fig.update_yaxes(range=[0, 105], row=2, col=3)
+    fig.update_yaxes(range=[0, 105], row=2, col=4)
+
+    fig.update_layout(
+        title_text=f"Submission Analysis{' (task: ' + task_name + ')' if task_name else ''}",
+        height=height * 3,
+        width=width,
+        showlegend=True,
+        legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="center", x=0.5),
+        barmode="group",
+    )
+
+    fig.show()
+
+    # Print statistics for each dataset
+    for result in results:
+        print(f"\n{'=' * 50}")
+        print(f"{result['label']}{' - Task: ' + task_name if task_name else ''}")
+        print(f"{'=' * 50}")
+        print(f"Valid submissions: {result['valid_count']} ({result['valid_count'] / result['total_count']:.1%})")
+        print(f"Invalid submissions: {result['invalid_count']} ({result['invalid_count'] / result['total_count']:.1%})")
+        print(f"Total submissions: {result['total_count']}")
+
+        if result["all_percentiles"]:
+            print("\nAll rollout percentiles (invalid=0):")
+            print(f"  Mean: {np.mean(result['all_percentiles']):.2%}")
+            print(f"  Median: {np.median(result['all_percentiles']):.2%}")
+            print(f"  Max: {np.max(result['all_percentiles']):.2%}")
+            print(f"  Min: {np.min(result['all_percentiles']):.2%}")
+
+        if result["medal_rates"]:
+            print("\nMedal rates:")
+            print(f"  Gold: {result['medal_rates']['gold_rate']:.1%}")
+            print(f"  Silver: {result['medal_rates']['silver_rate']:.1%}")
+            print(f"  Bronze: {result['medal_rates']['bronze_rate']:.1%}")
+            print(f"  Any Medal: {result['medal_rates']['any_medal_rate']:.1%}")
+
+        if result["rollout_durations"]:
+            print("\nRollout duration (minutes):")
+            print(f"  Mean: {np.mean(result['rollout_durations']):.1f}")
+            print(f"  Median: {np.median(result['rollout_durations']):.1f}")
+            print(f"  Max: {np.max(result['rollout_durations']):.1f}")
+            print(f"  Min: {np.min(result['rollout_durations']):.1f}")
+
+        if result["total_tokens"]:
+            print("\nTotal tokens:")
+            print(f"  Mean: {np.mean(result['total_tokens']):.0f}")
+            print(f"  Median: {np.median(result['total_tokens']):.0f}")
+            print(f"  Max: {np.max(result['total_tokens']):.0f}")
+            print(f"  Min: {np.min(result['total_tokens']):.0f}")
+
+    return results

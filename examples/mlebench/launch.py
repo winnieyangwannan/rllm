@@ -13,6 +13,8 @@ Usage:
     # Multiple tasks with multi-node
     python launch.py --config configs/gpt5.yaml --name multi_node_2_tasks --tasks mlsp-2013-birds,spooky-author-identification --samples 64 --nodes 2
     python launch.py --config configs/test_code.yaml --name multi_node_2_tasks_code --tasks mlsp-2013-birds,spooky-author-identification --samples 64 --nodes 2
+    python launch.py --config configs/replicate_code.yaml --name  replicate_code_v3 --tasks mlsp-2013-birds --samples 64 --nodes 1
+    python launch.py --config configs/qwen27b_vllm_code.yaml --name  qwen27b_vllm_test --tasks mlsp-2013-birds --samples 64 --nodes 1
 
 
     # Resume a failed/incomplete run

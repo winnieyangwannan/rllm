@@ -93,9 +93,11 @@ class EvalResult:
     steps: list | None = None
     messages: list | None = None
 
-    # NEW: Token metrics (from OpenAI API usage)
-    last_input_context_size: int = 0
-    completion_tokens: int = 0
+    # Token metrics (from OpenAI API usage)
+    context_size: int = 0  # Context window size on last turn (actual context usage)
+    total_tokens: int = 0  # Total conversation length (context_size + last completion)
+    prompt_tokens: int = 0  # Cumulative prompt tokens across all turns (for billing)
+    completion_tokens: int = 0  # Cumulative completion tokens across all turns
 
     # NEW: Duration breakdown
     rollout_duration: float = 0.0  # Agent interaction time
@@ -299,8 +301,11 @@ echo -e "\\n=== SAMPLE SUBMISSION FORMAT ===" && head -3 sample_submission.csv 2
         reasoning_effort=reasoning_effort,
     )
 
-    # Normalize metric keys to match new format
-    rollout_metrics["last_input_context_size"] = rollout_metrics.pop("prompt_tokens", 0)
+    # rollout_metrics now contains:
+    # - prompt_tokens: cumulative across all turns (for billing)
+    # - completion_tokens: cumulative across all turns
+    # - context_size: context window on last turn (actual context usage)
+    # - num_turns, termination_reason, rollout_duration
 
     return steps, final_messages, pred_solution, rollout_metrics
 
@@ -386,18 +391,53 @@ def run_single_rollout(
             )
             print("✓ Built initial messages")
 
-            openai_client = openai.AzureOpenAI(
-                azure_endpoint=cfg.model.azure_endpoint,
-                api_key=cfg.model.api_key,
-                api_version=cfg.model.api_version,
-                max_retries=0,
-            )
-            client = EvalClient(
-                openai_client=openai_client,
-                model=cfg.model.name,
-                reasoning_effort=reasoning_effort,
-            )
-            print(f"✓ Created EvalClient (model: {cfg.model.name})")
+            # Backend dispatch: azure → EvalClient, sglang/vllm → RolloutClient text mode
+            backend = getattr(cfg.model, "backend", "azure")
+
+            if backend == "vllm_embedded":
+                # Use EmbeddedVLLMClient - runs vLLM in-process (no HTTP server needed)
+                from rllm.experimental.fully_async.embedded_vllm_client import EmbeddedVLLMClient
+
+                # Get embedded-specific config
+                tensor_parallel_size = getattr(cfg.model, "tensor_parallel_size", 1)
+                gpu_memory_utilization = getattr(cfg.model, "gpu_memory_utilization", 0.9)
+                context_size = getattr(cfg.agent, "context_size", 32768)
+
+                print(f"Creating EmbeddedVLLMClient (model: {cfg.model.name}, tp={tensor_parallel_size})...")
+                client = asyncio.run(
+                    EmbeddedVLLMClient.create(
+                        model_path=cfg.model.name,
+                        tensor_parallel_size=tensor_parallel_size,
+                        max_model_len=context_size,
+                        gpu_memory_utilization=gpu_memory_utilization,
+                    )
+                )
+                print(f"✓ Created EmbeddedVLLMClient in embedded mode (model: {cfg.model.name}, tp={tensor_parallel_size})")
+            elif backend in ("sglang", "vllm"):
+                # Use RolloutClient in text mode for local SGLang/vLLM servers
+                from rllm.experimental.fully_async.client import RolloutClient
+
+                client = RolloutClient(
+                    router_url=cfg.model.base_url,
+                    model=cfg.model.name,
+                    api_key=getattr(cfg.model, "api_key", None),
+                    timeout=getattr(cfg.agent, "llm_timeout", 600.0),
+                )
+                print(f"✓ Created RolloutClient in text mode (model: {cfg.model.name}, backend: {backend}, url: {cfg.model.base_url})")
+            else:
+                # Default: use EvalClient for Azure OpenAI
+                openai_client = openai.AzureOpenAI(
+                    azure_endpoint=cfg.model.azure_endpoint,
+                    api_key=cfg.model.api_key,
+                    api_version=cfg.model.api_version,
+                    max_retries=0,
+                )
+                client = EvalClient(
+                    openai_client=openai_client,
+                    model=cfg.model.name,
+                    reasoning_effort=reasoning_effort,
+                )
+                print(f"✓ Created EvalClient (model: {cfg.model.name})")
 
             print(f"Starting agent loop (max_turns={cfg.agent.max_turns}, timeout={cfg.agent.rollout_timeout}s, context_size={cfg.agent.context_size})...")
             print(f"Tools: bash, edit, create, submit ({cfg.agent.submit_file} mode), check_submission_validity")
@@ -422,6 +462,14 @@ def run_single_rollout(
 
             result = asyncio.run(agent.run(messages))
 
+            # Cleanup embedded vLLM client to release GPU memory
+            if backend == "vllm_embedded":
+                try:
+                    asyncio.run(client.shutdown())
+                    print("✓ EmbeddedVLLMClient shutdown complete")
+                except Exception as e:
+                    print(f"Warning: EmbeddedVLLMClient shutdown error: {e}")
+
             steps = result.steps
             final_messages = result.messages
             pred_solution = result.pred_solution
@@ -431,7 +479,10 @@ def run_single_rollout(
         rollout_duration = rollout_metrics.get("rollout_duration", rollout_end_time - start_time)
         print(f"✓ Agent completed with {len(steps)} steps in {rollout_duration:.1f}s")
         print(f"  Termination: {rollout_metrics.get('termination_reason', 'unknown')}")
-        print(f"  Tokens: {rollout_metrics.get('last_input_context_size', 0)} last input context + {rollout_metrics.get('completion_tokens', 0)} completion")
+        ctx = rollout_metrics.get("context_size", 0)
+        prompt_tok = rollout_metrics.get("prompt_tokens", 0)
+        completion_tok = rollout_metrics.get("completion_tokens", 0)
+        print(f"  Tokens: context_size={ctx}, prompt_tokens={prompt_tok} (cumulative), completion_tokens={completion_tok}")
 
         # Log steps summary
         for i, step in enumerate(steps):
@@ -509,8 +560,10 @@ def run_single_rollout(
             pred_solution=pred_solution,
             steps=steps,
             messages=final_messages,
-            # NEW fields
-            last_input_context_size=rollout_metrics.get("last_input_context_size", 0),
+            # Token metrics
+            context_size=rollout_metrics.get("context_size", 0),
+            total_tokens=rollout_metrics.get("total_tokens", 0),
+            prompt_tokens=rollout_metrics.get("prompt_tokens", 0),
             completion_tokens=rollout_metrics.get("completion_tokens", 0),
             rollout_duration=rollout_duration,
             eval_duration=eval_duration,
@@ -521,7 +574,28 @@ def run_single_rollout(
     except Exception as e:
         import traceback
 
-        traceback.print_exc()
+        # Check if this is a worker dead error (unrecoverable container failure)
+        try:
+            from mle_agent.tools import WorkerDeadError
+
+            is_worker_dead = isinstance(e, WorkerDeadError) or "WorkerDeadError" in str(type(e).__name__)
+        except ImportError:
+            is_worker_dead = False
+
+        if is_worker_dead:
+            print(f"⚠️ Worker died - container is unrecoverable, will retry on new worker: {e}")
+            # Close sandbox before re-raising (finally won't run if we raise)
+            try:
+                sandbox.close()
+                print("✓ Sandbox closed (after worker death)")
+            except Exception:
+                pass  # Ignore close errors for dead workers
+            # Re-raise WorkerDeadError so Ray can retry on a different worker
+            raise
+        else:
+            traceback.print_exc()
+            termination_reason = "error"
+
         error_duration = time.time() - start_time
         return EvalResult(
             task_id=task_id,
@@ -534,12 +608,14 @@ def run_single_rollout(
             error=str(e),
             steps=None,
             messages=None,
-            # NEW fields for error case
-            last_input_context_size=0,
+            # Token metrics for error case
+            context_size=0,
+            total_tokens=0,
+            prompt_tokens=0,
             completion_tokens=0,
             rollout_duration=error_duration,
             eval_duration=0.0,
-            termination_reason="error",
+            termination_reason=termination_reason,
             outcomes={
                 "pass": False,
                 "valid_submission": False,
@@ -598,10 +674,12 @@ def build_trajectory_dict(result: EvalResult, task_data: dict, cfg: OmegaConf) -
             "score": result.score,
             "num_steps": result.num_steps,
             "duration": result.duration,
-            # Token metrics (NEW)
-            "last_input_context_size": result.last_input_context_size,
-            "completion_tokens": result.completion_tokens,
-            # Duration breakdown (NEW)
+            # Token metrics
+            "context_size": result.context_size,  # Context window on last turn
+            "total_tokens": result.total_tokens,  # Total conversation length
+            "prompt_tokens": result.prompt_tokens,  # Cumulative across all turns (billing)
+            "completion_tokens": result.completion_tokens,  # Cumulative across all turns
+            # Duration breakdown
             "rollout_duration": result.rollout_duration,
             "eval_duration": result.eval_duration,
         },
