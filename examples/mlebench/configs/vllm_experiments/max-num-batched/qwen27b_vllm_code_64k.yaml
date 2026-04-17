@@ -6,7 +6,7 @@
 #
 # Launch:
 #   cd /home/winnieyangwn/rllm/examples/mlebench
-#   python launch.py --config configs/qwen27b_vllm_code.yaml --name qwen27b_vllm_test_max_len --tasks mlsp-2013-birds --samples 64 --nodes 1
+#   python launch.py --config configs/vllm_experiments/max-num-batched/qwen27b_vllm_code_64k.yaml --name qwen27b_vllm_code_64k --tasks mlsp-2013-birds,spooky-author-identification --samples 64 --nodes 2
 
 defaults:
   - base
@@ -15,20 +15,21 @@ defaults:
 model:
   name: Qwen/Qwen3.5-27B
   backend: vllm
-  base_url:  http://h200-137-051-143:3595
+  base_url:  http://h200-137-000-153:19751
+
+# Sandbox settings
+sandbox:
+  manager_uri: h200-137-003-002:44961
 
 # Agent settings - Code mode (same timeouts as replicate_code.yaml)
 agent:
   submit_file: code
   session_timeout: 1200      # 20 minutes per bash command
   eval_timeout: 86400        # 24 hours for train.py execution
+  rollout_timeout: 86400     # 24 hours total
   context_size: 262144       # Qwen3.5-27B has 262K context!
   temperature: 1.0
   llm_timeout: 900.0         # 15 min timeout per LLM call
-
-# Sandbox settings
-sandbox:
-  manager_uri: h200-137-009-052:41921
 
 # Evaluation settings
 eval:
@@ -37,10 +38,10 @@ eval:
 
 # SLURM settings
 slurm:
-  qos: h200_agentic-models_high
-  account: agentic-models
+  qos: h200_coding_shared # h200_agentic-models_high
+  account: aira_ws2 # agentic-models
   gpus_per_node: 1
 
 # Ray settings
 ray:
-  max_concurrent_tasks_per_node: 48
+  max_concurrent_tasks_per_node: 64

@@ -1,5 +1,6 @@
 # Replicate CODE mode (multi_node_2_tasks_code)
 # submit_file=code, evaluator runs train.py
+#     python launch.py --config configs/replicate_code.yaml --name  replicate_code_v3 --tasks mlsp-2013-birds --samples 64 --nodes 1
 
 defaults:
   - base
@@ -34,4 +35,4 @@ slurm:
 
 # Ray settings
 ray:
-  max_concurrent_tasks_per_node: 32
+  max_concurrent_tasks_per_node: 16

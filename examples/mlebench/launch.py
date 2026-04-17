@@ -534,6 +534,14 @@ Examples:
             shutil.rmtree(dump_configs_dir)
         shutil.copytree(source_configs_dir, dump_configs_dir)
         dump_config_path = dump_configs_dir / config_path.name
+
+        # Also copy base.yaml from root configs if it exists and wasn't already copied
+        root_configs_dir = RLLM_ROOT / "examples" / "mlebench" / "configs"
+        base_yaml = root_configs_dir / "base.yaml"
+        if base_yaml.exists() and not (dump_configs_dir / "base.yaml").exists():
+            shutil.copy(base_yaml, dump_configs_dir / "base.yaml")
+            print("  + Copied base.yaml for config inheritance")
+
         print(f"Copied configs to: {dump_configs_dir}")
 
     # Create logs directory

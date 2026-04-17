@@ -1,0 +1,22 @@
+# Qwen3.5-27B via vLLM - CSV mode (FASTER - no training execution)
+# Uses RolloutClient in text mode against external vLLM server
+#
+# Launch:
+#   cd /home/winnieyangwn/rllm/examples/mlebench
+#   python launch.py --config configs/qwen27b_vllm_csv.yaml --name qwen27b_csv_test --tasks mlsp-2013-birds --samples 64 --nodes 1
+
+defaults:
+  - base
+
+# Model settings (vLLM server - external)
+model:
+  name: Qwen/Qwen3.5-27B
+  backend: vllm
+  base_url: http://h200-137-092-006:3146
+
+# Agent settings - CSV mode (FASTER: no train.py execution)
+agent:
+  submit_file: csv
+  session_timeout: 32400     # 9 hours per turn
+  context_size: 262144       # Qwen3.5-27B has 262K context
+  temperature: 1.0

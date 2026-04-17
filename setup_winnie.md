@@ -14,6 +14,8 @@ source .venv/bin/activate
 # Now you can use rllm CLI or Python
 ```
 
+- for agentbox, use amaia_fair-sc_0227
+
 ---
 
 ## Setup Summary
